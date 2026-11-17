@@ -456,6 +456,7 @@ defmodule Monty.Studio.RunLog do
         |> Map.merge(policy_input(opened.setup))
         |> Map.merge(plugin_input(opened))
         |> Map.merge(part_inputs(part))
+        |> Map.merge(scheduling_input(part))
     }
   end
 
@@ -475,26 +476,37 @@ defmodule Monty.Studio.RunLog do
 
   defp policy_input(%Setup{}), do: %{}
 
-  defp part_inputs(part) when map_size(part) == 0, do: %{}
-
   # The plan a parallel run was asked to carry out (`Monty.Studio.Partition`),
   # written into the record when the run starts: a page draws one card per part
   # before any part has taken a step, and the worker finds each part's stream by
   # the id kept here rather than by a second plan that might disagree.
-  defp part_inputs(%{parts: parts}) when is_list(parts) do
-    %{
-      "parts" =>
-        Enum.map(parts, fn part ->
-          %{
-            "index" => part.index,
-            "of" => part.of,
-            "phase" => to_string(part.phase),
-            "stream" => part.stream,
-            "phases" => %{to_string(part.phase) => part.episodes}
-          }
-        end)
-    }
+  defp part_inputs(part) do
+    case Map.fetch(part, :parts) do
+      {:ok, parts} when is_list(parts) ->
+        %{
+          "parts" =>
+            Enum.map(parts, fn part ->
+              %{
+                "index" => part.index,
+                "of" => part.of,
+                "phase" => to_string(part.phase),
+                "stream" => part.stream,
+                "phases" => %{to_string(part.phase) => part.episodes}
+              }
+            end)
+        }
+
+      _no_plan ->
+        %{}
+    end
   end
+
+  # How this run's steps are scheduled, when the caller chose: `:barrier` is
+  # Monty's own order and `:lagged` a deployment's measurement
+  # (`docs/monty-differences.md` §2.30). A run started from the command line says
+  # nothing here, and the deployment's own setting answers.
+  defp scheduling_input(%{scheduling: scheduling}), do: %{"scheduling" => to_string(scheduling)}
+  defp scheduling_input(_part), do: %{}
 
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()

@@ -163,6 +163,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # One run until somebody asks for more: parallelism is a choice made on
       # this page, not something a link should be able to set for them.
       parallelism: 1,
+      # How this run's steps are scheduled. Monty's own order unless the
+      # deployment's environment says otherwise; the page states it so a reader
+      # can see which of the two a run they are about to start will be.
+      scheduling: Jobs.scheduling(),
       # The batch a press of Run started and the page shows: `nil` until a run of
       # this experiment is followed, and then the parts whose cards the page draws
       # beside the run it is watching (`Monty.Studio.Partition`).
@@ -540,6 +544,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="input input-xs w-24"
               aria-label="The most steps one episode may take"
             />
+            <%!-- Monty's order, or the lagged round this port added. Said here
+            because it changes what the run decides, not only what it costs
+            (`docs/monty-differences.md` §2.30), and because a comparison is two
+            runs of this page rather than a script beside it. --%>
+            <label for="run-scheduling" class="ms-2">scheduling</label>
+            <select
+              id="run-scheduling"
+              name="scheduling"
+              class="select select-xs w-28"
+              aria-label="Whether a step waits for the modules it handed work to"
+            >
+              <option value="barrier" selected={@scheduling == :barrier}>
+                barrier
+              </option>
+              <option value="lagged" selected={@scheduling == :lagged}>lagged</option>
+            </select>
           </form>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
@@ -1097,9 +1117,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   @impl true
   def handle_event("run", _params, %{assigns: %{opened: opened, steps: steps}} = socket) do
     case refusal(socket.assigns) do
-      nil -> start(socket, opened, steps, socket.assigns.parallelism, socket.assigns.episodes)
-      :going -> already_going(socket, opened)
-      :cannot_run -> {:noreply, socket}
+      nil ->
+        start(
+          socket,
+          opened,
+          steps,
+          socket.assigns.parallelism,
+          socket.assigns.episodes,
+          socket.assigns.scheduling
+        )
+
+      :going ->
+        already_going(socket, opened)
+
+      :cannot_run ->
+        {:noreply, socket}
     end
   end
 
@@ -1182,7 +1214,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
     case refusal(socket.assigns) do
-      nil -> start(socket, opened, 1, 1, 1)
+      nil -> start(socket, opened, 1, 1, 1, socket.assigns.scheduling)
       :going -> already_going(socket, opened)
       :cannot_run -> {:noreply, socket}
     end
@@ -1297,9 +1329,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp assign_budget(socket, params) do
     assign(socket,
       episodes: count_of(params["episodes"]),
-      steps: cap(count_of(params["steps"]), socket.assigns.opened.setup)
+      steps: cap(count_of(params["steps"]), socket.assigns.opened.setup),
+      scheduling: scheduling_of(params["scheduling"], socket.assigns.scheduling)
     )
   end
+
+  # A mode this page cannot read is not a mode: the choice stays as it was, and
+  # the run keeps the one shown beside the button it was started with.
+  defp scheduling_of("lagged", _shown), do: :lagged
+  defp scheduling_of("barrier", _shown), do: :barrier
+  defp scheduling_of(_unreadable, shown), do: shown
 
   # One chart at a time, drawn for the box it has: the size measured for the
   # chart that was expanded belongs to it, so another one — or none — goes back
@@ -2364,13 +2403,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A part is not a copy of the experiment. A config evaluated a hundred and forty
   # times is finished in a fourteenth of the clock at fourteen parts, where
   # fourteen copies of it were fourteen times the work and no faster.
-  defp start(socket, opened, steps, parallelism, episodes) do
+  defp start(socket, opened, steps, parallelism, episodes, scheduling) do
     plan = Partition.plan(opened.setup, parallelism, episodes)
     parts = with_streams(Partition.parts(plan))
 
     attributes =
       RunLog.attributes(opened, steps, first_episode(parts), parallelism, episodes, %{
-        parts: parts
+        parts: parts,
+        scheduling: scheduling
       })
 
     case RunHistory.start(attributes) do

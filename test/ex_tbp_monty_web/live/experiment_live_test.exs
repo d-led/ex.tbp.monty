@@ -448,6 +448,31 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.inputs["episodes"] == 1
     end
 
+    # Monty's own round unless the run says otherwise. The page states the mode
+    # it will start, so the record can be the truth for the worker rather than
+    # the environment of whichever node picks the job up (`docs/monty-differences.md`
+    # §2.30).
+    test "a run says the scheduling Monty's order implies when nobody chose", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      assert has_element?(view, "#run-scheduling option[value=barrier][selected]")
+
+      view |> element("#step") |> render_click()
+
+      assert [run] = RunHistory.list_for(@tutorial)
+      assert run.inputs["scheduling"] == "barrier"
+    end
+
+    test "and the mode chosen on the page is the one the run records", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view |> element("#run-budget") |> render_change(%{"scheduling" => "lagged"})
+      view |> element("#step") |> render_click()
+
+      assert [run] = RunHistory.list_for(@tutorial)
+      assert run.inputs["scheduling"] == "lagged"
+    end
+
     test "and the step it records is one step of that experiment, not a redraw", %{conn: conn} do
       # The whole point of the button: the config runs, for one step, and what
       # that step saw is in the record.

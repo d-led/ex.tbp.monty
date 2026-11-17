@@ -1238,6 +1238,14 @@ defmodule Monty.Studio.Jobs.Run do
 
   defp episodes_of(_record, default), do: default
 
+  # How this run's steps are scheduled. The record is the truth — a run started
+  # from a page says its mode on the page, and a second worker with a different
+  # environment must not change what it was asked for. A run that says nothing
+  # takes the deployment's own setting (`Monty.Studio.Jobs.scheduling/0`).
+  defp scheduling_of(%{inputs: %{"scheduling" => "lagged"}}), do: :lagged
+  defp scheduling_of(%{inputs: %{"scheduling" => "barrier"}}), do: :barrier
+  defp scheduling_of(_record), do: Monty.Studio.Jobs.scheduling()
+
   # The episode a part starts counting from: the first of the episodes it was
   # given. A run of the whole experiment starts at nought.
   defp offset_of(%{inputs: %{"part" => %{"phases" => phases}}}) when is_map(phases) do
@@ -1336,7 +1344,8 @@ defmodule Monty.Studio.Jobs.Run do
       memory: state.memories,
       memory_targets: state.targets,
       first_seen: state.first_seen,
-      has_detailed_logger: Logging.detailed?(state.logging)
+      has_detailed_logger: Logging.detailed?(state.logging),
+      scheduling: scheduling_of(state.record)
     ]
 
     options =
