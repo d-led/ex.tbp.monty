@@ -127,22 +127,26 @@ Two debts remain. Neither is a refusal.
    Recognition is unaffected — matching reads the graphs. But training _on top of_
    a pretrained library would extend the wrong kind of model. Monty loads a state
    dict into the module it just built (`monty_experiment.py`). Copy that shape.
-3. **An unsupervised run cannot report its own accuracy, and why is open.** The map
-   a verdict is scored against is filled by `fixme_update_ground_truth/1` from the
-   object the module detected and the object it was told to expect, and the four
+3. **An unsupervised run cannot report its own accuracy — measured, and it is the
+   experiment's shape, not a bug.** The map a verdict is scored against is filled
+   by `fixme_update_ground_truth/1` from the object the module detected and the
+   object it was told to expect. One training episode of this corpus, stepped by
+   hand, answers `graph_id_to_target: %{}`: an unsupervised training episode
+   _concludes nothing_ — it builds its graph from the buffer of what it saw — so
+   `detected_object` is `nil` and the first clause of
+   `update_target_graph_mapping/3` has nothing to attribute. That is why the four
    records of `trained/dogs_surf_unsupervised` carry `targets: ["new_object0"]` …
-   `["new_object3"]` — each graph's own name, which is the fallback for a map with
-   no entry (§9). What is _not_ yet explained is where it is lost, because every
-   part this was blamed on checks out: `Jobs.Run` calls `Run.set_ground_truth/1`
-   once an episode, exactly where Monty's `MontyObjectRecognitionExperiment`
-   calls `fixme_set_ground_truth`; `Step.update_ltm_state/1` runs
-   `update_ltm_from_stm/1` then `fixme_update_ground_truth/1`, Monty's own order
-   (`monty_base.py:420-425`); and the guard either side of the store,
-   `mode == :train and buffer size > 0`, is Monty's (`graph_matching.py:642-645`).
-   The next measurement is a training episode of this corpus stepped by hand with
-   the module's `primary_target`, `detected_object` and buffer size read before
-   each of those three calls. Until then, an unsupervised memory is a count of
-   conclusions, not an accuracy.
+   `["new_object3"]`, the fallback for a map with no entry (§9), and it is not a
+   difference from Monty: `monty_base.py:420-425` and `graph_matching.py:642-645`
+   are the order and the guard this port has, and Monty's _supervised_ pretraining
+   is where a module's `detected_object` is set from the truth it was given
+   (`pretraining_experiments.py:91-95`).
+
+   So scoring an unsupervised memory needs the attribution to come from the
+   environment's target when nothing is detected — Monty's own unsupervised
+   experiments report accuracy because they train and evaluate in one run and the
+   evaluation is what names the object. Until that is made to reach the library,
+   an unsupervised memory is a count of conclusions, not an accuracy.
 
 ## 4. Order
 
