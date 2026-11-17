@@ -91,15 +91,45 @@ memory: /tmp/cad-experiment/plate — reading plate
 
 ![The mesh evaluation's page](images/cad-mesh-eval-summary.png)
 
-`cad_mesh_eval` — **finished**, `recognition`, world **mujoco**, 177 steps in
-ep 1/1, **recognised**: `outcome learning_module_0=match`, 15.4 s.
+`cad_mesh_eval` — **finished**, `recognition`, world **mujoco**, 222 steps in
+ep 1/1, **recognised**: `outcome learning_module_0=match`, 14.4 s, strongest
+evidence **24.43**.
 
 ![Its evidence](images/cad-mesh-eval-chart.png)
 
-The memory written against the exact B-rep named `plate` from the mesh, in fewer
-steps than it took against the B-rep itself (177 against 420). A tessellation of
-the same surface is the same object to a graph, and a mesh world costs less per
-step than a ray cast.
+The memory written against the exact B-rep named `plate` from the mesh, in half
+the steps it took against the B-rep itself (222 against 420) and against
+_stronger_ evidence (24.43 against 20.41). It did not say that the first time.
+
+### What the first run was really measuring
+
+The first pass at this reached evidence 8.43 and had a shape worth reading: up to
+8.0, a long flat stretch, then five steps that each cost exactly one, then a
+climb. A matching step is worth `log(score / (1 - score))` for that node's
+weighted feature score, so a step of exactly minus one is a score of 0.27, and
+the healthy steps of +0.95 were scores of 0.72.
+
+The cause was colour, and it was ours. The CAD world's `rgba` is _shading_: one
+light, so the memory learned hue 0 with value 0.25, 0.62 and 0.83. `MontyCad.Export`
+wrote `{0.72, 0.72, 0.75}` — blue a step above red, a hue of 0.583 — and the
+tutorial's learning module matches `hsv` at tolerance 0.1 with hue weighted 2,
+the loudest column it has. Every observation in the mesh world was therefore
+scored zero on the feature that counts most, and no amount of lighting could
+repair it: a light scales a colour, it does not paint it. `ExTbpMonty.Cad.Objects`
+put the number in the texture; `MontyCad.Export` chose it.
+
+The export now writes one grey whose three channels are equal, which is the hue
+and saturation the exact world shows whatever light either world applies. Two
+cases in `ex_monty_cad` hold it there. A matching step is worth 1.28 rather than
+0.95 (a score of 0.78 rather than 0.72) and the episode reaches a far stronger
+conclusion, which is what the two curves are: the same memory, the same world,
+three times the evidence.
+
+What is left of the gap is the part both renderers guess at differently — how
+bright a facet is under their own lights, and how much curvature a patch sees at
+the same point. That is why the curve still dips once, at step 90, and why it
+holds at 12.15 for fifty steps: the second is the agent not reaching new surface,
+which is the motor policy, not the features.
 
 ## What these results are, and are not
 
