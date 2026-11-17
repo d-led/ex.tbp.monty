@@ -262,40 +262,19 @@ defmodule Monty.Runtime.Step do
     {inputs, input_counts} = route_inputs(state, percepts, outputs)
 
     step_learning_modules(state, inputs, ctx)
-    {vote_info, goals} = vote_and_pass_goals(state)
 
-    {actions, state} =
-      step_motor_system(state, observations, proprioceptive_state, percepts, goals, ctx)
-
-    {state, processed?} = advance(state)
-
-    info = %{
-      step: state.step,
-      # Monty's `check_if_any_lms_updated`, which the experiment asks after every
-      # step: whether the step gave a module something to process, as opposed to
-      # only a location to buffer. It answers whether this step was a matching
-      # step at all, which is what the episode's own limits are counted in.
-      processed?: processed?,
-      # A sensor that answered nothing is not a percept: a view finder measures
-      # the scene for the motor system and sends none (`docs/monty-differences.md`
-      # §2.11).
-      percept_ids:
-        percepts
-        |> Map.reject(fn {_id, percept} -> is_nil(percept) end)
-        |> Map.keys()
-        |> Enum.sort(),
-      inputs: input_counts,
-      votes: vote_info,
-      goals: length(goals),
-      actions: actions,
+    pending = %{
+      observations: observations,
+      proprioceptive_state: proprioceptive_state,
+      ctx: ctx,
+      percepts: percepts,
+      input_counts: input_counts,
       sensor_timeouts: sensor_timeouts,
-      step_type: state.step_type,
-      terminal_states: state.terminal_states,
-      done?: state.done?,
-      duration_us: elapsed_us(started_at)
+      started_at: started_at
     }
 
-    {:reply, {:ok, actions, info}, %{state | step: state.step + 1}}
+    {reply, state} = finish_step(state, pending)
+    {:reply, reply, state}
   end
 
   def handle_call(:done?, _from, state), do: {:reply, state.done?, state}
@@ -371,6 +350,59 @@ defmodule Monty.Runtime.Step do
     :ok = Monty.Random.Stream.reseed(Monty.Random.Stream.via(model_id), seed)
 
     %{state | episode_seed: seed}
+  end
+
+  # Everything a step does once its modules have been given the epoch: the vote
+  # round, the motor system, the counters and the report a caller reads.
+  #
+  # It is a function of its own because a lagged run has to run it *later* than
+  # the call that began the step (`Monty.Runtime.Step.State.scheduling/1`): the
+  # round it integrates is the epoch before the one it is stepping, and the
+  # coordinator can only hear that epoch's reports through its mailbox — which it
+  # is not reading while it is inside a `handle_call`. The seam is here so that the
+  # deferred reply is a second caller of the same tail, not a second tail.
+  defp finish_step(%State{} = state, pending) do
+    {vote_info, goals} = vote_and_pass_goals(state)
+
+    {actions, state} =
+      step_motor_system(
+        state,
+        pending.observations,
+        pending.proprioceptive_state,
+        pending.percepts,
+        goals,
+        pending.ctx
+      )
+
+    {state, processed?} = advance(state)
+
+    info = %{
+      step: state.step,
+      # Monty's `check_if_any_lms_updated`, which the experiment asks after every
+      # step: whether the step gave a module something to process, as opposed to
+      # only a location to buffer. It answers whether this step was a matching
+      # step at all, which is what the episode's own limits are counted in.
+      processed?: processed?,
+      # A sensor that answered nothing is not a percept: a view finder measures
+      # the scene for the motor system and sends none (`docs/monty-differences.md`
+      # §2.11).
+      percept_ids:
+        pending.percepts
+        |> Map.reject(fn {_id, percept} -> is_nil(percept) end)
+        |> Map.keys()
+        |> Enum.sort(),
+      inputs: pending.input_counts,
+      votes: vote_info,
+      goals: length(goals),
+      actions: actions,
+      sensor_timeouts: pending.sensor_timeouts,
+      step_type: state.step_type,
+      terminal_states: state.terminal_states,
+      done?: state.done?,
+      duration_us: elapsed_us(pending.started_at)
+    }
+
+    {{:ok, actions, info}, %{state | step: state.step + 1}}
   end
 
   defp step_sensor_modules(
