@@ -165,8 +165,11 @@ Application.put_env(:ex_tbp_monty, :monty_libraries_dir, libraries)
 System.put_env("MONTY_CAD_PART", parts[sensed])
 
 # The seed is the input a rate over seeds varies: one episode recognising a part
-# says it can happen, ten say how often.
+# says it can happen, ten say how often. The budget is the other: a part whose
+# evidence climbs slower than the config's own steps never concludes, and a run
+# that ended at the budget is not a run that failed to recognise.
 seed = System.get_env("CAD_SEED")
+steps = System.get_env("CAD_STEPS") || "500"
 
 Mix.Tasks.Monty.Run.run(
   [
@@ -176,7 +179,7 @@ Mix.Tasks.Monty.Run.run(
     "--episodes",
     "1",
     "--steps",
-    "500",
+    steps,
     "--record"
   ] ++ if(seed in [nil, ""], do: [], else: ["--seed", seed])
 )
