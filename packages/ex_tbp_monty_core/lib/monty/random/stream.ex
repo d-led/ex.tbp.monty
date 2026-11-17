@@ -62,8 +62,14 @@ defmodule Monty.Random.Stream do
   def normal(server, loc, scale),
     do: GenServer.call(server, {:normal, loc, scale}, :infinity)
 
-  @doc "`count` normal draws: Monty's `ctx.rng.normal(loc=..., scale=..., size=count)`."
-  @spec normals(server(), non_neg_integer(), float(), float()) :: [float()]
+  @doc """
+  `count` normal draws: Monty's `ctx.rng.normal(loc=..., scale=..., size=count)`.
+
+  `scale` is one number, or one number a draw for the callers that give noise a
+  scale a channel (`noise_params.features.hsv: [0.1, 0.2, 0.2]`), which NumPy
+  broadcasts over the draws.
+  """
+  @spec normals(server(), non_neg_integer(), float(), float() | [float()]) :: [float()]
   def normals(server, count, loc, scale),
     do: GenServer.call(server, {:normals, count, loc, scale}, :infinity)
 

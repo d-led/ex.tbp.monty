@@ -100,9 +100,28 @@ defmodule Monty.Random.Numpy do
     {loc + scale * (factor * x2), %{state | has_gauss: true, gauss: factor * x1}}
   end
 
-  @doc "`count` normal draws: numpy's `normal(loc, scale, size=count)`."
-  @spec normals(t(), non_neg_integer(), float(), float()) :: {[float()], t()}
+  @doc """
+  `count` normal draws: numpy's `normal(loc, scale, size=count)`.
+
+  `scale` is one number or one number a draw, because NumPy broadcasts an array
+  scale over the draws (`rng.normal(0, [0.1, 0.2, 0.2], 3)`) — which is how
+  Monty writes a per-channel noise amount. A scale array spends the stream
+  exactly as `count` scalar draws do, so nothing after it moves.
+  """
+  @spec normals(t(), non_neg_integer(), float(), float() | [float()]) :: {[float()], t()}
   def normals(%__MODULE__{} = state, 0, _loc, _scale), do: {[], state}
+
+  def normals(%__MODULE__{} = state, count, loc, scale) when is_list(scale) do
+    if length(scale) != count do
+      raise ArgumentError,
+            "a per-draw scale of #{length(scale)} values for #{count} draws: " <>
+              "NumPy broadcasts one scale to one draw"
+    end
+
+    {draws, state} = normals(state, count, 0.0, 1.0)
+
+    {Enum.zip_with([draws, scale], fn [draw, sigma] -> loc + sigma * draw end), state}
+  end
 
   def normals(%__MODULE__{} = state, count, loc, scale) do
     Enum.map_reduce(1..count, state, fn _draw, state -> normal(state, loc, scale) end)
