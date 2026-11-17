@@ -65,4 +65,20 @@ defmodule ExTbpMonty.Cad.ObjectsTest do
     assert {:error, sentence} = Objects.write("part.step", dir, exporter: NoSuchModule)
     assert sentence =~ "ex_monty_cad"
   end
+
+  @tag :tmp_dir
+  test "one mesh can be written on its own, which is what an evaluation needs", %{tmp_dir: dir} do
+    plate = %{
+      name: "plate",
+      family: "plate",
+      vertices: [[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.01, 0.0]],
+      triangles: [[0, 1, 2]],
+      colour: {0.5, 0.5, 0.5}
+    }
+
+    row = Objects.write_mesh(plate, dir)
+
+    assert row.object == "plate"
+    assert File.regular?(Path.join([dir, "plate", "textured.obj"]))
+  end
 end

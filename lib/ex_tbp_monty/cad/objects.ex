@@ -66,34 +66,44 @@ defmodule ExTbpMonty.Cad.Objects do
   # recognition's own record id, so neither comes from a request.
   defp write_all(meshes, into) do
     File.mkdir_p!(into)
+    Enum.map(meshes, &write_mesh(&1, into))
+  end
 
-    Enum.map(meshes, fn mesh ->
-      object = object_name(mesh.name)
-      directory = Path.join(into, object)
-      File.mkdir_p!(directory)
+  @doc """
+  Writes one mesh as one object, and answers the row it wrote.
 
-      Import.write_object(Path.join(directory, "textured.obj"), %{
-        vertices: Enum.map(mesh.vertices, &List.to_tuple/1),
-        triangles: Enum.map(mesh.triangles, &List.to_tuple/1),
-        uvs: nil
-      })
+  This is what an evaluation needs: a memory of a *part* is compared against a
+  mesh of that part, so the caller decides what the one object is called.
+  """
+  # sobelow_skip ["Traversal.FileModule"]
+  # As above: the directory is the caller's, and the name is the recognition's.
+  @spec write_mesh(map(), Path.t()) :: row()
+  def write_mesh(mesh, into) do
+    object = object_name(mesh.name)
+    directory = Path.join(into, object)
+    File.mkdir_p!(directory)
 
-      {red, green, blue} = mesh.colour
+    Import.write_object(Path.join(directory, "textured.obj"), %{
+      vertices: Enum.map(mesh.vertices, &List.to_tuple/1),
+      triangles: Enum.map(mesh.triangles, &List.to_tuple/1),
+      uvs: nil
+    })
 
-      Import.write_texture(Path.join(directory, "texture_map.png"), {
-        :colour,
-        {red, green, blue, 1.0}
-      })
+    {red, green, blue} = mesh.colour
 
-      File.write!(Path.join(directory, "metadata.json"), JSON.encode!(placement(mesh.vertices)))
+    Import.write_texture(Path.join(directory, "texture_map.png"), {
+      :colour,
+      {red, green, blue, 1.0}
+    })
 
-      %{
-        name: mesh.name,
-        object: object,
-        faces: length(mesh.triangles),
-        vertices: length(mesh.vertices)
-      }
-    end)
+    File.write!(Path.join(directory, "metadata.json"), JSON.encode!(placement(mesh.vertices)))
+
+    %{
+      name: mesh.name,
+      object: object,
+      faces: length(mesh.triangles),
+      vertices: length(mesh.vertices)
+    }
   end
 
   # A record id is a name, not a path: `bosses/0` is one directory called

@@ -1,0 +1,14 @@
+# @package experiment.config
+# One object, three rotations: the part the memory was trained on, as a mesh.
+#
+# `object_names` is the directory `ExTbpMonty.Cad.Objects` wrote, and the name is
+# the one the memory carries — an object the memory does not hold is the control,
+# and it is a different run, not a different file here.
+do_eval: true
+eval_env_interface_args:
+  object_names:
+    - plate
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    rotations: ${constants.rotations_3}
+eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}

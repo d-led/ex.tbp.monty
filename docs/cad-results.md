@@ -72,16 +72,46 @@ Same memory (of `plate`), sensing `blend` instead.
 pair is the result: a memory of this part recognises it, and the same memory does
 not conclude on a part it was never shown.
 
+## 4. The same memory, in a mesh world
+
+```sh
+mix run scripts/cad_mesh_eval.exs
+```
+
+The part is written as an object set the MuJoCo world steps — `textured.obj`,
+`texture_map.png`, `metadata.json`, in metres, at its own scale, under the name
+the memory carries — and the run's world is then MuJoCo. Nothing on that path
+asks quiddity anything: `ExTbpMonty.Cad.Objects` is the last thing that reads the
+STEP file, and it runs before the episode starts.
+
+```
+object: plate — 460 faces, 468 vertices
+memory: /tmp/cad-experiment/plate — reading plate
+```
+
+![The mesh evaluation's page](images/cad-mesh-eval-summary.png)
+
+`cad_mesh_eval` — **finished**, `recognition`, world **mujoco**, 177 steps in
+ep 1/1, **recognised**: `outcome learning_module_0=match`, 15.4 s.
+
+![Its evidence](images/cad-mesh-eval-chart.png)
+
+The memory written against the exact B-rep named `plate` from the mesh, in fewer
+steps than it took against the B-rep itself (177 against 420). A tessellation of
+the same surface is the same object to a graph, and a mesh world costs less per
+step than a ray cast.
+
 ## What these results are, and are not
 
-- **They are stage 1 and 2**, in the CAD world: a memory built from exact geometry,
-  and a recognition against it, with a control. Both runs are one episode of one
-  part, so they say _that_ it happens, not how often — a rate needs seeds, and the
-  script takes `CAD_SEED` for exactly that.
-- **They are not stage 3.** No mesh, no texture, no MuJoCo: the world in both
-  phases is the B-rep, ray cast. `ExTbpMonty.Cad.Objects` writes the same
-  recognition's features as a world's object set, and the evaluation that reads
-  those — same memory, no CAD on the node — has not been run yet.
+- **They are the three stages, for one part.** A memory built from exact geometry
+  recognises that part; the same memory does not conclude on a part it never saw;
+  and the same memory recognises the part as a mesh in a world with no CAD on its
+  path. Each is one episode, so they say _that_ it happens — a rate wants seeds,
+  and `scripts/cad_experiment.exs` takes `CAD_SEED`.
+- **They are not compositional.** The memory holds the part as one object. The
+  feature-level alternative is wired — `MONTY_CAD_LABELS=features` gives the CAD
+  world one object per feature record, and `MontyCad.Export` meshes them the same
+  way — but the `_compositional` / `_monolithic` pair of configs has not been run.
 - **The labels are the geometry's own.** Nothing here was annotated by hand, and a
   face the recognition could not explain is the _body_: on this fixture the boss's
   top annulus is one, so a sensor looking straight down carries the body's id

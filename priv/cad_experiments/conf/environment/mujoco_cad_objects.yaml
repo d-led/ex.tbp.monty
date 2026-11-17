@@ -1,0 +1,40 @@
+# @package experiment.config.environment
+# The objects are CAD parts' own meshes, not MuJoCo's primitive-YCB set: one
+# directory per part under `$MONTY_DATA/cad_objects`, written by
+# `ExTbpMonty.Cad.Objects` from the same STEP file the training memory came from.
+#
+# Everything else is the surface agent the tutorial configs use, unchanged — the
+# evaluation is meant to differ from the CAD run in the world, and in nothing else.
+env_init_args:
+  data_path: ${path.expanduser:${oc.env:MONTY_DATA}/cad_objects}
+  agents:
+    - _target_: tbp.monty.simulators.mujoco.agents.SurfaceAgent
+      _partial_: true
+      agent_id: agent_id_0
+      sensor_configs:
+        patch:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.0
+          resolution:
+            width: 64
+            height: 64
+          zoom: 10.0
+        view_finder:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.03
+          resolution:
+            width: 64
+            height: 64
+          zoom: 1.0
+      position:
+        - 0.0
+        - 1.5
+        - 0.1
+  raise_actuate_missing: false
+env_init_func: ${monty.class:tbp.monty.simulators.mujoco.MuJoCoSimulator}
