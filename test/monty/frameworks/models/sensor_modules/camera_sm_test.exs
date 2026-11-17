@@ -382,8 +382,14 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
   end
 
   describe "snapshot telemetry" do
-    test "records the raw observation and the sensor's pose when asked to" do
-      sensor = sensor(save_raw_obs: true) |> placed_at([1.0, 2.0, 3.0])
+    # Two flags decide it: `save_raw_obs` is the config's word, and the detailed
+    # logger is the run's. A run that will not plot the episode keeps neither,
+    # which is what holds a training run's sensor under its heap ceiling
+    # (`docs/monty-differences.md` §2.26).
+    test "records the raw observation and the sensor's pose for a run that reads them" do
+      sensor =
+        sensor(save_raw_obs: true, has_detailed_logger: true) |> placed_at([1.0, 2.0, 3.0])
+
       observation = Patch.new()
 
       {_percept, sensor} = CameraSM.step(observation, false, ctx(), sensor)
@@ -400,6 +406,16 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
       {_percept, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor())
 
       assert CameraSM.state_dict(sensor).raw_observations == []
+    end
+
+    test "records nothing for a run whose logging never reads the record" do
+      sensor = sensor(save_raw_obs: true) |> placed_at([1.0, 2.0, 3.0])
+
+      {_percept, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor)
+
+      state = CameraSM.state_dict(sensor)
+      assert state.raw_observations == []
+      assert state.processed_observations == []
     end
 
     test "is emptied for the next episode, along with the filter's memory" do
