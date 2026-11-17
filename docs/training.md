@@ -239,14 +239,25 @@ trained, and only one of them can be judged:
   correct. Monty's own unsupervised experiments are scored because they train and
   evaluate **in one run**, where the mapping is still in the module.
 
-  **Since 2026-11-17 the library carries it.** `Memory.save_all/4` takes each
+  **Since 2026-11-17 the library can carry it.** `Memory.save_all/4` takes each
   module's map beside its memory and writes a `targets` list into every record,
   `Memory.load_with_targets/4` reads it back, and `Setup` indexes the module it
-  builds by those names, so an unsupervised memory trained now is scorable like a
-  supervised one (`docs/monty-differences.md` records the shape of the records). A
-  library written before that reads exactly as it did — the memories measured in
-  this document, `trained/dogs_surf_unsupervised` among them, carry no `targets`
-  and are still only countable, not scorable.
+  builds by those names (`docs/monty-differences.md` §2.27). A library written
+  before that reads exactly as it did.
+
+  **Which does not make an unsupervised pretraining scorable**, and the first
+  library written under the new format says why. The same eight episodes that
+  produced `trained/dogs_surf_unsupervised`'s fragment wrote
+  `targets: ["new_object0"]` … `["new_object3"]` — each graph's own name. The map
+  is filled by `fixme_update_ground_truth/1` in a training episode, from the object
+  the module detected and the object it was _told to expect_; an unsupervised
+  pretraining is told nothing, which is what unsupervised means, so there is no
+  target to record and the record falls back to the graph's name.
+
+  So a memory is scorable when the run that wrote it was told the answers, and that
+  is supervised pretraining. Monty's unsupervised experiments are scored because
+  they train and evaluate **in one run**: the evaluation phase is told the object
+  it shows, and that is where the mapping comes from.
 
 ### The dog corpus, end to end (measured 2026-11-17)
 
