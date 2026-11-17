@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Monty.RunTest do
     # the library tree too — writable and temporary here, holding what the
     # application ships, so a run of a config with a pretrained model still has
     # its graphs.
-    libraries = Tmp.libraries("run-task-libraries")
+    _libraries = Tmp.libraries("run-task-libraries")
 
     # A run history is what this module asserts about, so it starts empty: the
     # table survives between local runs, and "the database is untouched" is a
@@ -116,6 +116,38 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert DynamicSupervisor.which_children(ExTbpMonty.Core.ModelSupervisor) == []
     end
 
+    # The levers a page offers, and the reason to have them here too: two runs of
+    # one seed compared by a script, with the choice in the record rather than in
+    # whatever the shell happened to export.
+    test "--sensors and --scheduling are recorded with the run" do
+      run_and_capture([
+        "base_config_10distinctobj_dist_agent",
+        "--steps",
+        "1",
+        "--episodes",
+        "1",
+        "--sensors",
+        "concurrent",
+        "--scheduling",
+        "lagged",
+        "--settle",
+        "4"
+      ])
+
+      run = recorded_run()
+      assert run.inputs["sensors_step"] == "concurrent"
+      assert run.inputs["scheduling"] == "lagged"
+      assert run.inputs["settle"] == 4
+    end
+
+    test "and a run that names none records none" do
+      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "1"])
+
+      run = recorded_run()
+      refute Map.has_key?(run.inputs, "sensors_step")
+      refute Map.has_key?(run.inputs, "settle")
+    end
+
     test "--no-record keeps the database out of it" do
       output =
         run_and_capture([
@@ -198,6 +230,33 @@ defmodule Mix.Tasks.Monty.RunTest do
 
     test "no experiment at all" do
       assert_raise Mix.Error, ~r/which experiment/, fn -> Mix.Tasks.Monty.Run.run([]) end
+    end
+
+    # A value the task cannot read is refused, not quietly run as the default: a
+    # run that says `concurrent` in its record and served its sensors one after
+    # another is worse than a run that did not start.
+    test "a sensors mode this port does not have" do
+      assert_raise Mix.Error, ~r/sensors is `auto`/, fn ->
+        Mix.Tasks.Monty.Run.run([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "1",
+          "--sensors",
+          "parallel"
+        ])
+      end
+    end
+
+    test "a scheduling mode this port does not have" do
+      assert_raise Mix.Error, ~r/scheduling is `barrier`/, fn ->
+        Mix.Tasks.Monty.Run.run([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "1",
+          "--scheduling",
+          "eager"
+        ])
+      end
     end
   end
 

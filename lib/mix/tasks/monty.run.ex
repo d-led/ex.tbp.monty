@@ -70,7 +70,10 @@ defmodule Mix.Tasks.Monty.Run do
     quiet: :boolean,
     pretrained_dir: :string,
     overlay: :string,
-    world: :string
+    world: :string,
+    sensors: :string,
+    scheduling: :string,
+    settle: :integer
   ]
 
   @impl true
@@ -202,14 +205,17 @@ defmodule Mix.Tasks.Monty.Run do
     experiment = Monty.Studio.Setup.experiment_class(opened.setup)
 
     {:ok, run} =
-      Monty.Studio.Run.start(Monty.Studio.Setup.with_phase(opened.setup, scope.mode),
-        steps: scope.steps,
-        episode: episode,
-        epoch: epoch,
-        mode: scope.mode,
-        memory: carried.memories,
-        memory_targets: carried.targets,
-        first_seen: carried.first_seen
+      Monty.Studio.Run.start(
+        Monty.Studio.Setup.with_phase(opened.setup, scope.mode),
+        [
+          steps: scope.steps,
+          episode: episode,
+          epoch: epoch,
+          mode: scope.mode,
+          memory: carried.memories,
+          memory_targets: carried.targets,
+          first_seen: carried.first_seen
+        ] ++ run_levers(opts)
       )
 
     # The run is already started, so the class's `pre_episode` has nothing to
@@ -351,12 +357,59 @@ defmodule Mix.Tasks.Monty.Run do
 
       {:ok, history} =
         Monty.Studio.RunHistory.start(
-          Monty.Studio.RunLog.attributes(opened, steps(opened, opts), 0, 1, episodes)
+          Monty.Studio.RunLog.attributes(
+            opened,
+            steps(opened, opts),
+            0,
+            1,
+            episodes,
+            levers(opts)
+          )
         )
 
       {:ok, history} = Monty.Studio.RunHistory.mark_running(history)
       history
     end
+  end
+
+  # The three choices a run carries beside its size — how its steps are scheduled,
+  # how many steps a module still computing gets after a conclusion, and whether a
+  # step serves its sensors one after another or at once. The page offers them in
+  # the budget row; the command line is where two runs of one seed are compared
+  # without a browser, so it offers the same three and refuses a value it cannot
+  # read rather than running the default under a name that says otherwise.
+  defp levers(opts) do
+    %{
+      scheduling: scheduling_of(opts[:scheduling]),
+      settle: opts[:settle] || 0,
+      sensors: sensors_of(opts[:sensors])
+    }
+  end
+
+  defp scheduling_of(nil), do: Monty.Studio.Jobs.scheduling()
+  defp scheduling_of("barrier"), do: :barrier
+  defp scheduling_of("lagged"), do: :lagged
+
+  defp scheduling_of(other),
+    do: Mix.raise("scheduling is `barrier` or `lagged`, got: #{inspect(other)}")
+
+  defp sensors_of(nil), do: :auto
+  defp sensors_of("auto"), do: :auto
+  defp sensors_of("serial"), do: :serial
+  defp sensors_of("concurrent"), do: :concurrent
+
+  defp sensors_of(other),
+    do: Mix.raise("sensors is `auto`, `serial` or `concurrent`, got: #{inspect(other)}")
+
+  # What the levers become in a run's options: only the ones asked for, so a run
+  # that named none is the run this task always started.
+  defp run_levers(opts) do
+    [
+      opts[:settle] && {:settle_steps, opts[:settle]},
+      opts[:scheduling] && {:scheduling, scheduling_of(opts[:scheduling])},
+      opts[:sensors] && {:sensors_step, sensors_of(opts[:sensors])}
+    ]
+    |> Enum.reject(&(&1 in [nil, false]))
   end
 
   defp step_through(run, history, opts, episode, infos, beat) do
