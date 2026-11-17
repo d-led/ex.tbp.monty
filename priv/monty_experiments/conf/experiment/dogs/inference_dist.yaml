@@ -1,0 +1,32 @@
+# @package _global_
+
+# Monty's `unsupervised_inference_distinctobj_dist_agent`, on the dog corpus: the
+# distant agent stands off and looks at the whole object, so it reads a shape the
+# surface agent's 5 cm clip cannot — recognition against the memory
+# `dogs/supervised_pretraining` builds with the matching distant agent, which the
+# model path names.
+defaults:
+  - /monty: noresetevidencegraph_exp1000_e100_t3
+  - /monty/motor_system_config: distant_5
+  - /monty/learning_module: noresetevidence_1lm
+  - /monty/sensor_module: camera_dist_noise_raw0
+  - /monty/connectivity: 1lm_1sm
+  - /environment: mujoco_objaverse_dogs_dist_agent
+  - /env_interface: eval_dogs_random
+  - /env_interface/positioning_procedures_eval: getgoodview_viewfinder_patch
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0
+  - /termination: any1_min_e100_t3_exp1000_max_e100_t1000_tot6000
+  - /logging: basic_warning_monty_runs
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    show_sensor_output: false
+    n_train_epochs: 0
+    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining/pretrained/
+    n_eval_epochs: 10
+    seed: 42
+    supervised_lm_ids: []
+    python_log_level: DEBUG
+    logging:
+      run_name: dogs_inference_dist

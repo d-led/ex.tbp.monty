@@ -161,3 +161,72 @@ the refusal into the `:world_is_a_stand_in` warning: a run of that shape is
 stepped, and its numbers are nobody's but this port's. That is the honest half of
 what a Habitat config means here — the experiment's _wiring_ runs, its _scene_
 does not.
+
+## 7. What a memory has to be, before an inference can be judged by it
+
+Measured 2026-11-17, on this box, with `priv/monty/libraries` read by
+`MIX_ENV=test mix run --no-start /tmp/library_nodes.exs <dir>` — one record a
+graph, so a library's node count is what a percept can be matched against.
+
+| library | objects | nodes an object |
+| --- | --- | --- |
+| Monty's own `supervised_pre_training_5lms` (exported from its `model.pt`) | 10 | 2 668 … 376 |
+| Monty's own `supervised_pre_training_10distinctobj_vocus2` | 10 | 1 253 … 531 |
+| `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration) | 2 | ~1 500 |
+| `trained/surf_agent_2obj_unsupervised` (2 episodes) | 2 | ~540 |
+| `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent) | 8 | 29 … 88 |
+| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8 | 9 … 41 |
+
+The same inference, over two of those memories:
+
+- **`tutorial/surf_agent_2obj_eval`, against the 1 500-node YCB memory: 6 of 6
+  `match`, 599 steps** (~100 an episode) — the pipeline works.
+- **`dogs/inference_supervised` and `dogs/inference`, against 20–88-node
+  memories: 0 of 8 concluded, every episode `time_out`**, evidence around 2–5
+  where the YCB memory reaches tens. Not a policy problem: the patch sees the
+  dog, hypotheses are culled (4 296 → 136), and the evidence cannot climb because
+  almost no percept has a node within `max_match_distance` of it.
+
+So a recognition needs a memory of **hundreds of nodes an object**, and the
+density of a supervised pretraining is `epochs × sensors`: Monty's
+`supervised_pre_training_5lms` is fourteen rotations of five sensors, i.e. seventy
+passes an object, and that is where its ~2 400 nodes come from. One epoch of one
+sensor is one pass and ~20 nodes.
+
+**Trap — `NaiveScan`'s `fixed_amount` is a step size in degrees, not a count.**
+The spiral is `k * (k - 1) + 1` steps with `k = ceil(90 / fixed_amount)`
+(`monty/experiment/recognition_strategy/naive_scan.ex`), so 5 is 307 steps and 50
+is **3**: raising it shortens a pretraining rather than lengthening it.
+
+## 8. Two defects found by running the pipeline, both fixed
+
+- **A per-channel noise amount crashed the episode's stream.** Monty writes
+  `noise_params: features: hsv: [0.1, 0.2, 0.2]` and NumPy **broadcasts** it over
+  the draws; the port passed the list as a scalar standard deviation and
+  `Random.Stream` died with `:erlang.*/2 bad argument` on the first step of
+  `tutorial/surf_agent_2obj_eval`. `Monty.Random.Numpy.normals/4` now takes a
+  scale a draw and spends the stream exactly as scalar draws do (pinned against
+  numpy 1.23.5's own numbers in `numpy_test.exs`).
+- **An empty memory was written as a library.** `Memory.save_all/4` writes one
+  record a graph, so a memory holding none became a record-less file: a library
+  that reads back as "there is a memory here", recognises nothing, and — filed
+  under the name a previous run wrote — destroys that run's memory.
+  `Learned.holding/2` is what both writers ask now, and a divided wave whose merge
+  is empty answers `{:error, :nothing_learned}`.
+
+## 9. Which of the two memories a run can be scored against
+
+Both `dogs/inference` and `dogs/inference_supervised` read a library a run here
+trained, and only one of them can be judged:
+
+- **A supervised pretraining names each graph after the object it was told** —
+  `milka`, `puppy`, … — so `graph_id_to_target` is the identity and a verdict can
+  be `match`.
+- **An unsupervised one names them `new_object0`, `new_object1`, …** (Monty's own
+  naming) and keeps the true object in the module's `graph_id_to_target`; the
+  library format holds objects, nodes and features, not that mapping, so a
+  memory read back from `trained/` cannot say which dog `new_object3` was. Its
+  recognition is still a recognition — one graph, one possible object — it just
+  cannot be scored as correct. Monty's own unsupervised experiments are scored
+  because they train and evaluate **in one run**, where the mapping is still in
+  the module.

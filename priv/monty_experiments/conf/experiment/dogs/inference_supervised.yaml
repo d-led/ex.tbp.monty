@@ -1,26 +1,38 @@
 # @package _global_
 
 # The same inference as `dogs/inference`, against the memory *supervised*
-# pretraining built — `dogs/supervised_pretraining_small`.
+# pretraining built — `dogs/supervised_pretraining`, fourteen rotations of the
+# corpus, and Monty's `unsupervised_inference_distinctobj_dist_agent` with the
+# corpus swapped, because a *distant* memory is what it is.
 #
-# The difference is not a knob, it is what the two memories can be asked. A
-# supervised pretraining names each graph after the object it was told, so the
-# library holds `boykin_spaniel`, `milka`, … and a recognition can be right or
-# wrong. An unsupervised one names its graphs `new_object0`, `new_object1`, …
-# (Monty's own naming for a memory it built itself), and the mapping from those
-# names to the objects an evaluation places is a piece of a learning module's
-# state this library format does not carry — so an unsupervised memory can be
-# *read* by an inference run but its verdicts cannot be scored as matches.
-# Which of the two a run wants is therefore the run's first question.
+# `dogs/supervised_pretraining` scans with `naive_scan_5` on `DistantAgent` at
+# 0.2 m, so an evaluation of it has to come from the same agent, the same zoom
+# and the same transform; a surface-agent inference over a distant memory is a
+# second experiment wearing the first one's name.
+#
+# The difference from `dogs/inference` is not only the agent, it is what the two
+# memories can be asked. A supervised pretraining names each graph after the
+# object it was told, so the library holds `boykin_spaniel`, `milka`, … and a
+# recognition can be right or wrong. An unsupervised one names its graphs
+# `new_object0`, `new_object1`, … (Monty's own naming for a memory it built
+# itself), and the mapping from those names to the objects an evaluation places
+# is a piece of a learning module's state this library format does not carry —
+# so an unsupervised memory can be *read* by an inference run but its verdicts
+# cannot be scored as matches (`docs/training.md` §9).
+#
+# The memory's density is the other half: `docs/training.md` §7 has the node
+# counts a recognition needs, and one epoch of a naive scan builds a thirtieth of
+# what fourteen do.
 defaults:
   - /monty: noresetevidencegraph_exp1000_e100_t3
-  - /monty/motor_system_config: surface_curvature_informed_goal1
-  - /monty/learning_module: noresetevidence_1lm_dod0025
-  - /monty/sensor_module: camera_surf_noise_raw0
+  - /monty/motor_system_config: distant_5
+  - /monty/learning_module: noresetevidence_1lm
+  - /monty/sensor_module: camera_dist_noise_raw0
   - /monty/connectivity: 1lm_1sm
-  - /environment: mujoco_objaverse_dogs_surf_agent
+  - /environment: mujoco_objaverse_dogs_dist_agent
   - /env_interface: eval_dogs_random
-  - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
+  - /env_interface/positioning_procedures_eval: getgoodview_viewfinder_patch
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0
   - /termination: any1_min_e100_t3_exp1000_max_e100_t1000_tot6000
   - /logging: basic_warning_wandb_monty_runs
 
@@ -29,7 +41,7 @@ experiment:
   config:
     show_sensor_output: false
     n_train_epochs: 0
-    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining_small/pretrained/
+    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining/pretrained/
     n_eval_epochs: 10
     seed: 42
     supervised_lm_ids: []
