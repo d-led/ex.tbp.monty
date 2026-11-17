@@ -383,3 +383,20 @@ Fourteen rotations would be 112 episodes and about five hours; two rotations are
 thirteen minutes and seven of eight names. Raising it is one line in
 `dogs/surf_supervised`, and the honest next measurement is what rotations four,
 six and fourteen add.
+
+#### What the extra rotations bought (measured 2026-11-17)
+
+| memory                                   | episodes | steps  | wall   | nodes      | per dog       | named correctly |
+| ---------------------------------------- | -------- | ------ | ------ | ---------- | ------------- | --------------- |
+| `dogs_surf_supervised`, 2 rotations      | 16       | 42 263 | 13 min | 7 217      | 704 – 979     | 7 of 8          |
+| `dogs_surf_supervised_4rot`, 4 rotations | 32       | 77 892 | 32 min | **13 501** | 1 424 – 1 928 | **8 of 8**      |
+
+The eighth name is `milka`, which the two-rotation memory read as `puppy`: two
+small dogs that share a shape at this patch size, and the one confusion more
+surface views resolve. All eight episodes conclude `match` either way, so the
+rotations buy accuracy, not confidence.
+
+The two runs also say something about determinism: the first sixteen episodes of
+the four-rotation run left exactly the 7 217 nodes the two-rotation run left, to
+the node, because they are the same episodes from the same seed. A difference
+between two runs of one config is a behaviour change, never noise.
