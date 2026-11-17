@@ -80,6 +80,18 @@ defmodule Monty.Runtime.LearningModuleServer do
     GenServer.cast(server, {:hand_off, epoch, percepts, ctx, target})
   end
 
+  @doc """
+  Hands a module the votes one epoch's round combined, and answers at once.
+
+  This port's addition, for a lagged run: the coordinator is a step ahead of the
+  module it is telling, so the votes are buffered and applied at the module's own
+  boundary (`handle_cast/2`) rather than inside a call the coordinator waits for.
+  """
+  @spec deliver_votes(server(), non_neg_integer(), term()) :: :ok
+  def deliver_votes(server, epoch, votes) do
+    GenServer.cast(server, {:deliver_votes, epoch, votes})
+  end
+
   @doc "The last step this module finished processing, or `nil` before its first."
   @spec processed_through(server()) :: non_neg_integer() | nil
   def processed_through(server), do: GenServer.call(server, :processed_through, :infinity)
@@ -260,7 +272,8 @@ defmodule Monty.Runtime.LearningModuleServer do
        model_id: spec.model_id,
        epoch: nil,
        waiting: [],
-       report_votes?: Map.get(spec, :report_votes, false)
+       report_votes?: Map.get(spec, :report_votes, false),
+       pending_votes: %{}
      }}
   end
 
@@ -281,8 +294,26 @@ defmodule Monty.Runtime.LearningModuleServer do
       |> take_step(percepts, ctx, target)
       |> finished(epoch)
       |> report(epoch)
+      |> apply_votes(epoch - 1)
 
     {:noreply, reply_waiters(server)}
+  end
+
+  # The votes an epoch's round combined, for a module that was handed them rather
+  # than asked for them.
+  #
+  # They are applied at the *next* boundary — when this module finishes epoch
+  # `e + 1` — and not on arrival. Arrival is a race: the coordinator sends them
+  # after epoch `e + 1` was handed over, so a fast module has already finished it
+  # and a slow one has not, and applying on arrival would mean the same run
+  # computed two different things depending on which. A boundary is a rule about
+  # epochs, and the ordering that makes it safe is the mailbox's: the votes for
+  # `e` are always ahead of the hand-off for `e + 2`.
+  @impl true
+  def handle_cast({:deliver_votes, epoch, votes}, server) do
+    server = %{server | pending_votes: Map.put(server.pending_votes, epoch, votes)}
+
+    if server.epoch == epoch + 1, do: {:noreply, apply_votes(server, epoch)}, else: {:noreply, server}
   end
 
   defp take_step(%{module: module, state: state} = server, [], _ctx, _target) do
@@ -312,6 +343,27 @@ defmodule Monty.Runtime.LearningModuleServer do
   defp location_only?(percepts), do: Monty.Runtime.location_only_step?(percepts)
 
   defp finished(server, epoch), do: %{server | epoch: epoch}
+
+  # Monty's `update_stats_after_vote`, at the boundary the votes for an epoch
+  # belong to: a module that was handed votes applies them here, decides what they
+  # left it believing, and forgets them. A module the coordinator never handed
+  # votes to — every module of a barrier run — has nothing pending and does
+  # nothing here, because its round is settled by the coordinator's own calls.
+  defp apply_votes(server, epoch) do
+    case Map.pop(server.pending_votes, epoch) do
+      {nil, _pending} ->
+        server
+
+      {votes, pending} ->
+        {:ok, state} = server.module.receive_votes(votes, server.state)
+
+        %{
+          server
+          | state: server.module.update_stats_after_vote(state),
+            pending_votes: pending
+        }
+    end
+  end
 
   # `send_out_vote/1` is what this module believes, not a step of it: every
   # module in this tree answers it with the state it was given. It is called

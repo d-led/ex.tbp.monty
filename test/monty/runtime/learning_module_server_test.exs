@@ -171,6 +171,56 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     end
   end
 
+  describe "votes handed over rather than asked for" do
+    test "they wait for the module's next boundary, then apply", %{model_id: model_id} do
+      server = start_server(model_id, :lm_0)
+
+      LearningModuleServer.hand_off(server, 0, [Messages.percept()], Context.new(1), "mug")
+      assert :ok = LearningModuleServer.await(server, 0)
+
+      # The module is at epoch 0, so epoch 0's votes belong to the boundary it
+      # has not crossed yet.
+      LearningModuleServer.deliver_votes(server, 0, [:votes_of_epoch_0])
+      assert LearningModuleServer.state(server).votes_received == []
+
+      LearningModuleServer.hand_off(server, 1, [Messages.percept()], Context.new(1), "mug")
+      assert :ok = LearningModuleServer.await(server, 1)
+
+      assert LearningModuleServer.state(server).votes_received == [:votes_of_epoch_0]
+    end
+
+    test "they apply at once when that boundary is already crossed", %{model_id: model_id} do
+      server = start_server(model_id, :lm_0)
+
+      LearningModuleServer.hand_off(server, 0, [Messages.percept()], Context.new(1), "mug")
+      assert :ok = LearningModuleServer.await(server, 0)
+      LearningModuleServer.hand_off(server, 1, [Messages.percept()], Context.new(1), "mug")
+      assert :ok = LearningModuleServer.await(server, 1)
+
+      LearningModuleServer.deliver_votes(server, 0, [:late_but_in_time])
+      _ = :sys.get_state(server)
+
+      assert LearningModuleServer.state(server).votes_received == [:late_but_in_time]
+    end
+
+    test "an epoch's votes are applied once, never twice", %{model_id: model_id} do
+      server = start_server(model_id, :lm_0)
+
+      for epoch <- 0..1 do
+        LearningModuleServer.hand_off(server, epoch, [Messages.percept()], Context.new(1), "mug")
+        assert :ok = LearningModuleServer.await(server, epoch)
+      end
+
+      LearningModuleServer.deliver_votes(server, 0, [:once])
+      _ = :sys.get_state(server)
+
+      LearningModuleServer.hand_off(server, 2, [Messages.percept()], Context.new(1), "mug")
+      assert :ok = LearningModuleServer.await(server, 2)
+
+      assert LearningModuleServer.state(server).votes_received == [:once]
+    end
+  end
+
   describe "the behaviour's defaults" do
     test "a minimal module proposes nothing and emits nothing", %{model_id: model_id} do
       server = start_server(model_id, :lm_0, MinimalLearningModule)
