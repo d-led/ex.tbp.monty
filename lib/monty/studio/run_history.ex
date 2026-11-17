@@ -512,7 +512,13 @@ defmodule Monty.Studio.RunHistory do
       finished_at: finished_at,
       duration_us: duration(run.started_at, finished_at)
     })
-    |> Repo.update()
+    # `allow_stale` because a record can be reaped while its run is still
+    # stepping: the reaper's rule is quietness, and a training episode writes its
+    # transcript only at boundaries — minutes apart on a corpus episode. A run
+    # whose row was taken from it has still ended, and raising
+    # `Ecto.StaleEntryError` out of the closing write took the whole command down
+    # after the memory it learned had been written.
+    |> Repo.update(allow_stale: true)
     |> tap(fn
       {:ok, settled} -> broadcast({:settled, settled})
       _refused -> :ok

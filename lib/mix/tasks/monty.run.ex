@@ -232,11 +232,7 @@ defmodule Mix.Tasks.Monty.Run do
 
     unless opts[:quiet], do: Mix.shell().info(say_outcome(conclusion))
 
-    carried = %{
-      memories: next_memories(last_run, carried.memories, scope.mode),
-      first_seen: last_run.first_seen,
-      targets: targets_after(last_run, carried.targets, scope.mode)
-    }
+    carried = learned_from(last_run, carried, scope)
 
     # A training episode has nothing to recognise, so what it has to show for
     # itself is the memory it just built.
@@ -289,9 +285,25 @@ defmodule Mix.Tasks.Monty.Run do
   # than part of it, so a module that cannot answer for one is said out loud and
   # the phase goes on from the memory it had.
 
-  # What a graph was built from travels with the memory it belongs to, so the
-  # library names its objects — an unsupervised run names its graphs
-  # `new_object0`, … and nothing else would say which dog that was.
+  # What the next episode starts from: the memory this one built, where each
+  # object stood, and what each of its graphs was built from.
+  #
+  # The order is this function's and not a map literal's: `next_memories/3` is
+  # `update_ltm`, the only moment a training episode writes to memory, and the
+  # graph-to-object map is written by that same call. Read in the other order it
+  # is the map the episode *started* with — which named each graph after itself,
+  # so the library said `new_object0 → new_object0` and an unsupervised memory
+  # went on declaring itself unlabelled.
+  defp learned_from(last_run, carried, scope) do
+    memories = next_memories(last_run, carried.memories, scope.mode)
+
+    %{
+      memories: memories,
+      first_seen: last_run.first_seen,
+      targets: targets_after(last_run, carried.targets, scope.mode)
+    }
+  end
+
   defp targets_after(run, _carried, :train), do: Monty.Studio.Run.memory_targets(run)
 
   defp targets_after(_run, carried, :eval), do: carried
@@ -442,13 +454,25 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp finish(nil, _summary), do: nil
 
+  # The closing write is the record's, and a record whose connection went away is
+  # what a long run has: an episode of a training phase outlives the database's
+  # ownership timeout, and the run's own log has every step either way. So the
+  # answer is read, said out loud when it failed, and the run ends with its
+  # summary rather than with a `MatchError` in its last line.
   defp finish(history, summary) do
-    {:ok, stored} = Monty.Studio.RunHistory.store(history, history.log, history.timeline)
+    with {:ok, stored} <- Monty.Studio.RunHistory.store(history, history.log, history.timeline),
+         {:ok, finished} <-
+           Monty.Studio.RunHistory.finish(stored, Monty.Studio.RunLog.summary(summary)) do
+      finished
+    else
+      {:error, reason} ->
+        Mix.shell().error(
+          "the run's record could not be closed (#{inspect(reason)}); " <>
+            "the run's own log holds what it did"
+        )
 
-    {:ok, history} =
-      Monty.Studio.RunHistory.finish(stored, Monty.Studio.RunLog.summary(summary))
-
-    history
+        history
+    end
   end
 
   defp report_experiment(name, opened) do
