@@ -872,3 +872,22 @@ names.
   without a window. Windows runs `example_plugin.bat` through `cmd /c`, because a
   batch file is not an executable image and `CreateProcess` will not start one;
   `plugins\start-plugins.ps1` is the same launch by hand.
+
+## Where the data lives, and how it gets there
+
+A window has no repository beside it, so nothing an experiment reads may need
+one. Three kinds of input, and each has one way in:
+
+| input                                      | lives in                                                                          | arrives by                                                                                                                                                         |
+| ------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| object meshes, Monty's pretrained memories | `~/tbp/…`, or under the folder `--where` prints                                   | `/prerequisites` — a click per archive, streamed to `<target>.part` and moved into place only when its sha256 matches the digest `priv/prerequisites.yaml` records |
+| the CAD parts                              | the same folder's `parts/`, and the four the application ships in its own `priv/` | shipped with the application, or put there by hand; a part under the data folder comes first, so a person's own copy wins                                          |
+| this port's experiment configs             | the release's `priv/`                                                             | shipped with the application                                                                                                                                       |
+
+Nothing is a model in the repository. A pretrained memory is what Monty's
+training wrote, so exporting it is the fetch's work and its record is the
+archive's checksum; what the tree carries is the _record_ of where each data set
+came from, `priv/data_provenance.yaml`, and `mix monty.data.check` holds it to
+the bytes. The CAD world is offered as soon as the application is carried,
+because its parts ship with it — a window on a machine that has never seen
+another checkout still has a part to step.

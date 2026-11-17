@@ -102,6 +102,24 @@ register() {
   fi
 }
 
+# Removing something a previous run wrote, and a packaging run has to be
+# repeatable over whatever that was.
+#
+# The write bit comes back first because what a run leaves is not this script's
+# to assume: a release keeps read-only launchers (`bin/*` is 0555) and its
+# `COOKIE` at 0400, and `rm -rf` empties a directory only if that directory is
+# writable. A tree a crash left half-written is the same problem in a worse
+# shape. Failure here is loud on purpose — `rm`'s own words, and `set -e` stops
+# the run — because packing on top of a tree that could not be replaced is how a
+# stale artefact gets shipped as a new one.
+clean() {
+  local path=$1
+
+  [ -e "$path" ] || return 0
+  chmod -R u+w "$path" 2>/dev/null || true
+  rm -rf "$path"
+}
+
 # One bundle: the stylesheet, the scripts, `mix release`, and the window with
 # that release copied inside it. `start-desktop.sh` owns those steps — this
 # script must not have a second version of them.
@@ -120,7 +138,7 @@ build_app() {
   # launchers is `Permission denied (os error 13)`), and the check below then read
   # that stale bundle as success — a packaging run that reported nothing wrong and
   # shipped nothing new.
-  if [ -e "$bundle" ] && ! rm -rf "$bundle" 2>/dev/null; then
+  if [ -e "$bundle" ] && ! clean "$bundle"; then
     echo "cannot replace $bundle: something is holding it" >&2
     echo "  quit the app if it is open, then run this again" >&2
     return 1
@@ -208,7 +226,7 @@ companion_apps() {
     app="$artifacts/$rid/$name.app"
     identifier="dev.ex-tbp-monty.plugin.$(printf '%s' "$node" | tr '_' '-')"
 
-    rm -rf "$app"
+    clean "$app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
     cp scripts/desktop-plugins/companion-app.sh "$app/Contents/MacOS/$name"
@@ -289,7 +307,8 @@ carries_companion_apps() {
 linux_bundle() {
   local rid=$1 folder="$artifacts/$1/ex-tbp-monty-$1" target="$artifacts/$1/ex-tbp-monty-$1.tar.gz"
 
-  rm -rf "$folder" "$target"
+  clean "$folder"
+  rm -f "$target"
   mkdir -p "$folder"
   cp src-tauri/target/release/ex-tbp-monty-desktop "$folder/"
   cp -R src-tauri/target/release/rel "$folder/"
@@ -393,6 +412,11 @@ installer_package() {
   # tools that follow. The staged copy is ours to write.
   chmod -R u+w "$stage"
 
+  # A package from an earlier run goes before this one is written: a run that
+  # died before `pkgbuild` leaves a file of the right name that is not this run's
+  # answer, and the next upload would take it for one.
+  rm -f "$target"
+
   pkgbuild --root "$stage" \
     --identifier dev.ex-tbp-monty.desktop \
     --version "$version" \
@@ -422,7 +446,8 @@ disk_image() {
     return 0
   fi
 
-  rm -rf "$stage" "$target"
+  clean "$stage"
+  rm -f "$target"
   mkdir -p "$stage"
   # The window and its two companion apps: each companion looks for the window in
   # the folder it was dragged into, so a disk image holding one of the three would
@@ -448,7 +473,10 @@ for rid in "${rids[@]}"; do
 
   echo "$rid"
 
-  rm -rf "$artifacts/$rid"
+  # Whatever the last run left, gone: this script's answer is the folder it
+  # writes now, and a re-run has to produce that and not a mixture of the two.
+  clean "$artifacts/$rid"
+  clean "$artifacts/.ex-tbp-monty-$rid.zip"
   mkdir -p "$artifacts/$rid"
 
   case "$rid" in

@@ -58,7 +58,11 @@ fi
 node=$(tr -d ' \t\r\n' <"$resources/node")
 tmp=${TMPDIR:-/tmp}
 log="${tmp%/}/monty-studio-$node.log"
-: >"$log" 2>/dev/null || log=/dev/null
+
+# Appended, never truncated: a second click must not delete the log the node that
+# is already running is writing. `start-plugins.sh` keeps the same file the same
+# way, so the two routes leave one history rather than two.
+: >>"$log" 2>/dev/null || log=/dev/null
 
 # Everything this says goes to two places: the log (which a person can open) and
 # stderr (which macOS keeps in the unified log). A message that only went to
