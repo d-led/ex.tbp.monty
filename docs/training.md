@@ -307,3 +307,10 @@ and stopped in the same place, while `evidence_tutorial_surf_agent_2obj` (top
 80 %, `max_nneighbors: 10`) concluded every episode. **The memory decides how
 much evidence a percept can earn; the module decides whether an episode ever
 concludes.**
+#
+# The third row: `dogs/inference_paired` — the same dense memory, the module and
+# budget `tutorial/surf_agent_2obj_eval` uses — concludes 7 of 8 `match` and 1
+# `no_match` in 2 840 steps, where the config above concludes nothing at all.
+# A `match` here cannot be scored against the dog that was placed: an
+# unsupervised memory names its graphs `new_object0`, … and the mapping that
+# would say which dog that was is not in the library (§9).
