@@ -4,6 +4,15 @@ Written 2026-11-06, after the port finished a full evaluation run and the crash
 that used to end one. Every claim here is a file and a line, or a command whose
 output is quoted.
 
+**Where it stands now — 2026-11-17.** A new corpus (eight Objaverse dogs) is trained
+and recognised end to end, and what decides whether it is recognised is the
+training _policy_, not the number of samples: four rotations of a surface agent
+leave 13 501 nodes over the eight dogs and name eight of eight (23 of 24 over three
+evaluation rotations), where fourteen rotations of a dist agent's raster leave
+124 – 1 109 nodes and name five. The measurements, the commands and the four-row
+table are in [the dogs sections](#walking-the-corpus-recognises-it-7-of-8-names-all-eight-concluded-measured-2026-11-17)
+below; `priv/monty_experiments/conf/experiment/dogs/` holds the configs.
+
 **The state in one sentence**: the runtime can train an episode, Monty's
 learning code is ported, and the studio's loop now hands each episode the memory
 the last one wrote — so a config that trains runs here, and the guard that used
@@ -467,3 +476,24 @@ projected onto the view sphere, so how many meet a dog depends on the dog's
 silhouette; a surface agent walks the surface it is on, so every dog gets walked
 however its silhouette falls. **Denser sampling of the wrong place does not fix
 the wrong place.**
+
+#### The commands behind the numbers
+
+```sh
+# train (development store, ~13 min for two rotations, ~32 min for four)
+MIX_ENV=dev MONTY_DB=sqlite mix monty.run dogs/surf_supervised_4rot \
+  --world ex_mujoco --overlay priv/monty_experiments/conf --record
+
+# what the memory holds, per object
+MIX_ENV=test mix run --no-start scripts/library_nodes.exs priv/monty/libraries/trained
+
+# recognise, printing each episode's verdict *and* the dog it named
+MIX_ENV=test mix run --no-start scripts/probe_recognitions.exs \
+  dogs/inference_surf_supervised_4rot 24
+```
+
+The second and third are scripts rather than one-off probes for the reason the
+tables exist: a number that only a `mix run` in somebody's scratch directory
+printed is a number nobody can check. The recognition script prints the verdict
+beside the placed dog because a run's own log carries only the verdict, and it is
+the name that decides whether a `match` was right.
