@@ -806,6 +806,31 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     run
   end
 
+  # A step that says what a learning module made of it, written down: a page that
+  # reads an old step's report from the record needs it to be there.
+  defp record_a_step_believing(run, step, object) do
+    beliefs = %{"learning_module_0" => %{"graphs" => %{object => %{"max_evidence" => 5.0}}}}
+
+    {:ok, run} =
+      RunHistory.record_step(
+        run,
+        %{
+          "step" => step,
+          "at" => Monty.Studio.RunLog.now().instant,
+          "goals" => 1,
+          "votes" => %{"sent" => 1, "used" => 1},
+          "percepts" => ["patch"],
+          "inputs" => %{"learning_module_0" => 1},
+          "actions" => 1,
+          "duration_us" => 120,
+          "beliefs" => beliefs
+        },
+        moment(step)
+      )
+
+    run
+  end
+
   # The log lines the page is holding, oldest first: the window it follows, which
   # is not the run's whole transcript.
   defp log_lines(html) do
@@ -1346,6 +1371,32 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-0-2")
     end
 
+    # A run of thirty thousand steps held every one of them — a couple of
+    # kilobytes a step, so tens of megabytes a tab, and more with every episode.
+    # The page keeps a window and reads the one step a reader winds back to.
+    test "holds a window of a long run, and reads an older step from the record", %{
+      conn: conn
+    } do
+      Application.put_env(:ex_tbp_monty, :run_held_steps, 2)
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :run_held_steps) end)
+
+      run = running_run(0)
+      run = Enum.reduce(0..7, run, &record_a_step_believing(&2, &1, "mug"))
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      held = :sys.get_state(view.pid).socket.assigns.run.log
+
+      assert length(held) == 8
+      assert Enum.count(held, &is_map/1) <= 4
+
+      # Step 0 is older than the window: its report comes from the record, and
+      # the theories beside the replay are the ones that step believed.
+      render_hook(view, "replay_seek", %{"step" => 0})
+
+      assert view |> element("#replay-theories") |> render() =~ "mug"
+    end
+
+    # A step is several messages — the line, the beliefs, the pictures — and each
     # announces the same step. A page that added a line per message showed the
     # same step four times, which is the page inventing steps the run did not
     # take.

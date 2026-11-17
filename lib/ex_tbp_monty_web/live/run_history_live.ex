@@ -839,7 +839,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       end
 
     window = window_for(socket, run)
-    moment = run |> Replay.at(step) |> with_pictures(run)
+    moment = run |> Replay.at(step) |> with_its_report(run) |> with_pictures(run)
 
     {chart, chart_key, chart_base, samples} =
       chart_with(socket, catalog, series, series_id, window, step)
@@ -1048,10 +1048,56 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     digest = digest(socket)
     known = Digest.count(digest)
 
-    assign(socket,
-      digest: Digest.append(digest, numbered(run.log, known), numbered(run.timeline, known))
-    )
+    digest =
+      Digest.append(digest, numbered(run.log, known), numbered(run.timeline, known))
+
+    assign(socket, digest: digest, run: held(run))
   end
+
+  # How many of a long run's steps the page holds. Watching a run of thirty
+  # thousand steps held every one of them — a couple of kilobytes a step, so tens
+  # of megabytes a tab, and more with every episode. What a page draws is the tail
+  # of the log, the newest step and a line per step; the rest is one row's read
+  # away when a reader rewinds.
+  #
+  # It must stay far longer than `@log_tail`: the lines that leave the log panel
+  # are deleted from the stream by their place in this list, and a place that had
+  # been emptied out would be a line nobody can name.
+  @held_steps 2_000
+
+  # The last `@held_steps` steps, with the ones before them standing in as holes.
+  # A step's place is its position, so the list keeps its length and the page keeps
+  # its numbering, while the reports and moments of the steps nobody asked for are
+  # not held. It trims when the window has doubled, so following a run walks the
+  # tail once in a while rather than once a step.
+  defp held(%RunHistory.Run{log: log, timeline: timeline} = run) do
+    keep = held_steps()
+    behind = length(log) - keep
+
+    if behind > keep do
+      %{run | log: holes(behind, log), timeline: holes(behind, timeline, %{})}
+    else
+      run
+    end
+  end
+
+  defp held_steps, do: Application.get_env(:ex_tbp_monty, :run_held_steps, @held_steps)
+
+  defp holes(count, list, blank \\ nil),
+    do: List.duplicate(blank, count) ++ Enum.drop(list, count)
+
+  # What one step reported, for a step older than the window the page holds. Such
+  # a moment carries neither beliefs nor a step number, and both are one row's
+  # answer.
+  defp with_its_report(%{entry: nil, position: position} = moment, run)
+       when is_integer(position) do
+    case RunHistory.entry_at(run.id, position) do
+      nil -> moment
+      entry -> %{moment | entry: entry, step: Map.get(entry, "step", moment.step)}
+    end
+  end
+
+  defp with_its_report(moment, _run), do: moment
 
   # The steps from `from` on, each with the position it sits at. `Enum.with_index/2`
   # pairs an element with its index, so a position has to be put first.

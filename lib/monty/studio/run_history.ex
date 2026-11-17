@@ -1196,6 +1196,28 @@ defmodule Monty.Studio.RunHistory do
   end
 
   @doc """
+  What one recorded position reported, or `nil` if nothing was recorded there.
+
+  `position` counts steps the way a replay does — from zero, across episodes —
+  which is the array's own index. A page that keeps a window of a long run draws
+  the step the reader chose from this one report rather than holding all of them.
+  """
+  @spec entry_at(binary(), non_neg_integer()) :: map() | nil
+  def entry_at(id, position) when position >= 0 do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} ->
+        Run
+        |> where([run], run.id == ^uuid)
+        |> select([run], fragment("? -> CAST(? AS int)", run.log, ^position))
+        |> Repo.one()
+        |> json()
+
+      :error ->
+        nil
+    end
+  end
+
+  @doc """
   What the sensors of one recorded position saw, or `nil` if nothing was recorded there.
 
   `position` counts steps the way a replay does — from zero, across episodes —
@@ -1230,6 +1252,7 @@ defmodule Monty.Studio.RunHistory do
   end
 
   # Postgres hands the element back decoded; SQLite hands back its text.
+  defp json(nil), do: nil
   defp json(value) when is_binary(value), do: Jason.decode!(value)
   defp json(value), do: value
 
