@@ -24,6 +24,13 @@
 
 parts = %{
   "plate" => Path.expand("~/src/ex.monty.cad/test/fixtures/golden_simple_through_hole.step"),
+  # SolidCraft's own sample plate, exported from its JSON model — MIT OR
+  # Apache-2.0, SolidCraft contributors, credited in `ex_monty_cad`'s `NOTICE`.
+  # It is the first part here a CAD modeller drew rather than a test: an
+  # 80 × 50 × 22 mm plate with three through bores, and its centre is one of
+  # them, so a sensor stood off the middle looks down a hole.
+  "solidcraft-plate" =>
+    Path.expand("~/src/ex.monty.cad/test/fixtures/solidcraft_sample_plate.step"),
   "blend" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5.step"),
   "blend-big" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5_enlarged.step"),
   "plate-big" => Path.expand("/tmp/cad-experiment/parts/plate_big.step"),
