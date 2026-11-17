@@ -143,30 +143,26 @@ heading they started from is very likely the same: the curvature step at 24
 returned a direction that was his to the last digit, and that direction _is_ the
 stored heading, projected.
 
-So the streams part somewhere between steps 20 and 28, in a window whose only
-variable-drawing call is the avoidance search. The instrument for that count is the
-episode stream's own position, printed around the policy call — and its reading is
-a finding of its own: **the position never moves across a policy call** (624 before
-and after, step after step), so the policy's numbers are not coming from the
-episode's stream at all.
+So the streams part somewhere between steps 20 and 28, and the draw is **not** what
+parts them. One line in the policy's draw function answers it: the whole
+twenty-nine-step replay takes exactly **one** number, from the episode's stream —
+`0.3745401188473625`, which is NumPy's first draw at seed 42, the same number
+Monty's own run drew first. Our momentum step then reproduces our own direction to
+four millionths from the heading it held, `3.13055849388839`
+(`3.13055849388839 + 0.1 × theta_change(3.13055849388839, −0.788325…)`), so the
+blend is Monty's formula on Monty's number. His direction implies a heading of
+about `3.2284` (or `2.6572` on the other branch of the wrap), so **the heading
+before the blend is what differs** — the curvature step at 24 returned a direction
+that matched ours, so either what it stored did not match, or something between 25
+and 28 replaced it: ours ran no conflict search there (the heading counter stood at
+one of twelve).
 
-What they do come from is visible in two lines:
-`ActionSampler.stream/3` hands a sampler with no state of its own
-`Context.rng_for(ctx, module)`, and that is
-`:rand.seed_s(:exsss, {seed, :erlang.phash2(module_id), step})` — Erlang's
-generator, seeded per module **and per step**, not `Monty.Random.Numpy`, which is
-the port of the generator Monty actually draws from. That is not one stream per
-episode either, which is a rule this repository states about itself.
-
-How then the first twenty-seven actions are Monty's to the last digit is the next
-thing to answer, and it cannot be answered from the actions. The reverse check
-failed in an informative way: taking the episode's first sampled tangential
-direction and the policy's own blend, the number behind it would be
-`0.9740315379181416` — which is NumPy's draw at seed 42 at none of its first forty
-positions, and Erlang's `:exsss` at none of the seeds tried. So that angle was not a
-raw uniform of either generator, and how many numbers were drawn cannot be
-recovered by working backwards. It needs the call site: one line in each of the two
-draw functions, and the answer is which one the policy uses and when.
+The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
+projections between an angle and a vector) and `pc_moving_average` are identical to
+Monty's, line for line. What is left is the heading counter's bookkeeping and what
+the curvature step stores — `Context.rng_for/2`, which seeds Erlang's `:exsss` per
+module and per step, is a second generator that this episode never used and that
+still wants an owner.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
