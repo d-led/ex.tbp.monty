@@ -1943,3 +1943,40 @@ acts on an older picture. Making that cheap rather than costly is a question abo
 the experiment — an episode that needs fewer steps to conclude, or a forecast that
 does not need the newest belief — not about the scheduler. Until there is such an
 answer, this is a lever with a measured cost.
+
+## 2.31 A straggler is given time to deliver its prediction
+
+**The port's addition.** Monty ends an episode the moment its match criterion is
+satisfied — by default the first module to report `:match` — and every module
+still stepping is told it has timed out. Its computation is thrown away with the
+step it was in the middle of, which is a loss with no counterpart in a brain:
+neurons compute in parallel and waste work constantly, and the work that matters
+is the work that arrives before the decision. The port's step coordinator
+therefore has a **settle window**, `settle_steps` (default **0**, Monty's rule):
+
+- when the criterion is first satisfied the window opens and the episode keeps
+  stepping for that many more steps, or until every module has a terminal state,
+  whichever comes first;
+- a module that concludes inside the window is counted as having matched, not as
+  one that timed out;
+- at the close of the window every module still stepping is asked, in one round,
+  what it was voting for (`send_out_vote/1`), and that answer is kept beside its
+  `:time_out` as `still_believing` — a late prediction is still a prediction,
+  and the record says what it was.
+
+**Measured**, `tutorial/dist_agent_5lm_2obj_eval`, episode 1, seed 42,
+`scheduling: lagged`, from the page, one lever apart:
+
+| run                                    | settle | wall   | result                                           |
+| -------------------------------------- | ------ | ------ | ------------------------------------------------ |
+| `9fe411a7-7ba7-47f3-a166-0c890dc66c49` | 0      | 25.7 s | `mug`, three modules `match`, **two `time_out`** |
+| `a112ab07-4213-4a44-9d89-9aca1eb17ab2` | 5      | 15.2 s | `mug`, **no module timed out**                   |
+
+The five modules had all been voting `mug` for the whole episode with different
+evidence (`lm_3` was at 21.9 when the criterion fired, `lm_4` at 70.7); the two
+that ran out of steps were not in disagreement with the three that concluded,
+they were slower. A window of five steps was enough for them to deliver.
+
+**Not yet done:** the window is a number a run chooses, and the run page states
+the choice only in the form it was started with; the collected `still_believing`
+is in the step's status but not yet in the page's verdict line.

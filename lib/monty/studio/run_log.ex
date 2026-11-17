@@ -457,6 +457,7 @@ defmodule Monty.Studio.RunLog do
         |> Map.merge(plugin_input(opened))
         |> Map.merge(part_inputs(part))
         |> Map.merge(scheduling_input(part))
+        |> Map.merge(settle_input(part))
     }
   end
 
@@ -507,6 +508,13 @@ defmodule Monty.Studio.RunLog do
   # nothing here, and the deployment's own setting answers.
   defp scheduling_input(%{scheduling: scheduling}), do: %{"scheduling" => to_string(scheduling)}
   defp scheduling_input(_part), do: %{}
+  # A settle window, when the caller asked for one: the steps an episode keeps
+  # stepping after its criterion is satisfied, so a straggler's prediction still
+  # counts. Absent when nobody asked, which is Monty's own rule.
+  defp settle_input(%{settle: steps}) when is_integer(steps) and steps > 0,
+    do: %{"settle" => steps}
+
+  defp settle_input(_part), do: %{}
 
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()

@@ -603,6 +603,78 @@ defmodule Monty.Runtime.StepTest do
       refute_received {:set_terminal_state, :lm_0, _}
     end
 
+    test "Monty's rule ends the episode on the first conclusion, and a straggler is asked what it believed" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          learning_modules: [
+            learning_module(:lm_0, terminal: :match),
+            learning_module(:lm_1, terminal_after: 2, vote: :mug)
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      assert {:ok, _, info} = step(model_id)
+
+      assert info.done?
+      assert info.terminal_states == %{lm_0: :match, lm_1: :time_out}
+
+      # The module that was still computing answered with its prediction rather
+      # than being dropped: the computation is not wasted, it is late.
+      assert info.still_believing == %{lm_1: :mug}
+    end
+
+    test "a settle window is the time a module still computing is given" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          settle_steps: 3,
+          learning_modules: [
+            learning_module(:lm_0, terminal: :match),
+            learning_module(:lm_1, terminal_after: 2, vote: :mug)
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      # The first conclusion opens the window instead of ending the episode.
+      assert {:ok, _, first} = step(model_id)
+      refute first.done?
+      assert is_nil(Map.get(first.terminal_states, :lm_1))
+
+      # The second step is the one the straggler needed, and the episode ends in
+      # it because every module has now concluded.
+      assert {:ok, _, second} = step(model_id)
+
+      assert second.done?
+      assert second.terminal_states == %{lm_0: :match, lm_1: :match}
+      refute Map.has_key?(second.still_believing, :lm_1)
+    end
+
+    test "a window that runs out ends the episode, and reports what the straggler was voting for" do
+      model_id =
+        start_model(
+          experiment_mode: :eval,
+          settle_steps: 2,
+          learning_modules: [
+            learning_module(:lm_0, terminal: :match),
+            learning_module(:lm_1, vote: :mug)
+          ],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]}
+        )
+
+      {:ok, _, first} = step(model_id)
+      refute first.done?
+
+      {:ok, _, second} = step(model_id)
+      refute second.done?
+
+      assert {:ok, _, third} = step(model_id)
+
+      assert third.done?
+      assert third.terminal_states == %{lm_0: :match, lm_1: :time_out}
+      assert third.still_believing == %{lm_1: :mug}
+    end
+
     test "every module giving up is a conclusion without asking the criterion" do
       model_id =
         start_model(

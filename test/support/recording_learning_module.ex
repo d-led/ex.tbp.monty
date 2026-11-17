@@ -18,6 +18,8 @@ defmodule Monty.Test.RecordingLearningModule do
         region: Monty.Cmp.AttentionRegion.empty(),
         seen: [],
         terminal: nil,
+        terminal_after: nil,
+        steps: 0,
         processed?: false,
         mode: nil
       },
@@ -28,8 +30,22 @@ defmodule Monty.Test.RecordingLearningModule do
   @impl true
   def matching_step(percepts, ctx, state) do
     send(state.notify, {:learning_step, state.id, percepts, ctx.mode})
-    {:ok, %{state | seen: state.seen ++ percepts}}
+
+    {:ok,
+     state
+     |> Map.update!(:steps, &(&1 + 1))
+     |> Map.update!(:seen, &(&1 ++ percepts))
+     |> conclude_when_due()}
   end
+
+  # A module that needs a few steps to decide. The cases about the time a module
+  # is given rather than the answer it gives need one that concludes later than
+  # the module it shares an episode with.
+  defp conclude_when_due(%{terminal_after: after_steps, steps: steps} = state)
+       when is_integer(after_steps) and steps >= after_steps,
+       do: %{state | terminal: :match}
+
+  defp conclude_when_due(state), do: state
 
   # Reported as well as stored, because the *order* is the rule: Monty names a
   # module the object under its sensor before the module reads the percepts it

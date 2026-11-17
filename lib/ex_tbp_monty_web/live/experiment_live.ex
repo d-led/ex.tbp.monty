@@ -167,6 +167,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # deployment's environment says otherwise; the page states it so a reader
       # can see which of the two a run they are about to start will be.
       scheduling: Jobs.scheduling(),
+      # The steps a module still computing is given after another one concluded:
+      # zero is Monty's rule, where the first conclusion ends the episode.
+      settle: 0,
       # The batch a press of Run started and the page shows: `nil` until a run of
       # this experiment is followed, and then the parts whose cards the page draws
       # beside the run it is watching (`Monty.Studio.Partition`).
@@ -560,6 +563,22 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
               <option value="lagged" selected={@scheduling == :lagged}>lagged</option>
             </select>
+            <%!-- The time a module still computing is given after another one has
+            already concluded: Monty ends the episode on the first conclusion and
+            tells the rest they are out of time. The window is the grace they need
+            to deliver a prediction that still counts
+            (`docs/monty-differences.md` §2.31). --%>
+            <label for="run-settle" class="ms-2">settle</label>
+            <input
+              id="run-settle"
+              type="number"
+              name="settle"
+              min="0"
+              max="200"
+              value={@settle}
+              class="input input-xs w-16"
+              aria-label="How many steps a module still computing gets after a conclusion"
+            />
           </form>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
@@ -1124,7 +1143,8 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           steps,
           socket.assigns.parallelism,
           socket.assigns.episodes,
-          socket.assigns.scheduling
+          socket.assigns.scheduling,
+          socket.assigns.settle
         )
 
       :going ->
@@ -1214,7 +1234,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
     case refusal(socket.assigns) do
-      nil -> start(socket, opened, 1, 1, 1, socket.assigns.scheduling)
+      nil -> start(socket, opened, 1, 1, 1, socket.assigns.scheduling, socket.assigns.settle)
       :going -> already_going(socket, opened)
       :cannot_run -> {:noreply, socket}
     end
@@ -1330,9 +1350,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     assign(socket,
       episodes: count_of(params["episodes"]),
       steps: cap(count_of(params["steps"]), socket.assigns.opened.setup),
-      scheduling: scheduling_of(params["scheduling"], socket.assigns.scheduling)
+      scheduling: scheduling_of(params["scheduling"], socket.assigns.scheduling),
+      settle: settle_of(params["settle"], socket.assigns.settle)
     )
   end
+
+  # A settle window this page cannot read is not one: the number stays as it was,
+  # and the run keeps the one shown beside the button it was started with.
+  defp settle_of(value, shown) when is_binary(value) do
+    case Integer.parse(value) do
+      {steps, ""} when steps >= 0 -> steps
+      _not_a_number -> shown
+    end
+  end
+
+  defp settle_of(_absent, shown), do: shown
 
   # A mode this page cannot read is not a mode: the choice stays as it was, and
   # the run keeps the one shown beside the button it was started with.
@@ -2403,14 +2435,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A part is not a copy of the experiment. A config evaluated a hundred and forty
   # times is finished in a fourteenth of the clock at fourteen parts, where
   # fourteen copies of it were fourteen times the work and no faster.
-  defp start(socket, opened, steps, parallelism, episodes, scheduling) do
+  defp start(socket, opened, steps, parallelism, episodes, scheduling, settle) do
     plan = Partition.plan(opened.setup, parallelism, episodes)
     parts = with_streams(Partition.parts(plan))
 
     attributes =
       RunLog.attributes(opened, steps, first_episode(parts), parallelism, episodes, %{
         parts: parts,
-        scheduling: scheduling
+        scheduling: scheduling,
+        settle: settle
       })
 
     case RunHistory.start(attributes) do

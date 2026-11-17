@@ -461,6 +461,7 @@ defmodule Monty.Runtime.Step do
       sensor_timeouts: pending.sensor_timeouts,
       step_type: state.step_type,
       terminal_states: state.terminal_states,
+      still_believing: state.still_believing,
       done?: state.done?,
       duration_us: elapsed_us(pending.started_at)
     }
@@ -811,6 +812,9 @@ defmodule Monty.Runtime.Step do
       matching_steps: state.matching_steps,
       conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id)),
       terminal_states: state.terminal_states,
+      still_believing: state.still_believing,
+      settle_steps: state.settle_steps,
+      settle_left: state.settle_left,
       match_criterion: state.match_criterion
     }
   end
@@ -848,22 +852,7 @@ defmodule Monty.Runtime.Step do
       state = read_conclusions(state)
       {state, matched?} = check_terminal_conditions(state)
 
-      if matched? do
-        state = time_out_undecided(state)
-
-        cond do
-          state.experiment_mode == :train ->
-            switch_to(state, :exploratory)
-
-          state.experiment_mode == :eval and state.matching_steps > state.min_eval_steps ->
-            %{state | done?: true}
-
-          true ->
-            state
-        end
-      else
-        state
-      end
+      if matched?, do: settle(state), else: state
     else
       # A step that reached no module is not evidence of anything, so it does
       # not count towards the steps an episode's limits are measured in.
@@ -929,6 +918,49 @@ defmodule Monty.Runtime.Step do
     end)
   end
 
+  # A module that has delivered its conclusion has delivered a prediction; the
+  # ones still stepping are computing on time they no longer have. Monty closes
+  # the episode at this point and tells every straggler it is out of time, which
+  # throws away whatever it was about to conclude. `settle_steps` is the grace a
+  # run gives them instead: the episode keeps stepping for that many steps after
+  # the first conclusion — or until every module has a terminal state, whichever
+  # comes first — and a straggler that concludes inside the window is counted as
+  # a module that matched rather than as one that timed out. Zero is Monty's own
+  # rule, and the default.
+  defp settle(%State{settle_steps: 0} = state), do: close(state)
+
+  defp settle(%State{} = state) do
+    cond do
+      all_modules_concluded?(state) -> close(state)
+      state.settle_left == nil -> %{state | settle_left: state.settle_steps - 1}
+      state.settle_left > 0 -> %{state | settle_left: state.settle_left - 1}
+      true -> close(state)
+    end
+  end
+
+  defp all_modules_concluded?(%State{} = state) do
+    Enum.all?(state.learning_modules, fn lm ->
+      not is_nil(Map.get(state.terminal_states, lm.id))
+    end)
+  end
+
+  # The end of the settling: whoever is still stepping is out of time, and a run
+  # that trains turns to exploring.
+  defp close(%State{} = state) do
+    state = time_out_undecided(state)
+
+    cond do
+      state.experiment_mode == :train ->
+        switch_to(state, :exploratory)
+
+      state.experiment_mode == :eval and state.matching_steps > state.min_eval_steps ->
+        %{state | done?: true}
+
+      true ->
+        state
+    end
+  end
+
   defp update_terminal_conditions(%State{model_id: model_id} = state) do
     requests =
       Enum.map(state.learning_modules, fn lm ->
@@ -967,13 +999,49 @@ defmodule Monty.Runtime.Step do
 
   defp time_out_undecided(%State{model_id: model_id} = state) do
     undecided =
-      for lm <- state.learning_modules, is_nil(Map.get(state.terminal_states, lm.id)), do: lm.id
+      for lm <- state.learning_modules, is_nil(Map.get(state.terminal_states, lm.id)), do: lm
 
-    Enum.reduce(undecided, state, fn lm_id, state ->
+    bets = ask_for_bets(state, undecided)
+
+    Enum.reduce(undecided, state, fn %{id: lm_id}, state ->
       server = Registry.via({:learning_module, model_id, lm_id})
       :ok = LearningModuleServer.set_terminal_state(server, :time_out)
-      put_in(state.terminal_states[lm_id], :time_out)
+
+      state
+      |> put_in([Access.key(:terminal_states), lm_id], :time_out)
+      |> put_in([Access.key(:still_believing), lm_id], Map.get(bets, lm_id, believed(state, lm_id)))
     end)
+  end
+
+  # The episode is over, and a module still stepping is asked what it believed
+  # when it was stopped: a prediction that arrives late is still a prediction,
+  # and dropping it is the computation wasted rather than delivered. Asked in one
+  # round, because they are independent of one another.
+  defp ask_for_bets(%State{model_id: model_id} = state, modules) do
+    requests =
+      Enum.map(modules, fn %{id: lm_id, module: module} ->
+        server = Registry.via({:learning_module, model_id, lm_id})
+
+        {lm_id,
+         fn ->
+           LearningModuleServer.query(server, fn module_state ->
+             module.send_out_vote(module_state) |> elem(0)
+           end)
+         end}
+      end)
+
+    %{replies: bets} = Barrier.run(requests, state.call_timeout)
+    bets
+  end
+
+  # What a module that ran out of time was still voting for: the last report it
+  # handed the coordinator, which is the same shape `send_out_vote/1` answers.
+  # A module that never reported believed nothing this model can name.
+  defp believed(%State{reports: reports}, lm_id) do
+    case Map.get(reports, lm_id) do
+      {_epoch, %{vote: vote}} -> vote
+      _never_reported -> nil
+    end
   end
 
   defp switch_to(%State{} = state, step_type) do
@@ -1021,6 +1089,8 @@ defmodule Monty.Runtime.Step do
         matching_steps: 0,
         exploratory_steps: 0,
         terminal_states: %{},
+        still_believing: %{},
+        settle_left: nil,
         done?: false,
         step: 0
     }

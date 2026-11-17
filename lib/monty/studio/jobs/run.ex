@@ -1246,6 +1246,13 @@ defmodule Monty.Studio.Jobs.Run do
   defp scheduling_of(%{inputs: %{"scheduling" => "barrier"}}), do: :barrier
   defp scheduling_of(_record), do: Monty.Studio.Jobs.scheduling()
 
+  # How many steps an episode keeps stepping after its criterion is satisfied, so
+  # that a module still computing gets to deliver its prediction instead of being
+  # told the episode is over (`docs/monty-differences.md` §2.31). Zero is Monty's
+  # own rule: the first conclusion ends the episode.
+  defp settle_of(%{inputs: %{"settle" => steps}}) when is_integer(steps) and steps > 0, do: steps
+  defp settle_of(_record), do: 0
+
   # The episode a part starts counting from: the first of the episodes it was
   # given. A run of the whole experiment starts at nought.
   defp offset_of(%{inputs: %{"part" => %{"phases" => phases}}}) when is_map(phases) do
@@ -1345,7 +1352,8 @@ defmodule Monty.Studio.Jobs.Run do
       memory_targets: state.targets,
       first_seen: state.first_seen,
       has_detailed_logger: Logging.detailed?(state.logging),
-      scheduling: scheduling_of(state.record)
+      scheduling: scheduling_of(state.record),
+      settle_steps: settle_of(state.record)
     ]
 
     options =

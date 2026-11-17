@@ -501,6 +501,7 @@ defmodule Monty.Studio.Run do
       has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
       memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
       sensors_step: Keyword.get(opts, :sensors_step, :auto),
+      settle_steps: Keyword.get(opts, :settle_steps, 0),
       scheduling: Keyword.get_lazy(opts, :scheduling, &Monty.Studio.Jobs.scheduling/0)
     ]
 
