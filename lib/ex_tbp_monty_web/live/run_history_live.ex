@@ -34,7 +34,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   }
 
   alias Monty.Studio.Jobs.Reaper
-  alias Monty.Studio.Replay.Chart
+  alias Monty.Studio.Replay.{Chart, Digest}
   alias Monty.Studio.RunHistory.Part
 
   # The states a run can be in, in the order the filter pills read them.
@@ -430,6 +430,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         {:noreply,
          socket
          |> put_run(run)
+         |> remember(run)
          |> put_configuration(run)
          |> assign(setup: setup_of(run))
          |> put_parts(run)
@@ -549,7 +550,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           series_chosen: false,
           window: nil,
           step: nil,
-          playing: false
+          playing: false,
+          # A digest is one run's numbers: carrying it to another run's page would
+          # count that run's steps as already seen.
+          digest: nil,
+          catalog_key: nil,
+          catalog: nil
         )
     end
   end
@@ -581,7 +587,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         socket
 
       {:grown, grown} ->
-        socket |> assign(run: grown) |> append_log(grown) |> assign_replay(grown, :follow)
+        socket
+        |> assign(run: grown)
+        |> remember(grown)
+        |> append_log(grown)
+        |> assign_replay(grown, :follow)
     end
   end
 
@@ -680,6 +690,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         socket
         |> stamp_catch_up(run)
         |> put_run(run)
+        |> remember(run)
         |> append_log(run)
         |> assign_replay(run, :follow)
     end
@@ -1005,12 +1016,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp first_id([first | _rest]), do: first.id
   defp first_id([]), do: nil
 
-  # Every line the replay can draw, worked out once per version of the record.
-  # The answer to "which objects did this run still hold, and how strongly" is
-  # the same for the same record, and rebuilding it on every drag of the slider
-  # was most of what a drag cost.
-  defp catalog(socket, run) do
-    key = {run.id, length(run.log), length(run.timeline)}
+  # Every line the replay can draw, worked out once per step the run has taken.
+  #
+  # The numbers behind them are kept as the steps arrive (`Replay.Digest`), so a
+  # refresh costs what has just happened rather than what the run has ever done:
+  # recomputing them from the whole log on every step is quadratic, and it is what
+  # made a page watching a long run fall further behind the longer the run went.
+  defp catalog(socket, _run) do
+    digest = digest(socket)
+    key = {Map.get(socket.assigns, :run) && socket.assigns.run.id, Digest.count(digest)}
 
     case socket.assigns[:catalog_key] do
       ^key ->
@@ -1019,11 +1033,39 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       _other ->
         %{
           key: key,
-          objects: Replay.objects(run),
-          module_objects: Map.new(Replay.modules(run), &{&1, Replay.objects(run, &1)}),
-          series: Replay.series(run),
-          best: Replay.best_evidence(run)
+          objects: Digest.objects(digest),
+          module_objects: Map.new(Digest.modules(digest), &{&1, Digest.objects(digest, &1)}),
+          series: Digest.series(digest),
+          best: Digest.best(digest)
         }
+    end
+  end
+
+  # The steps the page has not folded into the digest yet, appended as a step
+  # each: the first time this runs for a record the whole of it arrives, and
+  # after that only what the run has taken since.
+  defp remember(socket, %RunHistory.Run{} = run) do
+    digest = digest(socket)
+    known = Digest.count(digest)
+
+    assign(socket,
+      digest: Digest.append(digest, numbered(run.log, known), numbered(run.timeline, known))
+    )
+  end
+
+  # The steps from `from` on, each with the position it sits at. `Enum.with_index/2`
+  # pairs an element with its index, so a position has to be put first.
+  defp numbered(list, from) do
+    list
+    |> Enum.drop(from)
+    |> Enum.with_index(from)
+    |> Enum.map(fn {item, at} -> {at, item} end)
+  end
+
+  defp digest(socket) do
+    case Map.get(socket.assigns, :digest) do
+      %Digest{} = digest -> digest
+      _none -> Digest.new()
     end
   end
 
@@ -2100,11 +2142,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   def handle_info({:studio, _run_id, _event}, socket) do
     if answered?(socket),
       do: {:noreply, refresh_later(socket)},
-      else: {:noreply, take_steps(socket)}
+      else: {:noreply, socket |> take_steps() |> stamp_refresh()}
   end
 
   def handle_info(:refresh_due, socket) do
-    {:noreply, socket |> assign(refresh_due: false) |> take_steps()}
+    {:noreply, socket |> assign(refresh_due: false) |> take_steps() |> stamp_refresh()}
   end
 
   # A page that shows a run keeps asking, even though the worker broadcasts: a
@@ -2197,6 +2239,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     assign(socket, refresh_due: true)
   end
+
+  # Stamped when a rebuild has happened, not when it starts: the window is the
+  # time between two rebuilds, so a page cannot rebuild faster than it can,
+  # which is what keeps a burst of steps from becoming a backlog. A run that is
+  # outrunning its page drops the steps in between — the newest step is the one
+  # a reader is looking at, and the log line of each step is still in the file.
+  defp stamp_refresh(socket),
+    do: assign(socket, refreshed_at: System.monotonic_time(:millisecond))
 
   defp answered?(socket) do
     case socket.assigns[:refreshed_at] do

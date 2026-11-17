@@ -1308,7 +1308,44 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#run-status") |> render() =~ "failed"
     end
 
-    # A step is several messages — the line, the beliefs, the pictures — and each
+    # A run that is outrunning its page arrives as a burst of steps, and a page
+    # that rebuilt itself for each of them spent all its time rebuilding: it was
+    # three thousand steps behind a run of eight thousand and never caught up,
+    # because every rebuild walked every step the run had ever taken. The first
+    # step of a burst is answered at once, the ones behind it share one rebuild on
+    # the page's own clock, and the newest step is the one drawn.
+    test "answers a burst of steps once, when its own window has passed", %{
+      conn: conn,
+      running: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      publish(run.id, 0)
+      broadcast(run.id, {:step, %{line: "step 0", step: 0, frames: [], episode: 0}})
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      # The first step of a burst is drawn at once: a page that waited for the
+      # next tick to show anything at all would look asleep.
+      assert has_element?(view, "#log-0-0")
+
+      # Steps that arrive inside the window the rebuild opened wait for the page's
+      # own clock, and the rebuild they share draws every step that has arrived by
+      # then.
+      Enum.each(1..2, fn step ->
+        publish(run.id, step)
+        broadcast(run.id, {:step, %{line: "step #{step}", step: step, frames: [], episode: 0}})
+      end)
+
+      _ = :sys.get_state(Monty.Studio.RunStream)
+
+      refute has_element?(view, "#log-0-1")
+
+      send(view.pid, :refresh_due)
+
+      assert has_element?(view, "#log-0-1")
+      assert has_element?(view, "#log-0-2")
+    end
+
     # announces the same step. A page that added a line per message showed the
     # same step four times, which is the page inventing steps the run did not
     # take.

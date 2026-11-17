@@ -15,13 +15,8 @@ defmodule Monty.Studio.Replay do
   """
 
   alias Monty.Simulators.Synthetic.Camera
+  alias Monty.Studio.Replay.Digest
   alias Monty.Studio.RunHistory.Run
-
-  @logged_series ["evidence", "percepts", "votes_used", "duration_us", "world_us"]
-
-  # The value axis of an evidence chart, named where the charts are built so the
-  # page never has to guess what the numbers are.
-  @evidence_axis "evidence"
 
   @type step_number :: integer()
 
@@ -118,26 +113,19 @@ defmodule Monty.Studio.Replay do
   the modules made of it, then what making it cost.
   """
   @spec series(Run.t()) :: [series()]
-  def series(%Run{} = run) do
-    # One walk for every series: each used to rebuild all the run's moments, and
-    # a moment asked its own position for an entry with `Enum.at/2` — quadratic
-    # in the steps and repeated once per series, which on a 24 329-step run was
-    # nine seconds on every page load.
-    moments = recorded(run)
+  def series(%Run{} = run), do: run |> digest() |> Digest.series()
 
-    ids = Enum.map(sensor_ids(run), &("sensor:" <> &1)) ++ @logged_series
+  @doc """
+  The run's numbers as they are kept while it grows.
 
-    Enum.map(ids, fn id ->
-      %{
-        id: id,
-        label: label_of(id),
-        title: label_of(id),
-        unit: unit_of(id),
-        axis: axis_of(id),
-        points: Enum.map(moments, &point(&1, id))
-      }
-    end)
-  end
+  A page following a run does not build this from the whole log on every step —
+  that is quadratic in the run's length and it is what made a watched run's page
+  fall further behind the longer the run went. It keeps the digest from one
+  rebuild to the next and appends the steps that arrived
+  (`Monty.Studio.Replay.Digest`).
+  """
+  @spec digest(Run.t()) :: Digest.t()
+  def digest(%Run{} = run), do: Digest.from(run)
 
   @doc """
   Every object a learning module held a graph for, one series each.
@@ -156,12 +144,8 @@ defmodule Monty.Studio.Replay do
   own, a module's evidence says which.
   """
   @spec objects(Run.t(), String.t() | nil) :: [series()]
-  def objects(%Run{} = run, module_id \\ nil) do
-    run
-    |> recorded()
-    |> series_by_object(module_id)
-    |> Enum.map(fn {name, points} -> object_series(name, points) end)
-  end
+  def objects(%Run{} = run, module_id \\ nil),
+    do: run |> digest() |> Digest.objects(module_id)
 
   @doc """
   The learning modules the run reported beliefs for, oldest name first.
@@ -170,76 +154,7 @@ defmodule Monty.Studio.Replay do
   is a question about a module and not about the ensemble.
   """
   @spec modules(Run.t()) :: [String.t()]
-  def modules(%Run{} = run) do
-    run |> recorded() |> Enum.flat_map(&module_ids/1) |> Enum.uniq() |> Enum.sort()
-  end
-
-  # Every object's line, in one pass over the run, named in order.
-  #
-  # Reading the log once per object is the same answer at the price of a pass
-  # each: ten objects over 42 401 steps was 620 ms of a page that has four
-  # seconds to spend, and the module picker asked for its own pass per module.
-  # An object's point at a step is here where the step is visited, which is the
-  # only place it ever was.
-  defp series_by_object(moments, module_id) do
-    by_object =
-      Enum.reduce(moments, %{}, fn moment, by_object ->
-        moment
-        |> evidence_by_object(module_id)
-        |> Enum.reduce(by_object, fn {name, value}, by_object ->
-          point = %{step: moment.position, value: value, episode: episode_of(moment)}
-          Map.update(by_object, name, [point], &[point | &1])
-        end)
-      end)
-
-    by_object
-    |> Enum.map(fn {name, points} -> {name, Enum.reverse(points)} end)
-    |> Enum.sort_by(&elem(&1, 0))
-  end
-
-  # What each object a step held a graph for was worth there: the strongest
-  # evidence any module held for it, or what one module held when a module is
-  # named. An object a module named without a number is worth nought rather than
-  # missing — the line has a point there with nothing behind it, which is what a
-  # ruled-out theory looks like.
-  defp evidence_by_object(moment, module_id) do
-    moment
-    |> beliefs(module_id)
-    |> Enum.reduce(%{}, fn belief, strengths ->
-      belief
-      |> Map.get("graphs", %{})
-      |> Enum.reduce(strengths, &stronger/2)
-    end)
-    |> Map.new(fn {name, strength} -> {name, strength || 0.0} end)
-  end
-
-  # One object's entry against what is known so far: the strongest evidence wins,
-  # and an object a module named without a number is kept as `nil` — a theory
-  # ruled out to nothing still has its point on the line, and a later module that
-  # does report a number still takes it.
-  defp stronger({name, graph}, strengths) do
-    case Map.get(graph, "max_evidence") do
-      value when is_number(value) ->
-        Map.update(strengths, name, value, fn
-          nil -> value
-          kept -> max(kept, value)
-        end)
-
-      _none ->
-        Map.put_new(strengths, name, nil)
-    end
-  end
-
-  defp object_series(name, points) do
-    %{
-      id: "object:" <> name,
-      label: name,
-      title: name,
-      unit: "",
-      axis: @evidence_axis,
-      points: points
-    }
-  end
+  def modules(%Run{} = run), do: run |> digest() |> Digest.modules()
 
   @doc """
   The object the run believed in most, and how much, over the whole run.
@@ -248,20 +163,7 @@ defmodule Monty.Studio.Replay do
   sure it was.
   """
   @spec best_evidence(Run.t()) :: %{object: String.t(), value: number()} | nil
-  def best_evidence(%Run{} = run) do
-    run
-    |> recorded()
-    |> Enum.reduce(nil, fn moment, best ->
-      strengths = evidence_by_object(moment, nil)
-
-      moment
-      |> object_names()
-      |> Enum.reduce(best, fn name, best ->
-        value = Map.get(strengths, name, 0.0)
-        if best == nil or value > best.value, do: %{object: name, value: value}, else: best
-      end)
-    end)
-  end
+  def best_evidence(%Run{} = run), do: run |> digest() |> Digest.best()
 
   @doc """
   The theories the run was still weighing at one step, strongest first.
@@ -322,37 +224,9 @@ defmodule Monty.Studio.Replay do
 
   defp beliefs_of(_moment), do: %{}
 
-  defp module_ids(%{entry: entry}) when is_map(entry),
-    do: entry |> Map.get("beliefs", %{}) |> Map.keys()
-
-  defp module_ids(_moment), do: []
-
   @doc "One series by id, with whatever points the run has for it."
   @spec chart_series(Run.t(), String.t()) :: series()
-  def chart_series(%Run{} = run, id) do
-    %{
-      id: id,
-      label: label_of(id),
-      title: label_of(id),
-      unit: unit_of(id),
-      axis: axis_of(id),
-      points: run |> recorded() |> Enum.map(&point(&1, id))
-    }
-  end
-
-  # The best-evidence line is one number at a step, and the object it belongs to
-  # is a different one in every episode: a reader who cannot see whose line it is
-  # is reading a shape with no names on it.
-  defp point(moment, "evidence") do
-    {object, value} = winner_of(moment.entry)
-
-    %{step: moment.position, value: value, episode: episode_of(moment), object: object}
-  end
-
-  # The episode travels with the point: the chart shades them in turn, and a
-  # step on its own does not say which episode it belonged to.
-  defp point(moment, id),
-    do: %{step: moment.position, value: value_of(moment, id), episode: episode_of(moment)}
+  def chart_series(%Run{} = run, id), do: run |> digest() |> Digest.series_of(id)
 
   @doc """
   Which episode a recorded moment belongs to, when the record kept it.
@@ -412,33 +286,6 @@ defmodule Monty.Studio.Replay do
   def inside?({from, to}, step), do: step >= from and step <= to
 
   # -- what a step is made of ------------------------------------------------
-
-  # The log is the spine, and the timeline is what the sensors saw at each place
-  # on it. Both are written one entry per step, but a record read without its
-  # pictures (`RunHistory.head/1`) has the log alone: every line, every number
-  # and every theory is still there, and only the frames are missing — which is
-  # why a step made from a log-only record is a step with no pictures, not a
-  # step that did not happen.
-  defp recorded(%Run{log: log, timeline: timeline}) do
-    # A step's own number restarts at zero in every episode, so it cannot address
-    # a replay: nine episodes of twelve steps are 108 recorded moments, not
-    # twelve. The log and the timeline are appended together, one entry each per
-    # step, so a moment's place in the sequence is what pairs it with its
-    # report — and its episode is what the band on the chart is drawn from.
-    #
-    # Both lists are walked once, and either may be the longer one: a record
-    # written before a step kept its pictures has a log longer than its timeline,
-    # and one whose log lost an entry has a timeline longer than its log. Neither
-    # is a step the other can drop.
-    count = max(length(log), length(timeline))
-    entries = log ++ List.duplicate(nil, count - length(log))
-    seen = timeline ++ List.duplicate(%{}, count - length(timeline))
-
-    entries
-    |> Enum.zip(seen)
-    |> Enum.with_index()
-    |> Enum.map(fn {{entry, moment}, position} -> moment_of(position, entry, moment) end)
-  end
 
   # One position, read from the two lists without walking them all: `at/2` is
   # called on every drag of the slider, and a replay that built every moment to
@@ -513,82 +360,6 @@ defmodule Monty.Studio.Replay do
         Camera.pictures?(observation),
         do: Camera.frame(sensor_id, observation, moment.step)
   end
-
-  defp sensor_ids(%Run{timeline: timeline}) do
-    timeline
-    |> Enum.flat_map(&(&1 |> Map.get("sensors", %{}) |> Map.keys()))
-    |> Enum.uniq()
-    |> Enum.sort()
-  end
-
-  defp value_of(%{sensors: sensors}, "sensor:" <> sensor_id),
-    do: sensors |> Map.get(sensor_id, %{}) |> position() |> x()
-
-  defp value_of(%{entry: entry}, "percepts"), do: length(get_in(entry || %{}, ["percepts"]) || [])
-  defp value_of(%{entry: entry}, "votes_used"), do: get_in(entry || %{}, ["votes", "used"]) || 0
-  defp value_of(%{entry: entry}, "duration_us"), do: Map.get(entry || %{}, "duration_us", 0)
-
-  # The world's half of a step, which a step's own clock does not measure: the
-  # agent is moved and the sensors rendered before the model sees anything.
-  defp value_of(%{entry: entry}, "world_us"), do: Map.get(entry || %{}, "world_us", 0)
-
-  # How sure the run was on that step: the best evidence any learning module held
-  # for any object. That is the curve an episode is judged by — it climbs to the
-  # recognition or it does not — and it is what the live page draws while a run is
-  # going, so a replay can draw the same one.
-  defp value_of(%{entry: entry}, "evidence"), do: entry |> winner_of() |> elem(1)
-
-  # The object the strongest evidence at that step belonged to, and how strong.
-  # Who that is changes with the episode, which is why the line is drawn in
-  # stretches: one colour per object, named in the legend and in the hover.
-  defp winner_of(nil), do: {nil, 0.0}
-
-  defp winner_of(entry) do
-    entry
-    |> Map.get("beliefs", %{})
-    |> Enum.flat_map(fn {_module, belief} ->
-      for {object, graph} <- Map.get(belief, "graphs", %{}) do
-        {object, Map.get(graph, "max_evidence") || 0.0}
-      end
-    end)
-    |> Enum.max_by(&elem(&1, 1), fn -> {nil, 0.0} end)
-  end
-
-  # Where a sensor was on that step: the `location` the transforms filled in, or
-  # the camera pose the world sent back, whose last column is the sensor's place
-  # in the world. A world behind the port answers no `location`, so without the
-  # second the chart draws a flat line at zero for a sensor that did move.
-  defp position(observation),
-    do: Map.get(observation, "location") || translation(observation["cam_to_world"])
-
-  defp translation([row | _rest] = matrix) when is_list(row), do: Enum.map(matrix, &List.last/1)
-  defp translation(_absent), do: nil
-
-  defp x([x | _rest]), do: x
-  defp x(_not_a_location), do: 0.0
-
-  defp label_of("sensor:" <> sensor_id), do: "#{sensor_id} x"
-  defp label_of("percepts"), do: "percepts per step"
-  defp label_of("votes_used"), do: "votes used"
-  defp label_of("duration_us"), do: "step duration"
-  defp label_of("world_us"), do: "world time per step"
-  defp label_of("evidence"), do: "best evidence"
-  defp label_of(other), do: other
-
-  defp unit_of("sensor:" <> _sensor_id), do: "m"
-  defp unit_of("duration_us"), do: "µs"
-  defp unit_of("world_us"), do: "µs"
-  defp unit_of(_counted), do: ""
-
-  # What the numbers on the value axis are. Evidence is the score a hypothesis is
-  # ranked by and the one axis a Monty page is read against, so it says
-  # "evidence" rather than nothing; a count says what it counts.
-  defp axis_of("sensor:" <> _sensor_id), do: "metres"
-  defp axis_of("duration_us"), do: "microseconds"
-  defp axis_of("world_us"), do: "microseconds"
-  defp axis_of("percepts"), do: "percepts"
-  defp axis_of("votes_used"), do: "votes"
-  defp axis_of(_evidence), do: @evidence_axis
 
   defp around(_playhead, 0, first, _last), do: {first, first}
 

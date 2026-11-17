@@ -128,6 +128,39 @@ with its k-d index. Each keeps a runnable Elixir reference and a parity test,
 because a kernel performs the reference's arithmetic in the reference's order.
 `config :ex_tbp_monty, native_kernels?: false` gives the reference path.
 
+## A page watching a run
+
+Measured 2026-11-17 on the dev cluster (node1, `dogs/surf_unsupervised`, 7 800
+steps at about twenty a second, one run page open):
+
+| after | page memory | messages queued |
+| ----- | ----------- | --------------- |
+| 1 min | 19 MB       | 172             |
+| 2 min | 28 MB       | 471             |
+| 6 min | **59 MB**   | **2 910**       |
+
+The page never caught up: it was drawing a step thousands behind the run, and
+every step it answered was a live rebuild. `eprof` on the page process named
+it — `Replay.recorded/1` ran **fifty times in five seconds**, each pass walking
+every step the run had ever taken, and the coalescing the page documents never
+engaged because `refreshed_at` was written only on the run's `finished` path.
+
+Two changes, both pinned:
+
+- **The numbers are kept as they arrive** (`Monty.Studio.Replay.Digest`). A line
+  keeps its lowest, highest and latest point per group of steps and merges
+  neighbours when it has too many, so a run of any length holds at most
+  `3 * 512` points a line and appending a step costs a step's work. A run short
+  enough to keep every step keeps exactly what it kept before.
+- **A burst of steps is one rebuild.** Each rebuild stamps when it finished, so
+  the steps behind it wait for the page's own window (`run_refresh_ms`, 250 ms
+  by default) instead of each paying a rebuild of its own — at most four a second
+  however fast the run goes.
+
+A stopped 14 360-step page held 56 MB before the change (the record 29, the
+catalog 10, the series 7, the chart 6) and one refresh of it cost 90 ms of
+recomputation plus 0.43 s of render.
+
 ## The open decision: one crossing
 
 A matching burst walks the hypothesis set many times: with an index, through
