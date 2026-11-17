@@ -425,8 +425,14 @@ defmodule Mix.Tasks.Monty.Run do
   # An overlay is the tree of configs that differ, read before the copy of
   # Monty's own: that is how an experiment of ours composes against the whole of
   # Monty's config without copying it (`ExTbpMonty.AnimalExperiments`).
-  defp conf_dir(nil), do: nil
-  defp conf_dir(overlay), do: [Path.expand(overlay), Monty.Config.Source.conf_dir()]
+  #
+  # With no `--overlay` the roots are the discovered ones — every experiment set
+  # this application carries, the group files they share, then Monty's mirror —
+  # so an experiment that appears in a set runs by name with no flag, which is
+  # what the catalog offers.
+  defp conf_dir(nil), do: Monty.Config.Source.conf_dirs()
+
+  defp conf_dir(overlay), do: [Path.expand(overlay) | Monty.Config.Source.conf_dirs()]
 
   # Named here so a misspelling is a refusal rather than a quietly different
   # world: `--world mujoco` that fell back to the stand-in would report numbers

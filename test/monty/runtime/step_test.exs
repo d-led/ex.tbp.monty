@@ -116,6 +116,63 @@ defmodule Monty.Runtime.StepTest do
     end
   end
 
+  describe "the sensor phase" do
+    @two_sensors [:patch, :view_finder]
+
+    defp two_sensor_observations do
+      %{@agent => Map.new(@two_sensors, &{&1, %{"location" => [0.0, 0.0, 0.0]}})}
+    end
+
+    defp step_two_sensors(sensor_opts, model_opts) do
+      sensors = Enum.map(@two_sensors, &sensor_module(&1, sensor_opts))
+
+      model_id =
+        start_model([
+          {:sensor_modules, sensors},
+          {:sm_to_lm, %{lm_0: @two_sensors}}
+          | model_opts
+        ])
+
+      assert {:ok, _actions, info} =
+               step(model_id, two_sensor_observations())
+
+      {model_id, info}
+    end
+
+    test "asking sensors that draw nothing together decides what asking them one by one decides" do
+      {_serial_model, serial_info} = step_two_sensors([], sensors_step: :serial)
+      {_concurrent_model, concurrent_info} = step_two_sensors([], sensors_step: :concurrent)
+
+      # Both were asked — a phase that quietly answered nothing would agree just
+      # as well — and the price was the only thing that moved.
+      assert Enum.sort(concurrent_info.percept_ids) == [:patch, :view_finder]
+
+      assert %{concurrent_info | duration_us: 0} == %{serial_info | duration_us: 0}
+    end
+
+    test "a sensor that draws keeps the phase one at a time" do
+      {model_id, _info} = step_two_sensors([draws?: true], [])
+
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :serial
+    end
+
+    test "sensors that draw nothing are asked together" do
+      {model_id, _info} = step_two_sensors([], [])
+
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :concurrent
+    end
+
+    test "a run may name the round it wants, and gets it" do
+      {named_serial, _} = step_two_sensors([], sensors_step: :serial)
+      {named_concurrent, _} = step_two_sensors([draws?: true], sensors_step: :concurrent)
+
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, named_serial}))) == :serial
+
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, named_concurrent}))) ==
+               :concurrent
+    end
+  end
+
   describe "routing percepts" do
     test "a percept that did not pass the filter is withheld, and the module is not stepped" do
       model_id = start_model(sensor_modules: [sensor_module(:patch, pass?: false)])

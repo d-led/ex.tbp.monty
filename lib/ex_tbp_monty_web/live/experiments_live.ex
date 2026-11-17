@@ -25,6 +25,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMonty.Cluster.Nodes
+  alias Monty.Config.Source
   alias Monty.Studio.{Catalog, Drafts, Index, PluginExperiment, Readiness}
 
   @page_size 30
@@ -34,7 +35,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   def mount(_params, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Nodes.topic())
 
-    plugins = Catalog.plugin_experiments()
+    plugins = Catalog.plugin_experiments(conf_dir: roots())
 
     # Which config a plugin experiment steps is a question only its host can
     # answer, and only the socket's mount asks it: the static render is thrown
@@ -82,7 +83,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # hold, not a request.
   @impl true
   def handle_info({:cluster_nodes, _entries}, socket) do
-    plugins = Catalog.plugin_experiments()
+    plugins = Catalog.plugin_experiments(conf_dir: roots())
     bases = bases(plugins, socket.assigns.bases)
 
     {:noreply,
@@ -132,7 +133,15 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # its config was written for — as `Monty.Studio.Readiness` answers it, through
   # the one process that composes it: the answer is cached, but the composing is
   # not, and every page open on a node that has just started used to do its own.
-  defp labels, do: Monty.Studio.Readiness.Cache.survey() |> Readiness.labels()
+  defp labels, do: Monty.Studio.Readiness.Cache.survey(conf_dir: roots()) |> Readiness.labels()
+
+  # The config trees a page here lists and opens: this application's experiment
+  # sets, then the group files they share, then Monty's copy
+  # (`Monty.Config.Source.conf_dirs/0`). `load/3` reads a list as an overlay —
+  # the first root that holds a file wins — so an experiment of ours composes
+  # against the whole of Monty's config without copying any of it, and a group
+  # file of ours replaces Monty's wherever an experiment names it.
+  defp roots, do: Source.conf_dirs()
 
   # The index a page shows. A plugin's experiment is listed by the node that
   # brings it (`Catalog.plugin_experiments/0`), and what it *is* comes from the
@@ -141,7 +150,7 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   # steps instead of four columns of "unknown".
   defp index(plugins, bases) do
     rows = Enum.map(plugins, &Map.put(&1, :base, Map.get(bases, &1.name)))
-    Index.build(Catalog.experiments() ++ rows, labels())
+    Index.build(Catalog.experiments(conf_dir: roots()) ++ rows, labels())
   end
 
   # A host is asked about an experiment this page has not seen before, and once:

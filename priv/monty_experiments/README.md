@@ -1,10 +1,32 @@
 # Our experiments
 
-The experiments in this tree are **this application's**, not Monty's. They are
-read through the `:conf_dir` option every opener already takes
-(`Monty.Studio.open/2`, `Monty.Studio.Catalog.experiments/1`,
-`Monty.Studio.Readiness`), under the path
-`ExTbpMonty.AnimalExperiments.conf_dir/0` → `priv/monty_experiments/conf`.
+The configs in this tree are **this application's**, not Monty's. They are kept
+here, beside Monty's mirror, and composed as an overlay over it.
+
+## The shape
+
+```
+priv/monty_experiments/
+  sets/<name>/conf/     one experiment set: its own experiments, its own
+                        overrides of Monty's groups, its own termination budgets
+  conf/                 group files that every set inherits
+```
+
+`Monty.Config.Source.conf_dirs/0` answers the roots in the order that
+decides who wins:
+
+```
+sets/*/conf  (sorted)  ->  conf  ->  priv/monty/conf
+```
+
+`Monty.Config.Source.load/3` reads that list as an overlay — the first root that
+holds a file wins — and `Source.experiments/1` unions the experiment names
+across roots. So a set beats the shared tree, which beats Monty: a set can
+replace a group file for its own experiments without touching anything shared,
+and the shared tree can replace a Monty group once for everybody.
+
+**Adding a set is `mkdir` plus YAML.** Nothing enumerates sets by name; the tree
+is the registry, and the studio lists what it finds.
 
 ## Why not `priv/monty/conf`
 
@@ -12,16 +34,29 @@ read through the `:conf_dir` option every opener already takes
 `priv/monty` and **deletes any other YAML under `conf/` or `snapshots/`** —
 `Monty.Config.Inputs.sync/2`, whose `prune/3` is the deleting part. A config
 written there survives until the next refresh and then vanishes without a
-message. That is the whole reason this directory exists.
+message. Everything here is a sibling of that mirror, never inside it.
 
-`test/ex_tbp_monty/animal_experiments_test.exs` holds the rule.
+`test/monty/config/source_conf_dirs_test.exs` holds both halves: every root is
+outside the mirror, and a refresh leaves our files alone.
 
-## What goes here
+## What goes in a set
 
-Only the files that differ from Monty's copy — an environment group naming a new
-object set's `data_path`, and the experiments that use it. Everything else is
-Monty's, and stays in the mirror where a refresh keeps it current.
+Only what differs from Monty's copy — an environment group naming the object
+set's `data_path`, the env interfaces that place objects from it, and the
+experiments that use them. Everything else is Monty's and stays in the mirror,
+where a refresh keeps it current.
 
-What those experiments are for, and the corpora they need, is a plan rather than
-a property of this tree: it lives in MemPalace (wing `ex.tbp.monty`, room `plan`)
+What the experiments are for, and the corpora they need, is a plan rather than a
+property of this tree: it lives in MemPalace (wing `ex.tbp.monty`, room `plan`)
 and in the agent memory `animal-corpus.md`.
+
+## Running one
+
+```
+mix monty.run dogs/surf_unsupervised --world ex_mujoco
+mix run --no-start scripts/probe_recognitions.exs dogs/inference_paired 8
+```
+
+The runner and the studio both default to `conf_dirs/0`, so a name in a set runs
+without an `--overlay`. An overlay is still accepted for a tree that is not part
+of this application, and is read before the sets.

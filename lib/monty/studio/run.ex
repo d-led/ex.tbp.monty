@@ -71,10 +71,12 @@ defmodule Monty.Studio.Run do
   belongs to, which is what a sampler walking one pose per epoch reads), `:mode`
   (`:eval` or `:train`, default `:eval`),
   `:has_detailed_logger` (whether this run's logging wants the whole hypothesis
-  space per step), and `:memory` — the memory each learning module starts from,
-  by module id, defaulting to the pretrained one (`Setup.memories/1`). A run is
-  one episode, so `:memory` and `memories/1` are what let a training phase keep
-  what it learned between episodes.
+  space per step), `:sensors_step` (`:auto`, `:serial` or `:concurrent` — whether
+  a step asks its sensors together; see `Setup.model_spec/3`), and `:memory` —
+  the memory each learning module starts from, by module id, defaulting to the
+  pretrained one (`Setup.memories/1`). A run is one episode, so `:memory` and
+  `memories/1` are what let a training phase keep what it learned between
+  episodes.
 
   The episode number is not bookkeeping: a run's random draws come from the
   seed its episode derives from the experiment's, so the same experiment and a
@@ -115,7 +117,8 @@ defmodule Monty.Studio.Run do
             else:
               Setup.model_spec(setup, model_id,
                 has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
-                memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end)
+                memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
+                sensors_step: Keyword.get(opts, :sensors_step, :auto)
               )
 
         {:ok, factories} = Setup.positioning_procedures(setup)

@@ -509,6 +509,11 @@ defmodule Monty.Studio.Setup do
   Options: `:has_detailed_logger` — whether this run's logging wants the whole
   hypothesis space per step. It is the experiment's answer, not the config's,
   because it follows from which handlers the logging section names.
+  `:sensors_step` — `:auto` (the default), `:serial` or `:concurrent`: whether a
+  step asks its sensors one at a time or in one round. `:auto` is what a run
+  wants: the sensors answer for themselves, and a set that draws nothing from the
+  episode's stream is asked together. The other two exist to run the same
+  experiment both ways and show that the numbers agree.
   """
   @spec model_spec(t(), atom() | String.t(), keyword()) :: map()
   def model_spec(%__MODULE__{} = setup, model_id, opts \\ []) do
@@ -539,7 +544,8 @@ defmodule Monty.Studio.Setup do
         # purpose — is a separate number (`vote_timeout`). A deadline on the
         # work itself only decides which module gets dropped when a machine is
         # busy, which is the one thing a comparison must not let it decide.
-        call_timeout: :infinity
+        call_timeout: :infinity,
+        sensors_step: Keyword.get(opts, :sensors_step, :auto)
       },
       Map.merge(criterion_spec(setup.match_criterion), monty_args(setup))
     )

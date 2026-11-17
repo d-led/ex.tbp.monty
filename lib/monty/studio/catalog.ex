@@ -102,9 +102,9 @@ defmodule Monty.Studio.Catalog do
   two things of one name is one experiment, and the config here is the one a
   reader can read.
   """
-  @spec plugin_experiments() :: [%{name: String.t(), host: String.t(), node: node()}]
-  def plugin_experiments do
-    ours = MapSet.new(experiments(), & &1.name)
+  @spec plugin_experiments(keyword()) :: [%{name: String.t(), host: String.t(), node: node()}]
+  def plugin_experiments(opts \\ []) do
+    ours = MapSet.new(experiments(opts), & &1.name)
 
     Nodes.snapshot()
     |> Enum.flat_map(fn entry ->
@@ -140,16 +140,38 @@ defmodule Monty.Studio.Catalog do
   defp fragment?(%{experiment_class: nil}), do: true
   defp fragment?(_experiment), do: false
 
-  # When the directory was last written, and how many configs it holds: a copy
-  # that is replaced, added to or trimmed moves one of the two.
-  defp directory_stamp(conf_dir) do
-    directory = Path.join(conf_dir, "experiment")
+  # When a root was last written, and how many configs it holds: a copy that is
+  # replaced, added to or trimmed moves one of the two. Every root is stamped,
+  # because a list of roots is an overlay — adding an experiment of ours has to
+  # invalidate the cache as surely as a `mix monty.inputs` does, and a stamp of
+  # Monty's tree alone would serve the list from before our file existed.
+  #
+  # Recursive, because an experiment's name is its path relative to `experiment`
+  # (`dogs/inference_paired`), so a new one is often a file in a directory that
+  # already existed — a stamp of bare `*.yaml` would not see it.
+  defp directory_stamp(conf_dirs) do
+    stamps = conf_dirs |> Source.roots() |> Enum.flat_map(&stamp_of/1)
 
-    with {:ok, %File.Stat{mtime: mtime}} <- File.stat(directory, time: :posix),
-         names when names != [] <- Path.wildcard(Path.join(directory, "*.yaml")) do
-      {mtime, length(names)}
-    else
-      _missing -> nil
+    if stamps == [], do: nil, else: stamps
+  end
+
+  defp stamp_of(root) do
+    names = Path.join(root, "experiment/**/*.yaml") |> Path.wildcard()
+
+    case names do
+      [] ->
+        []
+
+      names ->
+        written_at =
+          names
+          |> Enum.map(fn name ->
+            {:ok, %File.Stat{mtime: mtime}} = File.stat(name, time: :posix)
+            mtime
+          end)
+          |> Enum.max()
+
+        [{root, written_at, length(names)}]
     end
   end
 
@@ -215,9 +237,13 @@ defmodule Monty.Studio.Catalog do
   @spec options(String.t(), keyword()) :: [String.t()]
   def options(group, opts \\ []) do
     if group in @groups do
-      Path.join([conf_dir(opts), group, "*.yaml"])
-      |> Path.wildcard()
-      |> Enum.map(&(&1 |> Path.basename(".yaml")))
+      # Every root, deduped: a group an experiment of ours adds an option to is a
+      # choice the builder must offer, and one both trees hold is one choice.
+      conf_dir(opts)
+      |> Source.roots()
+      |> Enum.flat_map(fn root -> Path.wildcard(Path.join([root, group, "*.yaml"])) end)
+      |> Enum.map(&Path.basename(&1, ".yaml"))
+      |> Enum.uniq()
       |> Enum.sort()
     else
       []

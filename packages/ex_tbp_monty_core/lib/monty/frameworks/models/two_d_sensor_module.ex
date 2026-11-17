@@ -67,6 +67,9 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   defstruct sensor_module_id: nil,
             features: [],
             save_raw_obs: false,
+            # This port's addition: Monty's `TwoDSensorModule` keeps every
+            # percept unconditionally. The flag says whether a logger will read
+            # the step record (`docs/monty-differences.md` §2.26).
             has_detailed_logger: false,
             edge_detector: nil,
             processor: nil,
@@ -82,7 +85,14 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
 
   @type t :: %__MODULE__{}
 
-  @doc "The module a config asks for, as Monty's `__init__` reads its arguments."
+  @doc """
+  The module a config asks for, as Monty's `__init__` reads its arguments.
+
+  The `:has_detailed_logger` option is **this port's addition** — Monty's
+  constructor reads the config alone. It comes from the experiment's logging
+  section, through `Monty.Studio.Setup`, and says whether the step record is
+  worth keeping (`docs/monty-differences.md` §2.26).
+  """
   @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_config(%{} = config, options \\ []) do
     with {:ok, features} <- features(config) do
@@ -147,6 +157,14 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   end
 
   defp value(options, key, default), do: Keyword.get(options, key, default)
+
+  # This port's addition, and not Monty's: his `TwoDSensorModule` says nothing
+  # about drawing from the episode's stream, because Python steps the sensors one
+  # after another (`docs/monty-differences.md` §2.28). A 2-D sensor draws only
+  # when the config gave it `noise_params`.
+  @impl true
+  def draws_from_stream?(%__MODULE__{noise: {DefaultMessageNoise, _state}}), do: true
+  def draws_from_stream?(%__MODULE__{}), do: false
 
   # A detector is `{module, detector}`, the same shape `noise` and `filter` take,
   # so a test can hand the module a detector that answers what a case needs while

@@ -151,6 +151,16 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   defp noise(params) when map_size(params) == 0, do: noise(nil)
   defp noise(params), do: {DefaultMessageNoise, DefaultMessageNoise.new(params)}
 
+  # This port's addition, and not Monty's: Monty's `CameraSM` says nothing about
+  # drawing from the episode's stream, because Python steps the sensors one after
+  # another (`docs/monty-differences.md` §2.28). A camera draws only when the
+  # config gave it `noise_params`: the `raw0` presets the experiments run hold
+  # `NoMessageNoise`, so their steps take nothing from the stream and can be
+  # stepped beside their siblings.
+  @impl true
+  def draws_from_stream?(%__MODULE__{noise: {DefaultMessageNoise, _state}}), do: true
+  def draws_from_stream?(%__MODULE__{}), do: false
+
   defp filter(nil),
     do:
       {PassthroughPerceptFilter, PassthroughPerceptFilter.new(),
@@ -188,6 +198,10 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
     end
   end
 
+  # This port's addition, and not Monty's: `records?/1` has no counterpart there,
+  # because Monty appends unconditionally and a Python process is not killed for
+  # it (`docs/monty-differences.md` §2.26).
+  #
   # What this run keeps of a step: nothing, unless a logger is going to read it.
   #
   # Monty keeps two histories per sensor: the raw observation of every step when

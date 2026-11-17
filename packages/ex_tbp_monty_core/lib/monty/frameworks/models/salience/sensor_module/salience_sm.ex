@@ -109,6 +109,15 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   @target "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM"
   @vocus2_config "tbp.monty.frameworks.models.salience.strategies.vocus2.vocus2.Vocus2SalienceConfig"
 
+  # This port's addition, and not Monty's: his `SalienceSM` says nothing about
+  # drawing from the episode's stream, because Python steps the sensors one after
+  # another (`docs/monty-differences.md` §2.28). The dither is drawn from that
+  # stream on every informative step, so this sensor is never stepped beside its
+  # siblings: its numbers are the order the draws were taken in, and that order
+  # is Monty's serial round.
+  @impl true
+  def draws_from_stream?(_state), do: true
+
   @doc """
   The salience module a config entry describes, or why it is not this class's.
 

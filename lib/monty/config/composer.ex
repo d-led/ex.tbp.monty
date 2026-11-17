@@ -25,18 +25,25 @@ defmodule Monty.Config.Composer do
   @type tree :: map()
 
   @doc """
-  Composes `experiment` from the Monty checkout.
+  Composes `experiment` from the config roots.
 
   Options:
 
-    * `:conf_dir` — the Hydra config directory, defaulting to the checkout's.
+    * `:conf_dir` — the Hydra config directory, or a list of them read as an
+      overlay (the first root that holds a file wins), defaulting to every root
+      this application composes from (`Monty.Config.Source.conf_dirs/0`): an
+      experiment of ours beside the group files it shares beside Monty's mirror.
+      The default is what a *run* composes, so a name the studio lists opens
+      through the same roots the page listed it from. A tool that checks
+      *Monty's* configs against Monty's snapshots names `Source.conf_dir/0`
+      alone, because those experiments are not ours to re-compose.
     * `:overrides` — group overrides keyed by group path without a leading
       slash, as Hydra takes them on the command line
       (`%{"monty/learning_module" => "evidence_1lm_nn5_dod003"}`).
   """
   @spec compose(String.t(), keyword()) :: {:ok, tree()} | {:error, term()}
   def compose(experiment, opts \\ []) do
-    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
     overrides = Map.put(Keyword.get(opts, :overrides, %{}), "experiment", experiment)
 
     with {:ok, tree} <- compose_group(conf_dir, "", "experiment", nil, overrides, 0) do
@@ -71,7 +78,7 @@ defmodule Monty.Config.Composer do
   """
   @spec compose_yaml(String.t(), keyword()) :: {:ok, tree()} | {:error, term()}
   def compose_yaml(text, opts \\ []) do
-    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
 
     with {:ok, config} <- Source.load_text(text) do
       overrides =

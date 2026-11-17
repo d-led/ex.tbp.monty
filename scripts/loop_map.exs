@@ -125,6 +125,10 @@ defmodule LoopMap do
     "graph_memory" => "reads the memory, which Monty holds as an attribute",
     "num_hypotheses" => "counts a graph's hypotheses, a list length in Monty",
     "conclusion" => "reads the terminal state, an attribute in Monty",
+    # Monty's step loop calls its sensors in turn and the order is the answer;
+    # this reads the sensors' own answer to whether they draw, which is how the
+    # phase knows it may ask them together (§2.28 of the differences doc).
+    "sensors_step" => "how the sensor phase is asked; Monty's loop fixes the order",
     "observation_processed" => "reads whether the last observation was processed, an attribute in Monty",
     "set_terminal_state" => "writes the terminal state, an attribute assignment in Monty",
     "clear_conclusion" => "clears the episode's answer, an attribute assignment in Monty",

@@ -351,12 +351,18 @@ defmodule ExTbpMontyWeb.BuildLive do
   defp group_of(field), do: Enum.find(@choices, field, &(field_name(&1) == field))
 
   defp choices do
-    Map.new(@choices, fn group -> {group, Catalog.options(group)} end)
+    Map.new(@choices, fn group -> {group, Catalog.options(group, conf_dir: roots())} end)
   end
+
+  # What a builder offers is what a run page can open: the experiment sets this
+  # application carries, over the groups they share, over Monty's own tree
+  # (`Monty.Config.Source.conf_dirs/0` — first root holding a file wins, so ours
+  # replace Monty's where they name the same group option).
+  defp roots, do: Monty.Config.Source.conf_dirs()
 
   defp base_options do
     templates = Catalog.templates()
-    others = Catalog.experiments() |> Enum.map(&{&1.name, &1.name})
+    others = Catalog.experiments(conf_dir: roots()) |> Enum.map(&{&1.name, &1.name})
     templates |> Enum.map(&{&1, &1}) |> Enum.concat(others) |> Enum.uniq()
   end
 

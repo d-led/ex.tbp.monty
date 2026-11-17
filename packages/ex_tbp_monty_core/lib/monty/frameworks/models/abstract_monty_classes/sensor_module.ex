@@ -56,7 +56,32 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
   @doc "The region this sensor wants attended to."
   @callback propose_region(state) :: {AttentionRegion.t(), state}
 
-  @optional_callbacks propose_goals: 1, propose_region: 1
+  @doc """
+  Whether one step of this module draws from the episode's random stream.
+
+  **This port's addition.** Monty's `SensorModule` has no such callback: what a
+  sensor draws is invisible to it, because Python steps the sensors one after
+  another anyway. `draws_from_stream?/1` exists here because stepping them at
+  once is only safe when nobody draws — it is what makes
+  `Step.step_sensor_modules/4` allowed to be concurrent, and it is *this port's*
+  answer to a question Monty never has to ask
+  (`docs/monty-differences.md` §2.28).
+
+  The step coordinator asks this once, when the model is built, because it
+  decides how the sensors are stepped: `Step.step_sensor_modules/4` can ask
+  every sensor at once only when none of them draws. A sensor that draws pins
+  the phase to the order it is stepped in — an episode has one stream and the
+  draws are taken in that order (`Monty.Random.Stream`, `docs/monty-differences.md`
+  §2.1) — so a module that answers `true` here keeps Monty's serial round and
+  its numbers, and the ones that answer `false` are what a multi-sensor config
+  gets concurrency from.
+
+  The default is `false`: a sensor with no noise and no dither reads the
+  observation and nothing else.
+  """
+  @callback draws_from_stream?(state) :: boolean()
+
+  @optional_callbacks propose_goals: 1, propose_region: 1, draws_from_stream?: 1
 
   @doc """
   Defaults matching Monty's base `SensorModule`: a plain sensor proposes no
@@ -79,7 +104,14 @@ defmodule Monty.Frameworks.Models.AbstractMontyClasses.SensorModule do
       @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
       def clear_buffers(state), do: state
 
-      defoverridable propose_goals: 1, propose_region: 1, clear_buffers: 1
+      @impl Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
+      # This port's addition, not Monty's: a sensor says nothing about drawing
+      # because Python steps it serially. `false` is the honest default for the
+      # sensors this tree builds — no noise, no dither — and a sensor that draws
+      # overrides it (§2.28).
+      def draws_from_stream?(_state), do: false
+
+      defoverridable propose_goals: 1, propose_region: 1, clear_buffers: 1, draws_from_stream?: 1
     end
   end
 end

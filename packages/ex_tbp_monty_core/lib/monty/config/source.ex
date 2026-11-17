@@ -39,6 +39,63 @@ defmodule Monty.Config.Source do
   def inputs_root, do: Path.join(:code.priv_dir(:ex_tbp_monty), "monty")
 
   @doc """
+  The tree this application's own configs live in: a sibling of the mirror.
+
+  `mix monty.inputs` writes `priv/monty` and **deletes every other YAML** under
+  its `conf/` and `snapshots/` (`Monty.Config.Inputs.sync/2`), so a config
+  written inside the mirror lasts until the next refresh. Everything of ours
+  lives here instead, where that prune cannot reach it.
+
+  ```
+  priv/monty_experiments/
+    sets/<name>/conf     one experiment set: its own experiments and its own
+                         overrides of Monty's groups
+    conf                 group files every set inherits
+  ```
+
+  Which sets exist is the tree's own answer — a directory per set, found by
+  `extra_conf_dirs/0`, so adding one is `mkdir` plus YAML and no code. A set
+  named after a corpus is a *user* of this system, not part of it: nothing here
+  knows what any of them is about.
+  """
+  @spec extra_root() :: Path.t()
+  def extra_root, do: Path.join(:code.priv_dir(:ex_tbp_monty), "monty_experiments")
+
+  @doc """
+  The config roots of ours, strongest first: every set, then the shared tree.
+
+  Sorted, because a rank must not depend on the order a directory happens to be
+  read in.
+  """
+  @spec extra_conf_dirs() :: [Path.t()]
+  def extra_conf_dirs do
+    shared = Path.join(extra_root(), "conf")
+
+    Path.join(extra_root(), "sets/*/conf")
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.sort()
+    |> then(fn sets -> if File.dir?(shared), do: sets ++ [shared], else: sets end)
+  end
+
+  @doc """
+  Every root a config is composed from, in the order that decides who wins.
+
+  `load/3` reads this list as an **overlay** — the first root that holds a file
+  wins — and `experiments/1` unions the names across roots. So our sets beat our
+  shared tree, which beats Monty's mirror: a set replaces a group file for its
+  own experiments without touching anything shared, and the shared tree
+  replaces a Monty group once for everybody.
+
+  This is the default for everything that composes an experiment: the studio
+  (`Catalog`, `Studio.open/2`, `Readiness`) and `mix monty.run`. The tools that
+  check *Monty's* configs against Monty's snapshots read `conf_dir/0` alone,
+  because our experiments are not Monty's to check.
+  """
+  @spec conf_dirs() :: [Path.t()]
+  def conf_dirs, do: extra_conf_dirs() ++ [conf_dir()]
+
+  @doc """
   The Monty checkout: a maintainer's input, never a running system's.
 
   `MONTY_SOURCE` wins; otherwise `../monty-orig` next to the project, which is

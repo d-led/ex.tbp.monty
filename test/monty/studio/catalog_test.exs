@@ -77,4 +77,58 @@ defmodule Monty.Studio.CatalogTest do
       assert Catalog.trainer_for(nil) == nil
     end
   end
+
+  describe "a catalogue read from more than one root" do
+    test "lists what either root holds" do
+      ours = conf_dir([{"dogs/mine", @experiment}])
+      montys = conf_dir([{"base", @experiment}])
+
+      names = Catalog.experiments(conf_dir: [ours, montys]) |> Enum.map(& &1.name) |> Enum.sort()
+      assert names == ["base", "dogs/mine"]
+    end
+
+    test "answers a name both roots hold from the first" do
+      ours =
+        conf_dir([
+          {"shared", String.replace(@experiment, "n_train_epochs: 3", "n_train_epochs: 7")}
+        ])
+
+      montys = conf_dir([{"shared", @experiment}])
+
+      assert [%{config: %{"n_train_epochs" => 7}}] = Catalog.experiments(conf_dir: [ours, montys])
+    end
+
+    test "offers a group option from either root, once each" do
+      ours = conf_dir([{"dogs/mine", @experiment}])
+      montys = conf_dir([{"base", @experiment}])
+
+      for {dir, options} <- [{ours, ["surface_curvature"]}, {montys, ["surface"]}] do
+        File.mkdir_p!(Path.join(dir, "termination"))
+
+        for option <- options do
+          File.write!(Path.join([dir, "termination", option <> ".yaml"]), "defaults: []\n")
+        end
+      end
+
+      File.write!(Path.join([montys, "termination", "surface_curvature.yaml"]), "defaults: []\n")
+
+      assert Catalog.options("termination", conf_dir: [ours, montys]) == [
+               "surface",
+               "surface_curvature"
+             ]
+    end
+
+    test "re-reads the list when a set adds an experiment" do
+      ours = conf_dir([{"dogs/mine", @experiment}])
+      montys = conf_dir([{"base", @experiment}])
+
+      assert length(Catalog.experiments(conf_dir: [ours, montys])) == 2
+
+      # A stamp of Monty's tree alone would answer this from before the file
+      # existed, which is a page that hides an experiment somebody just added.
+      File.write!(Path.join([ours, "experiment/dogs/added.yaml"]), @experiment)
+
+      assert length(Catalog.experiments(conf_dir: [ours, montys])) == 3
+    end
+  end
 end

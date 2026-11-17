@@ -370,28 +370,46 @@ defmodule Monty.Runtime.Step do
          proprioceptive_state,
          ctx
        ) do
-    # One at a time, because an episode draws from one random stream and a
-    # sensor module may draw (the salience module dithers its scores): asking
-    # them together would let the scheduler decide the numbers. Monty's own
-    # loop is one call after another for the same reason.
-    state.sensor_modules
-    |> Enum.map(fn sm ->
-      {sm.id,
-       fn ->
-         SensorModuleServer.step(
-           Registry.via({:sensor_module, model_id, sm.id}),
-           observation_for(observations, sm),
-           Map.get(proprioceptive_state, sm.agent_id, %{}),
-           ctx,
-           state.motor_only?
-         )
-       end}
-    end)
-    |> Enum.reduce({%{}, []}, fn request, {percepts, timed_out} ->
-      %{replies: reply, timed_out: late} = Barrier.run([request], state.call_timeout)
+    # Each request closes over its own sensor's share and nothing else. It
+    # matters: a round of several requests runs each in a process of its own, and
+    # a process is handed a copy of what its closure holds, while a round of one
+    # runs where it was called and copies nothing (`Monty.Runtime.Barrier`). So a
+    # closure over `observations` would put every sensor's payload on the heap of
+    # every sensor's process, once per sensor per step, and that is the cost the
+    # concurrent round would pay for a phase whose work is a fraction of it.
+    motor_only? = state.motor_only?
 
-      {Map.merge(percepts, reply), timed_out ++ late}
-    end)
+    requests =
+      Enum.map(state.sensor_modules, fn sm ->
+        server = Registry.via({:sensor_module, model_id, sm.id})
+        observation = observation_for(observations, sm)
+        proprioceptive = Map.get(proprioceptive_state, sm.agent_id, %{})
+
+        {sm.id, fn -> SensorModuleServer.step(server, observation, proprioceptive, ctx, motor_only?) end}
+      end)
+
+    case State.sensors_step(state) do
+      :concurrent ->
+        # This branch is the port's addition; Monty's loop only ever has the one
+        # below (`docs/monty-differences.md` §2.28). One round for the whole
+        # phase: every sensor starts before any is awaited, so the phase costs
+        # its slowest sensor instead of the sum of them. Nothing in it touches
+        # the episode's random stream — that is what `State.sensors_step/1`
+        # checked — so the numbers are the same as the serial round's, by
+        # construction and not by luck.
+        %{replies: percepts, timed_out: timed_out} = Barrier.run(requests, state.call_timeout)
+        {percepts, timed_out}
+
+      :serial ->
+        # Monty's round, one call after another, because an episode draws from
+        # one random stream and a sensor that draws (a dither, a noise) makes the
+        # order part of the numbers.
+        Enum.reduce(requests, {%{}, []}, fn request, {percepts, timed_out} ->
+          %{replies: reply, timed_out: late} = Barrier.run([request], state.call_timeout)
+
+          {Map.merge(percepts, reply), timed_out ++ late}
+        end)
+    end
   end
 
   defp gather_outputs(%State{model_id: model_id} = state) do

@@ -210,7 +210,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         max_match_distance: Keyword.fetch!(options, :max_match_distance),
         tolerances: tolerances,
         feature_weights:
-          fill_feature_weights_with_default(Keyword.get(options, :feature_weights, %{}), tolerances),
+          fill_feature_weights_with_default(
+            Keyword.get(options, :feature_weights, %{}),
+            tolerances
+          ),
         feature_evidence_increment: Keyword.get(options, :feature_evidence_increment, 1),
         threshold_config: threshold_config,
         x_percent_threshold: Keyword.get(options, :x_percent_threshold, 10),
@@ -297,6 +300,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
+  # This port's addition: Monty indexes nothing when it loads a model, because
+  # its state dict carries `graph_id_to_target` beside the graphs. Here a library
+  # is a separate file, so the module indexes itself from the names the library
+  # recorded (`docs/monty-differences.md` §2.27).
+  #
   # Both directions of the index, from what the library says each graph was built
   # from, and from the graph's own id where it says nothing.
   defp index_objects_for_graphs(%__MODULE__{} = lm, targets) do
@@ -961,7 +969,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   """
   @spec get_all_known_object_ids(t()) :: [graph_id()]
   def get_all_known_object_ids(%__MODULE__{graph_memory: nil}), do: []
-  def get_all_known_object_ids(%__MODULE__{} = lm), do: GraphMemory.get_memory_ids(lm.graph_memory)
+
+  def get_all_known_object_ids(%__MODULE__{} = lm),
+    do: GraphMemory.get_memory_ids(lm.graph_memory)
 
   @doc """
   The model stored for `model_id`, or one input channel of it.
@@ -1052,7 +1062,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # current one either — the state a fresh module is built in, and the one an
   # episode's statistics are read from when the patch never met the object.
   # Monty's `_get_current_mlh` answers something in that case, and so does this.
-  defp finish_mlh(nil, %__MODULE__{current_mlh: nil}), do: %{empty_mlh() | graph_id: "new_object0"}
+  defp finish_mlh(nil, %__MODULE__{current_mlh: nil}),
+    do: %{empty_mlh() | graph_id: "new_object0"}
+
   defp finish_mlh(nil, %__MODULE__{} = lm), do: %{get_current_mlh(lm) | graph_id: "new_object0"}
   defp finish_mlh(mlh, %__MODULE__{}), do: mlh
 
@@ -1069,7 +1081,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   @doc "The most likely hypothesis of one object, whether or not it is the best overall."
   @spec get_mlh_for_object(t(), graph_id()) :: mlh()
-  def get_mlh_for_object(%__MODULE__{} = lm, graph_id), do: calculate_most_likely_hypothesis(lm, graph_id)
+  def get_mlh_for_object(%__MODULE__{} = lm, graph_id),
+    do: calculate_most_likely_hypothesis(lm, graph_id)
 
   @doc """
   How many hypotheses the module holds for one object.
@@ -1652,7 +1665,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp apply_votes(%__MODULE__{} = lm, {graph_id, votes}) do
     case Map.fetch(lm.hypotheses, graph_id) do
       {:ok, hypotheses} ->
-        %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, update_evidence_with_vote(lm, hypotheses, votes))}
+        %{
+          lm
+          | hypotheses:
+              Map.put(lm.hypotheses, graph_id, update_evidence_with_vote(lm, hypotheses, votes))
+        }
 
       :error ->
         lm
@@ -1832,7 +1849,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   step's error is measured from.
   """
   @spec collect_stats_to_save(t()) :: {t(), map()}
-  def collect_stats_to_save(%__MODULE__{} = lm), do: collect_stats_to_save(lm, &add_detailed_stats/2)
+  def collect_stats_to_save(%__MODULE__{} = lm),
+    do: collect_stats_to_save(lm, &add_detailed_stats/2)
 
   @doc """
   The same, with the detailed fields supplied by whoever owns the module.

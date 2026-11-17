@@ -49,6 +49,12 @@ defmodule Monty.Test.RecordingSensorModule do
   @impl true
   def propose_goals(state), do: {state.goals, state}
 
+  # A test says `draws?: true` when it is standing in for a module whose numbers
+  # come from the episode's stream — the salience module's dither, a camera's
+  # noise — so that the sensor phase has to be asked one at a time.
+  @impl true
+  def draws_from_stream?(state), do: Map.get(state, :draws?, false)
+
   @impl true
   def propose_region(state), do: {state.region, state}
 

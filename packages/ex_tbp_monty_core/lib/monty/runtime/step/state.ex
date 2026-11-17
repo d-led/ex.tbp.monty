@@ -29,6 +29,7 @@ defmodule Monty.Runtime.Step.State do
   defstruct model_id: nil,
             model_class: Monty.Runtime.Step,
             sensor_modules: [],
+            sensors_step: :auto,
             learning_modules: [],
             inputs: %{},
             lm_to_lm_vote: nil,
@@ -90,10 +91,47 @@ defmodule Monty.Runtime.Step.State do
           done?: boolean(),
           vote_timeout: timeout(),
           call_timeout: timeout(),
+          sensors_step: :auto | :serial | :concurrent,
           semantic_id_to_label: %{optional(integer()) => String.t()},
           step: non_neg_integer(),
           episode_seed: non_neg_integer() | nil
         }
+
+  @doc """
+  How the sensor phase of a step is asked: together, one at a time, or as the
+  sensors themselves decide.
+
+  **This port's addition:** Monty never asks — its step loop calls the sensors in
+  turn and the order is the answer (`docs/monty-differences.md` §2.28).
+
+  `:concurrent` asks every sensor in one round, so the phase costs its slowest
+  sensor instead of the sum — see `step_sensor_modules/4`. It is only safe while
+  none of them draws from the episode's stream, which is why `:auto` (the
+  default) answers `:concurrent` for a set of sensors that draw nothing and
+  `:serial` for a set in which one does. A run that wants Monty's round either
+  way asks for `:serial`; a run that wants the round and knows its sensors do
+  not draw asks for `:concurrent`, and gets it even then.
+
+  `:auto` is the interesting one: every `raw0` camera — the presets the shipped
+  experiments run — holds `NoMessageNoise`, so a five-camera experiment is
+  concurrent by construction and its numbers cannot move, because nothing in the
+  phase reads the stream it would have shared.
+  """
+  @spec sensors_step(t()) :: :serial | :concurrent
+  def sensors_step(%__MODULE__{sensors_step: :serial}), do: :serial
+
+  def sensors_step(%__MODULE__{sensors_step: :concurrent}), do: :concurrent
+
+  def sensors_step(%__MODULE__{sensor_modules: modules}) do
+    if Enum.any?(modules, &draws?/1), do: :serial, else: :concurrent
+  end
+
+  # A module that does not implement the callback was written before it existed;
+  # a sensor nobody has described is assumed to draw, which costs its run the
+  # speed and never its numbers.
+  defp draws?(%{module: module, state: state}) do
+    function_exported?(module, :draws_from_stream?, 1) and module.draws_from_stream?(state)
+  end
 
   @doc "Builds the coordinator state from a model spec."
   @spec new(map()) :: t()
@@ -115,6 +153,7 @@ defmodule Monty.Runtime.Step.State do
       model_id: Map.fetch!(options, :model_id),
       model_class: Map.get(options, :model_class, Monty.Runtime.Step),
       sensor_modules: Map.get(options, :sensor_modules, []),
+      sensors_step: Map.get(options, :sensors_step, :auto),
       learning_modules: learning_modules,
       inputs: inputs,
       lm_to_lm_vote: Map.get(options, :lm_to_lm_vote),

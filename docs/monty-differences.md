@@ -1751,3 +1751,62 @@ after the object it was stored under, which is what this port assumed.
 **What is therefore not compared.** Monty's `.pt` checkpoint, which carries the
 whole model's state — the module's other learned fields included. Only the two
 maps travel here, because they are the ones a later run scores itself against.
+
+## 2.28 A sensor says whether it draws from the episode's stream
+
+**In one line:** Monty's `SensorModule` interface has a callback this port added,
+`draws_from_stream?/1`, because a step here steps the sensors of a phase at once
+and may only do that when none of them draws.
+
+**What Monty does.** `Monty.step` calls each sensor module in turn, on one thread,
+and every draw a sensor takes comes out of the environment's generators in that
+order. What a sensor draws is therefore never a question Monty asks: the order is
+given by the loop.
+
+**What this port does.**
+[`SensorModule`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/abstract_monty_classes/sensor_module.ex)
+carries an optional `@callback draws_from_stream?(state) :: boolean()`, declared
+in the `use` block with the other optional callbacks and defaulting to `false`.
+`Step` asks it once, when the model is built, and reads the answer as permission:
+the sensors of a phase that all answer `false` can be stepped concurrently, and
+one that answers `true` pins the phase to Monty's serial order. The episode's
+single stream is `Monty.Random.Stream` (§2.1), whose draws must be taken in the
+order the episode takes them or the numbers stop matching Monty's.
+
+Three ported classes answer it, each saying in the code that the method is
+ours and not Monty's: `CameraSM` and `TwoDSensorModule` answer `true` exactly
+when their config gave them `noise_params`, and `SalienceSM` answers `true`
+always, because it dithers every informative step.
+
+Around the callback the port also has `Monty.Runtime.Step.State.sensors_step/1`
+— `:concurrent` for a set of sensors that draw nothing, `:serial` for a set in
+which one does — and a run option of the same name (`:auto`, the default,
+`:serial` or `:concurrent`) so the two rounds can be run against each other.
+Neither exists in Monty: it has no such question, and the option is a run's, not
+a config's — Monty's Hydra YAML has no key for it and this port added none.
+
+**Why.** Stepping sensors concurrently is where this port's speed comes from on
+a config with several of them, and a concurrent step of a module that draws would
+order its draws by completion rather than by position — a different episode, not
+a faster one. The callback keeps that decision with the module that knows the
+answer, instead of a list of "noisy sensors" kept somewhere in the runtime and
+wrong the first time a sensor gains noise.
+
+**What is therefore not compared.** Nothing: a sensor that does not draw answers
+`false` and the phase steps it exactly as Monty's loop does. A sensor that draws
+keeps the serial order, so its numbers are Monty's too.
+
+**What it bought, measured.** `scripts/probe_sensor_rounds.exs` steps the same
+episode twice, once with each round, and compares every step's percepts, actions
+and terminal states. On this machine (Apple Silicon, macOS 26), the MuJoCo world
+through `ex_mujoco`, `tutorial/dist_agent_5lm_2obj_eval` — six sensors, none of
+them drawing — three epochs agreed step for step and the mean model step was
+1793 / 110 / 456 ms serially against 1266 / 109 / 512 ms concurrently: the same
+number, whichever round asks. That config's sensors are cheap; a phase that costs
+its slowest sensor rather than their sum is a factor only where one sensor is
+expensive, and nothing here makes a phase whose sensors are cheap faster. The
+first measurement of this was wrong in the other direction, and the reason is
+worth keeping: a request closure holds what the sensor needs — a round of several
+requests copies that into a process of its own, so a closure over *all* the
+observations paid one copy per sensor per step and the concurrent round lost by a
+factor.

@@ -102,7 +102,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
       end
 
-    case Studio.open(name_of(params)) do
+    case Studio.open(name_of(params), conf_dir: Monty.Config.Source.conf_dirs()) do
       {:ok, opened} ->
         {:ok,
          follow_running(
@@ -1169,7 +1169,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         name = socket.assigns.opened.name
 
         {:noreply,
-         start_async(socket, :world, fn -> Studio.open(name, world_simulator: world) end)}
+         start_async(socket, :world, fn ->
+           Studio.open(name,
+             conf_dir: Monty.Config.Source.conf_dirs(),
+             world_simulator: world
+           )
+         end)}
     end
   end
 

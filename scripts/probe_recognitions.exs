@@ -21,7 +21,7 @@ defmodule Recognitions do
   whether a `match` was right.
   """
   def run(name, episodes) do
-    conf = [Path.expand("priv/monty_experiments/conf"), Monty.Config.Source.conf_dir()]
+    conf = Monty.Config.Source.conf_dirs()
     {:ok, opened} = Monty.Studio.open(name, conf_dir: conf, world_simulator: :ex_mujoco)
     setup = opened.setup
     experiment = Monty.Studio.Setup.experiment_class(setup)
