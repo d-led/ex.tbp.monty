@@ -157,11 +157,20 @@ Two checks close the obvious explanations without closing the question. Forcing 
 curvature branch at step 28 answers `0.377315189, -0.912522774, -0.157909578` — a
 third direction, so his was not that branch either. And no single draw among
 NumPy's first sixty, blended from our heading by Monty's own formula, produces his
-heading: that search finds nothing. So his blend started from a heading that is
-neither ours nor reachable from our trace, which leaves the stored heading as the
-suspect even though the direction it returned matched — and settling it needs his
-side: his `tangential_angle` and `prev_angle` around steps 24 to 28, from a run in
-Monty's own environment.
+heading: that search finds nothing.
+
+**His own recording says both sides drew the same number.** Every line of it
+carries the stream's position, and it stands at `624` for steps one to
+twenty-seven and `2` at step 28 — the same two numbers ours prints, from the same
+oracle. So "the draws differ" is closed by his data rather than by ours.
+
+That leaves his heading, and it is the one number his recording does not carry. The
+hook that wrote the fixture already records the stream's position per step
+(`record_monty_episode.py`), so a sibling hook writing
+`monty.motor_system`'s policy fields — `tangential_angle`, `prev_angle`,
+`using_pc_guide`, the two counters — is the same shape of thing, and this machine
+has what the run needs: the YCB meshes under `~/tbp/data`, the pretrained models
+under `~/tbp/results`, and a virtual environment where `tbp.monty` imports.
 
 The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
 projections between an angle and a vector) and `pc_moving_average` are identical to
