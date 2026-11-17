@@ -672,4 +672,39 @@ defmodule Monty.Studio.ChartTest do
       assert Enum.at(beliefs.reports, 1).points == []
     end
   end
+
+  test "a report is drawn by the projection the lines use, so it lands on its own line" do
+    chart = %Monty.Studio.Chart{
+      width: 200,
+      height: 100,
+      x_min: 10,
+      x_max: 20,
+      y_min: 0.0,
+      y_max: 10.0
+    }
+
+    beliefs =
+      Monty.Studio.Chart.beliefs(
+        [{"learning_module_0", [{10, 2.0}, {20, 10.0}]}, {"learning_module_1", [{10, 5.0}]}],
+        "mug"
+      )
+
+    dots = Monty.Studio.Chart.report_points(beliefs, chart)
+
+    # The same projection the line's points string is built from, so a dot is
+    # never beside the line it belongs to.
+    assert Enum.map(dots, &{&1.x, &1.y}) ==
+             Enum.map(
+               [
+                 {"learning_module_0", {10, 2.0}},
+                 {"learning_module_0", {20, 10.0}},
+                 {"learning_module_1", {10, 5.0}}
+               ],
+               fn {_module, point} -> Monty.Studio.Chart.project(point, chart) end
+             )
+
+    # The first step is the plot's own left edge, and the top of the scale is its top.
+    assert Enum.at(dots, 0).x == chart.margin_left
+    assert Enum.at(dots, 1).y < Enum.at(dots, 0).y
+  end
 end

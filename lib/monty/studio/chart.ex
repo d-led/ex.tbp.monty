@@ -257,7 +257,7 @@ defmodule Monty.Studio.Chart do
             |> Enum.map(&path_of(&1, chart))
             |> Enum.reject(&(&1 == ""))
             |> Enum.join(" "),
-          last: point(last_sample(segments) |> last_point(chart), chart)
+          last: project(last_sample(segments) |> last_point(chart), chart)
         }
       end)
       |> Enum.reject(&(&1.evidence == []))
@@ -643,12 +643,36 @@ defmodule Monty.Studio.Chart do
   end
 
   defp points_string({_episode, x, evidence}, chart) do
-    {px, py} = point({x, evidence}, chart)
+    {px, py} = project({x, evidence}, chart)
     "#{px},#{py}"
   end
 
-  defp point({x, evidence}, chart) do
+  @doc """
+  Where one `{step, evidence}` is drawn, in SVG units.
+
+  The lines' arithmetic, public because a report drawn as a dot has to land on
+  the line it belongs to: two projections would drift apart, and a dot that sits
+  beside its own line is worse than no dot at all.
+  """
+  @spec project({number(), number()}, t()) :: {number(), number()}
+  def project({x, evidence}, %__MODULE__{} = chart) do
     {rounded(x_coordinate(x, chart)), rounded(y(evidence, chart))}
+  end
+
+  @doc """
+  Where every report of one object is drawn, each with the module it came from.
+
+  One dot a report: the parallel beliefs of an object are the same marks in the
+  same colour, and which module made one is what a hover says.
+  """
+  @spec report_points(beliefs(), t()) :: [%{module_id: String.t(), x: number(), y: number()}]
+  def report_points(%{reports: reports}, %__MODULE__{} = chart) do
+    for %{module_id: module_id, points: points} <- reports,
+        {step, evidence} <- points do
+      {x, y} = project({step, evidence}, chart)
+
+      %{module_id: module_id, x: x, y: y}
+    end
   end
 
   defp x_coordinate(x, chart) do
