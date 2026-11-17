@@ -88,6 +88,11 @@ defmodule ExTbpMonty.Objaverse.Import do
          uid: entry["uid"],
          faces: length(mesh.triangles),
          vertices: length(mesh.vertices),
+         # Whether the material carried a texture at all. An object whose material
+         # is only a `baseColorFactor` gets a one-pixel PNG, and the sensor's patch
+         # then sees a single grey value wherever it looks — a corpus of scans
+         # without textures is a corpus of shapes, which is not the same experiment.
+         textured: match?({:image, _bytes, _mime}, mesh.texture),
          scale: placement["scale"],
          size: size(zup, placement["scale"])
        }}

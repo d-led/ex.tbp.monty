@@ -4,15 +4,6 @@
   "lvis_category": "dog",
   "objects": [
     {
-      "id": "boykin_spaniel",
-      "uid": "032ccef2632146c59f1db8f55d3ba88b",
-      "shard": "000-000",
-      "name": "Boykin Spaniel",
-      "author": "justicar",
-      "licence": "by",
-      "page": "https://sketchfab.com/models/032ccef2632146c59f1db8f55d3ba88b"
-    },
-    {
       "id": "milka",
       "uid": "8c6ac61b545c4910a6d3f97cd59fc71c",
       "shard": "000-084",
@@ -40,15 +31,6 @@
       "page": "https://sketchfab.com/models/00d56831f9bc49f9a668f418c1af7558"
     },
     {
-      "id": "puppy_dog",
-      "uid": "057dd0154cbc47549c73a092aa15199e",
-      "shard": "000-000",
-      "name": "Puppy dog",
-      "author": "sidarthmenon",
-      "licence": "by",
-      "page": "https://sketchfab.com/models/057dd0154cbc47549c73a092aa15199e"
-    },
-    {
       "id": "puppy",
       "uid": "993a1aeb956d41708b5aa30c993df276",
       "shard": "000-145",
@@ -58,15 +40,6 @@
       "page": "https://sketchfab.com/models/993a1aeb956d41708b5aa30c993df276"
     },
     {
-      "id": "smoothie_3d",
-      "uid": "f1944531d33348c9a425956ab2f4c00a",
-      "shard": "000-084",
-      "name": "Smoothie-3D upload",
-      "author": "wolffiresword",
-      "licence": "by",
-      "page": "https://sketchfab.com/models/f1944531d33348c9a425956ab2f4c00a"
-    },
-    {
       "id": "dogs_head",
       "uid": "0cd590cd899548e4858010f054a29dbd",
       "shard": "000-145",
@@ -74,6 +47,38 @@
       "author": "Gabriel.Eloy.Bernardes",
       "licence": "by",
       "page": "https://sketchfab.com/models/0cd590cd899548e4858010f054a29dbd"
+    }
+  ],
+  "excluded": [
+    {
+      "id": "smoothie_3d",
+      "uid": "f1944531d33348c9a425956ab2f4c00a",
+      "shard": "000-084",
+      "name": "Smoothie-3D upload",
+      "author": "wolffiresword",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/f1944531d33348c9a425956ab2f4c00a",
+      "reason": "not an object: a room with its backdrop, 87.9 x 57.1 x 85.1 raw units with two faces of area 42 and surface per bounding volume 0.04 where the dogs measure 0.6-8.9. Normalised to the corpus height it is a wall in front of the sensor, so it is excluded rather than downloaded"
+    },
+    {
+      "id": "boykin_spaniel",
+      "uid": "032ccef2632146c59f1db8f55d3ba88b",
+      "shard": "000-000",
+      "name": "Boykin Spaniel",
+      "author": "justicar",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/032ccef2632146c59f1db8f55d3ba88b",
+      "reason": "untextured: the material carries only a baseColorFactor, so its texture_map.png is the importer's one-pixel grey. The patch then sees a single grey value wherever it looks and hsv carries no information, which is a different experiment from the textured dogs"
+    },
+    {
+      "id": "puppy_dog",
+      "uid": "057dd0154cbc47549c73a092aa15199e",
+      "shard": "000-000",
+      "name": "Puppy dog",
+      "author": "sidarthmenon",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/057dd0154cbc47549c73a092aa15199e",
+      "reason": "untextured: the material carries only a baseColorFactor, so its texture_map.png is the importer's one-pixel grey. The patch then sees a single grey value wherever it looks and hsv carries no information, which is a different experiment from the textured dogs"
     }
   ]
 }

@@ -59,7 +59,8 @@ defmodule Mix.Tasks.Monty.Objaverse.Import do
 
           Mix.shell().info(
             "  #{row.id} — #{row.faces} faces, #{row.vertices} vertices, " <>
-              "#{Float.round(x, 3)} × #{Float.round(y, 3)} × #{Float.round(z, 3)} m"
+              "#{Float.round(x, 3)} × #{Float.round(y, 3)} × #{Float.round(z, 3)} m" <>
+              if(row.textured, do: "", else: " — NO TEXTURE (a flat grey patch)")
           )
         end)
 
