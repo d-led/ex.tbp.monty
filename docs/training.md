@@ -280,3 +280,30 @@ The next step for the three missed dogs is the memory, not the module: the corpu
 was scanned by one sensor in fourteen rotations, and Monty's own densities come
 from five sensors (`supervised_pre_training_5lms`: 2 668 nodes for `mug`) or a
 surface agent's thousands of steps (`surf_agent_1lm_2obj_train`: ~1 500).
+### The unsupervised half, and the same config over two memories (measured 2026-11-17)
+
+`dogs/surf_unsupervised` trains a surface agent on the corpus and evaluates in
+the same run — Monty's own shape for unsupervised learning, where the
+graph-to-target mapping is still in the module and a verdict can be scored.
+Recorded, one epoch of eight episodes: 32 000 steps and a memory of **1 393
+nodes over 4 objects** (487, 447, 297, 162), filed as
+`trained/dogs_surf_unsupervised`. Its own training episodes ended `no_match` five
+times — which is how a graph is born in training, not a failure.
+
+The same inference, `dogs/inference`, over two memories of that corpus — so the
+only thing that changed is the memory:
+
+| memory | best evidence | steps | verdicts |
+| --- | --- | --- | --- |
+| 74 nodes an object (a run killed at step 1049 by the sensor's heap, §8) | 11.3 | 13 690 | 8 of 8 `time_out` |
+| 348 nodes an object | **70.7**, 1 object possible | 9 345 | 8 of 8 `time_out` |
+
+Density is worth six times the evidence and it narrows the field to one dog — and
+still no episode concludes, because this config's module
+(`noresetevidence_1lm_dod0025`, `evidence_threshold_config: all`) reads every
+hypothesis and the episode is cut at a hundred matching steps. Over the
+supervised memory, the same module reached evidence 78 with one object possible
+and stopped in the same place, while `evidence_tutorial_surf_agent_2obj` (top
+80 %, `max_nneighbors: 10`) concluded every episode. **The memory decides how
+much evidence a percept can earn; the module decides whether an episode ever
+concludes.**
