@@ -168,14 +168,14 @@ Measured 2026-11-17, on this box, with `priv/monty/libraries` read by
 `MIX_ENV=test mix run --no-start /tmp/library_nodes.exs <dir>` — one record a
 graph, so a library's node count is what a percept can be matched against.
 
-| library | objects | nodes an object |
-| --- | --- | --- |
-| Monty's own `supervised_pre_training_5lms` (exported from its `model.pt`) | 10 | 2 668 … 376 |
-| Monty's own `supervised_pre_training_10distinctobj_vocus2` | 10 | 1 253 … 531 |
-| `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration) | 2 | ~1 500 |
-| `trained/surf_agent_2obj_unsupervised` (2 episodes) | 2 | ~540 |
-| `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent) | 8 | 29 … 88 |
-| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8 | 9 … 41 |
+| library                                                                    | objects | nodes an object |
+| -------------------------------------------------------------------------- | ------- | --------------- |
+| Monty's own `supervised_pre_training_5lms` (exported from its `model.pt`)  | 10      | 2 668 … 376     |
+| Monty's own `supervised_pre_training_10distinctobj_vocus2`                 | 10      | 1 253 … 531     |
+| `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration)    | 2       | ~1 500          |
+| `trained/surf_agent_2obj_unsupervised` (2 episodes)                        | 2       | ~540            |
+| `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent)  | 8       | 29 … 88         |
+| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |
 
 The same inference, over two of those memories:
 
@@ -245,16 +245,16 @@ The pipeline, on the eight-dog Objaverse corpus
    `unsupervised_inference_distinctobj_dist_agent` with the corpus and the memory
    swapped: **8 of 8 episodes concluded `match`, 2 059 steps** (~257 an episode).
 
-| episode | placed | concluded | evidence | nodes in that graph |
-| --- | --- | --- | --- | --- |
-| 1 | boykin_spaniel | boykin_spaniel | 31.3 | 298 |
-| 2 | milka | milka | 2.3 | 1 109 |
-| 3 | dog_free_fire | **milka** | 42.5 | 124 / 1 109 |
-| 4 | kinder_guard_dog | **puppy_dog** | 14.1 | 125 / 240 |
-| 5 | puppy_dog | puppy_dog | 8.3 | 240 |
-| 6 | puppy | **boykin_spaniel** | 17.5 | 223 / 298 |
-| 7 | smoothie_3d | smoothie_3d | 44.5 | 242 |
-| 8 | dogs_head | dogs_head | 67.2 | 157 |
+| episode | placed           | concluded          | evidence | nodes in that graph |
+| ------- | ---------------- | ------------------ | -------- | ------------------- |
+| 1       | boykin_spaniel   | boykin_spaniel     | 31.3     | 298                 |
+| 2       | milka            | milka              | 2.3      | 1 109               |
+| 3       | dog_free_fire    | **milka**          | 42.5     | 124 / 1 109         |
+| 4       | kinder_guard_dog | **puppy_dog**      | 14.1     | 125 / 240           |
+| 5       | puppy_dog        | puppy_dog          | 8.3      | 240                 |
+| 6       | puppy            | **boykin_spaniel** | 17.5     | 223 / 298           |
+| 7       | smoothie_3d      | smoothie_3d        | 44.5     | 242                 |
+| 8       | dogs_head        | dogs_head          | 67.2     | 157                 |
 
 **Five of eight are right, and the three wrong ones are the three thinnest
 graphs.** Which episode shows which object is not a guess: the interface answers
@@ -266,7 +266,7 @@ Two things this taught, both Monty's own behaviour rather than the port's:
 - **A `match` needs the pose, not the evidence.** Episode 2 concluded on evidence
   2.3: one object was left and the possible hypotheses agreed on a pose, and that
   is all `check_terminal_condition` asks. `object_evidence_threshold` gates the
-  object a *time-out* reports (Monty's line 610), not a match, so raising it does
+  object a _time-out_ reports (Monty's line 610), not a match, so raising it does
   not change a conclusion — measured: three runs with threshold 1, threshold 20
   and a twenty-step minimum evaluation are identical step for step.
 - **A module that reads every hypothesis does not resolve a pose.** With
@@ -280,6 +280,7 @@ The next step for the three missed dogs is the memory, not the module: the corpu
 was scanned by one sensor in fourteen rotations, and Monty's own densities come
 from five sensors (`supervised_pre_training_5lms`: 2 668 nodes for `mug`) or a
 surface agent's thousands of steps (`surf_agent_1lm_2obj_train`: ~1 500).
+
 ### The unsupervised half, and the same config over two memories (measured 2026-11-17)
 
 `dogs/surf_unsupervised` trains a surface agent on the corpus and evaluates in
@@ -293,10 +294,10 @@ times — which is how a graph is born in training, not a failure.
 The same inference, `dogs/inference`, over two memories of that corpus — so the
 only thing that changed is the memory:
 
-| memory | best evidence | steps | verdicts |
-| --- | --- | --- | --- |
-| 74 nodes an object (a run killed at step 1049 by the sensor's heap, §8) | 11.3 | 13 690 | 8 of 8 `time_out` |
-| 348 nodes an object | **70.7**, 1 object possible | 9 345 | 8 of 8 `time_out` |
+| memory                                                                  | best evidence               | steps  | verdicts          |
+| ----------------------------------------------------------------------- | --------------------------- | ------ | ----------------- |
+| 74 nodes an object (a run killed at step 1049 by the sensor's heap, §8) | 11.3                        | 13 690 | 8 of 8 `time_out` |
+| 348 nodes an object                                                     | **70.7**, 1 object possible | 9 345  | 8 of 8 `time_out` |
 
 Density is worth six times the evidence and it narrows the field to one dog — and
 still no episode concludes, because this config's module
@@ -307,10 +308,15 @@ and stopped in the same place, while `evidence_tutorial_surf_agent_2obj` (top
 80 %, `max_nneighbors: 10`) concluded every episode. **The memory decides how
 much evidence a percept can earn; the module decides whether an episode ever
 concludes.**
-#
-# The third row: `dogs/inference_paired` — the same dense memory, the module and
-# budget `tutorial/surf_agent_2obj_eval` uses — concludes 7 of 8 `match` and 1
-# `no_match` in 2 840 steps, where the config above concludes nothing at all.
-# A `match` here cannot be scored against the dog that was placed: an
-# unsupervised memory names its graphs `new_object0`, … and the mapping that
-# would say which dog that was is not in the library (§9).
+
+`dogs/inference_paired` is the third row of that table: the same dense memory,
+with the module and the budget that `tutorial/surf_agent_2obj_eval` uses. It
+concludes **7 `match` and 1 `no_match` of eight in 2 840 steps** — 355 an
+episode, where the config beside it takes 1 168 for eight time-outs. A `match`
+there cannot be scored against the dog that was placed, for the reason §9 gives:
+an unsupervised memory names its graphs `new_object0`, …
+
+A run recorded with `--record` under `MIX_ENV=test` writes into the suite's own
+database, and the suite wipes the runs it finds there when it starts
+(`test/test_helper.exs`). Record experiments in the development environment, or
+expect the transcript to be gone after the next `mix test`.

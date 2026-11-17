@@ -20,4 +20,13 @@ if System.get_env("CI") do
 end
 
 ExUnit.start()
+
+# The suite owns this database, and owning it means a run recorded in it is not
+# one of the suite's. `MIX_ENV=test mix monty.run --record` writes rows here — the
+# dogs were trained and recognised that way — and a case that asks what this
+# node's latest runs are, or how many failed runs a delete covers, then answers
+# with somebody's experiment. Start every run of the suite from a store with none,
+# in `:auto` mode because there is no test process to own the sandbox yet.
+Ecto.Adapters.SQL.Sandbox.mode(ExTbpMonty.Repo.Postgres, :auto)
+Monty.Studio.RunHistory.delete_matching(state: "all")
 Ecto.Adapters.SQL.Sandbox.mode(ExTbpMonty.Repo.Postgres, :manual)
