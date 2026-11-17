@@ -11,20 +11,25 @@ defmodule Monty.Studio.Artifacts do
   not Monty's, and a run nobody wants is a directory nobody wants.
   """
 
-  @default_root "priv/studio_runs"
-
   # The two pictures a sensor draws of a step, as `put_frame/5` names them.
   @kinds ["depth", "colour"]
 
   @doc """
   The directory run artifacts are kept under.
 
-  Three answers, in the order a deployment's own words come: what the application
+  Two answers, in the order a deployment's own words come: what the application
   was configured with (`:studio_artifacts_dir` — a release names it, and a test
-  points it at a temporary folder), else `MONTY_ARTIFACTS_DIR` where the
-  environment said so, else this application's own `priv/studio_runs`.
+  points it at a temporary folder), else what `Monty.Paths` names for a run's
+  output (`MONTY_ARTIFACTS_DIR`, else `<application data>/runs`).
 
-  That environment variable is the cluster's one lever: a part performed by another
+  `priv/` is deliberately not one of them. It was, and a run started outside the
+  application's own boot — a `mix` task, a script, a development run — wrote its
+  log and every frame of every step into the source tree, which `mix release`
+  then copies whole: that is how a desktop bundle came to carry gigabytes of a
+  checkout's run recordings (`scripts/check-release.sh` refuses one that does).
+  A run's output is user data, and the data folder is where user data goes.
+
+  The environment variable is the cluster's one lever: a part performed by another
   node writes its steps, its pictures and its statistics here, and the node that
   owns the run reads them back — `Monty.Studio.Partition.hosts/3` only puts a part
   on a node that answers the same directory
@@ -33,12 +38,7 @@ defmodule Monty.Studio.Artifacts do
   """
   @spec root() :: Path.t()
   def root do
-    Application.get_env(:ex_tbp_monty, :studio_artifacts_dir) || from_environment() ||
-      @default_root
-  end
-
-  defp from_environment do
-    if Monty.Paths.artifacts_from_environment?(), do: Monty.Paths.artifacts()
+    Application.get_env(:ex_tbp_monty, :studio_artifacts_dir) || Monty.Paths.artifacts()
   end
 
   @doc """

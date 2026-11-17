@@ -22,11 +22,18 @@ defmodule Monty.Studio.ArtifactsTest do
 
   # A node answers "where do a run's files go" with this, and a peer decides
   # whether it shares a run's directory by comparing it — so the answer has to be
-  # the directory the files are actually written to, in every environment.
-  test "is where the deployment said, and its own folder otherwise" do
+  # the directory the files are actually written to, in every environment. It is
+  # never inside the source tree: `mix release` copies `priv` whole, so a run
+  # started outside the application's own boot — a task, a script, a development
+  # run — that wrote there put its log and every frame of every step into the next
+  # build.
+  test "is where the deployment said, and the data folder otherwise" do
     Tmp.without_app_env(:studio_artifacts_dir)
     System.delete_env("MONTY_ARTIFACTS_DIR")
-    assert Artifacts.root() == "priv/studio_runs"
+
+    assert Artifacts.root() == Monty.Paths.artifacts()
+    refute String.starts_with?(Artifacts.root(), "priv/")
+    refute String.contains?(Artifacts.root(), "/priv/")
 
     System.put_env("MONTY_ARTIFACTS_DIR", "/tmp/somewhere/runs")
     on_exit(fn -> System.delete_env("MONTY_ARTIFACTS_DIR") end)

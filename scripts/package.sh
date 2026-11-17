@@ -370,6 +370,24 @@ zip_app() {
   echo "  $target"
 }
 
+# One zip per plugin app, beside the window's. A release page then lists three
+# downloads, each an app a person double-clicks — which is the demonstration
+# (three apps, three nodes), not one archive four people have to unpack to find
+# out what is in it.
+zip_companions() {
+  local rid=$1 pair name app target
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    app="$artifacts/$rid/$name.app"
+    target="$artifacts/$rid/$name-$rid.zip"
+
+    rm -f "$target"
+    ditto -c -k --sequesterRsrc --keepParent "$app" "$target"
+    echo "  $target"
+  done
+}
+
 # The installer a person double-clicks. What it buys over the zip is not the
 # double-click: the quarantine flag is set by whatever *downloaded* the file, on
 # that file — the installer then writes the payload itself, so the app it lays
@@ -504,6 +522,7 @@ for rid in "${rids[@]}"; do
 
       if [ "$make_zip" = true ]; then
         zip_app "$rid"
+        zip_companions "$rid"
       fi
 
       if [ "$make_pkg" = true ]; then

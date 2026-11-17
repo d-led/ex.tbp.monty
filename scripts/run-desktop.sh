@@ -222,7 +222,9 @@ else
 
     case "$rid" in
         osx-*)
-            bundle_zip="$(find "$work" -maxdepth 2 -name '*.zip' -print -quit)"
+            # The window's zip by name: the download carries one zip per app now,
+            # and "the first `find` prints" would pick a plugin's.
+            bundle_zip="$(find "$work" -maxdepth 2 -name "$asset.zip" -print -quit)"
             if [ -n "$bundle_zip" ]; then
                 echo "Expanding the application (about 550 MB) ..."
                 mkdir -p "$work/app"
@@ -254,6 +256,25 @@ else
                 [ -d "$companion" ] || continue
                 rm -rf "$dir/$(basename "$companion")"
                 mv "$companion" "$dir/"
+            done
+
+            # And each plugin app is a download of its own. When the download a
+            # person took carries them too, they go beside the window for the same
+            # reason: a companion finds its window in its own folder.
+            for extra in "$work"/*.zip; do
+                [ -e "$extra" ] || continue
+                [ "$(basename "$extra")" = "$asset.zip" ] && continue
+
+                stage="$work/extra"
+                rm -rf "$stage"
+                mkdir -p "$stage"
+                unpack "$extra" "$stage" 2>/dev/null || true
+
+                for app in "$stage"/*.app; do
+                    [ -d "$app" ] || continue
+                    rm -rf "$dir/$(basename "$app")"
+                    mv "$app" "$dir/"
+                done
             done
 
             # A bundle that a *browser* downloaded carries the quarantine flag,
