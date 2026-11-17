@@ -8,7 +8,9 @@ authors:
     website: "https://github.com/d-led"
 repository-code: "https://github.com/d-led/ex.tbp.monty"
 license: MPL-2.0
-version: "0.1.3"
+version: "0.1.4"
+date-released: "2026-11-17"
+doi: 10.5281/zenodo.24315550
 abstract: >-
   The Thousand Brains Project's Monty rewritten in Elixir: a module-for-module
   port of the sensorimotor framework, from the sensor module and the learning
@@ -21,8 +23,7 @@ keywords:
   - object recognition
   - pose estimation
   - Elixir
-# Zenodo mints a DOI for each GitHub release; add it as `doi:` once the first
-# release has been archived.
+# `doi` is the concept DOI: it always resolves to the latest archived release.
 references:
   - type: article
     title: "Thousand-Brains Systems: Sensorimotor Intelligence for Rapid, Robust Learning and Inference"
