@@ -903,7 +903,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # A record still holds the arrays a picture is drawn from until it is compacted,
   # and then it holds the names of the files the compaction wrote.
-  defp drawn_from_the_record(%{position: position} = moment, run) when is_integer(position) do
+  defp drawn_from_the_record(%{position: position} = moment, run) do
     case RunHistory.sensors_at(run.id, position) do
       sensors when is_map(sensors) and map_size(sensors) > 0 ->
         Replay.with_pictures(moment, sensors)
@@ -913,16 +913,18 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
-  defp drawn_from_the_record(moment, _run), do: moment
-
   # A moment whose pictures are files is drawn from the newest files that exist,
   # under the step those pictures belong to — which is what the caption beside
-  # them then says. A moment drawn from arrays needs nothing.
+  # them then says. A moment drawn from arrays needs nothing, and a moment with
+  # neither a picture nor a place to look for one is drawn as it is.
   defp repaired(%{frames: [_ | _] = frames} = moment, run) do
     if Enum.any?(frames, &named_by_path?/1), do: from_the_files(moment, run), else: moment
   end
 
-  defp repaired(moment, run), do: from_the_files(moment, run)
+  defp repaired(%{position: position} = moment, run) when is_integer(position),
+    do: from_the_files(moment, run)
+
+  defp repaired(moment, _run), do: moment
 
   # The markup a frame carries is a safe tuple, not a string: a check that asked
   # `is_binary?` of it answered `false` for every frame and let every broken
@@ -933,7 +935,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   defp named_by_path?(%{data: data}) when is_binary(data), do: String.contains?(data, "/frames/")
   defp named_by_path?(_frame), do: false
 
-  defp from_the_files(%{position: position} = moment, run) when is_integer(position) do
+  defp from_the_files(%{position: position} = moment, run) do
     case Artifacts.pictures_at(run.id, position) do
       {:ok, pictured, sensors} when map_size(sensors) > 0 ->
         Replay.with_pictures(%{moment | step: pictured}, sensors)
@@ -942,8 +944,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         %{moment | frames: [], sensors: %{}}
     end
   end
-
-  defp from_the_files(moment, _run), do: %{moment | frames: [], sensors: %{}}
 
   # A record that still says "running" is not the same as a run that is: a
   # process killed mid-flight leaves the row open, and a clock beside it would

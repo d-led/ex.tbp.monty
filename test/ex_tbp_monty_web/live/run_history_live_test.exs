@@ -722,9 +722,6 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
     {:ok, _view, html} = live(conn, "/runs/#{run.id}")
 
-    [_, after_frames] = String.split(html, "replay-frames", parts: 2)
-    IO.inspect(String.slice(after_frames, 0, 300), label: "DIAG FRAMES")
-
     assert html =~ "/frames/0/patch-colour.png"
     refute html =~ "/frames/12000/patch-colour.png"
   end
