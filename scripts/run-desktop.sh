@@ -216,9 +216,9 @@ else
             fi
 
             # Named, not guessed. The download carries the window's two companion
-            # plugin apps beside it, so "the first `.app` find prints" is a coin
-            # toss between three bundles — and one of the wrong answers renames a
-            # plugin app to the window's name, which is a download that unpacks
+            # plugin apps beside it, so "the first `.app` find prints" picks one of
+            # three bundles by whatever order the directory happens to be in — and
+            # a plugin app renamed to the window's name is a download that unpacks
             # and opens the wrong thing.
             found="$(find "$from" -maxdepth 2 -name 'Monty on the BEAM.app' -print -quit)"
 

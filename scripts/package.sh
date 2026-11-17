@@ -105,13 +105,13 @@ register() {
 # Removing something a previous run wrote, and a packaging run has to be
 # repeatable over whatever that was.
 #
-# The write bit comes back first because what a run leaves is not this script's
-# to assume: a release keeps read-only launchers (`bin/*` is 0555) and its
-# `COOKIE` at 0400, and `rm -rf` empties a directory only if that directory is
-# writable. A tree a crash left half-written is the same problem in a worse
-# shape. Failure here is loud on purpose — `rm`'s own words, and `set -e` stops
-# the run — because packing on top of a tree that could not be replaced is how a
-# stale artefact gets shipped as a new one.
+# The write bit comes back first because `rm -rf` empties a directory only if
+# that directory is writable, and a tree this script did not create is not this
+# script's to assume: `installer_package` puts the write bit back on its staged
+# copy for the same reason, and a tree a crash left half-written is the same
+# problem in a worse shape. Failure here is loud on purpose — `rm`'s own words,
+# and `set -e` stops the run — because packing on top of a tree that could not be
+# replaced is how a stale artefact gets shipped as a new one.
 clean() {
   local path=$1
 
@@ -241,9 +241,6 @@ companion_apps() {
       echo "  $name.app wears the generic icon: the bundle has no Contents/Resources/icon.icns" >&2
     fi
 
-    # The icons are the window's own, on purpose: these are its companions, and
-    # three generic document icons in the Dock say less than three of the product
-    # they belong to. What tells them apart is the name under the icon.
     cat >"$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -159,10 +159,13 @@ asks the window who it is (`/health`), opens the window when nothing answers yet
 and waits for it, reads the window's cookie from
 `Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and runs the release the
 window already carries (`Contents/Resources/plugins/<node>`) in the foreground —
-so the Dock icon is the node and quitting the app stops it. It is a launcher and
-not a copy of a node, which is also why it says so plainly when the window is not
-beside it. `MONTY_STUDIO_APP` points one at a window somewhere else, which is how
-a checkout tries them without installing anything.
+`exec`, so the app and the node are one process rather than a wrapper around one.
+It is a launcher and not a copy of a node, which is also why it says so plainly
+when the window is not beside it. `MONTY_STUDIO_APP` points one at a window
+somewhere else, which is how a checkout tries them without installing anything.
+Pressing it twice is not an error: a node that is already up answers, and the
+launcher says so instead of starting a second one and wiping the log of the
+first.
 
 **A plugin is told where the window is; it does not discover it.** The two
 example nodes do not use libcluster: each runs a `Join` process that dials the
@@ -423,6 +426,12 @@ because it needs no release to exist before somebody can try the app:
    platform this machine is", and a platform it is not is refused rather than
    faked. The build itself is `scripts/start-desktop.sh --bundle` — the
    packaging script has no second copy of those steps.
+
+   **A second run replaces the first, it does not add to it.** `artifacts/<platform>/`
+   is emptied before anything is written into it, together with a zip a crashed
+   run may have left beside it, and every write bit is put back first: `rm -rf`
+   empties a directory only if that directory is writable, and a tree this script
+   did not create is not this script's to assume.
 
    The `.pkg` installs without anybody dragging anything, and it arrives
    **without the quarantine flag** — not because a script strips it, but because

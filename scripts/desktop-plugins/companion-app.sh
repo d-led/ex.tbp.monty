@@ -65,8 +65,9 @@ log="${tmp%/}/monty-studio-$node.log"
 : >>"$log" 2>/dev/null || log=/dev/null
 
 # Everything this says goes to two places: the log (which a person can open) and
-# stderr (which macOS keeps in the unified log). A message that only went to
-# stderr is a click that appeared to do nothing, because a click has no terminal.
+# stderr (which a shell that ran this shows, and which a click does not). A
+# message that only went to stderr is a click that appeared to do nothing,
+# because a click has no terminal.
 say() {
   printf '%s\n' "$*" >>"$log" 2>/dev/null || true
   printf '%s\n' "$*" >&2
@@ -136,9 +137,9 @@ window_port() {
 
 command -v curl >/dev/null 2>&1 || die "There is no curl to ask the window with."
 
-# `-s` and not `-f`: a window whose database is unreachable answers `/health` with
-# a 503 that still carries its node name, and a node that is in the cluster is a
-# node to join whatever the database is doing.
+# `-s` and not `-f`: the name in the body is what this needs, and a window that
+# answers 503 still names the node it is. The status code is the health probe's
+# question, not this launcher's.
 answered() {
   curl -s --max-time 2 "http://127.0.0.1:$1/health" 2>/dev/null || true
 }
@@ -192,8 +193,8 @@ say "$name: joining $target (the window answers on port $port)"
 # folder of that name and version, where it dies on its first line.
 unset RELEASE_VSN RELEASE_NAME RELEASE_ROOT RELEASE_NODE RELEASE_DISTRIBUTION RELEASE_TMP RELEASE_MODE
 
-# Foreground, and `exec` rather than a child: the Dock icon is the node, so
-# quitting the app stops it and nothing is left holding a port behind an app
-# that looks closed.
+# Foreground, and `exec` rather than a child: the app's process is the node, not
+# a wrapper that can die and leave the node behind it. A click and a quit then
+# name the same process.
 cd "$release"
 exec env RELEASE_COOKIE="$cookie" MONTY_SEEDS="$target" "./bin/$node" start >>"$log" 2>&1
