@@ -171,6 +171,41 @@ mutated. What follows from that, and what looks wrong upstream, is in
 | [docs/readiness.md](docs/readiness.md)                       | which experiments run here, and what each missing class unblocks      |
 | [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                                |
 
+## Citation
+
+What this port follows is described in the papers below. If you use it in your
+work, cite them. The port itself is citable too: [`CITATION.cff`](CITATION.cff)
+is what GitHub's _Cite this repository_ button reads, and Zenodo mints a DOI for
+each release.
+
+```bibtex
+@article{leadholm2026thousandbrains,
+  title   = {Thousand-Brains Systems: Sensorimotor Intelligence for Rapid, Robust Learning and Inference},
+  author  = {Leadholm, Niels and Clay, Viviane and Knudstrup, Scott and Lee, Hojae and Hawkins, Jeff},
+  journal = {Neural Computation},
+  year    = {2026},
+  doi     = {10.1162/neco.a.1508}
+}
+
+@article{clay2024thousandbrains,
+  title   = {The Thousand Brains Project: A New Paradigm for Sensorimotor Intelligence},
+  author  = {Clay, Viviane and Leadholm, Niels and Hawkins, Jeff},
+  journal = {arXiv preprint arXiv:2412.18354},
+  year    = {2024},
+  url     = {https://arxiv.org/abs/2412.18354}
+}
+
+@article{hawkins2019framework,
+  title   = {A Framework for Intelligence and Cortical Function Based on Grid Cells in the Neocortex},
+  author  = {Hawkins, Jeff and Lewis, Marcus and Klukas, Mirko and Purdy, Scott and Ahmad, Subutai},
+  journal = {Frontiers in Neural Circuits},
+  volume  = {12},
+  pages   = {121},
+  year    = {2019},
+  doi     = {10.3389/fncir.2018.00121}
+}
+```
+
 ## Licence
 
 MPL-2.0 — see [LICENSE](LICENSE). Monty itself is MIT-licensed, and this project
