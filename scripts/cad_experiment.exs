@@ -179,6 +179,11 @@ System.put_env("MONTY_CAD_PART", parts[sensed])
 seed = System.get_env("CAD_SEED")
 steps = System.get_env("CAD_STEPS") || "500"
 
+# A CAD step's sensors are two ray casts into the B-rep, and that is most of what
+# a step costs here — so this is the world where serving them at once should
+# show, and `CAD_SENSORS=serial` is the run it is compared with.
+sensors = System.get_env("CAD_SENSORS")
+
 Mix.Tasks.Monty.Run.run(
   [
     "base_config_10distinctobj_surf_agent",
@@ -189,5 +194,7 @@ Mix.Tasks.Monty.Run.run(
     "--steps",
     steps,
     "--record"
-  ] ++ if(seed in [nil, ""], do: [], else: ["--seed", seed])
+  ] ++
+    if(seed in [nil, ""], do: [], else: ["--seed", seed]) ++
+    if(sensors in [nil, ""], do: [], else: ["--sensors", sensors])
 )
