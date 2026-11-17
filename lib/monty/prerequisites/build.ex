@@ -80,6 +80,8 @@ defmodule Monty.Prerequisites.Build do
     end
   end
 
+  # The manifest is this application's own file, found under its priv.
+  # sobelow_skip ["Traversal.FileModule"]
   def run("objaverse_dogs", notify) do
     with {:ok, corpus, file} <- corpus("objaverse_dogs") do
       objects = file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
@@ -122,6 +124,7 @@ defmodule Monty.Prerequisites.Build do
 
   # -- the corpus ----------------------------------------------------------
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp corpus(name) do
     case Enum.find(corpora(), &(elem(&1, 0) == name)) do
       nil ->
@@ -146,6 +149,7 @@ defmodule Monty.Prerequisites.Build do
     end)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp corpus?(file) do
     with {:ok, text} <- File.read(file),
          {:ok, document} <- JSON.decode(text) do
@@ -157,6 +161,8 @@ defmodule Monty.Prerequisites.Build do
 
   # One file per object, cached: a second build fetches nothing, and an
   # interrupted one resumes at the next missing file.
+  # `into` is the cache directory under the data root, built here.
+  # sobelow_skip ["Traversal.FileModule"]
   defp fetch(objects, into, notify) do
     File.mkdir_p!(into)
     {:ok, _} = Application.ensure_all_started(:req)
@@ -180,6 +186,8 @@ defmodule Monty.Prerequisites.Build do
     end)
   end
 
+  # `path` is that cache plus the uid the corpus manifest names.
+  # sobelow_skip ["Traversal.FileModule"]
   defp fetch_glb(object, path) do
     url = Enum.join([@glb, object["shard"], object["uid"] <> ".glb"], "/")
 

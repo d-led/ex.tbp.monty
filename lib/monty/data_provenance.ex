@@ -74,6 +74,9 @@ defmodule Monty.DataProvenance do
 
   @doc "The sha256 of a file, as lowercase hex."
   @spec file_hash(Path.t()) :: String.t()
+  # `path` is a prerequisite's own target, or a test's fixture: the caller
+  # names a file this machine holds, and no request reaches here.
+  # sobelow_skip ["Traversal.FileModule"]
   def file_hash(path) do
     path
     |> File.stream!(65_536, [])
