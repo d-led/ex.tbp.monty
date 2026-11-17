@@ -635,4 +635,41 @@ defmodule Monty.Studio.ChartTest do
       end
     end
   end
+
+  describe "one object believed by several modules at once" do
+    test "every module's own reports are kept, and the line is the strongest at each step" do
+      beliefs =
+        Monty.Studio.Chart.beliefs(
+          [
+            {"learning_module_0", [{0, 1.0}, {1, 3.0}]},
+            {"learning_module_1", [{0, 2.0}, {1, 2.5}]}
+          ],
+          "mug"
+        )
+
+      # The marks differ, the object does not: one colour for the dots and the line.
+      assert beliefs.colour == Monty.Studio.Chart.colour("mug")
+
+      # The line is what the group held at its strongest, at each step.
+      assert beliefs.converged == [{0, 2.0}, {1, 3.0}]
+
+      # And every report is still there, as it was made: five modules diverge in
+      # height long before they disagree about the object.
+      assert Enum.map(beliefs.reports, &{&1.module_id, &1.points}) == [
+               {"learning_module_0", [{0, 1.0}, {1, 3.0}]},
+               {"learning_module_1", [{0, 2.0}, {1, 2.5}]}
+             ]
+    end
+
+    test "a step only one module reported is a point with nothing beside it" do
+      beliefs =
+        Monty.Studio.Chart.beliefs(
+          [{"learning_module_0", [{0, 1.0}]}, {"learning_module_1", []}],
+          "mug"
+        )
+
+      assert beliefs.converged == [{0, 1.0}]
+      assert Enum.at(beliefs.reports, 1).points == []
+    end
+  end
 end

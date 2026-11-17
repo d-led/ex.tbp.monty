@@ -355,6 +355,53 @@ defmodule Monty.Studio.Chart do
     Map.get(@object_colours, name, golden_angle_colour(index))
   end
 
+  @typedoc """
+  One object's beliefs as the modules reported them, and the line they converge
+  on.
+
+  A chart is drawn for one module, but an object is believed by several at once:
+  every sensor's module reports its own evidence for the same graph, and the
+  agreement is that they are climbing the same object at different heights. Both
+  are kept, because they answer different questions — each module's own reports
+  are the dots, and the strongest report at each step is the line. One colour for
+  both: the marks differ, the object does not.
+  """
+  @type beliefs :: %{
+          graph_id: String.t(),
+          colour: String.t(),
+          converged: [{non_neg_integer(), number()}],
+          reports: [%{module_id: String.t(), points: [{non_neg_integer(), number()}]}]
+        }
+
+  @doc """
+  The parallel reports of one object, in that object's colour.
+
+  `reports` is a list of `{module_id, [{step, evidence}]}` — what each module
+  said about this graph, step by step. The answer keeps every one of them as it
+  was reported, and beside them the converged line: at each step, the strongest
+  evidence any module held for this object. A step only one module reported is a
+  point with nothing beside it, which is the truth about a module that had not
+  looked yet.
+  """
+  @spec beliefs([{String.t(), [{non_neg_integer(), number()}]}], String.t()) :: beliefs()
+  def beliefs(reports, graph_id) do
+    %{
+      graph_id: graph_id,
+      colour: colour(graph_id),
+      converged: converged(reports),
+      reports:
+        Enum.map(reports, fn {module_id, points} -> %{module_id: module_id, points: points} end)
+    }
+  end
+
+  defp converged(reports) do
+    reports
+    |> Enum.flat_map(fn {_module_id, points} -> points end)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.map(fn {step, evidences} -> {step, Enum.max(evidences)} end)
+    |> Enum.sort()
+  end
+
   defp golden_angle_colour(index) do
     "hsl(#{Float.round(:math.fmod(index * @golden_angle, 360.0), 3)}, 70%, 50%)"
   end
