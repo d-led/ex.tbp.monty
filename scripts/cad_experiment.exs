@@ -145,6 +145,14 @@ File.mkdir_p!(Path.dirname(path))
 write_options =
   if System.get_env("CAD_ABSOLUTE_SPACING") in ["1", "true"], do: [spacing: 2.0], else: []
 
+# `MONTY_CAD_LABELS=features` is what the world labels a face with, and a memory
+# of a part has to answer in the same words: one object per feature, so the run
+# it feeds can learn a bore rather than the lump a bore is cut into.
+write_options =
+  if System.get_env("MONTY_CAD_LABELS") == "features",
+    do: [{:labels, :features} | write_options],
+    else: write_options
+
 {:ok, written} =
   memory
   |> Enum.map(&{&1, parts[&1]})
@@ -153,7 +161,7 @@ write_options =
 for object <- written.objects do
   IO.puts(
     "#{object.object_id}: #{object.nodes} nodes at #{object.spacing} mm, " <>
-      "#{object.skipped} skipped, families #{inspect(object.families)}"
+      "families #{inspect(object.families)}"
   )
 end
 
