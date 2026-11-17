@@ -816,6 +816,14 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.world_name(setup, :cad) == "CAD part (bracket.step)"
     end
 
+    test "a part is its features when the deployment asks for them" do
+      Tmp.system_env("MONTY_CAD_LABELS", "features")
+      assert Setup.cad_labels() == :features
+
+      Tmp.without_env("MONTY_CAD_LABELS")
+      assert Setup.cad_labels() == :part
+    end
+
     test "says no part is named when the deployment names none" do
       setup = setup_for("tutorial/first_experiment")
       Tmp.without_env("MONTY_CAD_PART")

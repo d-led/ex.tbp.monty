@@ -910,13 +910,35 @@ defmodule Monty.Studio.Setup do
   defp open_cad_scene(module) do
     path = cad_part_path!()
 
-    case module.open(path) do
+    case module.open(path, cad_scene_options()) do
       {:ok, scene} ->
         scene
 
       {:error, error} ->
         raise ArgumentError, "#{path} could not be opened: #{Exception.message(error)}"
     end
+  end
+
+  # Whether a part is one object or the features the geometry names.
+  #
+  # `MONTY_CAD_LABELS=features` asks `MontyCad.Scene` for the recognition's own
+  # labels, so a supervised run is taught a bore rather than a plate. It is a
+  # deployment fact like `MONTY_CAD_PART` — the same node, the same part — and
+  # the default is what every CAD run had before: one part, one object.
+  defp cad_scene_options do
+    if cad_labels() == :features, do: [labelled: true], else: []
+  end
+
+  @doc """
+  What a CAD part is stepped as: `:features`, or the part as one object.
+
+  `MONTY_CAD_LABELS=features` asks the recognition what the part is made of and
+  gives every feature its own id; anything else, including no variable, is the
+  part as a single object, which is what every CAD run had before.
+  """
+  @spec cad_labels() :: :features | :part
+  def cad_labels do
+    if System.get_env("MONTY_CAD_LABELS") == "features", do: :features, else: :part
   end
 
   # The path, or the raise a person reads instead.
