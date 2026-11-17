@@ -88,9 +88,14 @@ defmodule Monty.Prerequisites.Zip do
 
   The local header's name and extra field are what `#{@local_slack}` covers; a
   range that asks for this span therefore arrives holding the whole member.
+
+  A byte count is an integer, and the entry a caller hands in is one this module
+  parsed: an entry whose size arrived as anything else is not an entry, and the
+  guard says so rather than returning a span of half a byte.
   """
   @spec span(entry()) :: pos_integer()
-  def span(%{compressed_size: compressed}), do: @local_fixed + @local_slack + compressed
+  def span(%{compressed_size: compressed}) when is_integer(compressed),
+    do: @local_fixed + @local_slack + compressed
 
   @doc """
   One member's bytes — as they arrived, local header first — inflated and

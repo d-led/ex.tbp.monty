@@ -11,7 +11,9 @@ leave 13 501 nodes over the eight dogs and name eight of eight (23 of 24 over th
 evaluation rotations), where fourteen rotations of a dist agent's raster leave
 124 – 1 109 nodes and name five. The measurements, the commands and the four-row
 table are in [the dogs sections](#walking-the-corpus-recognises-it-7-of-8-names-all-eight-concluded-measured-2026-11-17)
-below; `priv/monty_experiments/conf/experiment/dogs/` holds the configs.
+below; `priv/monty_experiments/sets/dogs/conf/experiment/dogs/` holds the configs
+in the set `dogs`, which every opener reads by name with no flag
+(`Monty.Config.Source.conf_dirs/0`).
 
 **The state in one sentence**: the runtime can train an episode, Monty's
 learning code is ported, and the studio's loop now hands each episode the memory
@@ -279,7 +281,7 @@ trained, and both can be judged — the difference is what their names mean:
 ### The dog corpus, end to end (measured 2026-11-17)
 
 The pipeline, on the eight-dog Objaverse corpus
-(`priv/monty_experiments/conf/experiment/dogs/`):
+(`priv/monty_experiments/sets/dogs/conf/experiment/dogs/`):
 
 1. **Train** — `dogs/supervised_pretraining`, Monty's
    `supervised_pre_training_base` with the corpus swapped: 14 rotations × 8 dogs
@@ -500,7 +502,7 @@ over one rotation of each dog, and 23 of 24 over three.
 ```sh
 # train (development store, ~13 min for two rotations, ~32 min for four)
 MIX_ENV=dev MONTY_DB=sqlite mix monty.run dogs/surf_supervised_4rot \
-  --world ex_mujoco --overlay priv/monty_experiments/conf --record
+  --world ex_mujoco --record
 
 # what the memory holds, per object
 MIX_ENV=test mix run --no-start scripts/library_nodes.exs priv/monty/libraries/trained

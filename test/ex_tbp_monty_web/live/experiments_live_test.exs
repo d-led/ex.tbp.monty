@@ -177,7 +177,14 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
       assert has_element?(view, "#chip-agent-surf")
       assert has_element?(view, "#facet-agent-surf[data-active='true']")
       assert row_names(view) != all
-      assert Enum.all?(row_names(view), &(&1 =~ "surf"))
+
+      # The list that stays is the list the tag counted, and it is the surface
+      # agents — which is not the same as every name that says "surf": a config
+      # of ours (`dogs/inference`) is a surface agent whose name says nothing of
+      # the kind, and a name is not what this filter is about.
+      assert length(row_names(view)) == count_on(view, "#facet-agent-surf")
+      assert has_element?(view, "#experiment-base_10simobj_surf_agent")
+      refute has_element?(view, "#experiment-base_77obj_dist_agent")
     end
 
     test "a value in force is marked, and the others are not", %{conn: conn} do
@@ -415,6 +422,17 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     |> List.flatten()
     |> Enum.map(&String.trim_leading(&1, "experiment-"))
     |> Enum.reject(&(&1 == "experiments-empty"))
+  end
+
+  # The number a tag advertises, as the page shows it beside the tag's name.
+  defp count_on(view, selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#{selector} span")
+    |> LazyHTML.text()
+    |> String.trim()
+    |> String.to_integer()
   end
 
   # The blocks of the results section, in the order a reader meets them: what
