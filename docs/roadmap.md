@@ -127,18 +127,26 @@ tangential step does to the body that reads the depth next.
 What the policy was holding there says where to look. Both sides are on the same
 branch at step 28 — momentum, not curvature: the two steps before it answered from
 a curvature, and this one is back on momentum with the counter at its first step of
-twelve, so the avoidance search does not run either. The heading the blend starts
-from is ours to read, `3.13055849388839`, set by the curvature step at 24, whose
-action was his to the last digit. The flag that chooses the branch is computed by
-the same rule on both sides — `|k1 − k2| >= pc1_is_pc2_threshold`, ten by default,
-and this config does not override it — and ours reads false at step 28, which is
-also what a patch whose curvatures are that close should read.
+twelve, so the avoidance search that could replace the heading has not come round.
+The flag that chooses the branch reads the same way on both sides, from the same
+rule (`|k1 − k2| >= pc1_is_pc2_threshold`, ten by default, and this config does not
+override it).
 
-So the difference is one of two numbers: the heading the curvature step stored, or
-the draw the stream handed the blend. Telling them apart means printing the draw
-beside the angle in Monty's own run, which needs his environment
-(`scripts/setup_monty_oracle.sh`): ours answers `2.8941245807491454` from a stored
-`3.13055849388839`, and his direction differs from ours by five and a half degrees.
+The two directions are then comparable to the digit, because the frame they are
+expressed in is ours to check: the probe prints the agent's rotation with each
+step, and rotating our own local heading by it reproduces our recorded direction
+exactly. Rotating **his** recorded direction back by the same rotation gives a
+local heading of `3.001720189` against our `2.894124581` — a tenth of a radian
+apart. With `alpha` at 0.1 that is a target a whole radian away, which is to say
+the two blends were handed different draws from the episode's stream. The stored
+heading they started from is very likely the same: the curvature step at 24
+returned a direction that was his to the last digit, and that direction _is_ the
+stored heading, projected.
+
+So the streams part somewhere between steps 20 and 28, in a window whose only
+variable-drawing call is the avoidance search — it draws once per candidate heading
+it tries, and how many it tries depends on the conflicts it finds against the
+points already visited. The next thing to read is that count on both sides.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the

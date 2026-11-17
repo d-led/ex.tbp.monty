@@ -187,7 +187,7 @@ defmodule ActionStream do
     # from the view finder's centre pixel; the surface cycle samples one. The two
     # are 0.8 mm apart on the opening step, so the branch has to be named rather
     # than inferred from the movement.
-    describe_policy(motor)
+    describe_policy(motor, state.proprioceptive_state)
 
     # The world moves by his action, so the next question is the same one.
     {observations, proprioceptive_state, interface} =
@@ -208,10 +208,14 @@ defmodule ActionStream do
 
   # What the policy was holding when it answered. The branch it took follows from
   # these: `searching` is Monty's "nothing found yet", a nil last action is an
-  # episode's first step, and `pc_heading` is which way the curvature-guided step
-  # went — `:no` is the momentum path, `:min` and `:max` follow a curvature.
-  defp describe_policy(motor) do
+  # episode's first step, `pc_heading` is which way the curvature-guided step went,
+  # and the heading counter is how long the momentum has been carried. The agent's
+  # rotation is here too, because a recorded direction is in the world's frame and
+  # the policies' headings are in the agent's — rotating his back is how his blend
+  # becomes a number ours can be put beside.
+  defp describe_policy(motor, proprioceptive_state) do
     policy = motor.policy_selector.policy
+    rotation = proprioceptive_state |> Map.fetch!(@agent) |> Map.fetch!(:rotation)
 
     IO.puts(
       "the policy: searching #{inspect(policy.attempting_to_find_object)}, " <>
@@ -222,6 +226,7 @@ defmodule ActionStream do
         "heading #{inspect(Map.get(policy, :following_heading_counter))}/" <>
         "#{inspect(Map.get(policy, :min_heading_steps))}, " <>
         "angle #{inspect(Map.get(policy, :tangential_angle))}, " <>
+        "rotation #{inspect(Tuple.to_list(Map.get(rotation, :wxyz, {})))}, " <>
         "last action #{inspect(policy.last_surface_policy_action, limit: 3)}, " <>
         "desired #{inspect(policy.desired_object_distance)}"
     )
