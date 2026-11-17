@@ -825,8 +825,8 @@ defmodule Monty.Studio.Setup do
   # The part is not this application's code — `ex_monty_cad` is another package
   # with its own dependencies — so it is asked for by name and a node that does
   # not have it says so, rather than linking the package to find out.
-  def world(%__MODULE__{} = setup, :cad, _episode, opts) do
-    scene = cad_scene(Keyword.get(opts, :cad_part))
+  def world(%__MODULE__{} = setup, :cad, _episode, _opts) do
+    scene = cad_scene()
     # A part is its own scene, so where the agent starts is read from the part
     # and not from the config's start pose: that one places an agent in MuJoCo's
     # scene, where the object is where MuJoCo put it.
@@ -891,7 +891,7 @@ defmodule Monty.Studio.Setup do
   # which brings quiddity and its Rust build, and a run on a node without it is
   # refused here — with the two things that would make it work — instead of
   # failing inside a world.
-  defp cad_scene(named) do
+  defp cad_scene do
     module = cad_module()
 
     refusals = [
@@ -906,7 +906,7 @@ defmodule Monty.Studio.Setup do
         raise ArgumentError, sentence
 
       nil ->
-        open_cad_scene(module, named)
+        open_cad_scene(module)
     end
   end
 
@@ -915,8 +915,8 @@ defmodule Monty.Studio.Setup do
   # `ex_monty_cad`, so neither has a test that reaches it: a stair of nested
   # cases in a function nothing covers is what the CRAP ranking is about, and
   # saying each answer once keeps it about one refusal rather than two.
-  defp open_cad_scene(module, named) do
-    path = cad_part_path!(named)
+  defp open_cad_scene(module) do
+    path = cad_part_path!()
 
     case module.open(path, cad_scene_options()) do
       {:ok, scene} ->
@@ -950,8 +950,8 @@ defmodule Monty.Studio.Setup do
   end
 
   # The path, or the raise a person reads instead.
-  defp cad_part_path!(named) do
-    case cad_part_path(named) do
+  defp cad_part_path! do
+    case cad_part_path() do
       {:ok, path} -> path
       {:error, sentence} -> raise ArgumentError, sentence
     end
@@ -969,18 +969,16 @@ defmodule Monty.Studio.Setup do
   exists is used as it is, because a one-off part should be openable without
   moving it first.
 
-  The name comes from the run — a page's picker, a task's switch — and a run that
-  names none falls back to `MONTY_CAD_PART`, the deployment's default part. Both
-  are optional: a node with parts in `parts/` and no variable is a node where the
-  page offers each of them.
+  The name comes from the deployment — `MONTY_CAD_PART` — because which part a
+  run is about belongs to the experiment, the way Monty's own configs name the
+  objects a run steps: a part that a page could change mid-flight would be one
+  more thing a record could disagree with the config about.
 
   Answers the sentence a page or a run would show when there is no part to open,
   rather than a `nil` that becomes a different world somewhere else.
   """
-  @spec cad_part_path(String.t() | nil) :: {:ok, Path.t()} | {:error, String.t()}
-  def cad_part_path(named \\ nil), do: resolve_part(named)
-
-  defp resolve_part(nil) do
+  @spec cad_part_path() :: {:ok, Path.t()} | {:error, String.t()}
+  def cad_part_path do
     case cad_part() do
       nil ->
         {:error,

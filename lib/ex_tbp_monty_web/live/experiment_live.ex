@@ -174,11 +174,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # the port's own rule, so a run started without choosing is the run this
       # page always started.
       sensors: :auto,
-      # The part a CAD run opens, chosen on this page the way the world is, and
-      # the parts this node can open. `nil` for every other world: a run of a
-      # scene made of a sphere has no file to name.
-      cad_part: cad_part(opened),
-      cad_parts: Setup.cad_parts(),
       # The batch a press of Run started and the page shows: `nil` until a run of
       # this experiment is followed, and then the parts whose cards the page draws
       # beside the run it is watching (`Monty.Studio.Partition`).
@@ -476,7 +471,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       <ExTbpMontyWeb.StudioComponents.diagram :if={@opened.diagram} diagram={@opened.diagram} />
 
       <ExTbpMontyWeb.StudioComponents.findings
-        findings={checks(@opened.setup.findings)}
+        findings={checks(@opened.setup.findings, @missing)}
         needs={@missing}
       />
 
@@ -663,27 +658,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 selected={world == @opened.setup.world}
               >
                 {Setup.world_name(@opened.setup, world)}{unavailable(@opened.setup, world)}
-              </option>
-            </select>
-          </form>
-          <%!-- Which part a CAD run opens, from the files this node holds: the
-          world choice alone cannot say which file, and a part named only by the
-          deployment's variable is a part a reader cannot change by clicking. --%>
-          <form
-            :if={@opened && @opened.setup.world == :cad && @cad_parts != []}
-            id="part-choice"
-            phx-change="part"
-            class="flex items-center gap-1"
-          >
-            <label for="part-select" class="text-[11px] text-base-content/60">part</label>
-            <select
-              id="part-select"
-              name="part"
-              class="select select-xs w-56 font-mono"
-              aria-label="Which CAD part the run opens"
-            >
-              <option :for={part <- @cad_parts} value={part} selected={part == @cad_part}>
-                {part}
               </option>
             </select>
           </form>
@@ -1249,16 +1223,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   def handle_event("seed", %{"seed" => value}, socket),
     do: {:noreply, with_chosen_seed(socket, value)}
 
-  # Which part a CAD run opens: a choice like the world, recorded on the run, so
-  # a reader of the record can open the same file. A name this node does not hold
-  # is not a part — the choice stays as it was rather than being written down as
-  # a file that was never there.
-  def handle_event("part", %{"part" => choice}, socket) do
-    if choice in socket.assigns.cad_parts,
-      do: {:noreply, assign(socket, :cad_part, choice)},
-      else: {:noreply, socket}
-  end
-
   # The world is a choice made here and recorded on the run, not a property of
   # the deployment: the queue executes what the record says it was given, so two
   # workers with different settings cannot disagree about it afterwards.
@@ -1416,18 +1380,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp sensors_of("serial", _shown), do: :serial
   defp sensors_of("concurrent", _shown), do: :concurrent
   defp sensors_of(_unreadable, shown), do: shown
-
-  # The part a CAD run opens before anybody chooses one: the deployment's own
-  # when this node holds that file, and otherwise the first file it holds — so
-  # the list always shows the file a press of Run would open.
-  defp cad_part(%{setup: %Setup{world: :cad}}) do
-    parts = Setup.cad_parts()
-    named = Path.rootname(Setup.cad_part() || "")
-
-    Enum.find(parts, List.first(parts), &(Path.rootname(&1) == named))
-  end
-
-  defp cad_part(_opened), do: nil
 
   # A settle window this page cannot read is not one: the number stays as it was,
   # and the run keeps the one shown beside the button it was started with.
@@ -2517,15 +2469,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     %{
       scheduling: socket.assigns.scheduling,
       settle: socket.assigns.settle,
-      sensors: socket.assigns.sensors,
-      cad_part: cad_part_of(socket.assigns)
+      sensors: socket.assigns.sensors
     }
   end
-
-  # The part is only this page's to name while the world it steps is the CAD one:
-  # a record written for a MuJoCo run must not claim a part it never opened.
-  defp cad_part_of(%{opened: %Setup{world: :cad}, cad_part: part}), do: part
-  defp cad_part_of(_assigns), do: nil
 
   defp start(socket, opened, steps, parallelism, episodes, levers) do
     plan = Partition.plan(opened.setup, parallelism, episodes)
@@ -2671,10 +2617,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
        logging: Logging.open(opened.setup).notes,
        error: nil,
        needs: needs(opened),
-       missing: with_actions(missing(opened)),
-       # The part follows the world: a page that just became a CAD run shows the
-       # file that run would open, and a page that stopped being one shows none.
-       cad_part: cad_part(opened)
+       missing: with_actions(missing(opened))
      )}
   end
 
@@ -3003,10 +2946,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # A need is not always a download: the interpreter is configuration, and
   # offering a download for it would be offering something that does not exist.
-  # The two findings the checks box already says as a missing need, dropped so a
-  # reader is not told the same thing twice in two boxes.
-  @said_as_a_need [:world_data_missing, :no_pretrained_memory]
-  defp checks(findings), do: Enum.reject(findings, &(&1.code in @said_as_a_need))
+  # A finding that a missing file already says is dropped, so a reader is not
+  # told the same thing twice — but only when the file list actually says it.
+  # `@missing` is empty when no archive carries a memory and no experiment here
+  # trains it, and dropping the finding then left a page that disabled Run,
+  # said "Fix the errors above", and showed no error at all.
+  @said_as_a_need %{models: :no_pretrained_memory, data: :world_data_missing}
+  defp checks(findings, missing) do
+    said = for need <- missing, do: Map.get(@said_as_a_need, need.kind)
+    Enum.reject(findings, &(&1.code in said))
+  end
 
   # Where the click for one need goes: the archive that fills its directory, the
   # experiment that would train the model it names, or the page that lists what

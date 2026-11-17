@@ -124,8 +124,7 @@ defmodule Monty.Studio.Run do
     with {:ok, interface, positioning, placed_in} <-
            position(setup, factories, episode,
              epoch: Keyword.get(opts, :epoch, 0),
-             phase: mode,
-             cad_part: Keyword.get(opts, :cad_part)
+             phase: mode
            ) do
       {started_in, started} =
         :timer.tc(fn ->

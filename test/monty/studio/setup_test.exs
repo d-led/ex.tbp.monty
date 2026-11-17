@@ -819,31 +819,6 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.cad_part_path() == {:ok, path}
     end
 
-    # A run says which part it steps, so the part is the run's choice and the
-    # variable is only the default: two pages on one node can open two parts.
-    test "the part a run names wins over the one the deployment names" do
-      data = Tmp.dir("monty-data")
-      Tmp.system_env("MONTY_DATA", data)
-      Tmp.system_env("MONTY_CAD_PART", "plate")
-      File.mkdir_p!(Path.join(data, "parts"))
-      File.write!(Path.join([data, "parts", "plate.step"]), "")
-      File.write!(Path.join([data, "parts", "bracket.step"]), "")
-
-      assert Setup.cad_part_path("bracket") == {:ok, Path.join([data, "parts", "bracket.step"])}
-      assert Setup.cad_part_path() == {:ok, Path.join([data, "parts", "plate.step"])}
-    end
-
-    test "a part a run names that this node does not hold says which parts it does" do
-      data = Tmp.dir("monty-data")
-      Tmp.system_env("MONTY_DATA", data)
-      File.mkdir_p!(Path.join(data, "parts"))
-      File.write!(Path.join([data, "parts", "plate.step"]), "")
-
-      assert {:error, sentence} = Setup.cad_part_path("bracket")
-      assert sentence =~ ~s(there is no part "bracket")
-      assert sentence =~ "plate.step"
-    end
-
     # A desktop install has no repository beside it, and the parts it can step
     # travel with the application: an empty data root is not an empty CAD world.
     test "opens a part the application ships, with nothing downloaded" do
@@ -852,7 +827,9 @@ defmodule Monty.Studio.SetupTest do
 
       assert "solidcraft-plate.step" in Setup.cad_parts()
 
-      assert {:ok, path} = Setup.cad_part_path("solidcraft-plate")
+      Tmp.system_env("MONTY_CAD_PART", "solidcraft-plate")
+
+      assert {:ok, path} = Setup.cad_part_path()
       assert Path.basename(path) == "solidcraft-plate.step"
       assert File.regular?(path)
     end
@@ -865,7 +842,9 @@ defmodule Monty.Studio.SetupTest do
       File.mkdir_p!(Path.join(data, "parts"))
       File.write!(Path.join([data, "parts", "solidcraft-plate.step"]), "mine")
 
-      assert Setup.cad_part_path("solidcraft-plate") ==
+      Tmp.system_env("MONTY_CAD_PART", "solidcraft-plate")
+
+      assert Setup.cad_part_path() ==
                {:ok, Path.join([data, "parts", "solidcraft-plate.step"])}
     end
 

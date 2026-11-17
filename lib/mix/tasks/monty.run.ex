@@ -73,8 +73,7 @@ defmodule Mix.Tasks.Monty.Run do
     world: :string,
     sensors: :string,
     scheduling: :string,
-    settle: :integer,
-    part: :string
+    settle: :integer
   ]
 
   @impl true
@@ -383,8 +382,7 @@ defmodule Mix.Tasks.Monty.Run do
     %{
       scheduling: scheduling_of(opts[:scheduling]),
       settle: opts[:settle] || 0,
-      sensors: sensors_of(opts[:sensors]),
-      cad_part: opts[:part]
+      sensors: sensors_of(opts[:sensors])
     }
   end
 
@@ -409,8 +407,7 @@ defmodule Mix.Tasks.Monty.Run do
     [
       opts[:settle] && {:settle_steps, opts[:settle]},
       opts[:scheduling] && {:scheduling, scheduling_of(opts[:scheduling])},
-      opts[:sensors] && {:sensors_step, sensors_of(opts[:sensors])},
-      opts[:part] && {:cad_part, opts[:part]}
+      opts[:sensors] && {:sensors_step, sensors_of(opts[:sensors])}
     ]
     |> Enum.reject(&(&1 in [nil, false]))
   end

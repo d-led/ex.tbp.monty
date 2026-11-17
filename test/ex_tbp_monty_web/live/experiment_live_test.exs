@@ -113,45 +113,6 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert select =~ "MuJoCo (compiled in, via ex_mujoco)"
     end
 
-    # A CAD run is about a file, and which file is the reader's to say: the world
-    # choice alone cannot name one, so the parts this node holds are offered
-    # beside it — the files themselves, not a variable somebody set on the
-    # deployment. A part is download-and-go input, like Monty's object sets.
-    test "the page lets the run choose which part it steps", %{conn: conn} do
-      data = Tmp.dir("monty-data")
-      Tmp.system_env("MONTY_DATA", data)
-      Tmp.without_env("MONTY_CAD_PART")
-      File.mkdir_p!(Path.join(data, "parts"))
-      File.write!(Path.join([data, "parts", "bracket.step"]), "")
-      File.write!(Path.join([data, "parts", "plate.step"]), "")
-
-      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
-
-      refute has_element?(view, "#part-select"), "a MuJoCo run opens no part"
-
-      view |> element("#world-choice") |> render_change(%{"world" => "cad"})
-      await_composition(view)
-
-      # Every part this node can open is offered — the two under its data root
-      # and the ones the application ships, so a fresh install has something to
-      # step — and exactly one is shown as chosen, because the list never hides
-      # what a press of Run is about to open.
-      picker = view |> element("#part-select") |> render()
-      assert picker =~ "bracket.step"
-      assert picker =~ "plate.step"
-      assert picker =~ "solidcraft-plate.step"
-
-      assert [_chosen] =
-               picker
-               |> LazyHTML.from_fragment()
-               |> LazyHTML.query("option[selected]")
-               |> LazyHTML.attribute("value")
-
-      # Choosing the other part is choosing the other file.
-      view |> element("#part-choice") |> render_change(%{"part" => "plate.step"})
-
-      assert view |> element("#part-select") |> render() =~ ~s(value="plate.step" selected)
-    end
 
     # Poka-yoke: MuJoCo reads a downloaded object set and memory. Queuing a run
     # without them answers with a run that dies at its first step, so the page
