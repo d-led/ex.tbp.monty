@@ -138,6 +138,33 @@ defmodule Monty.Runtime.StepTest do
                Step.state(Registry.via({:step, model_id})).reports
     end
 
+    test "a lagged step routes the epoch before's outputs, and does not read them" do
+      output = Messages.percept()
+
+      model_id =
+        start_model(
+          scheduling: :lagged,
+          sensor_modules: [sensor_module(:patch)],
+          learning_modules: [learning_module(:lm_0, output: output), learning_module(:lm_1)],
+          sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]},
+          lm_to_lm: %{lm_1: [:lm_0]}
+        )
+
+      # Epoch 0 has no output behind it: each module gets its own sensor's percept
+      # and nothing else.
+      assert {:ok, _actions, first} = step(model_id)
+      assert first.inputs == %{lm_0: 1, lm_1: 1}
+
+      # Epoch 1 gets epoch 0's output, handed over in its report — which is what
+      # means the modules were never asked for it, and the next world step can
+      # begin while they work.
+      assert {:ok, _actions, second} = step(model_id)
+      assert second.inputs == %{lm_0: 1, lm_1: 2}
+
+      assert_receive {:learning_step, :lm_1, [_percept, %Cmp.Message{} = relayed], :matching}
+      assert relayed == output
+    end
+
     test "a lagged round hands the motor one list of goals, sensors' included" do
       model_id =
         start_model(

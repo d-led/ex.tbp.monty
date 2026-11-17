@@ -259,27 +259,30 @@ defmodule Monty.Runtime.Step do
     {percepts, sensor_timeouts} =
       step_sensor_modules(state, observations, proprioceptive_state, ctx)
 
-    {outputs, _output_timeouts} = gather_outputs(state)
-    {inputs, input_counts} = route_inputs(state, percepts, outputs)
-
-    step_learning_modules(state, inputs, ctx)
-
     pending = %{
       observations: observations,
       proprioceptive_state: proprioceptive_state,
       ctx: ctx,
       percepts: percepts,
-      input_counts: input_counts,
       sensor_timeouts: sensor_timeouts,
       started_at: started_at
     }
 
     case state.scheduling do
+      # A lagged step cannot route its inputs yet: the top-down outputs it routes
+      # are the epoch before's, and they arrive as reports the coordinator is not
+      # reading while it is inside a call. So the step parks here — after its
+      # sensors, which is the half that needs nothing from the modules — and the
+      # rest runs when the last report has been handled.
       :lagged ->
         park_step(state, from, pending)
 
       :barrier ->
-        {reply, state} = finish_step(state, pending)
+        {outputs, _output_timeouts} = gather_outputs(state)
+        {inputs, input_counts} = route_inputs(state, percepts, outputs)
+        step_learning_modules(state, inputs, ctx)
+
+        {reply, state} = finish_step(state, Map.put(pending, :input_counts, input_counts))
         {:reply, reply, state}
     end
   end
@@ -368,7 +371,7 @@ defmodule Monty.Runtime.Step do
     epoch = state.step - 1
 
     if reported?(state, epoch) do
-      {reply, state} = finish_step(state, pending)
+      {reply, state} = resume_step(state, pending, lagged_reports(state, epoch))
       {:reply, reply, state}
     else
       {:noreply, %{state | pending_step: %{from: from, epoch: epoch, pending: pending}}}
@@ -379,13 +382,26 @@ defmodule Monty.Runtime.Step do
 
   defp finish_parked_step(%State{pending_step: parked} = state) do
     if reported?(state, parked.epoch) do
-      {reply, state} = finish_step(state, parked.pending)
+      {reply, state} = resume_step(state, parked.pending, lagged_reports(state, parked.epoch))
       GenServer.reply(parked.from, reply)
 
       %{state | pending_step: nil}
     else
       state
     end
+  end
+
+  # The rest of a lagged step, which can only run once the epoch before it has
+  # been reported: those reports carry the modules' top-down outputs, which is
+  # what this step routes into them. A barrier step routes the outputs it can
+  # read here and now; a lagged one routes the ones it was told, which is why the
+  # modules are never held to the coordinator's pace — the next world step runs
+  # while they finish the epoch they were just handed.
+  defp resume_step(%State{} = state, pending, reports) do
+    {inputs, input_counts} = route_inputs(state, pending.percepts, lagged_outputs(reports))
+    step_learning_modules(state, inputs, pending.ctx)
+
+    finish_step(state, Map.merge(pending, %{input_counts: input_counts, reports: reports}))
   end
 
   # Every module of a lagged model reports every epoch it is handed, whether or
@@ -409,7 +425,7 @@ defmodule Monty.Runtime.Step do
   # is not reading while it is inside a `handle_call`. The seam is here so that the
   # deferred reply is a second caller of the same tail, not a second tail.
   defp finish_step(%State{} = state, pending) do
-    {vote_info, goals} = vote_and_pass_goals(state)
+    {vote_info, goals} = round_and_goals(state, pending)
 
     {actions, state} =
       step_motor_system(
@@ -603,14 +619,13 @@ defmodule Monty.Runtime.Step do
 
   defp stepwise_target(_percepts, _no_map), do: "no_label"
 
-  # A lagged round reads the epoch *before* this step, and reads it from the
-  # reports: the modules have already been handed this step's work, so asking one
-  # of them anything here would queue behind that work and the lag would buy
-  # nothing. What a module would have been asked — its vote, its goals, its
-  # region — travelled with its report for that reason.
-  defp vote_and_pass_goals(%State{scheduling: :lagged, step: step} = state) do
+  # A lagged round reads the epoch *before* this step, from the reports the step
+  # was resumed with: the modules have already been handed this step's work, so
+  # asking one of them anything here would queue behind that work and the lag
+  # would buy nothing. What a module would have been asked — its vote, its goals,
+  # its region — travelled with its report for that reason.
+  defp round_and_goals(%State{scheduling: :lagged, step: step} = state, %{reports: reports}) do
     epoch = step - 1
-    reports = lagged_reports(state, epoch)
 
     vote_info = deliver_lagged_votes(state, epoch, reports)
 
@@ -629,6 +644,12 @@ defmodule Monty.Runtime.Step do
 
     {vote_info, state.attention.(goals, regions)}
   end
+
+  defp round_and_goals(%State{} = state, _pending), do: vote_and_pass_goals(state)
+
+  # What the round of the epoch before hands on: each module's top-down output,
+  # routed into this step exactly as `gather_outputs/1` routes the one it reads.
+  defp lagged_outputs(reports), do: Map.new(reports, fn {id, report} -> {id, report.output} end)
 
   # A finite vote deadline closes the round with the votes that arrived; the
   # default `:infinity` reproduces Monty's synchronous round.

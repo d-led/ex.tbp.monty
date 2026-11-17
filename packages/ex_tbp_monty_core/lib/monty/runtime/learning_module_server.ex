@@ -273,7 +273,8 @@ defmodule Monty.Runtime.LearningModuleServer do
        epoch: nil,
        waiting: [],
        report_votes?: Map.get(spec, :report_votes, false),
-       pending_votes: %{}
+       pending_votes: %{},
+       round: nil
      }}
   end
 
@@ -287,14 +288,21 @@ defmodule Monty.Runtime.LearningModuleServer do
   # message to the coordinator, because that is the whole point of the lag: the
   # belief of epoch `n` is readable while the module is already working on
   # `n + 1`, which a call could not be (it would queue behind that work).
+  #
+  # The two halves of that message are read at the two moments the barrier round
+  # reads them: the belief and the wants as the step left the module, before the
+  # previous round's votes are applied (`note_round/2`), and the top-down output
+  # after (`report/1`) — because applying votes is what settles a module's
+  # conclusion, and the output says `pass_message` only for a match.
   @impl true
   def handle_cast({:hand_off, epoch, percepts, ctx, target}, server) do
     server =
       server
       |> take_step(percepts, ctx, target)
       |> finished(epoch)
-      |> report(epoch)
+      |> note_round()
       |> apply_votes(epoch - 1)
+      |> report()
 
     {:noreply, reply_waiters(server)}
   end
@@ -372,16 +380,26 @@ defmodule Monty.Runtime.LearningModuleServer do
   # with the state it was given. They are asked here only where a coordinator
   # asked to be told, so a run that reads them the synchronous way is not given
   # three extra calls per module per step.
-  defp report(%{report_votes?: false} = server, _epoch), do: server
+  defp note_round(%{report_votes?: false} = server), do: %{server | round: nil}
 
-  defp report(%{module: module, state: state} = server, epoch) do
+  defp note_round(%{module: module, state: state} = server) do
     {vote, state} = module.send_out_vote(state)
     {goals, state} = module.propose_goals(state)
     {region, state} = module.propose_region(state)
 
-    notify_coordinator(server, epoch, %{vote: vote, goals: goals, region: region})
+    %{server | state: state, round: %{vote: vote, goals: goals, region: region}}
+  end
 
-    %{server | state: state}
+  # The report itself: the round noted at the step, and the output the module
+  # gives now that the previous round's votes have been applied.
+  defp report(%{round: nil} = server), do: server
+
+  defp report(%{module: module, state: state, round: round} = server) do
+    {output, state} = module.get_output(state)
+
+    notify_coordinator(server, server.epoch, Map.put(round, :output, output))
+
+    %{server | state: state, round: nil}
   end
 
   # The coordinator is the model's, registered beside the modules; a model being
