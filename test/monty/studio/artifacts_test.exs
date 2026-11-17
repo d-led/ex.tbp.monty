@@ -192,6 +192,31 @@ defmodule Monty.Studio.ArtifactsTest do
       assert Artifacts.frames_at(run_id(), 0) == %{}
     end
 
+    # The pictures are drawn behind the step they belong to, so the newest step's
+    # folder is the one that does not exist yet: a page that asked for it drew the
+    # broken-image icon under every live step while the files beside it were fine.
+    test "a step the writer has not reached answers with the newest pictures before it" do
+      id = run_id()
+      {:ok, _at_four} = Artifacts.put_frame(id, 4, "patch", "depth", @png)
+      {:ok, _at_nine} = Artifacts.put_frame(id, 9, "patch", "depth", @png)
+
+      assert Artifacts.pictures_at(id, 12) ==
+               {:ok, 9,
+                %{
+                  "patch" => %{
+                    "images" => %{"depth" => "/runs/#{id}/frames/9/patch-depth.png"}
+                  }
+                }}
+    end
+
+    test "and nothing drawn before it is no pictures rather than an older one" do
+      id = run_id()
+      {:ok, _at_nine} = Artifacts.put_frame(id, 9, "patch", "depth", @png)
+
+      assert Artifacts.pictures_at(id, 2) == :none
+      assert Artifacts.frames_at(id, 2) == %{}
+    end
+
     test "and names only what is a picture: a stray file is not a sensor's" do
       id = run_id()
       step = Path.join(Artifacts.frames_dir(id), "7")

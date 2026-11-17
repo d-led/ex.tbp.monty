@@ -873,34 +873,77 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     )
   end
 
-  # The pictures of the step being shown, asked for by itself: a record read
-  # without its pictures (`RunHistory.head/1`) has no timeline at all, and one
-  # step's observations are the only ones a page can draw.
+  # The pictures of the step being shown, from the record and then from the disk.
   #
-  # Nothing is asked when the run has a timeline: a moment that came with it was
-  # handed over with whatever its sensors kept, and asking again would be a
-  # database read per step for a page that is following a run.
+  # A live step hands its pictures over as bytes, and bytes are always drawable. A
+  # recorded moment either keeps the arrays a picture is drawn from — also
+  # drawable here — or names files, and a file it names may not be there: the
+  # pictures are drawn behind the step, and a run resumed in another virtual
+  # machine numbers them from nought again. Drawing a name the writer never used is
+  # the broken-image icon under a caption that says which step the picture is
+  # supposed to be.
+  defp with_pictures(nil, _run), do: nil
+
+  defp with_pictures(%{frames: [_ | _]} = moment, run), do: repaired(moment, run)
+
   defp with_pictures(moment, run) do
-    case moment do
-      %{frames: [_ | _]} ->
-        moment
-
-      %{position: position, step: step} ->
-        if run.timeline == [],
-          do: Replay.with_pictures(moment, sensors_at(run, position, step)),
-          else: moment
-
-      nil ->
-        nil
-    end
+    moment
+    |> from_the_record_when_it_has_none(run)
+    |> repaired(run)
   end
 
-  defp sensors_at(run, position, step) do
+  # A record read without its steps (`RunHistory.head/1`) has no timeline, and one
+  # step's observations are the only ones a page can draw. A run the page is
+  # following has its moments in hand and is not asked for again: a database read
+  # per step is what this page is built not to do.
+  defp from_the_record_when_it_has_none(moment, %{timeline: []} = run),
+    do: drawn_from_the_record(moment, run)
+
+  defp from_the_record_when_it_has_none(moment, _run), do: moment
+
+  # A record still holds the arrays a picture is drawn from until it is compacted,
+  # and then it holds the names of the files the compaction wrote.
+  defp drawn_from_the_record(%{position: position} = moment, run) when is_integer(position) do
     case RunHistory.sensors_at(run.id, position) do
-      sensors when is_map(sensors) and map_size(sensors) > 0 -> sensors
-      _nothing_recorded -> Monty.Studio.Artifacts.frames_at(run.id, step)
+      sensors when is_map(sensors) and map_size(sensors) > 0 ->
+        Replay.with_pictures(moment, sensors)
+
+      _nothing_recorded ->
+        moment
     end
   end
+
+  defp drawn_from_the_record(moment, _run), do: moment
+
+  # A moment whose pictures are files is drawn from the newest files that exist,
+  # under the step those pictures belong to — which is what the caption beside
+  # them then says. A moment drawn from arrays needs nothing.
+  defp repaired(%{frames: [_ | _] = frames} = moment, run) do
+    if Enum.any?(frames, &named_by_path?/1), do: from_the_files(moment, run), else: moment
+  end
+
+  defp repaired(moment, run), do: from_the_files(moment, run)
+
+  # The markup a frame carries is a safe tuple, not a string: a check that asked
+  # `is_binary?` of it answered `false` for every frame and let every broken
+  # picture through.
+  defp named_by_path?(%{data: {:safe, markup}}) when is_binary(markup),
+    do: String.contains?(markup, "/frames/")
+
+  defp named_by_path?(%{data: data}) when is_binary(data), do: String.contains?(data, "/frames/")
+  defp named_by_path?(_frame), do: false
+
+  defp from_the_files(%{position: position} = moment, run) when is_integer(position) do
+    case Artifacts.pictures_at(run.id, position) do
+      {:ok, pictured, sensors} when map_size(sensors) > 0 ->
+        Replay.with_pictures(%{moment | step: pictured}, sensors)
+
+      _nothing_drawn_yet ->
+        %{moment | frames: [], sensors: %{}}
+    end
+  end
+
+  defp from_the_files(moment, _run), do: %{moment | frames: [], sensors: %{}}
 
   # A record that still says "running" is not the same as a run that is: a
   # process killed mid-flight leaves the row open, and a clock beside it would

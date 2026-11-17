@@ -31,6 +31,11 @@ defmodule Monty.Studio.RunStream.Pictures do
   # took longest — 58 MB on a live run, of which 11 MB was live data.
   @idle_after Application.compile_env(:ex_tbp_monty, :studio_idle_hibernate_after, 5_000)
 
+  # How far behind the steps the writer may get before it starts drawing only
+  # every next step it reaches: about a second of a stepping run, which is the
+  # point after which its pictures are of steps nobody is watching.
+  @backlog 20
+
   @doc """
   Draws and writes a step's pictures, and announces the step.
 
@@ -65,10 +70,32 @@ defmodule Monty.Studio.RunStream.Pictures do
 
   @impl true
   def handle_cast({:drawn, step, pictures_in, frame}, state) do
-    images = images_of(step)
+    # The steps this process is handed are only as useful as the pictures a page
+    # can reach: a writer that falls behind by a thousand steps draws pictures
+    # nobody is looking at while the step on screen has none. Past a short
+    # backlog a step is announced without its own picture, and the page draws the
+    # newest one that exists (`Artifacts.pictures_at/2`) under the step it belongs
+    # to. The record still names every step's pictures; only the bytes are thinned.
+    images = if behind?(), do: %{}, else: images_of(step)
     write(pictures_in, frame, images)
     broadcast(pictures_in, {:step, announcement(step, frames_of(step, images))})
     {:noreply, state}
+  end
+
+  @doc """
+  How many steps the writer may fall behind before it stops drawing every one.
+
+  A run of twenty thousand steps is eighty thousand files; a page can only show
+  one step at a time, and the picture that matters is the newest one.
+  """
+  @spec backlog() :: non_neg_integer()
+  def backlog, do: @backlog
+
+  defp behind? do
+    case Process.info(self(), :message_queue_len) do
+      {:message_queue_len, queued} -> queued > @backlog
+      _unknown -> false
+    end
   end
 
   @impl true

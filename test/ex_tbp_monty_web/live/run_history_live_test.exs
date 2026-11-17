@@ -5,6 +5,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   import ExUnit.CaptureLog
   import Phoenix.LiveViewTest
 
+  alias Monty.Studio.Artifacts
   alias Monty.Studio.RunHistory
 
   # A run as a finished experiment leaves it, in whatever state a test needs.
@@ -699,6 +700,64 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   # A step's moment, recorded the way a run records one: the arrays a camera
   # answers with go in, and the pictures a page draws them into come out. The
   # depth grows with the step, so a step is visibly a different step.
+  # A step's pictures are drawn behind the step, and a run resumed in another
+  # virtual machine numbers them from nought again, so a moment can name a folder
+  # the writer never used. The page drew four broken-image icons for it, under a
+  # caption that said which step the pictures were supposed to be.
+  test "a step whose pictures are not on disk draws the newest ones that are", %{conn: conn} do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "dogs/surf_unsupervised",
+        source: "monty",
+        steps: 2,
+        config: %{}
+      })
+
+    {:ok, run} = RunHistory.mark_running(run)
+    {:ok, run} = RunHistory.record_step(run, step_entry(0), pictured(run, 0, "0"))
+    {:ok, run} = RunHistory.record_step(run, step_entry(1), pictured(run, 1, "12000"))
+
+    # The writer reached the first step and no further.
+    {:ok, _first} = Artifacts.put_frame(run.id, 0, "patch", "colour", Base.encode64("png"))
+
+    {:ok, _view, html} = live(conn, "/runs/#{run.id}")
+
+    [_, after_frames] = String.split(html, "replay-frames", parts: 2)
+    IO.inspect(String.slice(after_frames, 0, 300), label: "DIAG FRAMES")
+
+    assert html =~ "/frames/0/patch-colour.png"
+    refute html =~ "/frames/12000/patch-colour.png"
+  end
+
+  defp step_entry(step) do
+    %{
+      "step" => step,
+      "at" => Monty.Studio.RunLog.now().instant,
+      "goals" => 0,
+      "votes" => %{"sent" => 1, "used" => 1},
+      "percepts" => ["patch"],
+      "inputs" => %{"learning_module_0" => 1},
+      "actions" => 1,
+      "duration_us" => 120
+    }
+  end
+
+  # A moment whose picture is a path under `folder`, whether or not anything was
+  # written there.
+  defp pictured(run, step, folder) do
+    url = Artifacts.frame_url(run.id, Artifacts.frame_name(folder, "patch", "colour"))
+
+    Monty.Studio.RunLog.moment(%{step: step}, %{
+      Monty.Simulators.Synthetic.Environment.agent_id() => %{
+        "patch" => %{
+          "location" => [0.0, 0.0, 0.1],
+          "value" => 0.0,
+          "images" => %{"colour" => url}
+        }
+      }
+    })
+  end
+
   defp moment(step) do
     near = 0.02 + step * 0.01
 

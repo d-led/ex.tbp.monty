@@ -492,23 +492,82 @@ defmodule Monty.Studio.Artifacts do
   was lost.
   """
   @spec frames_at(binary(), non_neg_integer()) :: map()
-  def frames_at(run_id, step) do
-    step_name = Integer.to_string(step)
+  def frames_at(run_id, position) do
+    case pictures_at(run_id, position) do
+      {:ok, _pictured, sensors} -> sensors
+      :none -> %{}
+    end
+  end
 
-    case File.ls(Path.join(frames_dir(run_id), step_name)) do
-      {:ok, names} ->
-        names
-        |> Enum.flat_map(&pictured/1)
-        |> Enum.reduce(%{}, fn {sensor_id, kind, name}, sensors ->
-          url = frame_url(run_id, Path.join(step_name, name))
+  @doc """
+  A step's pictures, and which step's they are.
 
-          Map.update(sensors, sensor_id, %{"images" => %{kind => url}}, fn observation ->
-            Map.update(observation, "images", %{kind => url}, &Map.put(&1, kind, url))
-          end)
-        end)
+  A picture is written behind the step it belongs to (`Monty.Studio.RunStream.Pictures`),
+  so the folder of the newest step is by construction the one that does not exist
+  yet: asking for it drew the broken-image icon under every live step of a run
+  that was otherwise fine. The answer is therefore the newest step at or before
+  the one asked — a picture of the object a moment ago rather than none — and the
+  number it answers with is the one the note beside it states, so a picture can
+  never pose as the step on screen.
+  """
+  @spec pictures_at(binary(), non_neg_integer()) :: {:ok, non_neg_integer(), map()} | :none
+  def pictures_at(run_id, position) do
+    case pictured_folder(run_id, position) do
+      nil -> :none
+      {folder, names} -> {:ok, described(folder, position), frames_of(run_id, folder, names)}
+    end
+  end
 
-      _no_step ->
-        %{}
+  # A divided run names its folders `part-<n>-<position>`, which is not a number
+  # a page can label a step with; the position it asked for is.
+  defp described(folder, asked) do
+    case Integer.parse(folder) do
+      {position, ""} -> position
+      _part_named -> asked
+    end
+  end
+
+  defp frames_of(run_id, folder, names) do
+    names
+    |> Enum.flat_map(&pictured/1)
+    |> Enum.reduce(%{}, fn {sensor_id, kind, name}, sensors ->
+      url = frame_url(run_id, Path.join(folder, name))
+
+      Map.update(sensors, sensor_id, %{"images" => %{kind => url}}, fn observation ->
+        Map.update(observation, "images", %{kind => url}, &Map.put(&1, kind, url))
+      end)
+    end)
+  end
+
+  # The folder a page draws `position` from: its own when there is one, and
+  # otherwise the newest one before it.
+  defp pictured_folder(run_id, position) do
+    named(run_id, Integer.to_string(position)) || named(run_id, newest_before(run_id, position))
+  end
+
+  defp named(_run_id, nil), do: nil
+
+  defp named(run_id, folder) do
+    case File.ls(Path.join(frames_dir(run_id), folder)) do
+      {:ok, names} -> {folder, names}
+      _no_step -> nil
+    end
+  end
+
+  defp newest_before(run_id, position) do
+    with {:ok, folders} <- File.ls(frames_dir(run_id)),
+         [_ | _] = written <-
+           folders |> Enum.flat_map(&position_of/1) |> Enum.filter(&(&1 < position)) do
+      Integer.to_string(Enum.max(written))
+    else
+      _no_frames_or_none_before -> nil
+    end
+  end
+
+  defp position_of(folder) do
+    case Integer.parse(folder) do
+      {position, ""} -> [position]
+      _part_named -> []
     end
   end
 
