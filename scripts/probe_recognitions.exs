@@ -44,6 +44,23 @@ defmodule Recognitions do
       print(index, run)
       Monty.Studio.Run.stop(run)
     end
+    |> tally(episodes)
+  end
+
+  # A memory built with no labels can hold several objects in one graph, and then
+  # "the graph held the dog" is not the same achievement as "the graph named only
+  # this dog". Both are printed, because a memory of two-object graphs scores high
+  # by accident and the two numbers only mean something together.
+  defp tally(answers, episodes) do
+    counts = Enum.frequencies(answers)
+
+    IO.puts(
+      "\nof #{episodes}: " <>
+        "#{Map.get(counts, :named_the_dog, 0)} named only the dog shown · " <>
+        "#{Map.get(counts, :named_among_others, 0)} named it among others · " <>
+        "#{Map.get(counts, :named_another, 0)} named another · " <>
+        "#{Map.get(counts, :nothing, 0)} named nothing"
+    )
   end
 
   defp object_of(run) do
@@ -75,19 +92,38 @@ defmodule Recognitions do
     end
   end
 
+  # Prints one line per module and answers how the episode went, for the tally.
   defp print(index, run) do
     state = Monty.Studio.Run.statistics(run, &Monty.Studio.Logging.projection/1)
+    shown = object_of(run)
     said = Map.get(state.terminal_states, "learning_module_0")
 
-    for module <- state.learning_modules do
+    state.learning_modules
+    |> Enum.map(fn module ->
       inner = Map.get(module, :state) || Map.get(module, :module)
       detected = is_map(inner) && Map.get(inner, :detected_object)
-      targets = is_map(inner) && Map.get(inner, :graph_id_to_target)
+      names = target_of(detected, is_map(inner) && Map.get(inner, :graph_id_to_target))
 
       IO.puts(
-        "episode #{index + 1}: showed #{object_of(run) || "?"} · #{inspect(said)} · " <>
-          "detected #{inspect(detected)} of #{named(detected, target_of(detected, targets))}"
+        "episode #{index + 1}: showed #{shown || "?"} · #{inspect(said)} · " <>
+          "detected #{inspect(detected)} of #{named(detected, names)}"
       )
+
+      verdict(shown, said, names)
+    end)
+    # These configs run one module; with several, the first one's answer is the
+    # episode's.
+    |> List.first(:nothing)
+  end
+
+  defp verdict(_shown, state, _names) when state != :match, do: :nothing
+  defp verdict(shown, :match, names) when shown == nil or names in [nil, []], do: :nothing
+
+  defp verdict(shown, :match, names) do
+    cond do
+      names == [shown] -> :named_the_dog
+      shown in names -> :named_among_others
+      true -> :named_another
     end
   end
 
