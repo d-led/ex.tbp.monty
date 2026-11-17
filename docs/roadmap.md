@@ -137,11 +137,7 @@ expressed in is ours to check: the probe prints the agent's rotation with each
 step, and rotating our own local heading by it reproduces our recorded direction
 exactly. Rotating **his** recorded direction back by the same rotation gives a
 local heading of `3.001720189` against our `2.894124581` — a tenth of a radian
-apart. With `alpha` at 0.1 that is a target a whole radian away, which is to say
-the two blends were handed different draws from the episode's stream. The stored
-heading they started from is very likely the same: the curvature step at 24
-returned a direction that was his to the last digit, and that direction _is_ the
-stored heading, projected.
+apart, which with `alpha` at 0.1 is a target a whole radian apart.
 
 So the streams part somewhere between steps 20 and 28, and the draw is **not** what
 parts them. One line in the policy's draw function answers it: the whole
@@ -156,6 +152,16 @@ before the blend is what differs** — the curvature step at 24 returned a direc
 that matched ours, so either what it stored did not match, or something between 25
 and 28 replaced it: ours ran no conflict search there (the heading counter stood at
 one of twelve).
+
+Two checks close the obvious explanations without closing the question. Forcing the
+curvature branch at step 28 answers `0.377315189, -0.912522774, -0.157909578` — a
+third direction, so his was not that branch either. And no single draw among
+NumPy's first sixty, blended from our heading by Monty's own formula, produces his
+heading: that search finds nothing. So his blend started from a heading that is
+neither ours nor reachable from our trace, which leaves the stored heading as the
+suspect even though the direction it returned matched — and settling it needs his
+side: his `tangential_angle` and `prev_angle` around steps 24 to 28, from a run in
+Monty's own environment.
 
 The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
 projections between an angle and a vector) and `pc_moving_average` are identical to

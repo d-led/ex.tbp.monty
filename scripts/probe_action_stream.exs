@@ -246,6 +246,7 @@ defmodule ActionStream do
         "heading #{inspect(Map.get(policy, :following_heading_counter))}/" <>
         "#{inspect(Map.get(policy, :min_heading_steps))}, " <>
         "angle #{inspect(Map.get(policy, :tangential_angle))}, " <>
+        "alpha #{inspect(Map.get(policy, :alpha))} pc_alpha #{inspect(Map.get(policy, :pc_alpha))}, " <>
         "rotation #{inspect(Tuple.to_list(Map.get(rotation, :wxyz, {})))}, " <>
         "last action #{inspect(policy.last_surface_policy_action, limit: 3)}, " <>
         "desired #{inspect(policy.desired_object_distance)}"
