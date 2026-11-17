@@ -1259,6 +1259,12 @@ defmodule Monty.Studio.Jobs.Run do
   defp sensors_step_of(%{inputs: %{"sensors_step" => "concurrent"}}), do: :concurrent
   defp sensors_step_of(_record), do: :auto
 
+  # The part this run steps, named when it was started: a CAD world opened from a
+  # page or a task is about the part that reader chose, not about whatever the
+  # node's variable names today.
+  defp cad_part_of(%{inputs: %{"cad_part" => name}}), do: [cad_part: name]
+  defp cad_part_of(_record), do: []
+
   # The episode a part starts counting from: the first of the episodes it was
   # given. A run of the whole experiment starts at nought.
   defp offset_of(%{inputs: %{"part" => %{"phases" => phases}}}) when is_map(phases) do
@@ -1349,19 +1355,20 @@ defmodule Monty.Studio.Jobs.Run do
     # interface Monty would have used for this mode. An evaluation phase steps the
     # model it already has; a training phase's next episode starts from the memory
     # the last one wrote, so it is given a model of its own (`phase_model_id/1`).
-    options = [
-      steps: state.record.steps,
-      episode: index,
-      epoch: Map.get(callbacks, :epoch, 0),
-      mode: state.mode,
-      memory: state.memories,
-      memory_targets: state.targets,
-      first_seen: state.first_seen,
-      has_detailed_logger: Logging.detailed?(state.logging),
-      scheduling: scheduling_of(state.record),
-      settle_steps: settle_of(state.record),
-      sensors_step: sensors_step_of(state.record)
-    ]
+    options =
+      [
+        steps: state.record.steps,
+        episode: index,
+        epoch: Map.get(callbacks, :epoch, 0),
+        mode: state.mode,
+        memory: state.memories,
+        memory_targets: state.targets,
+        first_seen: state.first_seen,
+        has_detailed_logger: Logging.detailed?(state.logging),
+        scheduling: scheduling_of(state.record),
+        settle_steps: settle_of(state.record),
+        sensors_step: sensors_step_of(state.record)
+      ] ++ cad_part_of(state.record)
 
     options =
       if state.mode == :eval, do: [{:model_id, phase_model_id(run_id)} | options], else: options

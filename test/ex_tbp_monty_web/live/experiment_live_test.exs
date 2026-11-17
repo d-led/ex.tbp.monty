@@ -107,16 +107,42 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert select =~ "MuJoCo (in this application)"
       assert select =~ ~s(selected)
 
-      # And only what this node can step: the suite carries no `ex_monty_cad`, so
-      # a part is not offered here — the page asks the setup what this node has
-      # rather than keeping a list of its own.
-      refute :cad in Monty.Studio.Setup.worlds()
-      refute select =~ "CAD part"
-
       # Both MuJoCo worlds are offered, named for what differs — which program
       # steps the scene — because the scene itself is the experiment's.
       assert select =~ "MuJoCo (in this application)"
       assert select =~ "MuJoCo (compiled in, via ex_mujoco)"
+    end
+
+    # A CAD run is about a file, and which file is the reader's to say: the world
+    # choice alone cannot name one, so the parts this node holds are offered
+    # beside it — the files themselves, not a variable somebody set on the
+    # deployment. A part is download-and-go input, like Monty's object sets.
+    test "the page lets the run choose which part it steps", %{conn: conn} do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.without_env("MONTY_CAD_PART")
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "bracket.step"]), "")
+      File.write!(Path.join([data, "parts", "plate.step"]), "")
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/tutorial/first_experiment")
+
+      refute has_element?(view, "#part-select"), "a MuJoCo run opens no part"
+
+      view |> element("#world-choice") |> render_change(%{"world" => "cad"})
+      await_composition(view)
+
+      # Both files are offered, and the one a press of Run would open is the one
+      # shown as chosen: the list never hides what the run is about to do.
+      picker = view |> element("#part-select") |> render()
+      assert picker =~ "bracket.step"
+      assert picker =~ "plate.step"
+      assert picker =~ ~s(value="bracket.step" selected)
+
+      # Choosing the other part is choosing the other file.
+      view |> element("#part-choice") |> render_change(%{"part" => "plate.step"})
+
+      assert view |> element("#part-select") |> render() =~ ~s(value="plate.step" selected)
     end
 
     # Poka-yoke: MuJoCo reads a downloaded object set and memory. Queuing a run

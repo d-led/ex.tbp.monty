@@ -459,6 +459,7 @@ defmodule Monty.Studio.RunLog do
         |> Map.merge(scheduling_input(part))
         |> Map.merge(settle_input(part))
         |> Map.merge(sensors_step_input(part))
+        |> Map.merge(cad_part_input(part))
     }
   end
 
@@ -524,6 +525,13 @@ defmodule Monty.Studio.RunLog do
     do: %{"sensors_step" => to_string(sensors)}
 
   defp sensors_step_input(_part), do: %{}
+
+  # The part a CAD world stepped, when the run named one: a reader of the record
+  # can open the same file again, and a page can say which part this was about
+  # without consulting a variable that has since changed.
+  defp cad_part_input(%{cad_part: name}) when is_binary(name), do: %{"cad_part" => name}
+
+  defp cad_part_input(_part), do: %{}
 
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()

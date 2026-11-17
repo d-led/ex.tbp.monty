@@ -705,10 +705,17 @@ defmodule Monty.Studio.Setup do
   # the other through the C++ binding, `ex_mujoco`.
   def world_name(_setup, :ex_mujoco), do: "MuJoCo (compiled in, via ex_mujoco)"
 
-  # A CAD part is named by the deployment (`MONTY_CAD_PART`), so the words say
-  # which part rather than which engine. A page asks this before anything is
-  # built, so a node with no part named says that instead of raising.
-  def world_name(_setup, :cad), do: "CAD part (#{cad_part() |> part_file()})"
+  # A CAD run opens a file, and which file is chosen beside the world, so the
+  # label names the deployment's part when it has one and otherwise says how many
+  # there are to choose from. A page asks this before anything is built, so a
+  # node with no part at all says that instead of raising.
+  def world_name(_setup, :cad) do
+    case cad_part() do
+      nil -> "CAD part (#{part_count()})"
+      named -> "CAD part (#{part_file(named)})"
+    end
+  end
+
   def world_name(setup, :mujoco), do: mujoco_world_name(setup)
 
   # An operator can configure a world this build does not carry. Saying so is
@@ -818,8 +825,8 @@ defmodule Monty.Studio.Setup do
   # The part is not this application's code — `ex_monty_cad` is another package
   # with its own dependencies — so it is asked for by name and a node that does
   # not have it says so, rather than linking the package to find out.
-  def world(%__MODULE__{} = setup, :cad, _episode, _opts) do
-    scene = cad_scene()
+  def world(%__MODULE__{} = setup, :cad, _episode, opts) do
+    scene = cad_scene(Keyword.get(opts, :cad_part))
     # A part is its own scene, so where the agent starts is read from the part
     # and not from the config's start pose: that one places an agent in MuJoCo's
     # scene, where the object is where MuJoCo put it.
@@ -863,8 +870,8 @@ defmodule Monty.Studio.Setup do
   `:mujoco` and `:synthetic` are this application's own. `:cad` is a part, which
   is `ex_monty_cad`'s scene, and a node that does not carry that application
   cannot step one — so the list is the node's answer and not a constant in a
-  page. A part also has to be named: a node with the application and no
-  `MONTY_CAD_PART` has nothing to open.
+  page. A part also has to be there: a node with the application and no part in
+  `parts/` has nothing to open.
 
   Kept here because three callers ask the same question — the experiment page,
   the MCP tool and the mix tasks — and a list written into each is a list that
@@ -875,15 +882,16 @@ defmodule Monty.Studio.Setup do
     [:mujoco, :ex_mujoco, :synthetic] ++ if cad_step?(), do: [:cad], else: []
   end
 
-  # Carried and named: a scene module with no part is an option a reader would
-  # choose and a run would then refuse.
-  defp cad_step?, do: Code.ensure_loaded?(cad_module()) and cad_part() != nil
+  # Carried, and with a part to open: a scene module and an empty `parts/` is an
+  # option a reader would choose and a run would then refuse. The part is chosen
+  # by whoever starts the run, so the presence of one part is the whole test.
+  defp cad_step?, do: Code.ensure_loaded?(cad_module()) and cad_parts() != []
 
   # The scene module, by name: the studio does not depend on `ex_monty_cad`,
   # which brings quiddity and its Rust build, and a run on a node without it is
   # refused here — with the two things that would make it work — instead of
   # failing inside a world.
-  defp cad_scene do
+  defp cad_scene(named) do
     module = cad_module()
 
     refusals = [
@@ -898,7 +906,7 @@ defmodule Monty.Studio.Setup do
         raise ArgumentError, sentence
 
       nil ->
-        open_cad_scene(module)
+        open_cad_scene(module, named)
     end
   end
 
@@ -907,8 +915,8 @@ defmodule Monty.Studio.Setup do
   # `ex_monty_cad`, so neither has a test that reaches it: a stair of nested
   # cases in a function nothing covers is what the CRAP ranking is about, and
   # saying each answer once keeps it about one refusal rather than two.
-  defp open_cad_scene(module) do
-    path = cad_part_path!()
+  defp open_cad_scene(module, named) do
+    path = cad_part_path!(named)
 
     case module.open(path, cad_scene_options()) do
       {:ok, scene} ->
@@ -942,15 +950,15 @@ defmodule Monty.Studio.Setup do
   end
 
   # The path, or the raise a person reads instead.
-  defp cad_part_path! do
-    case cad_part_path() do
+  defp cad_part_path!(named) do
+    case cad_part_path(named) do
       {:ok, path} -> path
       {:error, sentence} -> raise ArgumentError, sentence
     end
   end
 
   @doc """
-  The STEP file a run of the CAD world opens, from `MONTY_CAD_PART`.
+  The STEP file a run of the CAD world opens.
 
   A part is **named** rather than pathed, the way the objects MuJoCo steps are:
   the name is looked for in `parts/` under this node's data root
@@ -958,43 +966,62 @@ defmodule Monty.Studio.Setup do
   both put one. A value that is the path of a file that exists is used as
   it is, because a one-off part should be openable without moving it first.
 
+  The name comes from the run — a page's picker, a task's switch — and a run that
+  names none falls back to `MONTY_CAD_PART`, the deployment's default part. Both
+  are optional: a node with parts in `parts/` and no variable is a node where the
+  page offers each of them.
+
   Answers the sentence a page or a run would show when there is no part to open,
   rather than a `nil` that becomes a different world somewhere else.
   """
-  @spec cad_part_path() :: {:ok, Path.t()} | {:error, String.t()}
-  def cad_part_path do
-    module = Module.concat(["MontyCad", "Inputs"])
-
+  @spec cad_part_path(String.t() | nil) :: {:ok, Path.t()} | {:error, String.t()}
+  def cad_part_path(named \\ nil) do
     # The CAD package owns the convention (`MontyCad.Inputs`, which the CAD
     # server uses too). This node asks it when it is carried and answers from its
     # own paths otherwise — the same directory either way, because both read
     # `MONTY_DATA` and default to the same folder.
-    if Code.ensure_loaded?(module), do: module.part_path(), else: resolve_part()
+    case carried_inputs() do
+      nil -> resolve_part(named)
+      module when is_nil(named) -> module.part_path()
+      module -> module.part_path(named)
+    end
   end
 
-  defp resolve_part do
+  # The CAD package's input conventions, when this node carries it: a node with
+  # the studio and no CAD application has no scene to open either, and this is
+  # the same question asked once.
+  defp carried_inputs do
+    module = Module.concat(["MontyCad", "Inputs"])
+    if Code.ensure_loaded?(module), do: module
+  end
+
+  defp resolve_part(nil) do
     case cad_part() do
       nil ->
         {:error, "no CAD part is named: `MONTY_CAD_PART` is the name of a part in #{parts_dir()}"}
 
       named ->
-        cond do
-          File.regular?(named) ->
-            {:ok, Path.expand(named)}
+        resolve_part(named)
+    end
+  end
 
-          File.regular?(path = Path.join(parts_dir(), named)) ->
-            {:ok, path}
+  defp resolve_part(named) do
+    cond do
+      File.regular?(named) ->
+        {:ok, Path.expand(named)}
 
-          File.regular?(path = Path.join(parts_dir(), named <> ".step")) ->
-            {:ok, path}
+      File.regular?(path = Path.join(parts_dir(), named)) ->
+        {:ok, path}
 
-          File.regular?(path = Path.join(parts_dir(), named <> ".stp")) ->
-            {:ok, path}
+      File.regular?(path = Path.join(parts_dir(), named <> ".step")) ->
+        {:ok, path}
 
-          true ->
-            {:error,
-             "there is no part #{inspect(named)}: #{parts_dir()} holds #{inspect(cad_parts())}"}
-        end
+      File.regular?(path = Path.join(parts_dir(), named <> ".stp")) ->
+        {:ok, path}
+
+      true ->
+        {:error,
+         "there is no part #{inspect(named)}: #{parts_dir()} holds #{inspect(cad_parts())}"}
     end
   end
 
@@ -1026,10 +1053,25 @@ defmodule Monty.Studio.Setup do
 
   defp cad_module, do: Module.concat(["MontyCad", "Scene"])
 
-  defp cad_part, do: System.get_env("MONTY_CAD_PART")
+  @doc """
+  The part `MONTY_CAD_PART` names, or `nil`.
 
-  defp part_file(nil), do: "no part named"
+  The deployment's default: a run that names no part of its own opens this one,
+  and a page that shows a picker starts it on this part so the file a reader is
+  looking at is the file the run opens.
+  """
+  @spec cad_part() :: String.t() | nil
+  def cad_part, do: System.get_env("MONTY_CAD_PART")
+
   defp part_file(path), do: Path.basename(path)
+
+  defp part_count do
+    case cad_parts() do
+      [] -> "no part to open"
+      [one] -> one
+      parts -> "#{length(parts)} parts to choose"
+    end
+  end
 
   # Monty's simulator, from the numbers the config states: the data path the
   # meshes load from, the agent its `env_init_args` names (class, start pose and

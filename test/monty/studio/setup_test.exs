@@ -734,10 +734,20 @@ defmodule Monty.Studio.SetupTest do
       end
     end
 
-    test "offers only the worlds this node can step" do
-      # This suite carries no `ex_monty_cad`, so a part is not one of them: a
-      # selector that offered it would be offering a world the node refuses.
-      assert Setup.worlds() == [:mujoco, :ex_mujoco, :synthetic]
+    test "offers a world when this node can step it" do
+      # A CAD world is offered when there is a part to open and not before: the
+      # selector offers what a run could do, and a part is a file this node holds
+      # rather than a variable somebody set.
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.without_env("MONTY_CAD_PART")
+
+      refute :cad in Setup.worlds()
+
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "bracket.step"]), "")
+
+      assert List.last(Setup.worlds()) == :cad
     end
 
     test "a compiled MuJoCo world refuses a config whose environment is not MuJoCo" do
@@ -770,10 +780,15 @@ defmodule Monty.Studio.SetupTest do
     # which a studio node need not carry, so the part is asked for by name and
     # the answer here is what such a node says instead of a FunctionClauseError
     # or a world that half-works.
-    test "refuses a CAD part on a node that does not carry the CAD application" do
+    test "refuses a CAD world when this node holds no part to open" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.without_env("MONTY_CAD_PART")
       setup = setup_for("tutorial/first_experiment")
 
-      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(setup, :cad) end
+      assert_raise ArgumentError, ~r/no CAD part is named.*parts/s, fn ->
+        Setup.world(setup, :cad)
+      end
     end
 
     # MuJoCo's objects arrive in directories under `MONTY_DATA`; a part is the
@@ -809,6 +824,31 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.cad_part_path() == {:ok, path}
     end
 
+    # A run says which part it steps, so the part is the run's choice and the
+    # variable is only the default: two pages on one node can open two parts.
+    test "the part a run names wins over the one the deployment names" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.system_env("MONTY_CAD_PART", "plate")
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "plate.step"]), "")
+      File.write!(Path.join([data, "parts", "bracket.step"]), "")
+
+      assert Setup.cad_part_path("bracket") == {:ok, Path.join([data, "parts", "bracket.step"])}
+      assert Setup.cad_part_path() == {:ok, Path.join([data, "parts", "plate.step"])}
+    end
+
+    test "a part a run names that this node does not hold says which parts it does" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "plate.step"]), "")
+
+      assert {:error, sentence} = Setup.cad_part_path("bracket")
+      assert sentence =~ ~s(there is no part "bracket")
+      assert sentence =~ "plate.step"
+    end
+
     test "names the CAD part a run would step, from the deployment" do
       setup = setup_for("tutorial/first_experiment")
       Tmp.system_env("MONTY_CAD_PART", "/parts/bracket.step")
@@ -824,11 +864,20 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.cad_labels() == :part
     end
 
-    test "says no part is named when the deployment names none" do
-      setup = setup_for("tutorial/first_experiment")
+    test "says how many parts there are to open when the deployment names none" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
       Tmp.without_env("MONTY_CAD_PART")
+      File.mkdir_p!(Path.join(data, "parts"))
+      setup = setup_for("tutorial/first_experiment")
 
-      assert Setup.world_name(setup, :cad) == "CAD part (no part named)"
+      assert Setup.world_name(setup, :cad) == "CAD part (no part to open)"
+
+      File.write!(Path.join([data, "parts", "plate.step"]), "")
+      assert Setup.world_name(setup, :cad) == "CAD part (plate.step)"
+
+      File.write!(Path.join([data, "parts", "bracket.step"]), "")
+      assert Setup.world_name(setup, :cad) == "CAD part (2 parts to choose)"
     end
   end
 

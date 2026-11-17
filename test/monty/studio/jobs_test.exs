@@ -26,6 +26,21 @@ defmodule Monty.Studio.JobsTest do
     running
   end
 
+  describe "what a run keeps of the levers it was given" do
+    # A part named on a page is a part a worker can open again: the record is
+    # the only thing the queue reads, so the name has to be in it — and a run of
+    # another world must not claim a part it never opened.
+    test "names the CAD part a run steps, and nothing when it steps no part" do
+      {:ok, opened} = Monty.Studio.open("tutorial/first_experiment")
+
+      named = RunLog.attributes(opened, 3, 0, 1, nil, %{cad_part: "bracket.step"})
+      unnamed = RunLog.attributes(opened, 3, 0, 1, nil, %{})
+
+      assert named.inputs["cad_part"] == "bracket.step"
+      refute Map.has_key?(unnamed.inputs, "cad_part")
+    end
+  end
+
   describe "how many runs a node performs at once" do
     test "is two when the deployment says nothing" do
       assert Jobs.studio_concurrency(nil) == 2
