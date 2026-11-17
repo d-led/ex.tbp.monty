@@ -1674,3 +1674,42 @@ here unsolved.
 **What is therefore not compared.** The epoch directories Monty leaves, the
 `exp_state_dict.pt` counters it saves beside them, and the interface and logger
 epoch hooks, which here have no caller.
+## 2.26 A sensor keeps its step record only for a detailed logger
+
+**In one line:** Monty appends every percept to `processed_obs` and, when
+`save_raw_obs` is set, every raw observation to its telemetry, unconditionally;
+this port appends either only when the run's logging reads them, because one
+episode's worth is what takes a process past the run's heap ceiling.
+
+**What Monty does.** `SensorModule.step` ends with
+`self.processed_obs.append(percept.__dict__)`, and its `SnapshotTelemetry`
+records the raw observation of every step when the config says `save_raw_obs:
+True`. Both exist for `state_dict()` — which the detailed logger writes out and
+`plot_utils_analysis.py` reads back.
+
+**What this port does.**
+[`CameraSM`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/camera_sm.ex)
+and [`TwoDSensorModule`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/two_d_sensor_module.ex)
+take `:has_detailed_logger`, which `Monty.Studio.Setup.model_spec/3` answers from
+the experiment's logging section and hands to every sensor module it builds —
+the same flag, from the same place, that the learning modules already take for
+their own detailed statistics. The camera keeps its raw observations when the
+config asked for them **and** that flag is on, and its percepts when the flag is
+on; `state_dict/1` answers both keys either way, empty.
+
+**Why.** A raw observation is 1.6 MB of Elixir terms where Monty holds a few
+numpy arrays — measured on `surf_agent_unsupervised_10distinctobj`, whose sensor
+config is `save_raw_obs: true`, at 490 MB after three hundred steps, against
+nothing at all for the percepts. A thousand-step episode therefore held the
+sensor module's process at gigabytes, the run's heap ceiling (`run_max_heap_mb`)
+killed it, and every training run of this port stopped silently at the step the
+exploring phase ended — for Monty's own config, on Monty's own objects, exactly
+as for a corpus of ours. Monty does not have this failure because the same list
+costs it a fraction of the memory and because nothing kills a Python process for
+it.
+
+**What is therefore not compared.** The step record a run whose logging is not
+detailed would have kept: `state_dict()['raw_observations']` and
+`['processed_observations']` are empty there, where Monty's hold the episode. A
+run that wants them says so in its logging section, and then keeps them as Monty
+does.

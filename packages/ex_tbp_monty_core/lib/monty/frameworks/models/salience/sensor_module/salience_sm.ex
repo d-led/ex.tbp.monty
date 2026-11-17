@@ -117,9 +117,12 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   or a `segmentation_strategy`. Every shipped config takes the defaults for all
   four, and a strategy this port has not written is an error rather than a
   silently uniform view.
+
+  `:has_detailed_logger` arrives because every sensor class is asked the same
+  question; this one keeps no percept history, so it has nothing to decide.
   """
-  @spec from_config(map()) :: {:ok, t()} | {:error, term()}
-  def from_config(%{} = config) do
+  @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
+  def from_config(%{} = config, _options \\ []) do
     with :ok <- check_target(Map.get(config, "_target_", @target)),
          {:ok, sensor_module_id} <- sensor_module_id(config),
          {:ok, strategy} <- layer(config, "salience_strategy", Uniform),

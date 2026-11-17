@@ -53,6 +53,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   defstruct sensor_module_id: nil,
             features: [],
             save_raw_obs: false,
+            has_detailed_logger: false,
             pose: nil,
             processor: nil,
             noise: nil,
@@ -65,6 +66,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
           sensor_module_id: atom() | String.t(),
           features: [String.t()],
           save_raw_obs: boolean(),
+          has_detailed_logger: boolean(),
           pose: SensorState.t() | nil,
           processor: ObservationProcessor.t(),
           noise: {module(), struct()},
@@ -81,9 +83,13 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
   `delta_thresholds`, `is_surface_sm` and `pc1_is_pc2_threshold` when the config
   gives them. `sensor_module_id` falls back to the config's `sensor_id`, which is
   how a patch sensor is named in the configs that carry both.
+
+  `:has_detailed_logger` is the experiment's answer rather than the config's —
+  whether this run's logging reads the percept history — and it is why a run that
+  does not log in detail does not pay for one.
   """
-  @spec from_config(map()) :: {:ok, t()} | {:error, term()}
-  def from_config(%{} = config) do
+  @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
+  def from_config(%{} = config, options \\ []) do
     with :ok <- check_target(Map.get(config, "_target_", @target)),
          {:ok, features} <- features(config) do
       {:ok,
@@ -91,6 +97,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
          Map.get(config, "sensor_module_id", Map.get(config, "sensor_id")),
          features: features,
          save_raw_obs: Map.get(config, "save_raw_obs", false),
+         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
          noise_params: Map.get(config, "noise_params"),
          delta_thresholds: Map.get(config, "delta_thresholds"),
          is_surface_sm: Map.get(config, "is_surface_sm", false),
@@ -122,6 +129,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
       sensor_module_id: sensor_module_id,
       features: Keyword.fetch!(options, :features),
       save_raw_obs: Keyword.get(options, :save_raw_obs, false),
+      has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
       processor:
         ObservationProcessor.new(
           features: Keyword.fetch!(options, :features),
@@ -162,7 +170,7 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
 
   @impl true
   def step(observation, motor_only?, ctx, %__MODULE__{} = sm) do
-    sm = if sm.save_raw_obs, do: record_snapshot(sm, observation), else: sm
+    sm = if records?(sm), do: record_snapshot(sm, observation), else: sm
 
     case ObservationProcessor.process(sm.processor, observation) do
       {:ok, percept} ->
@@ -173,12 +181,36 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSM do
 
         {percept, sm} = apply_filter(sm, percept)
 
-        {percept, %{sm | processed_observations: [percept | sm.processed_observations]}}
+        {percept, record(sm, percept)}
 
       {:error, _no_point_cloud} ->
         {nil, sm}
     end
   end
+
+  # What this run keeps of a step: nothing, unless a logger is going to read it.
+  #
+  # Monty keeps two histories per sensor: the raw observation of every step when
+  # the config says `save_raw_obs: true`, and every percept it made. Both exist so
+  # that a detailed run can be plotted afterwards (`plot_utils_analysis.py` reads
+  # them out of `state_dict()`), and neither is read by a run that logs the basic
+  # graphs. They are also not free here: a raw observation is 1.6 MB of Elixir
+  # terms where Monty holds a few numpy arrays, so a thousand-step episode of
+  # Monty's own unsupervised config held the sensor's process at gigabytes and the
+  # run's heap ceiling killed it — silently, at the step the exploring phase
+  # ended, which is why every training run of this port stopped there.
+  #
+  # The learning modules already keep their detailed statistics only for a run
+  # that logs them; a sensor keeps its step record by the same rule
+  # (`docs/monty-differences.md` §2.26). `state_dict/1` still answers both keys,
+  # empty.
+  defp records?(%__MODULE__{save_raw_obs: save?, has_detailed_logger: detailed?}),
+    do: save? and detailed?
+
+  defp record(%__MODULE__{has_detailed_logger: false} = sm, _percept), do: sm
+
+  defp record(%__MODULE__{} = sm, percept),
+    do: %{sm | processed_observations: [percept | sm.processed_observations]}
 
   @doc """
   Everything recorded so far: the raw observations, and every percept this

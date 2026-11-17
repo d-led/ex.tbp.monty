@@ -67,6 +67,7 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   defstruct sensor_module_id: nil,
             features: [],
             save_raw_obs: false,
+            has_detailed_logger: false,
             edge_detector: nil,
             processor: nil,
             noise: nil,
@@ -82,10 +83,15 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   @type t :: %__MODULE__{}
 
   @doc "The module a config asks for, as Monty's `__init__` reads its arguments."
-  @spec from_config(map()) :: {:ok, t()} | {:error, term()}
-  def from_config(%{} = config) do
+  @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
+  def from_config(%{} = config, options \\ []) do
     with {:ok, features} <- features(config) do
-      {:ok, build(Map.get(config, "sensor_module_id", "sensor_module_0"), features, config)}
+      {:ok,
+       build(
+         Map.get(config, "sensor_module_id", "sensor_module_0"),
+         features,
+         Map.put(config, :has_detailed_logger, Keyword.get(options, :has_detailed_logger, false))
+       )}
     end
   end
 
@@ -117,6 +123,7 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
       sensor_module_id: sensor_module_id,
       features: features,
       save_raw_obs: value(options, :save_raw_obs, false),
+      has_detailed_logger: value(options, :has_detailed_logger, false),
       edge_detector: edge_detector(options, extract_edges?),
       processor:
         ObservationProcessor.new(

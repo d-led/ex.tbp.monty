@@ -29,9 +29,12 @@ defmodule Monty.Experiment.SensorModule.ExperimentSensorModule do
   Monty's entry: `sensor_module_id`, `sensor_id` and `transforms`. A transform
   the config names is only built when this port has written it — an empty list is
   the common case and the one every shipped surf config uses.
+
+  `:has_detailed_logger` arrives because every sensor class is asked the same
+  question; this one keeps no percept history, so it has nothing to decide.
   """
-  @spec from_config(map()) :: {:ok, SensorModule.t()} | {:error, term()}
-  def from_config(%{} = config) do
+  @spec from_config(map(), keyword()) :: {:ok, SensorModule.t()} | {:error, term()}
+  def from_config(%{} = config, _options \\ []) do
     with :ok <- check_target(Map.get(config, "_target_", @target)),
          {:ok, sensor_id} <- sensor_id(config),
          {:ok, transforms} <- transforms(config) do

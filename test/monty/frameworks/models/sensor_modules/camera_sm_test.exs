@@ -403,7 +403,9 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
     end
 
     test "is emptied for the next episode, along with the filter's memory" do
-      sensor = sensor(save_raw_obs: true, delta_thresholds: %{"n_steps" => 20}) |> placed_at()
+      sensor =
+        sensor(save_raw_obs: true, has_detailed_logger: true, delta_thresholds: %{"n_steps" => 20})
+        |> placed_at()
 
       {_percept, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor)
       reset = CameraSM.reset(sensor)
@@ -416,12 +418,24 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
       assert percept.pass_message
     end
 
-    test "records every percept in the order they were made" do
+    test "records every percept in the order they were made, for a run that logs them" do
       observation = Patch.new()
-      sensor = sensor(save_raw_obs: true) |> placed_at()
+      sensor = sensor(save_raw_obs: true, has_detailed_logger: true) |> placed_at()
       {percept, sensor} = CameraSM.step(observation, false, ctx(), sensor)
 
       assert CameraSM.state_dict(sensor).processed_observations == [percept]
+    end
+
+    # A megabyte a step kept for nobody is what grew one process past the run's
+    # heap ceiling and killed a training episode (docs/monty-differences.md §2.18).
+    test "keeps no percept history for a run whose logging is not detailed" do
+      sensor = sensor(save_raw_obs: true) |> placed_at()
+
+      {percept, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor)
+      {_second, sensor} = CameraSM.step(Patch.new(), false, ctx(), sensor)
+
+      assert CameraSM.state_dict(sensor).processed_observations == []
+      assert percept != nil
     end
   end
 

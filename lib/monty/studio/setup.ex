@@ -518,7 +518,7 @@ defmodule Monty.Studio.Setup do
     Map.merge(
       %{
         model_id: model_id,
-        sensor_modules: Enum.map(setup.sensors, &sensor_module_spec/1),
+        sensor_modules: Enum.map(setup.sensors, &sensor_module_spec(&1, detailed?)),
         learning_modules:
           Enum.map(
             setup.learning_modules,
@@ -561,9 +561,10 @@ defmodule Monty.Studio.Setup do
   end
 
   # What runs for one sensor: the class its config targets, when this port has
-  # written it, and a stand-in otherwise.
-  defp sensor_module_spec(sensor) do
-    case ported_sensor_module(sensor.config) do
+  # written it, and a stand-in otherwise. `detailed?` is the run's answer, not the
+  # config's: a sensor keeps its percept history for a logger that reads it.
+  defp sensor_module_spec(sensor, detailed?) do
+    case ported_sensor_module(sensor.config, detailed?) do
       {:ok, module, state} ->
         %{
           id: sensor.id,
@@ -587,10 +588,10 @@ defmodule Monty.Studio.Setup do
   # `ExperimentSensorModule` or a `SalienceSM` that proposes where to look — and
   # the port's own module for each. One that is none of them, or one whose pieces
   # this port has not written, is a stand-in.
-  defp ported_sensor_module(config) do
+  defp ported_sensor_module(config, detailed?) do
     [CameraSM, TwoDSensorModule, ExperimentSensorModule, SalienceSM]
     |> Enum.find_value(:not_ported, fn module ->
-      case module.from_config(config) do
+      case module.from_config(config, has_detailed_logger: detailed?) do
         {:ok, state} -> {:ok, module, state}
         {:error, _not_this_class} -> nil
       end
