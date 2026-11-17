@@ -1818,7 +1818,7 @@ its slowest sensor rather than their sum is a factor only where one sensor is
 expensive, and nothing here makes a phase whose sensors are cheap faster. The
 first measurement of this was wrong in the other direction, and the reason is
 worth keeping: a request closure holds what the sensor needs — a round of several
-requests copies that into a process of its own, so a closure over *all* the
+requests copies that into a process of its own, so a closure over _all_ the
 observations paid one copy per sensor per step and the concurrent round lost by a
 factor.
 
@@ -1830,7 +1830,7 @@ waits for the epoch only where it needs the answer — the vote round.
 
 **What Monty does.** `MontyBase.step` calls `_step_learning_modules`, which calls
 every module's `matching_step` in the caller's thread, one at a time. The step is
-therefore *performed by* the coordinator, and a module that took a second held
+therefore _performed by_ the coordinator, and a module that took a second held
 the loop for a second.
 
 **What this port does.** Each module is a process with a mailbox
@@ -1848,8 +1848,8 @@ the loop for a second.
 Two messages from one sender arrive in order, so a `hand_off/5` followed by an
 `await/3` cannot race: the work is always enqueued before the wait.
 
-**Why.** It is the difference between a module *being called* and a module
-*working*: the coordinator's stack no longer grows with the module's step, and a
+**Why.** It is the difference between a module _being called_ and a module
+_working_: the coordinator's stack no longer grows with the module's step, and a
 module's pace is its own. It is also the precondition for a continuous pipeline —
 modules that keep working while their siblings do, with the epoch as the only
 place the coordinator says "not before step n" — which is where this port means
@@ -1858,5 +1858,54 @@ the sensors themselves permit).
 
 **What is therefore not compared.** Nothing, yet: the vote round still begins
 after every module has finished its step, because a vote is the module's state
-*after* its step. So the decisions are Monty's, and the suite that pins them
+_after_ its step. So the decisions are Monty's, and the suite that pins them
 passes unchanged; what moved is where the work runs, not what it computes.
+
+## 2.30 A step can be scheduled a lagged epoch behind
+
+**In one line:** a barrier step — Monty's order, and this port's default — waits
+for the modules it just handed work to before its vote round; a lagged step does
+not, and integrates the epoch _before_ instead, from the report each module sent
+when it finished it.
+
+**What Monty does.** `MontyBase.step` hands each module its percepts and waits for
+the answer inside the loop (`_step_learning_modules`), so the vote round — the one
+place the modules' theories meet — begins only once every module has finished the
+step it is voting on. Goals and regions are then asked of the modules in a second
+round, after their steps. One step's work cannot overlap with the next step's
+sensors, because there is one thread and it is the step's.
+
+**What this port does.** `Monty.Runtime.Step.State.scheduling/1` is `:barrier` or
+`:lagged` (a deployment sets it with `MONTY_STUDIO_SCHEDULING`, read in
+`Monty.Studio.Jobs.scheduling/1`). A lagged step:
+
+- hands epoch _n_ to every module and does not wait for it (`hand_off/5`, no
+  `await/3`);
+- runs its round for epoch _n − 1_, reading the vote, the goals and the region
+  from the report that module sent (`handle_cast({:voted, …})`). Nothing is asked
+  of a module here, because a question would queue behind the epoch it is already
+  working on;
+- hands the combined votes over rather than delivering them (`deliver_votes/3`),
+  and the module applies them at its own next boundary (§2.29's vote round);
+- replies when the last report for _n − 1_ is in hand. The reply is deferred, not
+  awaited: `handle_call/3` returns `{:noreply, …}` with the step parked, and
+  `GenServer.reply/2` fires in the mailbox handler that hears the last report. A
+  call cannot wait for messages it will not read until it has returned, which is
+  why the step had to be cut (`finish_step/2`) for this to be possible at all.
+
+The sensors are not lagged: they are asked per step in either mode, because a
+sensor's answer is the step's input and not a theory about it.
+
+**Why.** It is the point of the epoch hand-off: a module's pace becomes its own,
+and the coordinator waits only for the report it genuinely cannot do without. The
+world and the sensors of step _n + 1_ overlap with the modules still working on
+step _n_.
+
+**What is therefore not compared.** The trajectory. A lagged step's goals are one
+epoch older than the percepts they move on, so a lagged run is a different episode
+from Monty's, and no parity is claimed for it — which is why `:barrier` stays the
+default and the mode is a deployment's own measurement. Two properties are kept
+inside the mode, and both are tested: the lag is exactly one epoch (never "as far
+behind as the module happens to be"), so the same episode run twice is the same
+trajectory; and the votes of epoch _e_ apply at the boundary of _e + 1_, so a
+faster module cannot compute a different answer from a slower one.

@@ -238,12 +238,13 @@ defmodule Monty.Runtime.Step do
   # report *for the epoch it integrates*, so which module answered first cannot
   # decide what the model believes.
   @impl true
-  def handle_cast({:voted, id, epoch, vote}, %State{} = state) do
-    {:noreply, %{state | reports: Map.put(state.reports, id, {epoch, vote})}}
+  def handle_cast({:voted, id, epoch, report}, %State{} = state) do
+    state = %{state | reports: Map.put(state.reports, id, {epoch, report})}
+    {:noreply, finish_parked_step(state)}
   end
 
   @impl true
-  def handle_call({:step, observations, proprioceptive_state, ctx}, _from, %State{} = state) do
+  def handle_call({:step, observations, proprioceptive_state, ctx}, from, %State{} = state) do
     state = start_stream_if_new_episode(state, ctx)
 
     ctx = %{
@@ -273,8 +274,14 @@ defmodule Monty.Runtime.Step do
       started_at: started_at
     }
 
-    {reply, state} = finish_step(state, pending)
-    {:reply, reply, state}
+    case state.scheduling do
+      :lagged ->
+        park_step(state, from, pending)
+
+      :barrier ->
+        {reply, state} = finish_step(state, pending)
+        {:reply, reply, state}
+    end
   end
 
   def handle_call(:done?, _from, state), do: {:reply, state.done?, state}
@@ -352,6 +359,46 @@ defmodule Monty.Runtime.Step do
     %{state | episode_seed: seed}
   end
 
+  # A lagged step finishes when the epoch before it has been reported, which can
+  # be later than the call that began it — so the step is parked here and the
+  # reply is sent from `finish_parked_step/1`, in the mailbox handler that hears
+  # the last report. `handle_call` cannot wait for its own mailbox: anything it
+  # waits on is answered by a message it will not read until it has replied.
+  defp park_step(%State{} = state, from, pending) do
+    epoch = state.step - 1
+
+    if reported?(state, epoch) do
+      {reply, state} = finish_step(state, pending)
+      {:reply, reply, state}
+    else
+      {:noreply, %{state | pending_step: %{from: from, epoch: epoch, pending: pending}}}
+    end
+  end
+
+  defp finish_parked_step(%State{pending_step: nil} = state), do: state
+
+  defp finish_parked_step(%State{pending_step: parked} = state) do
+    if reported?(state, parked.epoch) do
+      {reply, state} = finish_step(state, parked.pending)
+      GenServer.reply(parked.from, reply)
+
+      %{state | pending_step: nil}
+    else
+      state
+    end
+  end
+
+  # Every module of a lagged model reports every epoch it is handed, whether or
+  # not it had anything to process, so this is a fact about the epoch and not a
+  # race between modules that did and did not answer.
+  defp reported?(_state, epoch) when epoch < 0, do: true
+
+  defp reported?(%State{reports: reports} = state, epoch) do
+    Enum.all?(state.learning_modules, fn %{id: id} ->
+      match?({^epoch, _report}, Map.get(reports, id))
+    end)
+  end
+
   # Everything a step does once its modules have been given the epoch: the vote
   # round, the motor system, the counters and the report a caller reads.
   #
@@ -426,7 +473,8 @@ defmodule Monty.Runtime.Step do
         observation = observation_for(observations, sm)
         proprioceptive = Map.get(proprioceptive_state, sm.agent_id, %{})
 
-        {sm.id, fn -> SensorModuleServer.step(server, observation, proprioceptive, ctx, motor_only?) end}
+        {sm.id,
+         fn -> SensorModuleServer.step(server, observation, proprioceptive, ctx, motor_only?) end}
       end)
 
     case State.sensors_step(state) do
@@ -499,6 +547,13 @@ defmodule Monty.Runtime.Step do
   # nothing is started in lockstep, and the work no longer has to be performed
   # inside the coordinator's call to it.
   #
+  # A lagged model does not wait here at all. Its round is the epoch before this
+  # one, and `reported?/2` is the wait for that — so the module is never held to
+  # the coordinator's pace, and the only thing a step blocks on is a report it
+  # genuinely cannot do without. The lag is fixed at one epoch rather than "as far
+  # behind as the module happens to be", which is what keeps two runs of one
+  # episode identical.
+  #
   # A module with no inputs is not stepped — it is told it had nothing, which is
   # what keeps a location-only step out of the symmetry count.
   defp step_learning_modules(
@@ -509,13 +564,28 @@ defmodule Monty.Runtime.Step do
     servers =
       Map.new(inputs, fn {lm_id, percepts} ->
         server = Registry.via({:learning_module, model_id, lm_id})
-        :ok = LearningModuleServer.hand_off(server, state.step, percepts, ctx, stepwise_target(percepts, labels))
+
+        :ok =
+          LearningModuleServer.hand_off(
+            server,
+            state.step,
+            percepts,
+            ctx,
+            stepwise_target(percepts, labels)
+          )
+
         {lm_id, server}
       end)
 
-    Enum.each(servers, fn {_lm_id, server} ->
-      LearningModuleServer.await(server, state.step, timeout)
-    end)
+    case state.scheduling do
+      :barrier ->
+        Enum.each(servers, fn {_lm_id, server} ->
+          LearningModuleServer.await(server, state.step, timeout)
+        end)
+
+      :lagged ->
+        :ok
+    end
 
     :ok
   end
@@ -532,6 +602,30 @@ defmodule Monty.Runtime.Step do
   end
 
   defp stepwise_target(_percepts, _no_map), do: "no_label"
+
+  # A lagged round reads the epoch *before* this step, and reads it from the
+  # reports: the modules have already been handed this step's work, so asking one
+  # of them anything here would queue behind that work and the lag would buy
+  # nothing. What a module would have been asked — its vote, its goals, its
+  # region — travelled with its report for that reason.
+  defp vote_and_pass_goals(%State{scheduling: :lagged, step: step} = state) do
+    epoch = step - 1
+    reports = lagged_reports(state, epoch)
+
+    vote_info = deliver_lagged_votes(state, epoch, reports)
+
+    learning_goals = Enum.flat_map(reports, fn {_id, report} -> report.goals end)
+    learning_regions = Enum.map(reports, fn {_id, report} -> report.region end)
+
+    # Monty's order in each round: goals are learning modules then sensors,
+    # regions are sensors then learning modules (`propose_goals/1`,
+    # `propose_regions/1`), and reordering them here would be a difference
+    # nothing reads today and a later change would inherit.
+    goals = learning_goals ++ sensor_goals(state)
+    regions = sensor_regions(state) ++ learning_regions
+
+    {vote_info, state.attention.(goals, regions)}
+  end
 
   # A finite vote deadline closes the round with the votes that arrived; the
   # default `:infinity` reproduces Monty's synchronous round.
@@ -564,6 +658,42 @@ defmodule Monty.Runtime.Step do
     {vote_info, state.attention.(propose_goals(state), propose_regions(state))}
   end
 
+  # Nothing precedes epoch 0, so the step that begins an episode integrates
+  # nothing — and is not parked waiting for a report that cannot exist.
+  defp lagged_reports(_state, epoch) when epoch < 0, do: %{}
+
+  # The gate (`reported?/2`) is what makes the fetch safe: a step does not reach
+  # its round until every module has reported this epoch.
+  defp lagged_reports(%State{reports: reports} = state, epoch) do
+    Map.new(state.learning_modules, fn %{id: id} ->
+      {^epoch, report} = Map.fetch!(reports, id)
+      {id, report}
+    end)
+  end
+
+  # The votes an epoch's round combined, handed over rather than delivered: this
+  # module applies them at its own next boundary, because it is already working
+  # on the epoch after the one being voted on. Settling is the module's own doing
+  # at that boundary (`Monty.Runtime.LearningModuleServer.apply_votes/2`), which
+  # is why there is no `update_stats_after_vote` round here.
+  defp deliver_lagged_votes(%State{lm_to_lm_vote: nil}, _epoch, _reports),
+    do: %{sent: 0, used: 0, deadline_hit?: false, timed_out: []}
+
+  defp deliver_lagged_votes(%State{lm_to_lm_vote: vote_matrix} = state, epoch, reports) do
+    votes =
+      for {id, report} <- reports, Map.has_key?(vote_matrix, id), into: %{}, do: {id, report.vote}
+
+    Enum.each(state.combine_votes.(votes, state), fn {receiver, payload} ->
+      LearningModuleServer.deliver_votes(
+        Registry.via({:learning_module, state.model_id, receiver}),
+        epoch,
+        payload
+      )
+    end)
+
+    %{sent: map_size(vote_matrix), used: map_size(votes), deadline_hit?: false, timed_out: []}
+  end
+
   defp deliver_votes(%State{model_id: model_id} = state, combined) do
     requests =
       Enum.map(combined, fn {receiver, payload} ->
@@ -589,12 +719,21 @@ defmodule Monty.Runtime.Step do
 
   defp propose_goals(%State{model_id: model_id} = state) do
     learning = Enum.map(learning_servers(state, model_id), &LearningModuleServer.propose_goals/1)
-    sensors = Enum.map(sensor_servers(state, model_id), &SensorModuleServer.propose_goals/1)
-    Enum.concat(learning ++ sensors)
+    Enum.concat(learning ++ sensor_goals(state))
+  end
+
+  # The sensors are not lagged: they are asked per step in every mode, because
+  # their goals are a read of what they just measured and they answer without a
+  # queue behind them.
+  defp sensor_goals(%State{model_id: model_id} = state) do
+    Enum.map(sensor_servers(state, model_id), &SensorModuleServer.propose_goals/1)
+  end
+
+  defp sensor_regions(%State{model_id: model_id} = state) do
+    Enum.map(sensor_servers(state, model_id), &SensorModuleServer.propose_region/1)
   end
 
   defp propose_regions(%State{model_id: model_id} = state) do
-    sensors = Enum.map(sensor_servers(state, model_id), &SensorModuleServer.propose_region/1)
     learning = Enum.map(learning_servers(state, model_id), &LearningModuleServer.propose_region/1)
 
     # Sensors first, then learning modules — Monty's `_pass_goals` order, which
@@ -602,7 +741,7 @@ defmodule Monty.Runtime.Step do
     # (attention pools every weight about a voxel with `min`/`max`, and groups by
     # voxel before answering), but a difference that nothing reads is still a
     # difference a later change would inherit.
-    sensors ++ learning
+    sensor_regions(state) ++ learning
   end
 
   defp step_motor_system(

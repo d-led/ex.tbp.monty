@@ -32,6 +32,7 @@ defmodule Monty.Runtime.Step.State do
             sensors_step: :auto,
             scheduling: :barrier,
             reports: %{},
+            pending_step: nil,
             learning_modules: [],
             inputs: %{},
             lm_to_lm_vote: nil,
@@ -96,6 +97,7 @@ defmodule Monty.Runtime.Step.State do
           sensors_step: :auto | :serial | :concurrent,
           scheduling: :barrier | :lagged,
           reports: %{optional(id()) => {non_neg_integer(), term()}},
+          pending_step: nil | %{from: GenServer.from(), epoch: integer(), pending: map()},
           semantic_id_to_label: %{optional(integer()) => String.t()},
           step: non_neg_integer(),
           episode_seed: non_neg_integer() | nil
@@ -160,6 +162,7 @@ defmodule Monty.Runtime.Step.State do
       sensors_step: Map.get(options, :sensors_step, :auto),
       scheduling: Map.get(options, :scheduling, :barrier),
       reports: %{},
+      pending_step: nil,
       learning_modules: learning_modules,
       inputs: inputs,
       lm_to_lm_vote: Map.get(options, :lm_to_lm_vote),

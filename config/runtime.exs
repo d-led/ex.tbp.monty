@@ -125,6 +125,14 @@ if Application.get_env(:ex_tbp_monty, Oban, [])[:queues] do
     ]
 end
 
+# How a step is scheduled — the barrier Monty's order implies, or the lagged round
+# that lets a module run on while the coordinator finishes the step before it.
+# Read here for the same reason the queue's number is: it is a deployment's
+# decision about its own machine, and `Monty.Studio.Jobs.scheduling/1` is what
+# decides what a value means (`docs/monty-differences.md` §2.30).
+config :ex_tbp_monty, :monty_studio,
+  scheduling: Monty.Studio.Jobs.scheduling(System.get_env("MONTY_STUDIO_SCHEDULING"))
+
 # A named node in a cluster keeps its own folder — its database, its runs, its own
 # output under `nodes/<its name>`; a node that runs alone keeps the one it always
 # had. Decided from the same value the line above was set from, and *here* rather

@@ -313,7 +313,9 @@ defmodule Monty.Runtime.LearningModuleServer do
   def handle_cast({:deliver_votes, epoch, votes}, server) do
     server = %{server | pending_votes: Map.put(server.pending_votes, epoch, votes)}
 
-    if server.epoch == epoch + 1, do: {:noreply, apply_votes(server, epoch)}, else: {:noreply, server}
+    if server.epoch == epoch + 1,
+      do: {:noreply, apply_votes(server, epoch)},
+      else: {:noreply, server}
   end
 
   defp take_step(%{module: module, state: state} = server, [], _ctx, _target) do
@@ -365,23 +367,28 @@ defmodule Monty.Runtime.LearningModuleServer do
     end
   end
 
-  # `send_out_vote/1` is what this module believes, not a step of it: every
-  # module in this tree answers it with the state it was given. It is called
-  # here only where a coordinator asked to be told, so a run that reads votes the
-  # synchronous way is not given an extra call per module per step.
+  # `send_out_vote/1`, `propose_goals/1` and `propose_region/1` are what a module
+  # believes and wants, not steps of it: every module in this tree answers them
+  # with the state it was given. They are asked here only where a coordinator
+  # asked to be told, so a run that reads them the synchronous way is not given
+  # three extra calls per module per step.
   defp report(%{report_votes?: false} = server, _epoch), do: server
 
   defp report(%{module: module, state: state} = server, epoch) do
     {vote, state} = module.send_out_vote(state)
-    notify_coordinator(server, epoch, vote)
+    {goals, state} = module.propose_goals(state)
+    {region, state} = module.propose_region(state)
+
+    notify_coordinator(server, epoch, %{vote: vote, goals: goals, region: region})
+
     %{server | state: state}
   end
 
   # The coordinator is the model's, registered beside the modules; a model being
   # torn down has none, and a belief nobody can hear is not an error.
-  defp notify_coordinator(%{model_id: model_id, id: id}, epoch, vote) do
+  defp notify_coordinator(%{model_id: model_id, id: id}, epoch, report) do
     case Registry.lookup({:step, model_id}) do
-      [{pid, _value}] -> GenServer.cast(pid, {:voted, id, epoch, vote})
+      [{pid, _value}] -> GenServer.cast(pid, {:voted, id, epoch, report})
       [] -> :ok
     end
   end

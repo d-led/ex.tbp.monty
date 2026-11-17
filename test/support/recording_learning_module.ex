@@ -122,12 +122,6 @@ defmodule Monty.Test.RecordingLearningModule do
   end
 
   @impl true
-  def set_stepwise_target(state, label) do
-    send(state.notify, {:stepwise_target, state.id, label})
-    state
-  end
-
-  @impl true
   def fixme_update_ground_truth(state) do
     send(state.notify, {:ground_truth, state.id})
     state

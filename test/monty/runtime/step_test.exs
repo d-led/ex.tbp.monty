@@ -134,7 +134,36 @@ defmodule Monty.Runtime.StepTest do
       # to have handled it before its state is read.
       _ = :sys.get_state(Registry.via({:step, model_id}))
 
-      assert %{lm_0: {0, _vote}} = Step.state(Registry.via({:step, model_id})).reports
+      assert %{lm_0: {0, %{vote: _vote, goals: _goals, region: _region}}} =
+               Step.state(Registry.via({:step, model_id})).reports
+    end
+
+    test "a lagged step integrates the epoch before, from the report it was given" do
+      model_id =
+        start_model(
+          scheduling: :lagged,
+          lm_to_lm_vote: %{lm_0: [:lm_0]},
+          combine_votes: fn votes, _state ->
+            Map.new(votes, fn {id, _vote} -> {id, {:combined, id}} end)
+          end
+        )
+
+      # Epoch 0's round has nothing before it to integrate, so the receiver is
+      # counted and nothing is used.
+      assert {:ok, _actions, first} = step(model_id)
+      assert first.votes == %{sent: 1, used: 0, deadline_hit?: false, timed_out: []}
+
+      # Epoch 1's round is epoch 0's, and epoch 0's belief is the report the
+      # module sent when it finished — not something the coordinator asked for.
+      assert {:ok, _actions, second} = step(model_id)
+      assert second.votes == %{sent: 1, used: 1, deadline_hit?: false, timed_out: []}
+
+      # Handed over rather than delivered: the module is already working on the
+      # epoch after the one being voted on, and applies them at its own boundary.
+      assert_receive {:receive_votes, :lm_0, {:combined, :lm_0}}
+
+      # Both replies came from the parked path, and it parks nothing twice.
+      assert Step.state(Registry.via({:step, model_id})).pending_step == nil
     end
   end
 

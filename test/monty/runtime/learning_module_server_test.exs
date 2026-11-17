@@ -119,6 +119,7 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     test "two steps are taken in the order they were handed over", %{model_id: model_id} do
       server = start_server(model_id, :lm_0)
       first = Messages.percept()
+
       second =
         Messages.percept(%{location: [1.0, 0.0, 0.0], sender_id: "patch_1"})
 
@@ -148,20 +149,33 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     } do
       # The coordinator is found by name, so a test can be the one that answers
       # to it — the name is the model's own, as in a running model.
-      {:ok, _} = Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+      {:ok, _} =
+        Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+
       server = start_reporting_server(model_id, :lm_0)
 
       LearningModuleServer.hand_off(server, 4, [Messages.percept()], Context.new(1), "mug")
 
       assert :ok = LearningModuleServer.await(server, 4)
-      # A cast, so the module never waits for the coordinator to listen: the
-      # stand-in's vote is its percept count, which tells the report from any
-      # other message this module could send.
-      assert_receive {:"$gen_cast", {:voted, :lm_0, 4, [count: 1, id: :lm_0]}}
+      # A cast, so the module never waits for the coordinator to listen. What it
+      # carries is everything the coordinator would otherwise have to ask for: a
+      # lagged round is one it runs after the module has moved on, so a question
+      # would queue behind the next epoch's work. The stand-in's vote is its
+      # percept count, which tells the report from any other message this module
+      # could send.
+      assert_receive {:"$gen_cast",
+                      {:voted, :lm_0, 4,
+                       %{
+                         vote: [count: 1, id: :lm_0],
+                         goals: [%Monty.Cmp.Goal{}],
+                         region: _region
+                       }}}
     end
 
     test "a module built the synchronous way reports nothing", %{model_id: model_id} do
-      {:ok, _} = Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+      {:ok, _} =
+        Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+
       server = start_server(model_id, :lm_0)
 
       LearningModuleServer.hand_off(server, 0, [Messages.percept()], Context.new(1), "mug")

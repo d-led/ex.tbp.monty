@@ -545,7 +545,8 @@ defmodule Monty.Studio.Setup do
         # work itself only decides which module gets dropped when a machine is
         # busy, which is the one thing a comparison must not let it decide.
         call_timeout: :infinity,
-        sensors_step: Keyword.get(opts, :sensors_step, :auto)
+        sensors_step: Keyword.get(opts, :sensors_step, :auto),
+        scheduling: Keyword.get(opts, :scheduling, :barrier)
       },
       Map.merge(criterion_spec(setup.match_criterion), monty_args(setup))
     )

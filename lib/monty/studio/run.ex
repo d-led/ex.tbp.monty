@@ -500,7 +500,8 @@ defmodule Monty.Studio.Run do
     base = [
       has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
       memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
-      sensors_step: Keyword.get(opts, :sensors_step, :auto)
+      sensors_step: Keyword.get(opts, :sensors_step, :auto),
+      scheduling: Keyword.get_lazy(opts, :scheduling, &Monty.Studio.Jobs.scheduling/0)
     ]
 
     case Keyword.fetch(opts, :memory_targets) do

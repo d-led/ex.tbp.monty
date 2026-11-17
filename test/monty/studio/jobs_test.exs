@@ -50,6 +50,25 @@ defmodule Monty.Studio.JobsTest do
     end
   end
 
+  describe "how a step is scheduled" do
+    test "Monty's order is what a deployment that says nothing gets" do
+      assert Jobs.scheduling(nil) == :barrier
+      assert Jobs.scheduling("") == :barrier
+    end
+
+    test "is the mode the deployment named" do
+      assert Jobs.scheduling("barrier") == :barrier
+      assert Jobs.scheduling("lagged") == :lagged
+    end
+
+    test "refuses a mode no run has, naming the variable" do
+      error = assert_raise RuntimeError, fn -> Jobs.scheduling("parallel") end
+
+      assert error.message =~ "MONTY_STUDIO_SCHEDULING"
+      assert error.message =~ "parallel"
+    end
+  end
+
   describe "a queued run" do
     test "is listed with its Oban state and the status of its record" do
       record = record_run()
