@@ -43,6 +43,9 @@ defmodule ExTbpMonty.Objaverse.Import do
   Answers one row per object: its directory name, face count, the scale it was
   given and how many vertices came through.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # `source` and `into` are the two directories `mix monty.objaverse.import`
+  # takes on its command line (`--from`, `--into`); an operator names them.
   @spec import(Path.t(), [entry()], Path.t()) :: {:ok, [map()]} | {:error, term()}
   def import(source, entries, into) do
     File.mkdir_p!(into)
@@ -64,6 +67,10 @@ defmodule ExTbpMonty.Objaverse.Import do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # The directories are the ones above; the two names joined onto them are the
+  # entry's `uid` and `id`, which are our manifest's own fields — not a
+  # request's.
   defp one(source, entry, into) do
     path = Path.join(source, entry["uid"] <> ".glb")
     directory = Path.join(into, entry["id"])
@@ -143,6 +150,8 @@ defmodule ExTbpMonty.Objaverse.Import do
     end)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `path` is the object's directory above with a fixed file name.
   defp write_object(path, mesh) do
     vertices =
       Enum.map(mesh.vertices, fn {x, y, z} ->
@@ -196,6 +205,9 @@ defmodule ExTbpMonty.Objaverse.Import do
   # glTF states colour in linear space; a one-pixel PNG is read as sRGB.
   defp channel(value), do: round(:math.pow(max(value, 0.0), 1 / 2.2) * 255)
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `into` is the corpus directory the command line names; the file name is
+  # fixed.
   defp attribution(into, entries) do
     rows =
       Enum.map(entries, fn entry ->

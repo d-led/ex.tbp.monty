@@ -38,6 +38,9 @@ defmodule ExTbpMonty.Objaverse.Glb do
         }
 
   @doc "Reads a `.glb` file."
+  # sobelow_skip ["Traversal.FileModule"]
+  # `path` is the corpus cache under `$MONTY_DATA` with a uid the manifest
+  # states; nothing here comes from a request.
   @spec read_file(Path.t()) :: {:ok, mesh()} | {:error, term()}
   def read_file(path) do
     case File.read(path) do
@@ -217,26 +220,32 @@ defmodule ExTbpMonty.Objaverse.Glb do
     end
   end
 
+  defp triangles(_document, _binary, nil, vertex_count) when vertex_count < 3, do: []
+
   defp triangles(_document, _binary, nil, vertex_count) do
-    if vertex_count < 3,
-      do: [],
-      else: for(index <- 0..(vertex_count - 1)//3, do: {index, index + 1, index + 2})
+    for index <- 0..(vertex_count - 1)//3, do: {index, index + 1, index + 2}
   end
 
   defp triangles(document, binary, index, _vertex_count) do
     accessor = accessor(document, index)
-    view = Enum.at(document["bufferViews"] || [], accessor["bufferView"] || 0) || %{}
+    view = entry(document["bufferViews"], accessor["bufferView"] || 0)
     offset = (view["byteOffset"] || 0) + (accessor["byteOffset"] || 0)
-    count = accessor["count"] || 0
 
-    values =
-      case accessor["componentType"] do
-        @uint16 -> for <<value::little-16 <- binary_part(binary, offset, count * 2)>>, do: value
-        @uint32 -> for <<value::little-32 <- binary_part(binary, offset, count * 4)>>, do: value
-        _other -> []
-      end
+    binary
+    |> indices(accessor["componentType"], offset, accessor["count"] || 0)
+    |> Enum.chunk_every(3)
+    |> Enum.filter(&(length(&1) == 3))
+    |> Enum.map(&List.to_tuple/1)
+  end
 
-    values |> Enum.chunk_every(3) |> Enum.filter(&(length(&1) == 3)) |> Enum.map(&List.to_tuple/1)
+  # A face is three indices, and an index is two or four bytes of little-endian
+  # unsigned integer, as the accessor says.
+  defp indices(binary, component_type, offset, count) do
+    case component_type do
+      @uint16 -> for <<value::little-16 <- binary_part(binary, offset, count * 2)>>, do: value
+      @uint32 -> for <<value::little-32 <- binary_part(binary, offset, count * 4)>>, do: value
+      _other -> []
+    end
   end
 
   # -- the material -----------------------------------------------------------
