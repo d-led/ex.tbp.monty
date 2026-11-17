@@ -11,7 +11,7 @@ defmodule Monty.Studio.PartsTest do
 
   use ExTbpMontyWeb.ConnCase, async: false
 
-  alias Monty.Studio.{Parts, RunHistory}
+  alias Monty.Studio.{Artifacts, Parts, RunHistory, RunStream}
 
   @experiment "base_config_10distinctobj_dist_agent"
 
@@ -91,10 +91,36 @@ defmodule Monty.Studio.PartsTest do
     end
   end
 
+  describe "the pictures a card draws" do
+    test "the newest step whose files the run wrote, not the newest step it announced", %{
+      setup: setup
+    } do
+      # `RunStream` names a step's pictures before they are drawn, and a writer that
+      # falls behind drops a step rather than fall further — so the newest names a
+      # part reports are quite often names of files that were never written, and
+      # drawing them is four broken images under a run that is otherwise fine.
+      {record, [first | _more]} = run([[0], [1]])
+      stream = first["stream"]
+
+      RunStream.publish(stream, pictured_step(0, 1.0), announce: record.id)
+      RunStream.publish(stream, pictured_step(1, 2.0), announce: record.id)
+      # The stream hands each step to the writer it owns, so waiting for the stream
+      # to have handled both is what puts both in the writer's queue; only then is
+      # `settle/1` a statement about these two.
+      _ = :sys.get_state(RunStream)
+      :ok = RunStream.Pictures.settle()
+      File.rm_rf!(Path.join(Artifacts.frames_dir(record.id), "part-0-1"))
+
+      [card | _second] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
+
+      assert [frame] = card.frames
+      assert frame.note =~ "step 0"
+      assert markup(frame) =~ "/frames/part-0-0/"
+    end
+  end
+
   describe "reading a run twice" do
     test "does not read a settled transcript again", %{setup: setup} do
-      # The page polls; a poll that re-read four transcripts twice a second would
-      # cost more than the run it is watching.
       {record, _parts} = run([[0], [1]])
 
       {:ok, _written} =
@@ -302,4 +328,16 @@ defmodule Monty.Studio.PartsTest do
       centre: nil
     }
   end
+
+  # The same step, with a sensor that saw something: the report `RunStream` names
+  # the pictures of, before the writer that draws them has drawn anything.
+  defp pictured_step(number, evidence) do
+    number
+    |> step(evidence)
+    |> Map.put(:part, 0)
+    |> Map.put(:observations, %{"patch" => %{"depth" => [[0.4, 0.5], [0.6, 0.7]]}})
+  end
+
+  # What a page puts in the document for a frame.
+  defp markup(frame), do: Phoenix.HTML.safe_to_string(frame.data)
 end

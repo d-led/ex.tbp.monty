@@ -48,6 +48,17 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     )
   end
 
+  # A row nobody has written for an hour: what a part's own twenty minutes look
+  # like to a page that reads the run's record to decide whether it is still going.
+  defp backdated(id) do
+    an_hour_ago = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+    ExTbpMonty.Repo.update_all(
+      from(run in RunHistory.Run, where: run.id == ^id),
+      set: [updated_at: an_hour_ago]
+    )
+  end
+
   setup do
     # Counting runs is what most of this module asserts, and the table survives
     # between local runs: a page that says "1–25 of 27" is worth testing on a
@@ -414,6 +425,59 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # The clock is the `LocalTime` component's, so the browser is what turns
       # UTC into the reader's own time.
       assert timing =~ "<time"
+    end
+
+    # A parted run writes its own row when a part closes and not before, so the row
+    # is quiet for the whole of a part's twenty minutes. A page that read that quiet
+    # as an ending said the run had *took* nine minutes beside a header saying it
+    # had been running for exactly that long — the two clocks in one screen.
+    test "a parted run whose own row is quiet is still running while a part steps", %{
+      conn: conn
+    } do
+      {:ok, _} = Monty.Studio.Settings.put("run_stale_after_s", 60)
+
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 10,
+          config: %{},
+          inputs: %{
+            "episodes" => 2,
+            "parts" => [
+              %{"index" => 0, "of" => 2, "phase" => "eval", "stream" => Ecto.UUID.generate()},
+              %{"index" => 1, "of" => 2, "phase" => "eval", "stream" => Ecto.UUID.generate()}
+            ]
+          }
+        })
+
+      {:ok, run} = RunHistory.mark_running(run)
+
+      # A worker has it, so the reaper leaves it alone: a quiet row is not an
+      # abandoned one while a job is executing it, which is exactly why a parted
+      # run survives its own silence.
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+      :ok = running(job)
+
+      [first, _second] = run.inputs["parts"]
+      publish_episode(first["stream"], 0, 0, "mug")
+      _ = Monty.Studio.RunStream.count(first["stream"])
+
+      # The run's own row was last written an hour ago, which is what a part's
+      # twenty minutes look like to a page reading the record.
+      backdated(run.id)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The clock beside the chart is the one that lied: "took" under a header that
+      # says "running for".
+      assert view |> element("#run-timing") |> render() =~ "running for"
+
+      # The clock beside the chart is the one that lied: "took … last step …"
+      # under a header that says "running for".
+      clock = view |> element("#replay-run-time") |> render()
+      assert clock =~ "since"
+      refute clock =~ "last step"
     end
 
     test "a run nobody has claimed yet says how long it has been waiting", %{conn: conn} do

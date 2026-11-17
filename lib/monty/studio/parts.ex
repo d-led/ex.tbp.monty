@@ -21,6 +21,7 @@ defmodule Monty.Studio.Parts do
   """
 
   alias Monty.Studio.{
+    Artifacts,
     Belief,
     Chart,
     PeerStream,
@@ -214,7 +215,7 @@ defmodule Monty.Studio.Parts do
       | taken: steps,
         steps: steps,
         points: Enum.reverse(points_of(entries), held.points),
-        frames: pictures_of(moments) || held.frames
+        frames: pictures_of(moments, held.record.id) || held.frames
     }
   end
 
@@ -251,24 +252,56 @@ defmodule Monty.Studio.Parts do
   defp last_pictures(id, {_entry, position}) do
     case RunHistory.sensors_at(id, position) do
       nil -> nil
-      sensors -> Replay.pictures(position, sensors) |> presence()
+      sensors -> drawn(id, position, sensors)
     end
   end
 
-  defp pictures_of(moments) do
+  # The newest step of these that a run actually drew, walking back from the last:
+  # a step's pictures are named before they are written (`RunStream` keeps the
+  # name, a process of its own writes the bytes behind the step), and a writer that
+  # falls behind drops a step rather than fall further — so the newest names a part
+  # reports are quite often the names of files that were never written, and a card
+  # drawing them is four broken images under a run that is otherwise fine.
+  defp pictures_of(moments, run_id) do
     moments
-    |> List.last()
-    |> case do
-      nil ->
-        nil
+    |> Enum.reverse()
+    |> Enum.find_value(fn moment ->
+      drawn(run_id, moment["step"], Map.get(moment, "sensors", %{}))
+    end)
+  end
 
-      moment ->
-        moment
-        |> Map.get("sensors", %{})
-        |> then(&Replay.pictures(moment["step"], &1))
-        |> presence()
+  # The frames of one step's sensors, or `nil` when none of them is on disk. What a
+  # card draws is the run's own file, so the note a frame carries names the step the
+  # picture is of — a picture of the object a moment ago, never one posing as the
+  # step on screen.
+  defp drawn(run_id, position, sensors) do
+    case Enum.filter(sensors, fn {_sensor_id, observation} -> written?(observation, run_id) end) do
+      [] -> nil
+      drawable -> Replay.pictures(position, Map.new(drawable)) |> presence()
     end
   end
+
+  # A recorded observation names its pictures by URL — the run's own file — and a
+  # live one carries the bytes, which cannot be missing.
+  defp written?(observation, run_id) do
+    with_the_bytes = Map.has_key?(observation, "depth") or Map.has_key?(observation, "rgba")
+
+    with_the_bytes or
+      observation |> Map.get("images", %{}) |> Map.values() |> Enum.any?(&on_disk?(&1, run_id))
+  end
+
+  defp on_disk?("data:" <> _inline, _run_id), do: true
+
+  defp on_disk?(url, run_id) when is_binary(url) do
+    case String.split(url, "/frames/", parts: 2) do
+      [_run, name] -> File.regular?(Path.join(Artifacts.frames_dir(run_id), name))
+      _not_a_picture_of_a_run -> false
+    end
+  end
+
+  # The depth range a recorded step keeps beside its pictures is a list of two
+  # numbers, and it is not a file either.
+  defp on_disk?(_range_or_nothing, _run_id), do: false
 
   defp presence([]), do: nil
   defp presence(frames), do: frames

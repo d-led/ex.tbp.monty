@@ -377,6 +377,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # said about itself.
   defp parts_running?(parts), do: Enum.any?(parts, &(&1.status == "running"))
 
+  # Whether anything is still stepping this run: the record's job, or one of its
+  # parts. A parted run writes its own row when a part closes and not before, so
+  # its row is quiet for the whole of a part's twenty minutes — and the clock
+  # beside the chart read that quiet as an ending, saying the run had *took* nine
+  # minutes while the header above it said it had been running for exactly that
+  # long.
+  defp stepping?(run, queue, parts), do: in_flight?(run, queue) or parts_running?(parts)
+
   # How far the division has got, as one number: a reader of a parted run wants
   # the count first, and the title above says the rest. `@division` is the
   # schedule (`Monty.Studio.RunHistory.Part`); `@parts` is the cards each part's
@@ -999,14 +1007,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         %{moment | frames: [], sensors: %{}}
     end
   end
-
-  # A record that still says "running" is not the same as a run that is: a
-  # process killed mid-flight leaves the row open, and a clock beside it would
-  # count the minutes since it died as time it has been going. `stalled?` is the
-  # page's own answer to "is anything still stepping this", and the reaper is
-  # what closes the record.
-  defp running?(%{status: "running"} = run), do: not RunHistory.stalled?(run)
-  defp running?(_not_running), do: false
 
   defp kept_pictures?(run), do: run.id |> RunHistory.sensors_at(0) |> Replay.kept_pictures?()
 
@@ -1641,11 +1641,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           kept, because a name alone does not say it and Monty's recognition
           configs carry a `n_train_epochs` they never run. In this row rather than
           on a line of its own: a reader of `/runs` sees eight runs of one
-          experiment name and needs the kind, not another line of header. --%>
+          experiment name and needs the kind, not another line of header. Tinted
+          rather than ghost, because a row of ghost badges is a row of badges
+          nobody reads. --%>
           <span
             :if={@kind}
             id="run-kind"
-            class="badge badge-ghost badge-sm"
+            class="badge badge-sm badge-secondary badge-soft"
             title={elem(@kind, 1)}
           >
             {elem(@kind, 0)}
@@ -1919,7 +1921,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           graphs={@graphs}
           pictures={@pictures}
           started_at={started_at(@run)}
-          running={running?(@run)}
+          running={stepping?(@run, @queue, @parts)}
           episode={Replay.episode_of(@moment)}
           episodes={episodes_of(@run)}
           took={Duration.of_run(@run)}
