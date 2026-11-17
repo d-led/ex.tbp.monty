@@ -1876,8 +1876,10 @@ round, after their steps. One step's work cannot overlap with the next step's
 sensors, because there is one thread and it is the step's.
 
 **What this port does.** `Monty.Runtime.Step.State.scheduling/1` is `:barrier` or
-`:lagged` (a deployment sets it with `MONTY_STUDIO_SCHEDULING`, read in
-`Monty.Studio.Jobs.scheduling/1`). A lagged step:
+`:lagged`. A run chooses it on the experiment page — the `scheduling` box beside
+its episode count, recorded on the run as `inputs["scheduling"]`, so the worker
+takes the mode from the record — and `MONTY_STUDIO_SCHEDULING` answers for a run
+started from the command line (`Monty.Studio.Jobs.scheduling/1`). A lagged step:
 
 - hands epoch _n_ to every module and does not wait for it (`hand_off/5`, no
   `await/3`);
@@ -1904,39 +1906,40 @@ step _n_.
 **What is therefore not compared.** The trajectory. A lagged step's goals are one
 epoch older than the percepts they move on, so a lagged run is a different episode
 from Monty's, and no parity is claimed for it — which is why `:barrier` stays the
-default and the mode is a deployment's own measurement. Two properties are kept
+default and the mode is a run's own choice. Two properties are kept
 inside the mode, and both are tested: the lag is exactly one epoch (never "as far
 behind as the module happens to be"), so the same episode run twice is the same
 trajectory; and the votes of epoch _e_ apply at the boundary of _e + 1_, so a
 faster module cannot compute a different answer from a slower one.
 
-**What it bought, measured.** `scripts/probe_lagged_steps.exs` steps the same
-episode both ways — same setup, same memory, same episode seed — and reports the
-mean model step and the episode's own wall clock. On this machine (Apple Silicon,
-macOS 26), the MuJoCo world through `ex_mujoco`,
-`tutorial/dist_agent_5lm_2obj_eval`, six sensors and five learning modules, three
-episodes:
+**What it bought, measured — two runs from the page.** Two runs of
+`tutorial/dist_agent_5lm_2obj_eval`, started one at a time from the experiment
+page, episodes = 1, seed 42, six sensors and five learning modules, the MuJoCo
+world through `ex_mujoco`, on this machine (Apple Silicon, macOS 26):
 
-| episode | barrier                          | lagged                           | wall clock |
-| ------- | -------------------------------- | -------------------------------- | ---------- |
-| 1       | 34 steps, 741 ms/step, 28 261 ms | 39 steps, 196 ms/step, 10 390 ms | 2.7×       |
-| 2       | 43 steps, 59 ms/step, 5 490 ms   | 40 steps, 58 ms/step, 4 804 ms   | 1.1×       |
-| 3       | 32 steps, 230 ms/step, 9 550 ms  | 48 steps, 136 ms/step, 9 717 ms  | 1.0×       |
+| mode    | steps | model time  | wall clock | what the modules concluded    |
+| ------- | ----- | ----------- | ---------- | ----------------------------- |
+| barrier | 34    | 61 253.9 ms | 1 min 11 s | all five `match`              |
+| lagged  | 39    | 9 825.3 ms  | 14.6 s     | three `match`, two `time_out` |
 
-So the per-step saving is real and at its largest when the vote round is
-expensive — 3.8× on episode 1 — and the episode's wall clock is that saving
-against the number of steps the different trajectory needs. On this config the
-lagged arm parts from the barrier one at step 6 of every episode and concludes in
-more steps on two of the three, which cancels the saving. **Reading it as "lagged
-is faster" would be wrong.** What is measured is that the round costs what a
-synchronous round of module calls costs, and that the mode removes it.
+The round is what the lag removes, and on this config it is most of a step: 6.2×
+less model time, 4.9× less wall clock. It is also a different episode — the
+trajectory parts at step 6 — and on this one it is a worse one: a lagged step's
+goals are an epoch older than the percepts they move on, and two of the five
+modules ran out of steps without concluding, where the barrier run's five all
+recognised the mug. **So "lagged is faster" is true and is not an argument for
+using it.** It is a scheduling option whose price is measured on the same page,
+and `barrier` is the default for exactly that reason.
 
-**What would make it a reliable win.** The step still has one serial dependency
-on the current epoch: `gather_outputs/1` reads each module's top-down output
-before the next hand-off, so the coordinator waits for the epoch it just handed
-over anyway — one epoch of lag in the _round_ buys the round's calls and not the
-work. Lagging the outputs the same way (route epoch _n − 1_'s outputs into epoch
-_n_) is what lets step _n + 1_'s sensors and world step run while step _n_'s
-modules work; §2.28's sensor round is what makes that phase cheap enough to hide
-behind. Until then this is a scheduling option with a measured price, not a
-speed-up.
+An earlier read of this came from `scripts/probe_lagged_steps.exs` — kept, because
+it is what found the goal-list crash, but not for numbers: on a machine shared
+with two live dev nodes it disagreed with itself between runs of the same episode,
+which is how a 3.8× became a 0.8× with nothing changed in between. The two runs
+above are the ones a person would make, and they are what the claim rests on.
+
+**What would make the lag worth its price.** The one thing the lag does not remove
+is the _dependency_: a module's belief is an epoch behind the world, so a policy
+acts on an older picture. Making that cheap rather than costly is a question about
+the experiment — an episode that needs fewer steps to conclude, or a forecast that
+does not need the newest belief — not about the scheduler. Until there is such an
+answer, this is a lever with a measured cost.
