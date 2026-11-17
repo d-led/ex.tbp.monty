@@ -320,3 +320,37 @@ A run recorded with `--record` under `MIX_ENV=test` writes into the suite's own
 database, and the suite wipes the runs it finds there when it starts
 (`test/test_helper.exs`). Record experiments in the development environment, or
 expect the transcript to be gone after the next `mix test`.
+
+### The surface agent, supervised: where the density comes from (measured 2026-11-17)
+
+The dist agent's memory of this corpus is uneven in a way that reads as a policy
+problem, not a corpus problem: `milka` came out with **1 109** nodes and
+`dog_free_fire` with **124**, and the three thinnest graphs — 124, 125, 223 — are
+exactly the three dogs the recognition names wrongly. A 5° naive scan is 307
+samples of the view sphere, and a dog of this corpus is met by a dozen of them per
+rotation; `milka` is the outlier because the raster crosses it more often.
+
+`dogs/surf_supervised` is Monty's `surf_agent_1lm_2obj_train` shape over the dogs:
+the surface agent, `graph_1lm`, `camera_surf_rgba`, supervised so the graph keeps
+the dog's own id and a verdict is scorable. Four episodes of it — four objects,
+one rotation each, 13 288 steps, ~3 300 an episode — filled the memory with
+**487, 976, 1 434, 1 865 nodes**: about **466 nodes an object per rotation**,
+where fourteen rotations of the dist agent left between 124 and 1 109. Walking
+the object is worth roughly fifty times a raster sample of it.
+
+Four episodes of a sweep that would have taken eight hours (112 episodes at three
+and a half minutes) is what makes the measurement affordable; the run that
+follows it is sixteen episodes — two rotations of all eight dogs.
+
+Recording an experiment in the test environment is not a place to do it. The
+suite's database is a sandbox pool, so a recorded run's writer holds its connection
+until `ownership_timeout` (two minutes) takes it away —
+
+    DBConnection.ConnectionError ... owner #PID<…> (Monty.Studio.RunWriter)
+    timed out because it owned the connection for longer than 120000ms
+
+— and the supervisor restarts it, so the run finishes and keeps its library while
+the checkpoints in each two-minute window are lost: the twenty-minute run above
+died this way six times and still wrote its memory. An experiment belongs in the
+development environment (`MIX_ENV=dev MONTY_DB=sqlite mix monty.run …`), whose
+store the Studio already shows.

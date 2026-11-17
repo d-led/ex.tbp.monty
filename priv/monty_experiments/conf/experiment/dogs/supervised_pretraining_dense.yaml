@@ -1,0 +1,40 @@
+# @package _global_
+
+# `dogs/supervised_pretraining` with the scan three times finer: the same dist
+# agent, modules, world and objects, `naive_scan_3` instead of `naive_scan_5` and
+# the termination that agrees with it.
+#
+# Why. Per object, fourteen rotations at 5° left the corpus uneven: `milka` came
+# out with 1 109 nodes and `dog_free_fire` with 124, and the three thinnest graphs
+# are the three dogs the recognition names wrongly (`docs/training.md` §7). A 5°
+# spiral is 307 samples of the view sphere and a dog of this corpus is met by a
+# dozen of them per rotation; at 3° it is 871 samples, so each graph should come
+# out roughly three times as dense for roughly three times the steps.
+defaults:
+  - /monty: graph_exp500_e3_t3
+  - /monty/motor_system_config: naive_scan_3
+  - /monty/learning_module: displacement_delta_d0001
+  - /monty/sensor_module: camera_dist_raw0
+  - /monty/connectivity: 1lm_1sm
+  - /environment: mujoco_objaverse_dogs_dist_agent
+  - /env_interface: train_dogs_predefined
+  - /env_interface/positioning_procedures_train: getgoodview_viewfinder_patch
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0
+  - /termination: any1_naivescan_fixed3_tot6000
+  - /logging: silent_info_train
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.pretraining_experiments.MontySupervisedObjectPretrainingExperiment
+  config:
+    show_sensor_output: false
+    n_train_epochs: ${constants.rotations_all_count}
+    n_eval_epochs: 3
+    model_name_or_path: ''
+    seed: 42
+    supervised_lm_ids: all
+    logging:
+      run_name: dogs_supervised_pretraining_dense
+
+# Trains only. Recognition against the memory it writes is
+# `dogs/inference_supervised` with `model_name_or_path` pointed at
+# `trained/dogs_supervised_pretraining_dense/pretrained/`.

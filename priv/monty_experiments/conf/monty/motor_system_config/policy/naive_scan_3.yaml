@@ -1,0 +1,13 @@
+# @package experiment.config.monty_config.motor_system_config.policy_selector.policy
+
+# Monty's `naive_scan_5`, a step smaller. The spiral is `k*(k-1)+1` steps with
+# `k = ceil(90/fixed_amount)`, so 5° is 307 samples over the view sphere and 3° is
+# 871 — three times as many places a dog can be met, which is what the corpus's
+# thin graphs were short of (`docs/training.md` §7).
+defaults:
+  - action_sampler: constant_dist
+
+_target_: tbp.monty.frameworks.models.motor_policies.NaiveScanPolicy
+use_goal_driven_actions: false
+agent_id: agent_id_0
+fixed_amount: 3
