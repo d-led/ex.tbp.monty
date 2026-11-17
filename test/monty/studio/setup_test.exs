@@ -735,19 +735,14 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "offers a world when this node can step it" do
-      # A CAD world is offered when there is a part to open and not before: the
-      # selector offers what a run could do, and a part is a file this node holds
-      # rather than a variable somebody set.
-      data = Tmp.dir("monty-data")
-      Tmp.system_env("MONTY_DATA", data)
+      # A CAD world is offered because this node carries the scene and the parts
+      # travel with the application: a desktop install with an empty data
+      # directory still steps a part.
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
       Tmp.without_env("MONTY_CAD_PART")
 
-      refute :cad in Setup.worlds()
-
-      File.mkdir_p!(Path.join(data, "parts"))
-      File.write!(Path.join([data, "parts", "bracket.step"]), "")
-
       assert List.last(Setup.worlds()) == :cad
+      assert Setup.world_name(setup_for("tutorial/first_experiment"), :cad) =~ "parts to choose"
     end
 
     test "a compiled MuJoCo world refuses a config whose environment is not MuJoCo" do
@@ -803,7 +798,7 @@ defmodule Monty.Studio.SetupTest do
       File.write!(Path.join([data, "parts", "bracket.step"]), "")
 
       assert Setup.cad_part_path() == {:ok, Path.join([data, "parts", "bracket.step"])}
-      assert Setup.cad_parts() == ["bracket.step"]
+      assert "bracket.step" in Setup.cad_parts()
     end
 
     test "a name the parts directory does not have says which parts it does" do
@@ -849,6 +844,31 @@ defmodule Monty.Studio.SetupTest do
       assert sentence =~ "plate.step"
     end
 
+    # A desktop install has no repository beside it, and the parts it can step
+    # travel with the application: an empty data root is not an empty CAD world.
+    test "opens a part the application ships, with nothing downloaded" do
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.without_env("MONTY_CAD_PART")
+
+      assert "solidcraft-plate.step" in Setup.cad_parts()
+
+      assert {:ok, path} = Setup.cad_part_path("solidcraft-plate")
+      assert Path.basename(path) == "solidcraft-plate.step"
+      assert File.regular?(path)
+    end
+
+    # A person who puts their own copy there means it: the data root is searched
+    # before the shipped parts, so the file a run opens is the one they placed.
+    test "a copy under the node's own data root wins over the shipped one" do
+      data = Tmp.dir("monty-data")
+      Tmp.system_env("MONTY_DATA", data)
+      File.mkdir_p!(Path.join(data, "parts"))
+      File.write!(Path.join([data, "parts", "solidcraft-plate.step"]), "mine")
+
+      assert Setup.cad_part_path("solidcraft-plate") ==
+               {:ok, Path.join([data, "parts", "solidcraft-plate.step"])}
+    end
+
     test "names the CAD part a run would step, from the deployment" do
       setup = setup_for("tutorial/first_experiment")
       Tmp.system_env("MONTY_CAD_PART", "/parts/bracket.step")
@@ -864,20 +884,15 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.cad_labels() == :part
     end
 
-    test "says how many parts there are to open when the deployment names none" do
-      data = Tmp.dir("monty-data")
-      Tmp.system_env("MONTY_DATA", data)
-      Tmp.without_env("MONTY_CAD_PART")
-      File.mkdir_p!(Path.join(data, "parts"))
+    test "says which part a run would open, or how many there are to choose" do
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
       setup = setup_for("tutorial/first_experiment")
 
-      assert Setup.world_name(setup, :cad) == "CAD part (no part to open)"
+      Tmp.system_env("MONTY_CAD_PART", "solidcraft-plate")
+      assert Setup.world_name(setup, :cad) == "CAD part (solidcraft-plate)"
 
-      File.write!(Path.join([data, "parts", "plate.step"]), "")
-      assert Setup.world_name(setup, :cad) == "CAD part (plate.step)"
-
-      File.write!(Path.join([data, "parts", "bracket.step"]), "")
-      assert Setup.world_name(setup, :cad) == "CAD part (2 parts to choose)"
+      Tmp.without_env("MONTY_CAD_PART")
+      assert Setup.world_name(setup, :cad) =~ "parts to choose"
     end
   end
 

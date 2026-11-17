@@ -960,11 +960,14 @@ defmodule Monty.Studio.Setup do
   @doc """
   The STEP file a run of the CAD world opens.
 
-  A part is **named** rather than pathed, the way the objects MuJoCo steps are:
-  the name is looked for in `parts/` under this node's data root
-  (`parts_dir/0`), which is where a downloaded set and the CAD server's MCP tools
-  both put one. A value that is the path of a file that exists is used as
-  it is, because a one-off part should be openable without moving it first.
+  A part is **named** rather than pathed, the way the objects MuJoCo steps are.
+  The name is looked for in `parts_dirs/0` in order: `parts/` under this node's
+  data root — where a downloaded set and the CAD server's MCP tools both put one,
+  so a person's own copy is the one their run opens — and then the parts the
+  application ships in its own `priv/`, which is what gives a machine with no
+  repository beside it something to step. A value that is the path of a file that
+  exists is used as it is, because a one-off part should be openable without
+  moving it first.
 
   The name comes from the run — a page's picker, a task's switch — and a run that
   names none falls back to `MONTY_CAD_PART`, the deployment's default part. Both
@@ -975,30 +978,14 @@ defmodule Monty.Studio.Setup do
   rather than a `nil` that becomes a different world somewhere else.
   """
   @spec cad_part_path(String.t() | nil) :: {:ok, Path.t()} | {:error, String.t()}
-  def cad_part_path(named \\ nil) do
-    # The CAD package owns the convention (`MontyCad.Inputs`, which the CAD
-    # server uses too). This node asks it when it is carried and answers from its
-    # own paths otherwise — the same directory either way, because both read
-    # `MONTY_DATA` and default to the same folder.
-    case carried_inputs() do
-      nil -> resolve_part(named)
-      module when is_nil(named) -> module.part_path()
-      module -> module.part_path(named)
-    end
-  end
-
-  # The CAD package's input conventions, when this node carries it: a node with
-  # the studio and no CAD application has no scene to open either, and this is
-  # the same question asked once.
-  defp carried_inputs do
-    module = Module.concat(["MontyCad", "Inputs"])
-    if Code.ensure_loaded?(module), do: module
-  end
+  def cad_part_path(named \\ nil), do: resolve_part(named)
 
   defp resolve_part(nil) do
     case cad_part() do
       nil ->
-        {:error, "no CAD part is named: `MONTY_CAD_PART` is the name of a part in #{parts_dir()}"}
+        {:error,
+         "no CAD part is named: `MONTY_CAD_PART` is the name of a part in " <>
+           Enum.join(parts_dirs(), " or ")}
 
       named ->
         resolve_part(named)
@@ -1010,49 +997,76 @@ defmodule Monty.Studio.Setup do
       File.regular?(named) ->
         {:ok, Path.expand(named)}
 
-      File.regular?(path = Path.join(parts_dir(), named)) ->
-        {:ok, path}
-
-      File.regular?(path = Path.join(parts_dir(), named <> ".step")) ->
-        {:ok, path}
-
-      File.regular?(path = Path.join(parts_dir(), named <> ".stp")) ->
+      path = find_part(named) ->
         {:ok, path}
 
       true ->
         {:error,
-         "there is no part #{inspect(named)}: #{parts_dir()} holds #{inspect(cad_parts())}"}
+         "there is no part #{inspect(named)}: #{Enum.join(parts_dirs(), " and ")} hold " <>
+           inspect(cad_parts())}
     end
+  end
+
+  # A person's own copy comes first: a part downloaded or written under the data
+  # root is the one a run of that name opens, and the shipped file is what answers
+  # when nobody has put another there.
+  defp find_part(named) do
+    for(dir <- parts_dirs(), ext <- ["", ".step", ".stp"], do: Path.join(dir, named <> ext))
+    |> Enum.find(&File.regular?/1)
   end
 
   @doc """
   The parts this node can step, by name, sorted.
 
-  Read from the directory `cad_part_path/0` looks in, so a part an operator put
-  there — or a tool wrote there — is offered without a second list to keep.
+  Read from the directories `cad_part_path/0` looks in — the data root's
+  `parts/`, where a download and the CAD server's tools put one, and the parts
+  the application ships — so a file an operator put there is offered without a
+  second list to keep.
   """
   @spec cad_parts() :: [String.t()]
   def cad_parts do
-    parts_dir()
+    parts_dirs()
+    |> Enum.flat_map(&step_files/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp step_files(directory) do
+    directory
     |> Path.join("*")
     |> Path.wildcard()
     |> Enum.filter(&(File.regular?(&1) and Path.extname(&1) in [".step", ".stp"]))
     |> Enum.map(&Path.basename/1)
-    |> Enum.sort()
   end
 
   @doc """
-  Where this node's parts live: `parts/` under the data root the worlds read.
+  Where parts are looked for, in the order a name is resolved.
 
-  Monty's objects arrive in directories under `MONTY_DATA` — a downloaded set per
-  archive — and a part is the same kind of input, so it lives beside them. A
-  downloaded set can fill it, and the CAD server's MCP tools can write one.
+  First `parts/` under the data root the worlds read: Monty's objects arrive in
+  directories there — a downloaded set per archive — and a part is the same kind
+  of input, so it lives beside them. Second the parts this application ships in
+  its own `priv/`, which is what makes a CAD world available on a machine that
+  has never seen another checkout.
+  """
+  @spec parts_dirs() :: [Path.t()]
+  def parts_dirs, do: Enum.uniq([parts_dir(), shipped_parts_dir()])
+
+  @doc """
+  Where this node's parts live: `parts/` under the data root the worlds read.
   """
   @spec parts_dir() :: Path.t()
   def parts_dir, do: Path.join(Monty.Paths.data(), "parts")
 
-  defp cad_module, do: Module.concat(["MontyCad", "Scene"])
+  # The parts that travel with the application. A release carries its `priv/`, so
+  # this is a directory a desktop install has even though it has no repository.
+  defp shipped_parts_dir do
+    case :code.priv_dir(:ex_tbp_monty) do
+      {:error, _reason} -> Path.join([File.cwd!(), "priv", "cad_experiments", "parts"])
+      dir -> Path.join([List.to_string(dir), "cad_experiments", "parts"])
+    end
+  end
 
+  defp cad_module, do: Module.concat(["MontyCad", "Scene"])
   @doc """
   The part `MONTY_CAD_PART` names, or `nil`.
 

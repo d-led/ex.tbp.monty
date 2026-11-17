@@ -132,12 +132,20 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       view |> element("#world-choice") |> render_change(%{"world" => "cad"})
       await_composition(view)
 
-      # Both files are offered, and the one a press of Run would open is the one
-      # shown as chosen: the list never hides what the run is about to do.
+      # Every part this node can open is offered — the two under its data root
+      # and the ones the application ships, so a fresh install has something to
+      # step — and exactly one is shown as chosen, because the list never hides
+      # what a press of Run is about to open.
       picker = view |> element("#part-select") |> render()
       assert picker =~ "bracket.step"
       assert picker =~ "plate.step"
-      assert picker =~ ~s(value="bracket.step" selected)
+      assert picker =~ "solidcraft-plate.step"
+
+      assert [_chosen] =
+               picker
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("option[selected]")
+               |> LazyHTML.attribute("value")
 
       # Choosing the other part is choosing the other file.
       view |> element("#part-choice") |> render_change(%{"part" => "plate.step"})
