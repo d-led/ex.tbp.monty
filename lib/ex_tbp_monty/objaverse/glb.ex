@@ -176,43 +176,44 @@ defmodule ExTbpMonty.Objaverse.Glb do
     end
   end
 
-  defp accessor(document, index) do
-    Enum.at(document["accessors"] || [], index) || %{}
-  end
+  defp accessor(document, index), do: entry(document["accessors"], index)
+
+  # One entry of one of the document's lists, and an empty map when the list or
+  # the index is not there: every reader below asks for a field of it, and a
+  # missing field is answered by the default it asks for.
+  defp entry(list, index), do: Enum.at(list || [], index) || %{}
 
   defp vectors(document, binary, accessor, width) do
-    view = Enum.at(document["bufferViews"] || [], accessor["bufferView"] || 0) || %{}
+    view = entry(document["bufferViews"], accessor["bufferView"] || 0)
     offset = (view["byteOffset"] || 0) + (accessor["byteOffset"] || 0)
     stride = if (view["byteStride"] || 0) > 0, do: view["byteStride"], else: width * 4
     count = accessor["count"] || 0
 
     case accessor["componentType"] do
-      @float when width == 3 ->
-        if count == 0 do
-          []
-        else
-          for index <- 0..(count - 1) do
-            <<x::little-float-32, y::little-float-32, z::little-float-32>> =
-              binary_part(binary, offset + index * stride, 12)
+      @float when width == 3 -> vertices(binary, offset, stride, count)
+      @float -> texcoords(binary, offset, stride, count)
+      _other -> []
+    end
+  end
 
-            {x, y, z}
-          end
-        end
+  defp vertices(_binary, _offset, _stride, 0), do: []
 
-      @float ->
-        if count == 0 do
-          []
-        else
-          for index <- 0..(count - 1) do
-            <<x::little-float-32, y::little-float-32>> =
-              binary_part(binary, offset + index * stride, 8)
+  defp vertices(binary, offset, stride, count) do
+    for index <- 0..(count - 1) do
+      <<x::little-float-32, y::little-float-32, z::little-float-32>> =
+        binary_part(binary, offset + index * stride, 12)
 
-            {x, y}
-          end
-        end
+      {x, y, z}
+    end
+  end
 
-      _other ->
-        []
+  defp texcoords(_binary, _offset, _stride, 0), do: []
+
+  defp texcoords(binary, offset, stride, count) do
+    for index <- 0..(count - 1) do
+      <<u::little-float-32, v::little-float-32>> = binary_part(binary, offset + index * stride, 8)
+
+      {u, v}
     end
   end
 
@@ -257,9 +258,9 @@ defmodule ExTbpMonty.Objaverse.Glb do
   defp colour(_none), do: :none
 
   defp image(document, binary, texture_index) do
-    texture = Enum.at(document["textures"] || [], texture_index) || %{}
-    image = Enum.at(document["images"] || [], texture["source"] || 0) || %{}
-    view = Enum.at(document["bufferViews"] || [], image["bufferView"] || -1) || %{}
+    texture = entry(document["textures"], texture_index)
+    image = entry(document["images"], texture["source"] || 0)
+    view = entry(document["bufferViews"], image["bufferView"] || -1)
 
     case view["byteLength"] do
       nil ->

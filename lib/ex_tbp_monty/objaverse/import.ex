@@ -174,9 +174,8 @@ defmodule ExTbpMonty.Objaverse.Import do
   defp format(value), do: :io_lib.format("~.6f", [value * 1.0])
 
   defp write_texture(path, {:image, bytes, _mime}) do
-    with {:ok, image} <- StbImage.read_binary(bytes) do
-      StbImage.write_file(image, path)
-    else
+    case StbImage.read_binary(bytes) do
+      {:ok, image} -> StbImage.write_file(image, path)
       {:error, reason} -> {:error, {:cannot_read_texture, reason}}
     end
   end
