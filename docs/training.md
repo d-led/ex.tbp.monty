@@ -400,3 +400,19 @@ The two runs also say something about determinism: the first sixteen episodes of
 the four-rotation run left exactly the 7 217 nodes the two-rotation run left, to
 the node, because they are the same episodes from the same seed. A difference
 between two runs of one config is a behaviour change, never noise.
+
+#### Twenty-four recognitions, not eight (measured 2026-11-17)
+
+Eight episodes are one rotation of each dog, which is enough to be suspicious of a
+perfect score. The same memory over three rotations of every dog — 24 episodes,
+all of which conclude `match` — names **23 of 24** (95.8 %): the single miss is
+`dog_free_fire` read as `puppy_dog`, a pair the two-rotation memory did not
+confuse. Two pairs of this corpus are close at a 64-pixel patch — `milka` and
+`puppy`, `dog_free_fire` and `puppy_dog` — and each memory resolves one of them
+and slips once on the other.
+
+So the honest statement of the memory's accuracy is **23 of 24 names over three
+rotations**, with every episode concluded, against five of eight names from the
+dist agent's memory. The supervised pair of the corpus now works end to end:
+`dogs/surf_supervised_4rot` builds the memory in thirty-two minutes, and
+`dogs/inference_surf_supervised_4rot` recognises the dogs with it.
