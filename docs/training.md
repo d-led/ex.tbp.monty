@@ -465,6 +465,65 @@ dist agent's memory. The supervised pair of the corpus now works end to end:
 `dogs/surf_supervised_4rot` builds the memory in thirty-two minutes, and
 `dogs/inference_surf_supervised_4rot` recognises the dogs with it.
 
+#### A divided run writes the same memory (measured 2026-11-17)
+
+The memory above is written by one run stepping sixteen episodes. The same
+sixteen, divided into two parts on the live two-node cluster, must leave the same
+memory — a division that loses a graph, or a name, is not a parallelisation of the
+experiment but a smaller experiment.
+
+| where                  | objects | nodes     | names                                                            |
+| ---------------------- | ------- | --------- | ---------------------------------------------------------------- |
+| part 1                 | 4       | 3 610     | `boykin_spaniel`, `dog_free_fire`, `puppy_dog`, `smoothie_3d`    |
+| part 2                 | 4       | 3 548     | `kinder_guard_dog`, `dogs_head`, `milka`, `puppy`                |
+| **the merged library** | **8**   | **7 158** | **8 graphs over 8 names, 0 graphs holding more than one object** |
+
+The division is Monty's own rule (`Monty.Studio.Partition`): a training wave is
+divided **by object**, every rotation of one object staying in the same part, so
+the two parts trained four dogs each and the merge is a union of graphs nothing
+had to reconcile. That is why the numbers add: 3 610 + 3 548 = 7 158, to the node.
+
+Two things were needed to make it a memory at all, and neither was there before
+this day:
+
+- an earlier run of the same corpus wrote graphs named `new_object0`, which
+  `a4b107b` fixed for a run started from a page;
+- the merge itself kept graphs and dropped each part's **targets**, so a divided
+  memory could name a graph and not the object it was built from — the defect
+  §2.27 fixed for a single run, surviving in the path a divided run takes. A part
+  of a memory is now its graph state _and_ the names its graphs were built from,
+  and the merge folds both (`Monty.Studio.Memories.merge/1`).
+
+Recognition against the merged memory, one rotation of each dog
+(`dogs/inference_surf_supervised`, 8 episodes): **8 of 8 concluded `match`, 6 named
+only the dog shown**, and the two misses are `kinder_guard_dog` read as
+`dogs_head` and `smoothie_3d` read as `boykin_spaniel`. The two-rotation memory
+built by one run names 7 of 8 on the same eight episodes; per-dog node counts sit
+in the same band (735 – 977 here against 704 – 979 there) and `kinder_guard_dog`
+is the thinnest graph in both, which is where the surface agent's two rotations
+leave this corpus least dense. What the divided run establishes is the pipeline:
+disjoint parts, an exact union, eight names, and a scorable memory. Whether its
+six of eight against the single run's seven is the division or a build difference
+is not answered here and is the next measurement, not a claim.
+
+```sh
+# the divided run: two parts, eight episodes each, on the live cluster
+elixir --name launch@127.0.0.1 --cookie local-dev-secret tmp/launch_divided.exs \
+  '"dogs/surf_supervised", "2", "ex_mujoco"'
+
+# what each part learned, and what the merge kept
+MIX_ENV=test mix run --no-start scripts/library_nodes.exs \
+  priv/studio_runs/<part-1>/memory/trained priv/studio_runs/<part-2>/memory/trained \
+  priv/studio_runs/<the-run>/memory/trained
+
+# the names, one graph each
+MIX_ENV=test mix run --no-start scripts/memory_names.exs dogs_surf_supervised
+
+# and what it recognises
+MIX_ENV=test mix run --no-start scripts/probe_recognitions.exs \
+  dogs/inference_surf_supervised 8
+```
+
 ### It is the policy, not the sample budget (measured 2026-11-17)
 
 `dogs/supervised_pretraining_dense` is the control: the same dist agent, the same
