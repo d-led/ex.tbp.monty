@@ -1253,6 +1253,12 @@ defmodule Monty.Studio.Jobs.Run do
   defp settle_of(%{inputs: %{"settle" => steps}}) when is_integer(steps) and steps > 0, do: steps
   defp settle_of(_record), do: 0
 
+  # How a step serves its sensors: the record's choice when one was made, and
+  # otherwise the port's own rule, which is what every run before this lever had.
+  defp sensors_step_of(%{inputs: %{"sensors_step" => "serial"}}), do: :serial
+  defp sensors_step_of(%{inputs: %{"sensors_step" => "concurrent"}}), do: :concurrent
+  defp sensors_step_of(_record), do: :auto
+
   # The episode a part starts counting from: the first of the episodes it was
   # given. A run of the whole experiment starts at nought.
   defp offset_of(%{inputs: %{"part" => %{"phases" => phases}}}) when is_map(phases) do
@@ -1353,7 +1359,8 @@ defmodule Monty.Studio.Jobs.Run do
       first_seen: state.first_seen,
       has_detailed_logger: Logging.detailed?(state.logging),
       scheduling: scheduling_of(state.record),
-      settle_steps: settle_of(state.record)
+      settle_steps: settle_of(state.record),
+      sensors_step: sensors_step_of(state.record)
     ]
 
     options =

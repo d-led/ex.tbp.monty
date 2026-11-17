@@ -170,6 +170,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # The steps a module still computing is given after another one concluded:
       # zero is Monty's rule, where the first conclusion ends the episode.
       settle: 0,
+      # Whether a step serves its sensors one after another or at once. `auto` is
+      # the port's own rule, so a run started without choosing is the run this
+      # page always started.
+      sensors: :auto,
       # The batch a press of Run started and the page shows: `nil` until a run of
       # this experiment is followed, and then the parts whose cards the page draws
       # beside the run it is watching (`Monty.Studio.Partition`).
@@ -579,6 +583,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="input input-xs w-16"
               aria-label="How many steps a module still computing gets after a conclusion"
             />
+            <%!-- Whether a step serves its sensors one after another or at once.
+            `auto` is the port's rule; naming one is what makes two runs of the
+            same seed a measurement of the fan-out rather than of both. --%>
+            <label for="run-sensors" class="ms-2">sensors</label>
+            <select
+              id="run-sensors"
+              name="sensors"
+              class="select select-xs w-28"
+              aria-label="Whether a step serves its sensors one after another or at once"
+            >
+              <option value="auto" selected={@sensors == :auto}>auto</option>
+              <option value="serial" selected={@sensors == :serial}>serial</option>
+              <option value="concurrent" selected={@sensors == :concurrent}>concurrent</option>
+            </select>
           </form>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
@@ -1143,8 +1161,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           steps,
           socket.assigns.parallelism,
           socket.assigns.episodes,
-          socket.assigns.scheduling,
-          socket.assigns.settle
+          levers(socket)
         )
 
       :going ->
@@ -1234,7 +1251,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # look at, not one run that pretends to have done two.
   def handle_event("step", _params, %{assigns: %{opened: opened}} = socket) do
     case refusal(socket.assigns) do
-      nil -> start(socket, opened, 1, 1, 1, socket.assigns.scheduling, socket.assigns.settle)
+      nil -> start(socket, opened, 1, 1, 1, levers(socket))
       :going -> already_going(socket, opened)
       :cannot_run -> {:noreply, socket}
     end
@@ -1351,9 +1368,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       episodes: count_of(params["episodes"]),
       steps: cap(count_of(params["steps"]), socket.assigns.opened.setup),
       scheduling: scheduling_of(params["scheduling"], socket.assigns.scheduling),
-      settle: settle_of(params["settle"], socket.assigns.settle)
+      settle: settle_of(params["settle"], socket.assigns.settle),
+      sensors: sensors_of(params["sensors"], socket.assigns.sensors)
     )
   end
+
+  # How a step serves its sensors. `auto` is the port's own rule — serial while
+  # one sensor's chain is what a step costs, concurrent once several sensors
+  # make it worth the fan-out — and asking for either is what makes the two
+  # comparable on the same machine and the same seed.
+  defp sensors_of("serial", _shown), do: :serial
+  defp sensors_of("concurrent", _shown), do: :concurrent
+  defp sensors_of(_unreadable, shown), do: shown
 
   # A settle window this page cannot read is not one: the number stays as it was,
   # and the run keeps the one shown beside the button it was started with.
@@ -2435,15 +2461,28 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A part is not a copy of the experiment. A config evaluated a hundred and forty
   # times is finished in a fourteenth of the clock at fourteen parts, where
   # fourteen copies of it were fourteen times the work and no faster.
-  defp start(socket, opened, steps, parallelism, episodes, scheduling, settle) do
+  # What the page hands a run beside its size: the three choices in the budget
+  # row, read off the page at the moment Run is pressed. One value rather than
+  # three more arguments, because all three answer the same question — how this
+  # run is to be carried out.
+  defp levers(socket) do
+    %{
+      scheduling: socket.assigns.scheduling,
+      settle: socket.assigns.settle,
+      sensors: socket.assigns.sensors
+    }
+  end
+
+  defp start(socket, opened, steps, parallelism, episodes, levers) do
     plan = Partition.plan(opened.setup, parallelism, episodes)
     parts = with_streams(Partition.parts(plan))
 
     attributes =
       RunLog.attributes(opened, steps, first_episode(parts), parallelism, episodes, %{
         parts: parts,
-        scheduling: scheduling,
-        settle: settle
+        scheduling: levers.scheduling,
+        settle: levers.settle,
+        sensors: levers.sensors
       })
 
     case RunHistory.start(attributes) do

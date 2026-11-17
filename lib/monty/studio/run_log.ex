@@ -458,6 +458,7 @@ defmodule Monty.Studio.RunLog do
         |> Map.merge(part_inputs(part))
         |> Map.merge(scheduling_input(part))
         |> Map.merge(settle_input(part))
+        |> Map.merge(sensors_step_input(part))
     }
   end
 
@@ -515,6 +516,14 @@ defmodule Monty.Studio.RunLog do
     do: %{"settle" => steps}
 
   defp settle_input(_part), do: %{}
+
+  # Whether a step served its sensors one after another or at once, when the
+  # caller named it: `auto` is the port's own rule and is left out of the record
+  # rather than written beside a run that made no choice.
+  defp sensors_step_input(%{sensors: sensors}) when sensors in [:serial, :concurrent],
+    do: %{"sensors_step" => to_string(sensors)}
+
+  defp sensors_step_input(_part), do: %{}
 
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()

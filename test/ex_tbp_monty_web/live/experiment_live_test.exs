@@ -473,6 +473,31 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.inputs["scheduling"] == "lagged"
     end
 
+    # How a step serves its sensors is the other thing two runs of one seed may
+    # differ in: serial is what a step always did, concurrent is the fan-out this
+    # port added. A run that made no choice records none, so `auto` stays a fact
+    # about the port rather than a word in every row.
+    test "a run serves its sensors by the port's own rule when nobody chose", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      assert has_element?(view, "#run-sensors option[value=auto][selected]")
+
+      view |> element("#step") |> render_click()
+
+      assert [run] = RunHistory.list_for(@tutorial)
+      refute Map.has_key?(run.inputs, "sensors_step")
+    end
+
+    test "and the sensors choice made on the page is the one the run records", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view |> element("#run-budget") |> render_change(%{"sensors" => "concurrent"})
+      view |> element("#step") |> render_click()
+
+      assert [run] = RunHistory.list_for(@tutorial)
+      assert run.inputs["sensors_step"] == "concurrent"
+    end
+
     test "and the step it records is one step of that experiment, not a redraw", %{conn: conn} do
       # The whole point of the button: the config runs, for one step, and what
       # that step saw is in the record.
