@@ -518,4 +518,42 @@ defmodule Monty.Studio.ReplayTest do
       refute Replay.kept_pictures?(nil)
     end
   end
+
+  test "one object's beliefs from every module, and the line they converge on" do
+    record = %Run{
+      timeline: Enum.map([0, 1], &moment/1),
+      log: [
+        %{
+          "step" => 0,
+          "beliefs" => %{
+            "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 1.0}}},
+            "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 3.0}}}
+          }
+        },
+        %{
+          "step" => 1,
+          "beliefs" => %{
+            "learning_module_0" => %{"graphs" => %{"mug" => %{"max_evidence" => 4.0}}},
+            "learning_module_1" => %{"graphs" => %{"mug" => %{"max_evidence" => 2.0}}}
+          }
+        }
+      ]
+    }
+
+    beliefs = Replay.beliefs(record, "mug")
+
+    # One colour for the object, whatever the marks are.
+    assert beliefs.colour == Monty.Studio.Chart.colour("mug")
+    assert beliefs.graph_id == "mug"
+
+    # Every module's own report is kept, two steps each.
+    assert Enum.map(beliefs.reports, & &1.module_id) == ["learning_module_0", "learning_module_1"]
+    assert Enum.map(beliefs.reports, &length(&1.points)) == [2, 2]
+
+    # The line is the strongest report at each step: 3.0 then 4.0.
+    assert Enum.map(beliefs.converged, &elem(&1, 1)) == [3.0, 4.0]
+
+    # An object nobody believed is not a chart with one empty line in it.
+    assert Replay.beliefs(record, "bowl") == nil
+  end
 end
