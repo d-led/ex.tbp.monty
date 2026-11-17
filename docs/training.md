@@ -230,3 +230,53 @@ trained, and only one of them can be judged:
   cannot be scored as correct. Monty's own unsupervised experiments are scored
   because they train and evaluate **in one run**, where the mapping is still in
   the module.
+
+### The dog corpus, end to end (measured 2026-11-17)
+
+The pipeline, on the eight-dog Objaverse corpus
+(`priv/monty_experiments/conf/experiment/dogs/`):
+
+1. **Train** — `dogs/supervised_pretraining`, Monty's
+   `supervised_pre_training_base` with the corpus swapped: 14 rotations × 8 dogs
+   = 112 training episodes, 34 384 steps, and a memory of **2 518 nodes** written
+   as `trained/dogs_supervised_pretraining` (1 109 for the easiest dog, 124 for
+   the hardest).
+2. **Infer** — `dogs/inference_supervised`, Monty's
+   `unsupervised_inference_distinctobj_dist_agent` with the corpus and the memory
+   swapped: **8 of 8 episodes concluded `match`, 2 059 steps** (~257 an episode).
+
+| episode | placed | concluded | evidence | nodes in that graph |
+| --- | --- | --- | --- | --- |
+| 1 | boykin_spaniel | boykin_spaniel | 31.3 | 298 |
+| 2 | milka | milka | 2.3 | 1 109 |
+| 3 | dog_free_fire | **milka** | 42.5 | 124 / 1 109 |
+| 4 | kinder_guard_dog | **puppy_dog** | 14.1 | 125 / 240 |
+| 5 | puppy_dog | puppy_dog | 8.3 | 240 |
+| 6 | puppy | **boykin_spaniel** | 17.5 | 223 / 298 |
+| 7 | smoothie_3d | smoothie_3d | 44.5 | 242 |
+| 8 | dogs_head | dogs_head | 67.2 | 157 |
+
+**Five of eight are right, and the three wrong ones are the three thinnest
+graphs.** Which episode shows which object is not a guess: the interface answers
+`Enum.at(object_names, rem(episode, n_objects))`
+(`one_object_per_episode_interface.ex:167`).
+
+Two things this taught, both Monty's own behaviour rather than the port's:
+
+- **A `match` needs the pose, not the evidence.** Episode 2 concluded on evidence
+  2.3: one object was left and the possible hypotheses agreed on a pose, and that
+  is all `check_terminal_condition` asks. `object_evidence_threshold` gates the
+  object a *time-out* reports (Monty's line 610), not a match, so raising it does
+  not change a conclusion — measured: three runs with threshold 1, threshold 20
+  and a twenty-step minimum evaluation are identical step for step.
+- **A module that reads every hypothesis does not resolve a pose.** With
+  `noresetevidence_1lm` (`evidence_threshold_config: all`, and a 100-matching-step
+  cut-off) the same memory narrows to one dog and evidence 78 and stops: no
+  conclusion in 8 of 8 episodes. With `evidence_tutorial_surf_agent_2obj` (top
+  80 % only, `max_nneighbors: 10`) and a 500-step budget, every episode concludes.
+  Which module a config names is part of the experiment.
+
+The next step for the three missed dogs is the memory, not the module: the corpus
+was scanned by one sensor in fourteen rotations, and Monty's own densities come
+from five sensors (`supervised_pre_training_5lms`: 2 668 nodes for `mug`) or a
+surface agent's thousands of steps (`surf_agent_1lm_2obj_train`: ~1 500).
