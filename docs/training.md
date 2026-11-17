@@ -354,3 +354,32 @@ the checkpoints in each two-minute window are lost: the twenty-minute run above
 died this way six times and still wrote its memory. An experiment belongs in the
 development environment (`MIX_ENV=dev MONTY_DB=sqlite mix monty.run …`), whose
 store the Studio already shows.
+
+### Walking the corpus recognises it: 7 of 8 names, all eight concluded (measured 2026-11-17)
+
+The two memories of the same eight dogs, read with the same recognition config
+(`dogs/inference_supervised` and `dogs/inference_surf_supervised`, both
+`evidence_tutorial_surf_agent_2obj` at top 80 %, `max_nneighbors: 10`, 500
+evaluation steps):
+
+| memory                                                                           | nodes     | per dog     | verdicts  | named correctly |
+| -------------------------------------------------------------------------------- | --------- | ----------- | --------- | --------------- |
+| `dogs_supervised_pretraining`, 14 rotations of a 5° naive scan on the dist agent | 2 518     | 124 – 1 109 | 8 `match` | **5 of 8**      |
+| `dogs_surf_supervised`, 2 rotations of the surface agent                         | **7 217** | 704 – 979   | 8 `match` | **7 of 8**      |
+
+The surface training is 16 episodes — two rotations of each dog, 42 263 steps,
+162.6 s in the model and 598.9 s in the world (thirteen minutes) — and it costs
+nothing in verdicts: the recognition concludes every episode, and the one miss is
+`milka` read as `puppy`, two small dogs that share a shape at this patch size.
+
+What the table says is that **evenness matters as much as size**. The dist agent's
+memory holds 1 109 nodes of `milka`, which the recognition then mistakes for
+`puppy`, and 124 of `dog_free_fire`, which it used to mistake for `milka`: the
+thinnest graphs were the wrong answers. The surface agent leaves every dog between
+704 and 979 nodes, and the three dogs the old memory confused are all recognised.
+Nothing else changed — same world, same corpus, same evaluation.
+
+Fourteen rotations would be 112 episodes and about five hours; two rotations are
+thirteen minutes and seven of eight names. Raising it is one line in
+`dogs/surf_supervised`, and the honest next measurement is what rotations four,
+six and fourteen add.

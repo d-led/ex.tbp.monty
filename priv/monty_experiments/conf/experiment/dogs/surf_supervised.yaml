@@ -29,7 +29,12 @@ experiment:
   _target_: tbp.monty.frameworks.experiments.pretraining_experiments.MontySupervisedObjectPretrainingExperiment
   config:
     show_sensor_output: false
-    n_train_epochs: ${constants.rotations_all_count}
+    # Two rotations of the corpus, not the fourteen `rotations_all_count` holds:
+    # an episode of this agent is ~3 300 steps, so 8 dogs × 14 rotations is 112
+    # episodes and about five hours on this machine, against thirteen minutes for
+    # the sixteen measured here (`docs/training.md`). Two rotations already leave
+    # 7 217 nodes over the eight dogs and seven of eight names recognised.
+    n_train_epochs: 2
     n_eval_epochs: 3
     model_name_or_path: ''
     seed: 42
