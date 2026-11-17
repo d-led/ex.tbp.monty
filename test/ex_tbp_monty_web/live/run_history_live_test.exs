@@ -2397,6 +2397,43 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#replay-chart-title") |> render() =~
                "Evidence for every object — as learning_module_0 held it"
     end
+
+    # The line a chart of one object draws is the strongest module's at every
+    # step, which is the right answer for the ensemble and says nothing about
+    # whether the modules agreed. Each module's own report of the same graph is a
+    # dot beside the line, in the object's own colour: a parallel run read for
+    # its agreement rather than for its winner.
+    test "an object's chart marks every module's own report of it", %{conn: conn} do
+      run =
+        run_believing([%{"mug" => 1.0}, %{"mug" => 2.0}], fn _evidence ->
+          %{
+            "learning_module_0" => %{"mug" => 1.0},
+            "learning_module_1" => %{"mug" => 7.0}
+          }
+        end)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-series") |> render() =~ ~s(value="object:mug")
+
+      view |> element("#replay-series") |> render_change(%{"series" => "object:mug"})
+
+      dots =
+        view
+        |> element("#replay-chart-reports")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("circle.report-dot")
+
+      # Two modules reported the object at two steps each: the line is one of
+      # them, the dots are all of them.
+      assert dots |> LazyHTML.attribute("data-module") |> Enum.sort() ==
+               ~w(learning_module_0 learning_module_0 learning_module_1 learning_module_1)
+
+      # The mug's blue, the same colour the line and its episode bands wear.
+      assert dots |> LazyHTML.attribute("stroke") |> Enum.uniq() == ["#1f77b4"]
+      assert dots |> LazyHTML.attribute("data-graph") |> Enum.uniq() == ["mug"]
+    end
   end
 
   describe "deleting a run" do

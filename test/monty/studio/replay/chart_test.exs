@@ -509,4 +509,81 @@ defmodule Monty.Studio.Replay.ChartTest do
       assert length(drawn_points(chart)) == 500
     end
   end
+
+  describe "the reports behind one object's line" do
+    # What a module reported about one graph, as the digest keeps it: the step of
+    # the run it was reported at, and the evidence that module held.
+    defp reported(chart, reports) do
+      chart = Chart.with_reports(chart, Monty.Studio.Chart.beliefs(reports, "mug"))
+
+      Chart.report_points(chart.beliefs, chart)
+    end
+
+    # An object's line, under the name the palette knows it by: `Digest.objects/2`
+    # names the series `object:mug` and labels it `mug`.
+    defp object_series(values), do: %{id: "object:mug", label: "mug", points: points(values)}
+
+    test "are drawn where the line that reported them draws the same number" do
+      chart = Chart.many([object_series([1.0, 2.0, 3.0])])
+
+      dots = reported(chart, [{"lm_1", [{0, 1.0}, {1, 2.0}, {2, 3.0}]}])
+
+      assert Enum.map(dots, &{&1.x, &1.y}) == chart |> drawn_points() |> Enum.take(3)
+    end
+
+    test "a module that held the object higher is drawn above the line" do
+      chart = Chart.many([object_series([1.0, 2.0, 3.0])])
+
+      assert [%{module_id: "lm_2", y: highest}, %{module_id: "lm_1", y: lowest}] =
+               reported(chart, [{"lm_2", [{0, 2.5}]}, {"lm_1", [{0, 1.0}]}])
+
+      # Up is a smaller y on an SVG axis.
+      assert highest < lowest
+    end
+
+    test "are not drawn for steps the reader zoomed away from" do
+      chart = Chart.many([object_series([1.0, 2.0, 3.0])], window: {1, 2})
+
+      dots = reported(chart, [{"lm_1", [{0, 1.0}, {1, 2.0}, {2, 3.0}]}])
+
+      assert Enum.map(dots, & &1.step) == [1, 2]
+    end
+
+    test "wear the object's own colour, the same one its line is drawn in" do
+      chart = Chart.many([object_series([1.0, 2.0])])
+      chart = Chart.with_reports(chart, Monty.Studio.Chart.beliefs([{"lm_1", [{0, 1.0}]}], "mug"))
+
+      assert [%{colour: colour}] = Chart.report_points(chart.beliefs, chart)
+      assert [%{colour: ^colour}] = chart.lines
+
+      # The palette's blue for a mug: the same colour the object's episode bands
+      # wear and the same one Monty's own dashboard draws it in.
+      assert colour == "#1f77b4"
+    end
+
+    test "a run too long for the plot draws one report a column, not one a step" do
+      values = Enum.map(1..4000, &(&1 * 0.01))
+      chart = Chart.many([object_series(values)])
+
+      dots =
+        reported(chart, [{"lm_1", Enum.map(Enum.with_index(values), fn {v, s} -> {s, v} end)}])
+
+      # Several reports to a unit of the plot would be one mark on top of another:
+      # a quarter of a unit is the finest the drawing distinguishes, the same
+      # rule the line is thinned by.
+      columns = Enum.map(dots, &trunc(&1.x * 4))
+
+      assert columns == Enum.uniq(columns)
+    end
+
+    test "and a run the plot can show whole keeps every report" do
+      values = Enum.map(1..300, &(&1 * 0.1))
+      chart = Chart.many([object_series(values)])
+
+      dots =
+        reported(chart, [{"lm_1", Enum.map(Enum.with_index(values), fn {v, s} -> {s, v} end)}])
+
+      assert length(dots) == 300
+    end
+  end
 end

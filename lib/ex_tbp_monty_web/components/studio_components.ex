@@ -856,6 +856,32 @@ defmodule ExTbpMontyWeb.StudioComponents do
                   The hook reads the pointer off the samples and names the step
                   itself, so the marks said nothing the page did not already
                   say. --%>
+                    <%!-- One object's parallel beliefs. The line above is the
+                  converged one — the strongest module at each step — and five
+                  modules agreeing on an object is four more climbs than a
+                  single line can show. Every report is a hollow dot in the
+                  object's own colour: what differs between the modules is the
+                  mark, not the object. `Chart.report_points/2` projects them by
+                  the same arithmetic as the line, so a dot cannot sit beside the
+                  line it belongs to. Only a chart of one object carries them —
+                  a chart of every object would draw every module's opinion of
+                  every object at once. --%>
+                    <g :if={@chart.beliefs} id="replay-chart-reports">
+                      <circle
+                        :for={dot <- Chart.report_points(@chart.beliefs, @chart)}
+                        cx={dot.x}
+                        cy={dot.y}
+                        r="1.5"
+                        fill="none"
+                        stroke={dot.colour}
+                        stroke-width="1"
+                        vector-effect="non-scaling-stroke"
+                        class="report-dot"
+                        data-module={dot.module_id}
+                        data-graph={dot.graph_id}
+                        pointer-events="none"
+                      />
+                    </g>
                   </g>
                   <line
                     :if={@chart.playhead}

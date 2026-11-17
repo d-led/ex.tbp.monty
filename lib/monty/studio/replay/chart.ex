@@ -55,6 +55,7 @@ defmodule Monty.Studio.Replay.Chart do
     :to,
     :playhead,
     :zero,
+    :beliefs,
     lines: [],
     bands: [],
     paths: [],
@@ -104,6 +105,23 @@ defmodule Monty.Studio.Replay.Chart do
           value: number()
         }
 
+  @typedoc """
+  One module's own report of the drawn object, as a mark on the picture.
+
+  The line is the converged one — the strongest module at each step — and a run
+  with five modules has four more opinions behind it that a single line cannot
+  show. Each report is a dot, in the object's colour: what differs between them
+  is the mark, not the object.
+  """
+  @type report :: %{
+          module_id: String.t(),
+          graph_id: String.t(),
+          colour: String.t(),
+          step: integer(),
+          x: float(),
+          y: float()
+        }
+
   @type t :: %__MODULE__{
           width: pos_integer(),
           height: pos_integer(),
@@ -115,6 +133,7 @@ defmodule Monty.Studio.Replay.Chart do
           from: number(),
           to: number(),
           playhead: float() | nil,
+          beliefs: Studio.Chart.beliefs() | nil,
           hover: [sample()],
           ticks: [%{value: number(), y: float(), label: String.t()}]
         }
@@ -203,6 +222,50 @@ defmodule Monty.Studio.Replay.Chart do
   @spec with_playhead(t(), Replay.step_number() | nil) :: t()
   def with_playhead(%__MODULE__{from: from, to: to} = chart, step),
     do: %{chart | playhead: playhead(step, from, to)}
+
+  @doc """
+  The same chart, with every module's own report of one object marked on it.
+
+  `beliefs` is `Monty.Studio.Chart.beliefs/2`'s answer for the object the chart
+  draws: the modules' reports step by step, and the converged line they make.
+  What comes back draws the reports as dots (`report_points/2`), which is the
+  question a single line cannot answer — did the modules agree, and which of them
+  was still climbing when the run ended.
+  """
+  @spec with_reports(t(), Studio.Chart.beliefs() | nil) :: t()
+  def with_reports(%__MODULE__{} = chart, beliefs), do: %{chart | beliefs: beliefs}
+
+  @doc """
+  Where every report of the drawn object goes, each with the module it came from.
+
+  Projected by the chart's own `x` and `y`, so a dot cannot sit beside the line it
+  belongs to, and cut to the window, so a zoomed chart does not draw the run's
+  whole history outside its axes.
+  """
+  @spec report_points(Studio.Chart.beliefs(), t()) :: [report()]
+  def report_points(
+        %{graph_id: graph_id, colour: colour, reports: reports},
+        %__MODULE__{} = chart
+      ) do
+    for %{module_id: module_id, points: points} <- reports,
+        {step, value} <- points,
+        Replay.inside?({chart.from, chart.to}, step) do
+      %{
+        module_id: module_id,
+        graph_id: graph_id,
+        colour: colour,
+        step: step,
+        x: Float.round(x(step, chart.from, chart.to), 2),
+        y: Float.round(y(value, chart.min, chart.max), 2)
+      }
+    end
+    # One dot a column a module, the same rule the lines are drawn by: a run of
+    # hundreds of steps puts several reports in every unit of a 320-unit plot, and
+    # they land on top of one another — the dots would be one thick mark and every
+    # one of them travels to the browser on every drawing.
+    |> Enum.chunk_by(&{&1.module_id, trunc(&1.x * @per_unit)})
+    |> Enum.map(&hd/1)
+  end
 
   # Labelled lines land on round numbers — one, two or five times a power of ten
   # — and the step is picked so the axis carries about four of them. Dividing the
@@ -350,7 +413,12 @@ defmodule Monty.Studio.Replay.Chart do
     drawn = %{
       id: series.id,
       label: series.label,
-      colour: Studio.Chart.colour(series.id, colour),
+      # By the name, not by the id: an object's series is called `object:mug`
+      # because ids are namespaced (`Replay.Digest.objects/2`), and the palette is
+      # keyed by `mug`. Looked up by the id, every object line took a hue of its
+      # own position while the same object's episode band took its palette colour,
+      # and the reports drawn beside the line (`report_points/2`) took a third.
+      colour: Studio.Chart.colour(series[:label] || series.id, colour),
       points: points,
       stretches: stretch_points(series.points, points, {from, to})
     }

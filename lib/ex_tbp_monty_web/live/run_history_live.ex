@@ -1181,6 +1181,22 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       points: []
     }
 
+    # One chart an object, which is where the modules' parallel reports are
+    # drawn: the strongest module's line, and every module's own report of it as
+    # a dot. A chart of every object puts all those dots on one picture at once,
+    # which says nothing about any of them.
+    one_object =
+      for %{label: name} <- objects do
+        %{
+          id: "object:" <> name,
+          label: name,
+          title: "Evidence for #{name} — strongest module, every module's report beside it",
+          unit: "",
+          axis: "evidence",
+          points: []
+        }
+      end
+
     per_module =
       for {module_id, lines} <- Enum.sort(module_objects), lines != [] do
         %{
@@ -1193,7 +1209,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         }
       end
 
-    [every_object | per_module] ++ series
+    [every_object | one_object] ++ per_module ++ series
   end
 
   # The chart, and what it was drawn from: the lines, the axis and the samples a
@@ -1209,14 +1225,50 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           {socket.assigns.chart_base, socket.assigns.samples}
 
         _other ->
-          fresh = Chart.many(chart_lines(catalog, series_id), window: window)
+          fresh =
+            catalog
+            |> chart_lines(series_id)
+            |> Chart.many(window: window)
+            |> Chart.with_reports(beliefs_of(catalog, series_id))
+
           {fresh, ExTbpMontyWeb.StudioComponents.chart_samples(fresh, series, series_id)}
       end
 
     {Chart.with_playhead(base, step), key, base, samples}
   end
 
+  # The reports one object's line hides. Every module that held a graph for the
+  # object reported it at its own height, and the line is the strongest of them:
+  # the chart draws the others as dots, in the object's own colour, which is how
+  # "did the modules agree" becomes a picture instead of a table of votes.
+  #
+  # Only a chart of one object carries them. A chart of every object, or of all
+  # objects as one module held them, is not about one graph, and its dots would be
+  # every module's opinion of every object at once — a cloud that says nothing
+  # about any of them.
+  defp beliefs_of(%{module_objects: module_objects}, "object:" <> graph_id) do
+    reports =
+      for {module_id, lines} <- Enum.sort(module_objects),
+          %{label: ^graph_id, points: points} <- lines,
+          points != [],
+          do: {module_id, Enum.map(points, &{&1.step, &1.value})}
+
+    case reports do
+      [] -> nil
+      reports -> Monty.Studio.Chart.beliefs(reports, graph_id)
+    end
+  end
+
+  defp beliefs_of(_catalog, _series_id), do: nil
+
   defp chart_lines(%{objects: objects}, @objects), do: objects
+
+  # One object's own chart: the strongest module's line for it, which is the line
+  # the object is judged by. The other modules' lines are the chart's dots
+  # (`beliefs_of/2`), because five lines of the same object on one colour-blind
+  # axis is one line too many.
+  defp chart_lines(%{objects: objects}, "object:" <> name),
+    do: Enum.filter(objects, &(&1.label == name))
 
   defp chart_lines(%{module_objects: module_objects}, @module_chart <> module_id),
     do: Map.get(module_objects, module_id, [])
