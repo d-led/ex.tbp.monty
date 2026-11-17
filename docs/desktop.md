@@ -90,7 +90,9 @@ Connect to a node**: the page takes `name@host`, calls `Node.connect/1` and says
 per name whether it connected, whether it is this node, or whether nobody
 answered (with the three reasons that look identical: not running, host
 unreachable, cookie differs). A dialled node is _not_ remembered; a peer list that
-survives a restart is `MONTY_SEEDS`.
+survives a restart is `MONTY_SEEDS`. The two sample plugin nodes are the third
+case: neither gossip nor dialled by hand — they are told the window's name when
+they start. See the section below.
 
 The data folder does **not** follow the name. The window is the one start that
 keeps the folder a node that runs alone uses, because an instance id is per
@@ -147,6 +149,30 @@ nodes the window's cookie, and both read it from the node rather than from a
 file, because `MONTY_CLUSTER_SECRET` replaces it at boot. That cookie is also how
 a started node is stopped: a release started with `start` is not a daemon, so
 there is no pid file to trust — the node is asked to stop.
+
+**On macOS the same two nodes are also two apps.** `Example Plugin.app` and
+`Flyverse Plugin.app` sit beside the window: the `.pkg` installs all three into
+`/Applications`, the `.dmg` holds all three to drag across, and `run-desktop.sh`
+unpacks all three into the same folder. Double-clicking one starts that node and
+joins it to the window. There is nothing to configure and nothing to type: it
+asks the window who it is (`/health`), opens the window when nothing answers yet
+and waits for it, reads the window's cookie from
+`Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and runs the release the
+window already carries (`Contents/Resources/plugins/<node>`) in the foreground —
+so the Dock icon is the node and quitting the app stops it. It is a launcher and
+not a copy of a node, which is also why it says so plainly when the window is not
+beside it. `MONTY_STUDIO_APP` points one at a window somewhere else, which is how
+a checkout tries them without installing anything.
+
+**A plugin is told where the window is; it does not discover it.** The two
+example nodes do not use libcluster: each runs a `Join` process that dials the
+name in `MONTY_SEEDS` every few seconds, and an OTP connection is mutual, so the
+window sees the node as well. The window's own gossip is how one _window_ finds
+another. Gossip would not carry a plugin anyway — a peer found that way with a
+different cookie is refused exactly as silently, and every release writes a
+`releases/COOKIE` of its own. That is why all three routes (the Settings button,
+the launch scripts, the companion apps) hand the node the window's name and its
+cookie.
 
 The child is given a release environment of its own, and that is the trap worth
 knowing about: a launcher defaults each `RELEASE_*` only while it is unset or
@@ -316,6 +342,15 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
     starting the release under `sh`, killing `sh` with `kill -9`, and watching
     the server answer `/health` 200 and then exit about two seconds later.
     `test/desktop/parent_watch_test.exs` covers the same decision.
+11. The two macOS companion plugin apps, built by `scripts/package.sh` beside the
+    window: the packaging's own functions were run against a stand-in window tree,
+    the zip they make was unpacked by `scripts/run-desktop.sh`, and each app's
+    launcher then read the node name out of `/health`, read the window's cookie
+    out of `rel/ex_tbp_monty/releases/COOKIE`, and started the release with both —
+    blanking an inherited `RELEASE_VSN` on the way. A window with clustering
+    switched off, a window without the plugins folder, and an app with no window
+    beside it were each tried, and each answers with a sentence rather than
+    nothing.
 
 ### What a bundle does not carry
 
@@ -375,12 +410,14 @@ because it needs no release to exist before somebody can try the app:
 1. `scripts/package.sh` builds what a person downloads, for one platform at a
    time, into `artifacts/<platform>/`:
 
-   | file                          | what it is for                                                                                                                                   |
-   | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-   | `Monty on the BEAM.app`       | the bundle itself                                                                                                                                |
-   | `ex-tbp-monty-osx-arm64.zip`  | what `run-desktop.sh` downloads and CI uploads; made by `ditto`, because an `.app` holds symlinks and executable modes that a plain zip flattens |
-   | `monty-on-the-beam-0.1.0.pkg` | double-click, app appears in `/Applications` (see below)                                                                                         |
-   | `monty-on-the-beam-0.1.0.dmg` | the by-hand form: drag it into `/Applications`                                                                                                   |
+   | file                          | what it is for                                                                                                                                                   |
+   | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `Monty on the BEAM.app`       | the bundle itself                                                                                                                                                |
+   | `Example Plugin.app`          | the first sample node as a double-click, beside the window it joins (`companion_apps` in the script)                                                             |
+   | `Flyverse Plugin.app`         | the second one, the same way                                                                                                                                     |
+   | `ex-tbp-monty-osx-arm64.zip`  | all three apps, what `run-desktop.sh` downloads and CI uploads; made by `ditto`, because an `.app` holds symlinks and executable modes that a plain zip flattens |
+   | `monty-on-the-beam-0.1.0.pkg` | double-click, all three apps appear in `/Applications` (see below)                                                                                               |
+   | `monty-on-the-beam-0.1.0.dmg` | the by-hand form: drag the three into `/Applications`                                                                                                            |
 
    `--no-dmg`, `--no-zip` and `--no-pkg` skip any of them; `all` means "the
    platform this machine is", and a platform it is not is refused rather than

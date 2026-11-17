@@ -30,6 +30,11 @@
 # The macOS app is not signed or notarised yet (docs/desktop.md), so the first
 # launch asks once: right-click, Open, Open. Everything after that is a normal
 # double-click, or this script again.
+#
+# On macOS the download holds three apps — the window, and the two companion
+# plugin apps that join it — and they are unpacked into the same folder, because
+# a companion looks for its window beside itself and nowhere else. Double-click
+# one of those to add that node to the window's cluster.
 
 set -euo pipefail
 
@@ -205,10 +210,17 @@ else
                 echo "Expanding the application (about 550 MB) ..."
                 mkdir -p "$work/app"
                 unpack "$bundle_zip" "$work/app" 2>>"$work/unpack.log" || true
-                found="$(find "$work/app" -maxdepth 2 -name '*.app' -print -quit)"
+                from="$work/app"
             else
-                found="$(find "$work" -maxdepth 2 -name '*.app' -print -quit)"
+                from="$work"
             fi
+
+            # Named, not guessed. The download carries the window's two companion
+            # plugin apps beside it, so "the first `.app` find prints" is a coin
+            # toss between three bundles — and one of the wrong answers renames a
+            # plugin app to the window's name, which is a download that unpacks
+            # and opens the wrong thing.
+            found="$(find "$from" -maxdepth 2 -name 'Monty on the BEAM.app' -print -quit)"
 
             if [ -z "$found" ]; then
                 say_what_it_held
@@ -218,9 +230,18 @@ else
             rm -rf "$instance"
             mv "$found" "$instance"
 
+            # The companion apps belong beside the window — that is where each of
+            # them looks for it — so they come along. By glob and not by name:
+            # this script has no business knowing how many there are.
+            for companion in "$(dirname "$found")"/*.app; do
+                [ -d "$companion" ] || continue
+                rm -rf "$dir/$(basename "$companion")"
+                mv "$companion" "$dir/"
+            done
+
             # A bundle that a *browser* downloaded carries the quarantine flag,
             # which stops it from starting. `curl` does not set one, so the usual
-            # run has nothing to clear: ask the bundle once, rather than walking
+            # run has nothing to clear: ask each bundle once, rather than walking
             # fifteen thousand files to delete an attribute none of them has.
             #
             # Where there is one, the deletion is batched (`{} +`) instead of one
@@ -229,10 +250,13 @@ else
             # each of those into a launcher of its own, and the walk then spends
             # twenty minutes on what takes a second, with nothing on screen to
             # say why.
-            if xattr -p com.apple.quarantine "$instance" >/dev/null 2>&1; then
-                echo "Clearing the quarantine flag ..."
-                find "$instance" -exec xattr -d com.apple.quarantine {} + 2>/dev/null || true
-            fi
+            for app in "$dir"/*.app; do
+                [ -d "$app" ] || continue
+                if xattr -p com.apple.quarantine "$app" >/dev/null 2>&1; then
+                    echo "Clearing the quarantine flag ..."
+                    find "$app" -exec xattr -d com.apple.quarantine {} + 2>/dev/null || true
+                fi
+            done
             ;;
         linux-*)
             # What the Linux build leaves is a tarball holding the window with

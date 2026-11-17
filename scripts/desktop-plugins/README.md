@@ -12,6 +12,12 @@ spawns both releases as its own children, lends them the node name and cookie it
 answers with, and stops them again when it closes — so the demo needs no
 terminal, and nothing is left running behind a window that is gone.
 
+On macOS the same two nodes also come as two apps beside the window — **Example
+Plugin.app** and **Flyverse Plugin.app** — whenever the window came from the
+`.pkg`, from the `.dmg`, or from `run-desktop.sh`, which all install the three
+together. Double-clicking one starts that node and joins it to the window; it
+finds the window by being next to it, so the two have to stay in one folder.
+
 The two scripts are the by-hand route, for when the window is not in front of you
 or was killed outright (a killed window never reaches its own graceful stop, so
 the two VMs keep their ports and their database until they are told):

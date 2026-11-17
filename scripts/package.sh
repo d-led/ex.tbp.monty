@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # Builds what a person can actually install, for one platform at a time:
 #
-#   macOS    Monty on the BEAM.app, a zip of it, a disk image holding it, and a
-#            `.pkg` installer that puts it in /Applications
+#   macOS    Monty on the BEAM.app, the two companion plugin apps beside it, a
+#            zip of all three, a disk image holding them, and a `.pkg` installer
+#            that puts them in /Applications
 #
 # The three are not the same offer:
 #
 #   .zip   what CI uploads and `scripts/run-desktop.sh` downloads — the one
 #          that needs no release to exist first
-#   .pkg   double-click, app appears in /Applications, and it arrives without the
-#          quarantine flag (see `installer_package`)
-#   .dmg   the by-hand form: drag the app across
+#   .pkg   double-click, the three apps appear in /Applications, and they arrive
+#          without the quarantine flag (see `installer_package`)
+#   .dmg   the by-hand form: drag the three apps across
 #
 # All of them carry the same bundle — the window, the Elixir release, the BEAM,
 # the embedded Python, and the two sample plugin nodes `Settings → Cluster`
-# starts — so the only difference is how a person picks it up.
+# starts — so the only difference is how a person picks it up. macOS also gets
+# `Example Plugin.app` and `Flyverse Plugin.app`: the same two nodes as a
+# double-click each, beside the window they join (`companion_apps`).
 #
 #   scripts/package.sh                 # the platform this machine is
 #   scripts/package.sh osx-arm64       # one named runtime
@@ -175,6 +178,108 @@ carries_plugins() {
   done
 }
 
+# The window's two companion plugin apps, by the name each shows and the release
+# each one runs. An array and not a space-separated string: both names contain a
+# space, and a list that is split on one makes `Example Plugin` into two apps.
+companions=("Example Plugin:example_plugin" "Flyverse Plugin:flyverse_plugin")
+readonly companions
+
+# A companion app is a **launcher**, not a copy of a node: it starts the release
+# the window already carries (`Contents/Resources/plugins/<node>`), so the two
+# runtimes are still there once. What it adds is the click — the by-hand route in
+# a bundle, which asks the window who it is (`/health`), reads the cookie it
+# answers with (`releases/COOKIE`), and hands both to the release.
+#
+# It cannot work without the window beside it, because joining one is the whole
+# of what it does; `MONTY_STUDIO_APP` is the one way to point it elsewhere, which
+# is how a checkout tries it without installing anything.
+#
+# `scripts/desktop-plugins/companion-app.sh` is the launcher, the same file in both
+# apps; `Contents/Resources/node` is the one line that tells them apart. The
+# executable is named after the app rather than after the script, because that is
+# the name Activity Monitor, Console and `ps` show for a node somebody is looking
+# for.
+companion_apps() {
+  local rid=$1 pair name node app identifier
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    node=${pair##*:}
+    app="$artifacts/$rid/$name.app"
+    identifier="dev.ex-tbp-monty.plugin.$(printf '%s' "$node" | tr '_' '-')"
+
+    rm -rf "$app"
+    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+
+    cp scripts/desktop-plugins/companion-app.sh "$app/Contents/MacOS/$name"
+    chmod +x "$app/Contents/MacOS/$name"
+    printf '%s\n' "$node" >"$app/Contents/Resources/node"
+
+    # The window's icon, not a new one: a missing one costs the picture and not
+    # the app, so it is said rather than refused.
+    if [ -f "$bundle/Contents/Resources/icon.icns" ]; then
+      cp "$bundle/Contents/Resources/icon.icns" "$app/Contents/Resources/icon.icns"
+    else
+      echo "  $name.app wears the generic icon: the bundle has no Contents/Resources/icon.icns" >&2
+    fi
+
+    # The icons are the window's own, on purpose: these are its companions, and
+    # three generic document icons in the Dock say less than three of the product
+    # they belong to. What tells them apart is the name under the icon.
+    cat >"$app/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleDisplayName</key>
+	<string>$name</string>
+	<key>CFBundleExecutable</key>
+	<string>$name</string>
+	<key>CFBundleIdentifier</key>
+	<string>$identifier</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$name</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$version</string>
+	<key>CFBundleVersion</key>
+	<string>$version</string>
+	<key>CFBundleIconFile</key>
+	<string>icon.icns</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.13</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
+PLIST
+
+    register "$app"
+    echo "  $app"
+  done
+}
+
+# Asked of the trees this script just wrote, for the reason `carries_plugins`
+# asks: an app whose launcher is not executable opens with "The application
+# cannot be opened", and nothing on the way says which step lost it.
+carries_companion_apps() {
+  local root=$1 pair name
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    if [ ! -x "$root/$name.app/Contents/MacOS/$name" ]; then
+      echo "the companion app $name.app has no launcher at Contents/MacOS/$name" >&2
+      ls "$root/$name.app/Contents" 2>/dev/null | sed 's/^/    /' >&2
+      return 1
+    fi
+  done
+}
+
 # What a Linux person gets: a tarball holding the window with its release beside
 # it, which runs from anywhere, the `.deb` a distribution's package manager
 # installs, and the AppImage — the release squeezed into one executable, which
@@ -226,11 +331,18 @@ bundle_one() {
 
 # `ditto`, not `zip`: an `.app` holds symlinks and executable modes, and a zip
 # that flattens either produces an app that opens and cannot start its server.
+#
+# The folder is the source and the archive is written outside it: this folder now
+# holds three apps, `ditto` archives one directory at a time, and writing the
+# archive into the directory being read would have it archive the file it is
+# still writing. The three land at the archive's root, which is the shape
+# `run-desktop.sh` unpacks and the shape one app had before them.
 zip_app() {
-  local rid=$1 target="$artifacts/$1/ex-tbp-monty-$1.zip"
+  local rid=$1 target="$artifacts/$1/ex-tbp-monty-$1.zip" beside="$artifacts/.ex-tbp-monty-$1.zip"
 
-  rm -f "$target"
-  ditto -c -k --sequesterRsrc --keepParent "$bundle" "$target"
+  rm -f "$target" "$beside"
+  ditto -c -k --sequesterRsrc "$artifacts/$rid" "$beside"
+  mv "$beside" "$target"
   echo "  $target"
 }
 
@@ -271,8 +383,10 @@ installer_package() {
 
   # The install location is `/`, so the paths inside the root are the paths on
   # the disk: `Applications/…` in the root is `/Applications/…` after installing.
+  # All three apps go in, because a companion app finds its window by being beside
+  # it — installing only the window would install a plugin you cannot click.
   mkdir -p "$stage/Applications"
-  cp -R "$bundle" "$stage/Applications/"
+  cp -R "$artifacts/$rid"/*.app "$stage/Applications/"
 
   # A release keeps read-only directories (the installers and the COOKIE are
   # 0555/0400), and a tree like that cannot be walked *and cleaned up* by the
@@ -295,7 +409,13 @@ installer_package() {
 # and `curl` command lines; the bundle inside keeps its product name, because
 # that is what the Finder shows.
 disk_image() {
-  local rid=$1 stage="$artifacts/$rid/.dmg" target="$artifacts/$rid/monty-on-the-beam-$version.dmg"
+  # Two statements and not one `local`: macOS ships bash 3.2, where every
+  # expansion in a `local a=$1 b="$x/$a"` line is evaluated against the `local`
+  # that has only just been declared — so `$rid` there is unset, and `set -u`
+  # ends the run with "rid: unbound variable" instead of making a disk image.
+  local rid=$1 stage target
+  stage="$artifacts/$rid/.dmg"
+  target="$artifacts/$rid/monty-on-the-beam-$version.dmg"
 
   if ! command -v hdiutil >/dev/null 2>&1; then
     echo "  no hdiutil: no disk image for $rid" >&2
@@ -304,7 +424,10 @@ disk_image() {
 
   rm -rf "$stage" "$target"
   mkdir -p "$stage"
-  cp -R "$bundle" "$stage/"
+  # The window and its two companion apps: each companion looks for the window in
+  # the folder it was dragged into, so a disk image holding one of the three would
+  # produce a plugin that says it has no window to join.
+  cp -R "$artifacts/$rid"/*.app "$stage/"
   ln -s /Applications "$stage/Applications"
 
   # Not `-quiet`: a run failed here with the pager empty and the job's only line
@@ -335,6 +458,12 @@ for rid in "${rids[@]}"; do
       cp -R "$bundle" "$artifacts/$rid/"
       register "$artifacts/$rid/$product.app"
       echo "  $artifacts/$rid/$product.app"
+
+      # And the two nodes the window carries, one double-click each, beside the
+      # window: the same releases the cluster page starts, started the way a
+      # person who does not read a terminal can start them.
+      companion_apps "$rid"
+      carries_companion_apps "$artifacts/$rid" || exit 1
 
       if [ "$make_zip" = true ]; then
         zip_app "$rid"

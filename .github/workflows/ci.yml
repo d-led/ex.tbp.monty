@@ -1014,6 +1014,21 @@ jobs:
           echo "the one-line download put the application in smoke/landing:"
           find smoke/landing -maxdepth 2 | head -10
 
+          # macOS downloads the window with its two companion plugin apps beside
+          # it, and `run-desktop.sh` puts all three in one folder because that is
+          # where each companion looks for its window. A zip that lost them still
+          # unpacks and still opens; it is a plugin nobody can click.
+          case "${{ matrix.rid }}" in
+            osx-*)
+              for app in "Example Plugin" "Flyverse Plugin"; do
+                if [ ! -x "smoke/landing/$app.app/Contents/MacOS/$app" ]; then
+                  echo "the download unpacked no $app.app beside the window" >&2
+                  exit 1
+                fi
+              done
+              ;;
+          esac
+
       - name: The one-line download unpacks what this job built (Windows)
         if: runner.os == 'Windows'
         timeout-minutes: 10
