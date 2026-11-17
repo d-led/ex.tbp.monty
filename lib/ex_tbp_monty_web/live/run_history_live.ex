@@ -909,6 +909,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       pictures: Map.get_lazy(socket.assigns, :pictures, fn -> kept_pictures?(run) end),
       best: catalog.best,
       theories: Replay.theories(moment),
+      # What the modules concluded at this step, and whether they agreed: Monty
+      # ends an episode on the first match, so the report of a parallel run is
+      # one `match` and a row of `time_out` — the criterion's doing, not the
+      # modules' answer.
+      verdict: Replay.verdict(moment),
       graphs: catalog.objects != [],
       chart: chart,
       # What a hover on the chart reads. Made with the chart and kept with it:
@@ -1970,6 +1975,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           series_id={@series_id}
           best={@best}
           theories={@theories}
+          verdict={@verdict}
           graphs={@graphs}
           pictures={@pictures}
           started_at={started_at(@run)}

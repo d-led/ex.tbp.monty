@@ -1014,6 +1014,45 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     run
   end
 
+  # A finished run whose only step carries what each module concluded: its
+  # terminal state and the object it named, as the recorder writes them.
+  defp run_that_concluded(conclusions) do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "tutorial/first_experiment",
+        source: "monty",
+        steps: 1,
+        config: %{}
+      })
+
+    beliefs =
+      Map.new(conclusions, fn {module_id, {state, object}} ->
+        {module_id,
+         %{
+           "terminal_state" => state,
+           "detected_object" => object,
+           "mlh" => if(object, do: %{"graph_id" => object}),
+           "graphs" => if(object, do: %{object => %{"max_evidence" => 5.0}}, else: %{})
+         }}
+      end)
+
+    entry = %{
+      "episode" => 0,
+      "step" => 0,
+      "percepts" => ["patch"],
+      "inputs" => %{"learning_module_0" => 1},
+      "votes" => %{"sent" => 1, "used" => 1},
+      "goals" => 0,
+      "actions" => 0,
+      "duration_us" => 120,
+      "beliefs" => beliefs
+    }
+
+    {:ok, run} = RunHistory.record_step(run, entry, moment(0))
+    {:ok, run} = RunHistory.finish(run, %{"steps" => 1})
+    run
+  end
+
   describe "the list of runs" do
     test "shows every run with how it ended", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs")
@@ -2433,6 +2472,43 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       # The mug's blue, the same colour the line and its episode bands wear.
       assert dots |> LazyHTML.attribute("stroke") |> Enum.uniq() == ["#1f77b4"]
       assert dots |> LazyHTML.attribute("data-graph") |> Enum.uniq() == ["mug"]
+    end
+
+    # Monty's criterion ends an episode on the first match and times the rest
+    # out, so "3 match · 2 time_out" is what the criterion did. What the modules
+    # answered is a different sentence: which object the concluded ones agreed
+    # on, and what the rest still held.
+    test "says what the modules concluded, and whether they agreed", %{conn: conn} do
+      run =
+        run_that_concluded(%{
+          "learning_module_0" => {"match", "mug"},
+          "learning_module_1" => {"time_out", "bowl"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      verdict = view |> element("#replay-verdict") |> render()
+
+      assert verdict =~ "agreed on mug"
+      assert verdict =~ "learning_module_1 still believing bowl"
+      assert view |> element("#replay-verdict") |> render() =~ ~s(data-agreed="true")
+    end
+
+    test "and a run whose modules named different objects has not agreed", %{conn: conn} do
+      run =
+        run_that_concluded(%{
+          "learning_module_0" => {"match", "mug"},
+          "learning_module_1" => {"match", "bowl"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      verdict = view |> element("#replay-verdict") |> render()
+
+      assert verdict =~ ~s(data-agreed="false")
+      assert verdict =~ "no agreement"
+      assert verdict =~ "learning_module_0 says mug"
+      assert verdict =~ "learning_module_1 says bowl"
     end
   end
 

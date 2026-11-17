@@ -18,6 +18,7 @@ defmodule Monty.Studio.Replay do
   alias Monty.Studio.Chart
   alias Monty.Studio.Replay.Digest
   alias Monty.Studio.RunHistory.Run
+  alias Monty.Studio.Verdict
 
   @type step_number :: integer()
 
@@ -239,6 +240,17 @@ defmodule Monty.Studio.Replay do
   defp beliefs_of(%{entry: entry}) when is_map(entry), do: Map.get(entry, "beliefs", %{})
 
   defp beliefs_of(_moment), do: %{}
+
+  @doc """
+  What the modules concluded at one step, and whether they agreed
+  (`Monty.Studio.Verdict.of/1`).
+
+  A step in the middle of an episode has concluded nothing, and answers a verdict
+  of "no module has concluded yet" — which is the truth about a step, and the
+  reason a finished episode is read at its last step.
+  """
+  @spec verdict(moment()) :: Verdict.t() | nil
+  def verdict(moment), do: moment |> beliefs_of() |> Verdict.of()
 
   @doc "One series by id, with whatever points the run has for it."
   @spec chart_series(Run.t(), String.t()) :: series()

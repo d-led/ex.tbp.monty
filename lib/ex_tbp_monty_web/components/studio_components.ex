@@ -402,6 +402,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :episodes, :integer, default: nil
   # What a run that has stopped took, in the words the page's header uses.
   attr :took, :string, default: nil
+  # What the modules concluded at the step under the slider, and whether they
+  # agreed (`Monty.Studio.Verdict`). `nil` for a step that reported no beliefs.
+  attr :verdict, :map, default: nil
   attr :id, :string, default: "replay"
 
   def replay(assigns) do
@@ -650,6 +653,21 @@ defmodule ExTbpMontyWeb.StudioComponents do
             </div>
           </div>
         </div>
+
+        <%!-- What the modules concluded at this step, in one sentence. Monty's
+        criterion ends the episode on the first match, so the record of a
+        parallel run is one `match` and a row of `time_out` — which is what the
+        criterion did, not what the modules answered. The verdict names the
+        object the concluded modules agreed on and what the rest still held:
+        silence is reported as silence, not as dissent. --%>
+        <p
+          :if={@verdict}
+          id="replay-verdict"
+          data-agreed={to_string(@verdict.agreed?)}
+          class="text-xs text-base-content/75"
+        >
+          {verdict_sentence(@verdict)}
+        </p>
 
         <%!-- Hovering a line says which object is under the pointer, which step
         it is, and what it was worth. The samples come from the server, so the
@@ -1457,6 +1475,54 @@ defmodule ExTbpMontyWeb.StudioComponents do
       _older -> ""
     end
   end
+
+  # What the modules concluded, in one sentence: the object the concluded ones
+  # agreed on, what the rest still held, and a dissent by name when there is one.
+  # "5 match · 0 time_out" is what Monty's criterion did; this is what the modules
+  # answered.
+  defp verdict_sentence(%{agreed?: true, object: object} = verdict) do
+    "agreed on #{object} · #{how_many(verdict)}" <>
+      still_believing(verdict.undecided) <> refused(verdict.dissent)
+  end
+
+  defp verdict_sentence(%{concluded: [_ | _]} = verdict) do
+    "no agreement · " <>
+      Enum.map_join(verdict.concluded, " · ", &"#{&1.module_id} says #{&1.object}") <>
+      still_believing(verdict.undecided) <> refused(verdict.dissent)
+  end
+
+  defp verdict_sentence(verdict) do
+    "no module has concluded" <>
+      still_believing(verdict.undecided) <> refused(verdict.dissent)
+  end
+
+  defp how_many(%{concluded: concluded, undecided: undecided, dissent: dissent}) do
+    total = length(concluded) + length(undecided) + length(dissent)
+
+    if length(concluded) == total,
+      do: "#{total} of #{total} modules concluded",
+      else: "#{length(concluded)} of #{total} concluded"
+  end
+
+  # A module that ran out of steps is not a module that disagreed: it held a
+  # belief when the episode ended, and the sentence says which. Grouped by the
+  # object, so four modules still believing the same thing are named once.
+  defp still_believing([]), do: ""
+
+  defp still_believing(results) do
+    results
+    |> Enum.group_by(& &1.object)
+    |> Enum.sort_by(fn {object, _group} -> to_string(object) end)
+    |> Enum.map_join("", fn
+      {nil, group} -> " · " <> module_names(group) <> " undecided"
+      {object, group} -> " · " <> module_names(group) <> " still believing " <> object
+    end)
+  end
+
+  defp refused([]), do: ""
+  defp refused(results), do: " · " <> module_names(results) <> " found none of the objects"
+
+  defp module_names(results), do: Enum.map_join(results, ", ", & &1.module_id)
 
   @doc """
   Trims a label to the box it sits in.
