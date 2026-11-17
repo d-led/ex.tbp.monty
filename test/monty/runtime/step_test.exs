@@ -116,6 +116,28 @@ defmodule Monty.Runtime.StepTest do
     end
   end
 
+  describe "the beliefs a lagged coordinator reads" do
+    test "a barrier run keeps none" do
+      model_id = start_model()
+
+      assert {:ok, _actions, _info} = step(model_id)
+      _ = :sys.get_state(Registry.via({:step, model_id}))
+
+      assert Step.state(Registry.via({:step, model_id})).reports == %{}
+    end
+
+    test "a lagged run keeps each module's belief, with the epoch it belongs to" do
+      model_id = start_model(scheduling: :lagged)
+
+      assert {:ok, _actions, _info} = step(model_id)
+      # The report travels as a message, so the coordinator is given the chance
+      # to have handled it before its state is read.
+      _ = :sys.get_state(Registry.via({:step, model_id}))
+
+      assert %{lm_0: {0, _vote}} = Step.state(Registry.via({:step, model_id})).reports
+    end
+  end
+
   describe "the sensor phase" do
     @two_sensors [:patch, :view_finder]
 

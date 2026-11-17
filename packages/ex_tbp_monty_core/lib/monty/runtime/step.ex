@@ -233,6 +233,15 @@ defmodule Monty.Runtime.Step do
   @impl true
   def init(options), do: {:ok, State.new(options)}
 
+  # A module saying what it believes after an epoch — the lagged coordinator's
+  # input (`State.scheduling/1`). It is kept, not integrated: a step reads the
+  # report *for the epoch it integrates*, so which module answered first cannot
+  # decide what the model believes.
+  @impl true
+  def handle_cast({:voted, id, epoch, vote}, %State{} = state) do
+    {:noreply, %{state | reports: Map.put(state.reports, id, {epoch, vote})}}
+  end
+
   @impl true
   def handle_call({:step, observations, proprioceptive_state, ctx}, _from, %State{} = state) do
     state = start_stream_if_new_episode(state, ctx)

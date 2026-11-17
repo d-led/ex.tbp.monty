@@ -27,7 +27,8 @@ defmodule Monty.Runtime.LearningModuleServer do
           required(:id) => id(),
           required(:model_id) => id(),
           required(:module) => module(),
-          required(:state) => term()
+          required(:state) => term(),
+          optional(:report_votes) => boolean()
         }
 
   @type server :: GenServer.server()
@@ -252,7 +253,15 @@ defmodule Monty.Runtime.LearningModuleServer do
   @impl true
   def init(spec) do
     {:ok,
-     %{module: spec.module, state: spec.state, id: spec.id, epoch: nil, waiting: []}}
+     %{
+       module: spec.module,
+       state: spec.state,
+       id: spec.id,
+       model_id: spec.model_id,
+       epoch: nil,
+       waiting: [],
+       report_votes?: Map.get(spec, :report_votes, false)
+     }}
   end
 
   # A step handed over: the same three things `learn/4` in `Monty.Runtime.Step`
@@ -260,12 +269,18 @@ defmodule Monty.Runtime.LearningModuleServer do
   # stepwise target, the step itself, then whether the step was one this module
   # had something to process. An empty hand-off is a module with no input: it is
   # not stepped, and it is told so.
+  #
+  # A module built for a lagged coordinator also says what it now believes, as a
+  # message to the coordinator, because that is the whole point of the lag: the
+  # belief of epoch `n` is readable while the module is already working on
+  # `n + 1`, which a call could not be (it would queue behind that work).
   @impl true
   def handle_cast({:hand_off, epoch, percepts, ctx, target}, server) do
     server =
       server
       |> take_step(percepts, ctx, target)
       |> finished(epoch)
+      |> report(epoch)
 
     {:noreply, reply_waiters(server)}
   end
@@ -297,6 +312,27 @@ defmodule Monty.Runtime.LearningModuleServer do
   defp location_only?(percepts), do: Monty.Runtime.location_only_step?(percepts)
 
   defp finished(server, epoch), do: %{server | epoch: epoch}
+
+  # `send_out_vote/1` is what this module believes, not a step of it: every
+  # module in this tree answers it with the state it was given. It is called
+  # here only where a coordinator asked to be told, so a run that reads votes the
+  # synchronous way is not given an extra call per module per step.
+  defp report(%{report_votes?: false} = server, _epoch), do: server
+
+  defp report(%{module: module, state: state} = server, epoch) do
+    {vote, state} = module.send_out_vote(state)
+    notify_coordinator(server, epoch, vote)
+    %{server | state: state}
+  end
+
+  # The coordinator is the model's, registered beside the modules; a model being
+  # torn down has none, and a belief nobody can hear is not an error.
+  defp notify_coordinator(%{model_id: model_id, id: id}, epoch, vote) do
+    case Registry.lookup({:step, model_id}) do
+      [{pid, _value}] -> GenServer.cast(pid, {:voted, id, epoch, vote})
+      [] -> :ok
+    end
+  end
 
   defp reached?(%{epoch: nil}, _epoch), do: false
   defp reached?(%{epoch: processed}, epoch), do: processed >= epoch

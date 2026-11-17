@@ -27,6 +27,21 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     Registry.via({:learning_module, model_id, id})
   end
 
+  # A module that tells the coordinator what it believes after every epoch — the
+  # mode a lagged run builds (`Monty.Runtime.Step.State.scheduling/1`).
+  defp start_reporting_server(model_id, id) do
+    spec = %{
+      id: id,
+      model_id: model_id,
+      module: LearningModule,
+      state: LearningModule.new(id),
+      report_votes: true
+    }
+
+    start_supervised!(Supervisor.child_spec({LearningModuleServer, spec}, id: {:learning, id}))
+    Registry.via({:learning_module, model_id, id})
+  end
+
   describe "a step" do
     test "keeps the percepts the module was given", %{model_id: model_id} do
       server = start_server(model_id, :lm_0)
@@ -124,6 +139,35 @@ defmodule Monty.Runtime.LearningModuleServerTest do
       assert :ok = LearningModuleServer.await(server, 0)
       assert LearningModuleServer.processed_through(server) == 0
       assert LearningModuleServer.state(server).percepts == []
+    end
+  end
+
+  describe "saying what it believes" do
+    test "a module built to report sends its belief to the coordinator, by epoch", %{
+      model_id: model_id
+    } do
+      # The coordinator is found by name, so a test can be the one that answers
+      # to it — the name is the model's own, as in a running model.
+      {:ok, _} = Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+      server = start_reporting_server(model_id, :lm_0)
+
+      LearningModuleServer.hand_off(server, 4, [Messages.percept()], Context.new(1), "mug")
+
+      assert :ok = LearningModuleServer.await(server, 4)
+      # A cast, so the module never waits for the coordinator to listen: the
+      # stand-in's vote is its percept count, which tells the report from any
+      # other message this module could send.
+      assert_receive {:"$gen_cast", {:voted, :lm_0, 4, [count: 1, id: :lm_0]}}
+    end
+
+    test "a module built the synchronous way reports nothing", %{model_id: model_id} do
+      {:ok, _} = Elixir.Registry.register(Monty.Runtime.Registry.registry(), {:step, model_id}, nil)
+      server = start_server(model_id, :lm_0)
+
+      LearningModuleServer.hand_off(server, 0, [Messages.percept()], Context.new(1), "mug")
+
+      assert :ok = LearningModuleServer.await(server, 0)
+      refute_receive {:"$gen_cast", {:voted, :lm_0, 0, _vote}}
     end
   end
 

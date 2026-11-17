@@ -172,7 +172,13 @@ defmodule Monty.Runtime.Model do
           {Monty.Runtime.SensorModuleServer, Map.put(spec, :model_id, model_id)}
         end) ++
         Enum.map(options.learning_modules, fn spec ->
-          {Monty.Runtime.LearningModuleServer, Map.put(spec, :model_id, model_id)}
+          # A module reports the belief it holds after each epoch only where the
+          # run asked for a lagged coordinator (`Monty.Runtime.Step.State`), so a
+          # run that reads votes the synchronous way pays nothing for it.
+          {Monty.Runtime.LearningModuleServer,
+           spec
+           |> Map.put(:model_id, model_id)
+           |> Map.put(:report_votes, Map.get(options, :scheduling, :barrier) == :lagged)}
         end) ++
         [{Step, Map.put(options, :model_id, model_id)}]
 
