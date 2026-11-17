@@ -110,7 +110,7 @@ walked the sensor over the object until the learning module recognised it.
 
 ## The variations of one experiment
 
-One config, four decision-makers, so that the policies can be compared on the
+One config, three decision-makers, so that the policies can be compared on the
 same objects rather than on each other's summaries:
 
 | Experiment                                       | Defined by                 | Motor system                       | World    |
@@ -118,9 +118,8 @@ same objects rather than on each other's summaries:
 | `base_10simobj_surf_agent`                       | the config (the control)   | `surface_curvature_informed_goal1` | `mujoco` |
 | `example_plugin.10simobj_surf_agent_one_episode` | `examples/example_plugin`  | `example_plugin.surface_stepper`   | `mujoco` |
 | `flyverse_plugin.10simobj_surf_agent`            | `examples/flyverse_plugin` | `flyverse_plugin.lif_steering`     | `mujoco` |
-| `monty_cad.10simobj_surf_agent`                  | `ex.monty.cad.server`      | `monty_cad.feature_walk`           | `cad`    |
 
-Three rules make that a comparison rather than four runs that happen to share a
+Three rules make that a comparison rather than three runs that happen to share a
 name:
 
 - **the same base.** Each definition names `base_10simobj_surf_agent` rather than a
@@ -140,46 +139,17 @@ contract routes, because it is called once per step and the value that travels i
 its name. A learning module is advertised rather than routed, so a definition that
 named one is refused by name (`Monty.Studio.PluginExperiment`).
 
-The CAD row also chooses its **world**, because a definition cannot: a world is a
-core noun, picked when the run is opened. It has to be `cad` — the walk converts
-the sensor's pose into the part's millimetres and walks the faces it finds there,
-so on `mujoco` it would issue real actions about an object that is not in the
-scene. The studio only offers the `cad` world on a node that carries
-`ex_monty_cad` and has `MONTY_CAD_PART` naming a part (`Monty.Studio.Setup.worlds/0`),
-so a page cannot ask for the pair half of which the node would refuse.
-
-Its host is a sibling checkout, not a process of this repository's
-`process-compose.yaml`, so the row appears when that node joins the cluster:
-
-```sh
-# in ex.monty.cad.server, on the same cookie as the studio stack
-PORT=4100 MONTY_CAD_PART=/path/to/part.step MONTY_CAPABILITIES=world:cad \
-  elixir --name cad_server@127.0.0.1 --cookie local-dev-secret -S mix phx.server
-```
-
-and the studio nodes name it in `MONTY_SEEDS` — or, on a stack already running,
-one `Node.connect(:"cad_server@127.0.0.1")` is enough, because `:pg` replicates the
-group on connect. Checked on a live pair: node1 listed
-`monty_cad.10simobj_surf_agent` beside the two hosts' variations five seconds
-later, and `PluginExperiment.open/2` answered with the definition on
-`cad_server@127.0.0.1` v0.2.0 and a live `monty_cad.feature_walk` v0.6.1 policy —
-base `base_10simobj_surf_agent`, seed 42.
-
 **What is not in the table, and why.** `ex_mujoco` is a physics engine, so it can
 be a world and not a decision — the `mujoco` world today is Python MuJoCo, and an
 Elixir one would be a fourth _world_ (`Monty.Studio.Setup.world/4` is where a world
-is added) rather than a fourth variation. `ex_quiddity` is the geometry under
-`monty_cad.feature_walk`: what makes that row possible, and no decision of its own
-to offer. `ex_cadmpeg` reads, converts and writes documents and builds no primitive
-(`docs/cad.md` has the measurement), so it authors a part rather than stepping or
-deciding one. `ex_monty_plugin` is the contract all three hosts answer and `fine`
-is the FFI under `ex_mujoco`: neither is a thing a run can swap.
+is added) rather than a fourth variation. `ex_monty_plugin` is the contract all
+three hosts answer and `fine` is the FFI under `ex_mujoco`: neither is a thing a
+run can swap. `ex_quiddity`, `ex_cadmpeg` and `ex_monty_cad` are the geometry and
+the memory, not decisions: what they are for is [a CAD part in a run](cad.html).
 
 A comparison is what the runs are, not what this page says they are: every record
 keeps `defined_by` (plugin, version, node) and `motor_policy` (policy, version,
-node), which is what makes two rows comparable after the fact. `docs/cad.md` keeps
-the one comparison that has been measured — the geometry policy against the
-config's curvature policy on a plate — including the reading that did not hold.
+node), which is what makes two rows comparable after the fact.
 
 ## The loop rules
 

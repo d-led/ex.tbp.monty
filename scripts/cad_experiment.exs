@@ -1,5 +1,5 @@
 # The CAD experiment: build a memory from CAD parts, then recognise one of them
-# in the CAD world. This is `docs/cad.md` item 3, runnable.
+# in the CAD world. Stages 1 and 2 of `docs/cad.md`, runnable.
 #
 #   mix run scripts/cad_experiment.exs                      # the plate, alone
 #   mix run scripts/cad_experiment.exs plate blend          # two parts, sense the blend
@@ -14,7 +14,7 @@
 # framework, not the geometry. `Monty.Studio.Setup` opens a part through
 # `MontyCad.Scene` when one is loaded, and `MontyCad.Training` writes the memory
 # a run reads — both live in `ex_monty_cad`, which the studio deliberately does
-# not depend on (`docs/cad.md`, first section). A node that carries that package
+# not depend on (`docs/cad.md`). A node that carries that package
 # needs none of this.
 #
 # The memory is written to a directory of its own and pointed at with
@@ -31,7 +31,7 @@ parts = %{
 }
 
 # Two parts that differ in one thing only — size — while both have a pose the
-# sensor can name (a rounded block's cannot, `docs/cad.md`). They are derived
+# sensor can name (a rounded block's cannot). They are derived
 # rather than checked in: the same nine faces and eighteen edges, and every
 # point *and* every radius scaled, because a file with scaled points and
 # unscaled radii is a different, broken part and the numbers are the only place
