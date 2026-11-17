@@ -282,29 +282,40 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
                # set by `init_monty_data_loggers`.
                has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
              ) do
-        # Monty's pretrained state dict carries which object built each graph; a
-        # library here holds the graphs under the object ids they were trained
-        # from, so the index is rebuilt from the memory the module was handed.
-        # Without it an episode's statistics cannot tell a target found from an
-        # object confused for one, and call every recall an unknown object.
+        # Monty's pretrained state dict carries which object built each graph, and
+        # a library here now does too (`docs/monty-differences.md` §2.27): the run
+        # that trained wrote the module's own `graph_id_to_target` beside the
+        # graphs. Without it an episode's statistics cannot tell a target found
+        # from an object confused for one, and would call every recall an unknown
+        # object. A library that carries none — a pretrained release this port did
+        # not write — is read as it always was: a graph is named after the object
+        # it was stored under.
         if Keyword.has_key?(options, :memory),
-          do: {:ok, index_objects_for_graphs(lm)},
+          do: {:ok, index_objects_for_graphs(lm, Keyword.get(options, :memory_targets, %{}))},
           else: {:ok, lm}
       end
     end
   end
 
-  # A graph is built from one object, and is stored under that object's id, so
-  # both directions of the index are the memory's own ids. Monty reaches the
-  # same two maps by training and then saving them in the model; this port's
-  # library keeps the graphs alone.
-  defp index_objects_for_graphs(%__MODULE__{} = lm) do
+  # Both directions of the index, from what the library says each graph was built
+  # from, and from the graph's own id where it says nothing.
+  defp index_objects_for_graphs(%__MODULE__{} = lm, targets) do
     graph_ids = GraphMemory.get_memory_ids(lm.graph_memory)
+
+    named =
+      Map.new(graph_ids, fn graph_id ->
+        {graph_id, MapSet.new(Map.get(targets, graph_id, [graph_id]))}
+      end)
 
     %{
       lm
-      | graph_id_to_target: Map.new(graph_ids, &{&1, MapSet.new([&1])}),
-        target_to_graph_id: Map.new(graph_ids, &{&1, MapSet.new([&1])})
+      | graph_id_to_target: named,
+        target_to_graph_id:
+          Enum.reduce(named, %{}, fn {graph_id, names}, index ->
+            Enum.reduce(names, index, fn name, index ->
+              Map.update(index, name, MapSet.new([graph_id]), &MapSet.put(&1, graph_id))
+            end)
+          end)
     }
   end
 

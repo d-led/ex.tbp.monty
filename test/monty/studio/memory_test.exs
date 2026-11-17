@@ -278,6 +278,31 @@ defmodule Monty.Studio.MemoryTest do
     end
   end
 
+  describe "the objects a memory's graphs were built from" do
+    test "travel with the graphs, because a graph named after its episode says nothing" do
+      dir = Tmp.dir("targets")
+
+      memory = trained_memory()
+      targets = %{"mug" => ["milka"], "bowl" => ["puppy_dog", "puppy"]}
+
+      assert :ok = Memory.save_all([{0, memory, targets}], "dogs", "trained", dir)
+
+      assert {:ok, %{targets: read}} = Memory.load_with_targets("dogs", "trained", 0, dir)
+
+      assert read == %{"bowl" => ["puppy", "puppy_dog"], "mug" => ["milka"]}
+    end
+
+    test "are the graphs' own ids for a library that carries none" do
+      dir = Tmp.dir("no_targets")
+      memory = trained_memory()
+
+      assert :ok = Memory.save(memory, "dogs", "trained", dir)
+
+      assert {:ok, %{targets: read}} = Memory.load_with_targets("dogs", "trained", 0, dir)
+      assert read == %{"bowl" => ["bowl"], "mug" => ["mug"]}
+    end
+  end
+
   # What matching reads, as values that do not depend on which column a feature
   # happens to sit in: each node's position and its features by name, sorted so
   # two memories that hold the same nodes compare equal whatever order they were

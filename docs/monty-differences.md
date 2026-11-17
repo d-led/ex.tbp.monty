@@ -1674,6 +1674,7 @@ here unsolved.
 **What is therefore not compared.** The epoch directories Monty leaves, the
 `exp_state_dict.pt` counters it saves beside them, and the interface and logger
 epoch hooks, which here have no caller.
+
 ## 2.26 A sensor keeps its step record only for a detailed logger
 
 **In one line:** Monty appends every percept to `processed_obs` and, when
@@ -1713,3 +1714,40 @@ detailed would have kept: `state_dict()['raw_observations']` and
 `['processed_observations']` are empty there, where Monty's hold the episode. A
 run that wants them says so in its logging section, and then keeps them as Monty
 does.
+
+## 2.27 A library says which object each graph was built from
+
+**In one line:** Monty keeps `graph_id_to_target` on the learning module and
+saves it with the model; this port's library used to keep the graphs alone, so a
+recognition run could not say whether a `match` named the object it was shown.
+
+**What Monty does.** `GraphLM._update_target_graph_mapping` records two sets in
+the module — graph → the objects it was built from, and object → its graphs — and
+`fixme_update_ground_truth` calls it after a training episode with the object the
+experiment placed. Both live in the module's `state_dict`, which is what a
+checkpoint holds, so a run that loads a pretrained model loads the answers with
+it, and `logging_utils.unsupervised_stats` can ask "was the target among the
+possible matches" of a memory it did not build.
+
+**What this port does.** The same two maps live on
+[`EvidenceGraphLM`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex)
+and are updated the same way. They are now written into the library too:
+`Monty.Studio.Memory.save_all/4` takes each module's map beside its memory and
+writes a `targets` list into every record, `Monty.Studio.Memory.load_with_targets/4`
+reads it back, and `Monty.Studio.Setup` hands it to the module it builds
+(`:memory_targets`), which indexes itself by those names instead of by the graph's
+own id. `mix monty.run` reads the map off each module at the end of a training
+episode (`Monty.Studio.Run.memory_targets/1`) and passes it to
+`Monty.Studio.Learned.keep/5`.
+
+**Why.** A graph an unsupervised training run names `new_object3` carries no
+identity: eight dogs gave four graphs, four of them concluded on `new_object3`,
+and the library held nothing that could say whether that was the dog the episode
+had shown. A `match` was therefore a conclusion and not an answer — the number
+this corpus exists to measure could not be computed at all. A library written
+before records carried `targets` is read as it always has been: a graph is named
+after the object it was stored under, which is what this port assumed.
+
+**What is therefore not compared.** Monty's `.pt` checkpoint, which carries the
+whole model's state — the module's other learned fields included. Only the two
+maps travel here, because they are the ones a later run scores itself against.

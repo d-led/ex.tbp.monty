@@ -135,6 +135,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
              }
     end
 
+    test "a memory that names the objects its graphs came from is indexed by those names" do
+      # What a library carries now (`docs/monty-differences.md` §2.27): an
+      # unsupervised training run names its graphs `new_object3`, and the library
+      # says which dog that was, so a recognition run can score itself.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(config(),
+          memory: pretrained(["new_object0", "new_object1"]),
+          memory_targets: %{"new_object0" => ["milka"], "new_object1" => ["puppy"]}
+        )
+
+      assert lm.graph_id_to_target == %{
+               "new_object0" => MapSet.new(["milka"]),
+               "new_object1" => MapSet.new(["puppy"])
+             }
+
+      assert lm.target_to_graph_id == %{
+               "milka" => MapSet.new(["new_object0"]),
+               "puppy" => MapSet.new(["new_object1"])
+             }
+    end
+
     test "a module about to learn starts with no graph built from any object" do
       {:ok, lm} = EvidenceGraphLM.from_config(config())
 

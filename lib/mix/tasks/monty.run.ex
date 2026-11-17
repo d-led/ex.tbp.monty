@@ -118,7 +118,11 @@ defmodule Mix.Tasks.Monty.Run do
   defp run_phases(opened, opts, history) do
     carried = %{
       memories: Monty.Studio.Setup.memories(opened.setup),
-      first_seen: %{}
+      first_seen: %{},
+      # What each graph was built from. A training episode's answer replaces the
+      # last one's, because the graphs a phase wrote are the ones the phase's
+      # last episode handed on; an evaluation episode leaves it alone.
+      targets: %{}
     }
 
     {infos, history, conclusion, carried, outcomes} =
@@ -131,17 +135,17 @@ defmodule Mix.Tasks.Monty.Run do
     # What a training phase learned is written down here, through the same seam
     # the queue's worker uses: a run that trains keeps its memory whichever door
     # it was started by, and a run with no record keeps nothing.
-    keep_memory(opened, history, carried.memories, opts)
+    keep_memory(opened, history, carried, opts)
 
     {infos, history, conclusion, outcomes}
   end
 
-  defp keep_memory(opened, history, memories, opts) do
+  defp keep_memory(opened, history, carried, opts) do
     plan = Monty.Studio.Setup.epoch_plan(opened.setup)
     run_id = history && history.id
 
     run_id
-    |> Monty.Studio.Learned.keep(opened, plan, memories)
+    |> Monty.Studio.Learned.keep(opened, plan, carried.memories, targets: carried.targets)
     |> Enum.each(fn line -> unless opts[:quiet], do: Mix.shell().info(line) end)
   end
 
@@ -230,7 +234,8 @@ defmodule Mix.Tasks.Monty.Run do
 
     carried = %{
       memories: next_memories(last_run, carried.memories, scope.mode),
-      first_seen: last_run.first_seen
+      first_seen: last_run.first_seen,
+      targets: targets_after(last_run, carried.targets, scope.mode)
     }
 
     # A training episode has nothing to recognise, so what it has to show for
@@ -283,6 +288,13 @@ defmodule Mix.Tasks.Monty.Run do
   # next episode starts from. A memory is what an episode leaves behind rather
   # than part of it, so a module that cannot answer for one is said out loud and
   # the phase goes on from the memory it had.
+
+  # What a graph was built from travels with the memory it belongs to, so the
+  # library names its objects — an unsupervised run names its graphs
+  # `new_object0`, … and nothing else would say which dog that was.
+  defp targets_after(run, _carried, :train), do: Monty.Studio.Run.memory_targets(run)
+
+  defp targets_after(_run, carried, :eval), do: carried
   defp next_memories(run, carried, mode) do
     Monty.Studio.Run.next_memories(run, carried, mode)
   rescue

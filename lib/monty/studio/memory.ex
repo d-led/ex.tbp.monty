@@ -162,11 +162,31 @@ defmodule Monty.Studio.Memory do
   @spec load_module(String.t(), String.t(), non_neg_integer(), Path.t()) ::
           {:ok, GraphMemory.t()} | {:error, :not_found | term()}
   def load_module(name, release, module_index, dir \\ libraries_dir()) do
+    with {:ok, %{memory: memory}} <- load_with_targets(name, release, module_index, dir),
+         do: {:ok, memory}
+  end
+
+  @doc """
+  One module's memory, with the objects its graphs were built from.
+
+  Monty keeps `graph_id_to_target` on the module, and this port's library used to
+  keep the graphs alone — which left a recognition run unable to say whether a
+  `match` named the object it was shown, because a graph an unsupervised training
+  run named `new_object3` carries no identity at all. The targets are written by
+  the run that trained (§2.27) and answered here; a library written before they
+  were carries each graph's own id instead, which is what this port has always
+  assumed.
+  """
+  @spec load_with_targets(String.t(), String.t(), non_neg_integer(), Path.t()) ::
+          {:ok, %{memory: GraphMemory.t(), targets: %{optional(String.t()) => [String.t()]}}}
+          | {:error, :not_found | term()}
+  def load_with_targets(name, release, module_index, dir \\ libraries_dir()) do
     with true <- model_name?(name),
          true <- is_binary(release),
          path = path_for(name, release, dir),
          true <- File.exists?(path) do
-      {:ok, built(path, module_index)}
+      {memory, targets} = built(path, module_index)
+      {:ok, %{memory: memory, targets: targets}}
     else
       _absent -> {:error, :not_found}
     end
@@ -200,20 +220,21 @@ defmodule Monty.Studio.Memory do
   @spec model_name?(term()) :: boolean()
   def model_name?(name), do: is_binary(name) and Regex.match?(@name_format, name)
 
-  # The decoded memory, built once per path for the life of the node. The key is
-  # the path, so pointing `:monty_libraries_dir` somewhere else (as a test that
-  # wants no libraries does) is a different cache entry rather than a stale hit.
+  # The decoded memory and its graphs' targets, built once per path for the life
+  # of the node. The key is the path, so pointing `:monty_libraries_dir`
+  # somewhere else (as a test that wants no libraries does) is a different cache
+  # entry rather than a stale hit.
   defp built(path, module_index) do
     key = {__MODULE__, :library, path, module_index}
 
     case :persistent_term.get(key, nil) do
       nil ->
-        memory = read!(path, module_index)
-        :persistent_term.put(key, memory)
-        memory
+        built = read!(path, module_index)
+        :persistent_term.put(key, built)
+        built
 
-      memory ->
-        memory
+      built ->
+        built
     end
   end
 
@@ -274,20 +295,40 @@ defmodule Monty.Studio.Memory do
   the *model's*: a training run that filed
   `dist_agent_5lm_2obj_train-learning_module_0` … `_4` left five libraries no
   config asks for, and the evaluation config of the tutorial found none of them.
+
+  An entry may carry the targets its graphs were built from — `{index, memory,
+  targets}`, where `targets` is Monty's `graph_id_to_target`, `%{graph =>
+  [object]}` — and a memory without them is written as it always was. This is
+  what makes a `match` checkable later: a graph named `new_object3` by an
+  unsupervised training run says nothing about which dog it is, and a library
+  that drops the module's own answers leaves recognition with no way to score
+  itself (`docs/monty-differences.md` §2.27).
   """
-  @spec save_all([{non_neg_integer(), GraphMemory.t()}], String.t(), String.t(), Path.t()) ::
-          :ok | {:error, term()}
+  @spec save_all(
+          [
+            {non_neg_integer(), GraphMemory.t()}
+            | {non_neg_integer(), GraphMemory.t(), %{optional(String.t()) => [String.t()]}}
+          ],
+          String.t(),
+          String.t(),
+          Path.t()
+        ) :: :ok | {:error, term()}
   def save_all(indexed, name, release, dir \\ libraries_dir()) do
     with :ok <- check_name(name),
          :ok <- check_release(release) do
       records =
-        Enum.flat_map(indexed, fn {index, memory} ->
-          Enum.map(records_of(memory), &Map.put(&1, "lm_index", index))
+        Enum.flat_map(indexed, fn entry ->
+          {index, memory, targets} = entry_of(entry)
+
+          Enum.map(records_of(memory, targets), &Map.put(&1, "lm_index", index))
         end)
 
       write(path_for(name, release, dir), records)
     end
   end
+
+  defp entry_of({index, memory}), do: {index, memory, %{}}
+  defp entry_of({index, memory, targets}), do: {index, memory, targets}
 
   defp check_name(name) do
     if model_name?(name), do: :ok, else: {:error, {:not_a_model_name, name}}
@@ -317,7 +358,7 @@ defmodule Monty.Studio.Memory do
   # learned into grid models holds those and a pretrained library holds plain
   # graphs: both answer `graph/1`, and what a record is made of is the same either
   # way.
-  defp records_of(%GraphMemory{} = memory) do
+  defp records_of(%GraphMemory{} = memory, targets) do
     for {object_id, channels} <- GraphMemory.state_dict(memory),
         {input_channel, model} <- channels,
         graph <- [memory.object_model.graph(model)],
@@ -326,7 +367,8 @@ defmodule Monty.Studio.Memory do
         "object_id" => object_id,
         "input_channel" => input_channel,
         "positions" => graph.pos,
-        "features" => features_of(graph)
+        "features" => features_of(graph),
+        "targets" => Map.get(targets, object_id, [object_id])
       }
     end
   end
@@ -378,9 +420,23 @@ defmodule Monty.Studio.Memory do
         {channel, Enum.filter(@features, &MapSet.member?(held, &1))}
       end)
 
-    GraphMemory.new(features_to_use: features_to_use)
-    |> GraphMemory.load_state_dict(models)
-    |> GraphMemory.initialize_feature_arrays()
+    memory =
+      GraphMemory.new(features_to_use: features_to_use)
+      |> GraphMemory.load_state_dict(models)
+      |> GraphMemory.initialize_feature_arrays()
+
+    # Which object each graph was built from, as the run that trained recorded it
+    # — the module's `graph_id_to_target` (`docs/monty-differences.md` §2.27). A
+    # library written before records carried one says what this port has always
+    # assumed: a graph is named after the object it came from.
+    targets =
+      records
+      |> Enum.group_by(& &1["object_id"], &Map.get(&1, "targets", [&1["object_id"]]))
+      |> Map.new(fn {object_id, name_lists} ->
+        {object_id, name_lists |> List.flatten() |> Enum.uniq() |> Enum.sort()}
+      end)
+
+    {memory, targets}
   end
 
   # Which module memories a library holds, counted once per path: the answer is a

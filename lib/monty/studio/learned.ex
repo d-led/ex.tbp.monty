@@ -164,13 +164,25 @@ defmodule Monty.Studio.Learned do
   # finding already says so.
   defp keep_run(run_id, opened, memories, options) do
     case holding(opened, memories) do
-      [] -> []
-      learned -> write(run_id, name_for(opened), learned, Keyword.get(options, :library, true))
+      [] ->
+        []
+
+      learned ->
+        write(
+          run_id,
+          name_for(opened),
+          learned,
+          Keyword.get(options, :library, true),
+          Keyword.get(options, :targets, %{})
+        )
     end
   end
 
-  defp write(run_id, name, learned, library?) do
-    indexed = Enum.map(learned, fn {index, _module_id, memory} -> {index, memory} end)
+  defp write(run_id, name, learned, library?, targets) do
+    indexed =
+      Enum.map(learned, fn {index, module_id, memory} ->
+        {index, memory, Map.get(targets, module_id, %{})}
+      end)
 
     with :ok <- Memory.save_all(indexed, name, @release, dir(run_id)),
          :ok <- write_library(indexed, name, library?) do

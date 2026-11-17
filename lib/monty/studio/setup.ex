@@ -514,6 +514,7 @@ defmodule Monty.Studio.Setup do
   def model_spec(%__MODULE__{} = setup, model_id, opts \\ []) do
     detailed? = Keyword.get(opts, :has_detailed_logger, false)
     memories = Keyword.get_lazy(opts, :memory, fn -> memories(setup) end)
+    targets = Keyword.get_lazy(opts, :memory_targets, fn -> memory_targets(setup) end)
 
     Map.merge(
       %{
@@ -522,7 +523,12 @@ defmodule Monty.Studio.Setup do
         learning_modules:
           Enum.map(
             setup.learning_modules,
-            &learning_module_spec(&1, Map.get(memories, &1.id, :none), detailed?)
+            &learning_module_spec(
+              &1,
+              Map.get(memories, &1.id, :none),
+              Map.get(targets, &1.id, %{}),
+              detailed?
+            )
           ),
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
@@ -1502,9 +1508,9 @@ defmodule Monty.Studio.Setup do
   # else reaches the stand-in, and the module map — which is where a class is
   # called `:implemented` — is what refuses the run: a registered class and a
   # status of `:implemented` are the same fact, and a test holds them together.
-  defp learning_module_spec(lm, memory, detailed?) do
+  defp learning_module_spec(lm, memory, targets, detailed?) do
     target = Map.get(lm.config, "_target_")
-    options = [has_detailed_logger: detailed?]
+    options = [has_detailed_logger: detailed?, memory_targets: targets]
     options = if memory == :none, do: options, else: [memory: memory] ++ options
 
     with {:ok, module} <- learning_module_class(target),
@@ -1588,6 +1594,33 @@ defmodule Monty.Studio.Setup do
   # finding promised graphs would make every experiment whose config names a
   # release nobody exported here run with an empty memory: no possible matches,
   # no evidence, nothing to draw, however long it runs.
+  @doc """
+  The objects each module's graphs were built from, by module id.
+
+  Monty keeps `graph_id_to_target` on the module, and a run scores itself
+  against it: a graph an unsupervised training run named `new_object3` says
+  nothing about which dog it is. The library carries it
+  (`docs/monty-differences.md` §2.27); a memory that came from somewhere else —
+  a pretrained release this port did not write — has none, and the module falls
+  back to each graph's own id.
+  """
+  @spec memory_targets(t()) :: %{optional(atom() | String.t()) => map()}
+  def memory_targets(%__MODULE__{learning_modules: modules} = setup) do
+    modules
+    |> Enum.with_index()
+    |> Map.new(fn {module, index} -> {module.id, targets_for(setup, index)} end)
+  end
+
+  defp targets_for(%__MODULE__{model_name_or_path: path}, index) do
+    with name when is_binary(name) <- Memory.name_of(path),
+         release when is_binary(release) <- Memory.release_of(path),
+         {:ok, %{targets: targets}} <- Memory.load_with_targets(name, release, index) do
+      targets
+    else
+      _absent -> %{}
+    end
+  end
+
   defp load_memory(name, release, module_index) do
     case Memory.load_module(name, release, module_index) do
       {:ok, memory} -> memory

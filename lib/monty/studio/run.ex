@@ -491,6 +491,30 @@ defmodule Monty.Studio.Run do
   end
 
   @doc """
+  What each module's graphs were built from — Monty's `graph_id_to_target`.
+
+  A run is one episode and its processes stop at the end of it, so a training
+  phase's memory is handed on as graphs alone (`memories/1`). What a graph cannot
+  say for itself is which object it came from: an unsupervised training run names
+  its graphs `new_object0`, … and a later run that matches one of them has no way
+  to know whether it named the right object. This is that answer, read off each
+  module the same way the memory is, and written into the library beside the
+  graphs (`Monty.Studio.Memory.save_all/4`).
+  """
+  @spec memory_targets(t()) :: %{optional(String.t()) => %{optional(String.t()) => [String.t()]}}
+  def memory_targets(%__MODULE__{model_id: model_id, setup: setup}) do
+    Map.new(setup.learning_modules, fn learning_module ->
+      server = Registry.via({:learning_module, model_id, learning_module.id})
+
+      targets =
+        LearningModuleServer.query(server, &Map.get(&1, :graph_id_to_target, %{}))
+
+      {learning_module.id,
+       Map.new(targets, fn {graph_id, names} -> {graph_id, Enum.sort(names)} end)}
+    end)
+  end
+
+  @doc """
   What each learning module holds in long-term memory now, by module id.
 
   A run is one episode and its processes stop at the end of it, so this is what
