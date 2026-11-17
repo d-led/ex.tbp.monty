@@ -407,6 +407,13 @@ defmodule Monty.Studio.Jobs.Run do
       # that places the object somewhere else still extends the graph it built
       # the first time.
       first_seen: %{},
+      # What each graph was built from, by module — Monty's `graph_id_to_target`.
+      # A training episode builds a graph of its own and names it, so a phase of
+      # five episodes has five answers and they are the library's only chance to
+      # say which dog it holds (`docs/monty-differences.md` §2.27). This is the
+      # same carrying `mix monty.run` does; a run started from a page is the same
+      # run.
+      targets: %{},
       # When this run last said it was alive, in monotonic seconds; `nil` until
       # the first step does. A record is written at episode boundaries and the
       # Reaper reads a silent record as a dead run, so the steps between two
@@ -446,7 +453,10 @@ defmodule Monty.Studio.Jobs.Run do
     # the parts learned between them, and one part writing it would overwrite the
     # merged one with its own share.
     Enum.each(
-      Learned.keep(run_id, opened, plan, state.memories, library: not part?(record)),
+      Learned.keep(run_id, opened, plan, state.memories,
+        library: not part?(record),
+        targets: state.targets
+      ),
       &say(run_id, &1)
     )
 
@@ -1324,6 +1334,7 @@ defmodule Monty.Studio.Jobs.Run do
       epoch: Map.get(callbacks, :epoch, 0),
       mode: state.mode,
       memory: state.memories,
+      memory_targets: state.targets,
       first_seen: state.first_seen,
       has_detailed_logger: Logging.detailed?(state.logging)
     ]
@@ -1376,6 +1387,11 @@ defmodule Monty.Studio.Jobs.Run do
   defp end_episode(run_id, %{run: run} = state, outcome, infos) do
     {conclusion, memories, logging, closing} = close_episode(run_id, state, outcome, run)
 
+    # What this training episode named has to be read while its modules are still
+    # answering: `Run.memory_targets/1` asks the learning module process, and the
+    # line below is where that process goes.
+    targets = targets_after(run, state)
+
     {stopping, _} = :timer.tc(fn -> stop_episode(run, state, outcome) end)
     {handed, record} = :timer.tc(fn -> keep(state.record, state.episodes_started - 1) end)
 
@@ -1395,9 +1411,18 @@ defmodule Monty.Studio.Jobs.Run do
         boundary: closing ++ [{"stop", stopping}, {"hand-over", handed}],
         # A supervised episode names where the object stood, and that place is
         # what every later episode of this run extends (`Run.supervise/1`).
-        first_seen: run.first_seen
+        first_seen: run.first_seen,
+        # A training episode's answer adds to the phase's: the graphs are keyed by
+        # id and two episodes never share one, so this is a union and not a
+        # decision. An evaluation episode learns nothing and leaves it alone.
+        targets: targets
     }
   end
+
+  defp targets_after(run, %{mode: :train, targets: carried}),
+    do: Run.merge_targets(carried, Run.memory_targets(run))
+
+  defp targets_after(_run, %{targets: carried}), do: carried
 
   # What the end of an episode owes its run's tally: one more conclusion, under
   # the module that made it. The last episode is not the run — whether this port
