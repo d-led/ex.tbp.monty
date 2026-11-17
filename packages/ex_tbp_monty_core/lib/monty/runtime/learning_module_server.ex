@@ -60,6 +60,46 @@ defmodule Monty.Runtime.LearningModuleServer do
     GenServer.call(server, {:exploratory_step, percepts, ctx}, :infinity)
   end
 
+  @doc """
+  Hands the module one step's work and answers at once.
+
+  This port's addition, and the first half of a continuous pipeline: the
+  coordinator hands over the percepts of step `epoch` as a message and goes on,
+  and asks `await/3` only where it needs the answer — the vote round, which is
+  the one place the modules' theories are integrated.
+
+  `target` is the object the module's sensor is on this step. The caller decides
+  it because only the coordinator holds the semantic-id map, and the module
+  records it before it reads the percepts it came with — Monty's
+  `_set_stepwise_targets`, in the same order as `learn/4` in
+  `Monty.Runtime.Step` had it.
+  """
+  @spec hand_off(server(), non_neg_integer(), percepts(), Monty.Context.t(), String.t()) :: :ok
+  def hand_off(server, epoch, percepts, ctx, target) do
+    GenServer.cast(server, {:hand_off, epoch, percepts, ctx, target})
+  end
+
+  @doc "The last step this module finished processing, or `nil` before its first."
+  @spec processed_through(server()) :: non_neg_integer() | nil
+  def processed_through(server), do: GenServer.call(server, :processed_through, :infinity)
+
+  @doc """
+  Waits until this module has processed step `epoch`.
+
+  The one synchronisation point of a continuous sensor/learning pipeline: the
+  modules run at their own pace, and this is where a caller says "not before
+  step n". It is a barrier in the data rather than in the scheduler — nothing
+  is started in lockstep, and a module that is already ahead answers at once.
+
+  Two messages from one sender arrive in order, so a `hand_off/5` sent before
+  this call is handled before it: handing work over and then waiting for it
+  cannot race.
+  """
+  @spec await(server(), non_neg_integer(), timeout()) :: :ok
+  def await(server, epoch, timeout \\ :infinity) do
+    GenServer.call(server, {:await, epoch}, timeout)
+  end
+
   @doc "Sends what this module believes, for the vote round to combine."
   @spec send_out_vote(server()) :: vote()
   def send_out_vote(server), do: GenServer.call(server, :send_out_vote, :infinity)
@@ -211,8 +251,74 @@ defmodule Monty.Runtime.LearningModuleServer do
 
   @impl true
   def init(spec) do
-    {:ok, %{module: spec.module, state: spec.state, id: spec.id}}
+    {:ok,
+     %{module: spec.module, state: spec.state, id: spec.id, epoch: nil, waiting: []}}
   end
+
+  # A step handed over: the same three things `learn/4` in `Monty.Runtime.Step`
+  # used to do through three calls, done here in one, in the same order — the
+  # stepwise target, the step itself, then whether the step was one this module
+  # had something to process. An empty hand-off is a module with no input: it is
+  # not stepped, and it is told so.
+  @impl true
+  def handle_cast({:hand_off, epoch, percepts, ctx, target}, server) do
+    server =
+      server
+      |> take_step(percepts, ctx, target)
+      |> finished(epoch)
+
+    {:noreply, reply_waiters(server)}
+  end
+
+  defp take_step(%{module: module, state: state} = server, [], _ctx, _target) do
+    %{server | state: module.add_lm_processing_to_buffer_stats(state, false)}
+  end
+
+  defp take_step(%{module: module, state: state} = server, percepts, ctx, target) do
+    state = module.set_stepwise_target(state, target)
+
+    state =
+      case ctx.mode do
+        :exploratory ->
+          {:ok, state} = module.exploratory_step(percepts, ctx, state)
+          state
+
+        _matching ->
+          {:ok, state} = module.matching_step(percepts, ctx, state)
+          state
+      end
+
+    %{
+      server
+      | state: module.add_lm_processing_to_buffer_stats(state, not location_only?(percepts))
+    }
+  end
+
+  defp location_only?(percepts), do: Monty.Runtime.location_only_step?(percepts)
+
+  defp finished(server, epoch), do: %{server | epoch: epoch}
+
+  defp reached?(%{epoch: nil}, _epoch), do: false
+  defp reached?(%{epoch: processed}, epoch), do: processed >= epoch
+
+  defp reply_waiters(server) do
+    {ready, waiting} =
+      Enum.split_with(server.waiting, fn {_from, epoch} -> reached?(server, epoch) end)
+
+    Enum.each(ready, fn {from, _epoch} -> GenServer.reply(from, :ok) end)
+
+    %{server | waiting: waiting}
+  end
+
+  def handle_call({:await, epoch}, from, server) do
+    if reached?(server, epoch) do
+      {:reply, :ok, server}
+    else
+      {:noreply, %{server | waiting: [{from, epoch} | server.waiting]}}
+    end
+  end
+
+  def handle_call(:processed_through, _from, server), do: {:reply, server.epoch, server}
 
   @impl true
   def handle_call({:matching_step, percepts, ctx}, _from, server) do

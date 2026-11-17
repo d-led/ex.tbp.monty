@@ -1821,3 +1821,42 @@ worth keeping: a request closure holds what the sensor needs — a round of seve
 requests copies that into a process of its own, so a closure over *all* the
 observations paid one copy per sensor per step and the concurrent round lost by a
 factor.
+
+## 2.29 A module's step is handed over, and waited for by epoch
+
+**In one line:** Monty calls each learning module's step inside its own loop;
+here the coordinator hands the step to the module's process as a message and
+waits for the epoch only where it needs the answer — the vote round.
+
+**What Monty does.** `MontyBase.step` calls `_step_learning_modules`, which calls
+every module's `matching_step` in the caller's thread, one at a time. The step is
+therefore *performed by* the coordinator, and a module that took a second held
+the loop for a second.
+
+**What this port does.** Each module is a process with a mailbox
+(`Monty.Runtime.LearningModuleServer`), and a step is given to it:
+
+- `hand_off(server, epoch, percepts, ctx, target)` — one message carrying the
+  stepwise target, the percepts and the context, answered at once. The three
+  things a step used to make of a module (name it, step it, record whether it had
+  anything to process) happen in the module's own process, in that order,
+  including "no input, so not stepped";
+- `await(server, epoch)` — `:ok` at once if the module is already past `epoch`,
+  otherwise the reply arrives when it gets there; `processed_through/1` reads
+  where it is.
+
+Two messages from one sender arrive in order, so a `hand_off/5` followed by an
+`await/3` cannot race: the work is always enqueued before the wait.
+
+**Why.** It is the difference between a module *being called* and a module
+*working*: the coordinator's stack no longer grows with the module's step, and a
+module's pace is its own. It is also the precondition for a continuous pipeline —
+modules that keep working while their siblings do, with the epoch as the only
+place the coordinator says "not before step n" — which is where this port means
+to go (`docs/monty-differences.md` §2.28 already made the sensor phase a round
+the sensors themselves permit).
+
+**What is therefore not compared.** Nothing, yet: the vote round still begins
+after every module has finished its step, because a vote is the module's state
+*after* its step. So the decisions are Monty's, and the suite that pins them
+passes unchanged; what moved is where the work runs, not what it computes.

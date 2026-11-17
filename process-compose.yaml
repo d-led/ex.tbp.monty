@@ -144,6 +144,13 @@ processes:
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "MONTY_DB=sqlite"
       - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
+      # One run at a time on this node. The default is two (`queues: [studio: 2]`,
+      # `config/config.exs`), and with two nodes on one laptop that is four
+      # MuJoCo worlds at once; one each makes the peak two, and the queue is what
+      # holds the rest until a slot frees. `Monty.Studio.Jobs.studio_concurrency/1`
+      # refuses anything that is not a whole number of at least one, so a typo
+      # here stops the node instead of quietly taking no work.
+      - "MONTY_STUDIO_CONCURRENCY=1"
       # Two nodes of one machine can do the same things. A cluster of unlike
       # machines is where the tags matter, and this is where a node declares its
       # own (`ExTbpMonty.Cluster.Capabilities`): uncomment on one side only, and
@@ -176,6 +183,9 @@ processes:
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "MONTY_DB=sqlite"
       - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
+      # One run at a time, as on node1: the two nodes share one queue, so a
+      # laptop's peak is now two runs rather than four.
+      - "MONTY_STUDIO_CONCURRENCY=1"
     readiness_probe:
       http_get:
         host: 127.0.0.1

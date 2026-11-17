@@ -31,6 +31,15 @@ defmodule Monty.Test.RecordingLearningModule do
     {:ok, %{state | seen: state.seen ++ percepts}}
   end
 
+  # Reported as well as stored, because the *order* is the rule: Monty names a
+  # module the object under its sensor before the module reads the percepts it
+  # came with, and a mailbox tells a test that the name arrived first.
+  @impl true
+  def set_stepwise_target(state, label) do
+    send(state.notify, {:stepwise_target, state.id, label})
+    Map.put(state, :stepwise_target_object, label)
+  end
+
   @impl true
   def exploratory_step(percepts, ctx, state) do
     send(state.notify, {:exploratory_step, state.id, percepts, ctx.mode})

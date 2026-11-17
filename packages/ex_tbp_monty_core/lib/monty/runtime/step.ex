@@ -447,43 +447,36 @@ defmodule Monty.Runtime.Step do
         do: message
   end
 
+  # Monty's `MontyForGraphMatching._step_learning_modules`, as a hand-off and an
+  # epoch wait rather than a round of blocking calls.
+  #
+  # Each module is given its step as a message — the stepwise target it is named
+  # by, the step itself, whether it had anything to process — and the coordinator
+  # then waits for the epoch only because the vote round needs the answer: the
+  # module's vote is its state after this step. That wait is a barrier in the
+  # data, not in the scheduler: a module that is already ahead answers at once,
+  # nothing is started in lockstep, and the work no longer has to be performed
+  # inside the coordinator's call to it.
+  #
+  # A module with no inputs is not stepped — it is told it had nothing, which is
+  # what keeps a location-only step out of the symmetry count.
   defp step_learning_modules(
-         %State{model_id: model_id, call_timeout: timeout, semantic_id_to_label: labels},
+         %State{model_id: model_id, call_timeout: timeout, semantic_id_to_label: labels} = state,
          inputs,
          ctx
        ) do
-    requests =
-      Enum.map(inputs, fn {lm_id, percepts} ->
+    servers =
+      Map.new(inputs, fn {lm_id, percepts} ->
         server = Registry.via({:learning_module, model_id, lm_id})
-        {lm_id, fn -> learn(server, percepts, ctx, labels) end}
+        :ok = LearningModuleServer.hand_off(server, state.step, percepts, ctx, stepwise_target(percepts, labels))
+        {lm_id, server}
       end)
 
-    Barrier.run(requests, timeout)
+    Enum.each(servers, fn {_lm_id, server} ->
+      LearningModuleServer.await(server, state.step, timeout)
+    end)
+
     :ok
-  end
-
-  # Monty's `MontyForGraphMatching._step_learning_modules`: a module with no
-  # inputs is not stepped, and every module is told whether this step gave it
-  # something to learn from. A step that carried only a location is buffered
-  # but is not evidence, which is what keeps it out of the symmetry count.
-  #
-  # A module that does get input is named the object under its sensor first,
-  # which is Monty's `_set_stepwise_targets`: it belongs to the step, so it is
-  # recorded before the module reads the percepts it came with.
-  defp learn(server, [], _ctx, _labels) do
-    LearningModuleServer.add_lm_processing_to_buffer_stats(server, false)
-  end
-
-  defp learn(server, percepts, %{mode: :exploratory} = ctx, labels) do
-    :ok = LearningModuleServer.set_stepwise_target(server, stepwise_target(percepts, labels))
-    :ok = LearningModuleServer.exploratory_step(server, percepts, ctx)
-    record_processing(server, percepts)
-  end
-
-  defp learn(server, percepts, ctx, labels) do
-    :ok = LearningModuleServer.set_stepwise_target(server, stepwise_target(percepts, labels))
-    :ok = LearningModuleServer.matching_step(server, percepts, ctx)
-    record_processing(server, percepts)
   end
 
   # Monty reads the id off the first percept and looks it up. An id the map does
@@ -498,13 +491,6 @@ defmodule Monty.Runtime.Step do
   end
 
   defp stepwise_target(_percepts, _no_map), do: "no_label"
-
-  defp record_processing(server, percepts) do
-    LearningModuleServer.add_lm_processing_to_buffer_stats(
-      server,
-      not Monty.Runtime.location_only_step?(percepts)
-    )
-  end
 
   # A finite vote deadline closes the round with the votes that arrived; the
   # default `:infinity` reproduces Monty's synchronous round.
