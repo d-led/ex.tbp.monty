@@ -646,7 +646,12 @@ defmodule Monty.Studio.Run do
   per-mode limit or on `match_criterion`.
   """
   @spec cap(Setup.t()) :: pos_integer()
-  def cap(%Setup{} = setup), do: Setup.max_total_steps(setup) || @default_steps
+  def cap(%Setup{} = setup) do
+    case Setup.max_total_steps(setup) do
+      steps when is_integer(steps) and steps > 0 -> steps
+      _no_ceiling -> @default_steps
+    end
+  end
 
   defp seed(%Setup{seed: seed}) when is_integer(seed), do: seed
   defp seed(_setup), do: 0
