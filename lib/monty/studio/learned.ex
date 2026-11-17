@@ -129,21 +129,41 @@ defmodule Monty.Studio.Learned do
 
   defp trains?(plan), do: Enum.any?(plan, fn {mode, _epochs} -> mode == :train end)
 
+  @doc """
+  The modules' memories that hold a graph, with the index a library files them
+  under.
+
+  A library is a claim that a memory exists: `Memory.save_all/4` writes one
+  record a graph, so a memory holding none is a file with no record — a library
+  that reads back as "there is a memory here" and recognises nothing, and, when
+  it is filed under a name a previous run used, one that destroys that run's
+  memory. So a module with nothing learnt to it is dropped here, the same way a
+  module that keeps no graph memory at all already is, and a run that learnt
+  nothing says nothing rather than saying it kept a library.
+  """
+  @spec holding(map(), %{optional(term()) => term()}) ::
+          [{non_neg_integer(), term(), GraphMemory.t()}]
+  def holding(opened, memories) do
+    opened.setup.learning_modules
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {module, index} ->
+      case Map.get(memories, module.id) do
+        %GraphMemory{} = memory ->
+          if holds_graph?(memory), do: [{index, module.id, memory}], else: []
+
+        _none ->
+          []
+      end
+    end)
+  end
+
+  defp holds_graph?(%GraphMemory{} = memory), do: GraphMemory.get_memory_ids(memory) != []
+
   # A module that keeps no graph memory — the stand-in learning module a config
   # without an evidence model gets — has nothing to write, and the `shell`
   # finding already says so.
   defp keep_run(run_id, opened, memories, options) do
-    learned =
-      opened.setup.learning_modules
-      |> Enum.with_index()
-      |> Enum.flat_map(fn {module, index} ->
-        case Map.get(memories, module.id) do
-          %GraphMemory{} = memory -> [{index, module.id, memory}]
-          _none -> []
-        end
-      end)
-
-    case learned do
+    case holding(opened, memories) do
       [] -> []
       learned -> write(run_id, name_for(opened), learned, Keyword.get(options, :library, true))
     end

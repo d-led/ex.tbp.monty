@@ -139,6 +139,21 @@ defmodule Monty.Studio.MemoriesTest do
       assert {:ok, filed} = Memory.load_module(name, Learned.release(), 0, libraries)
       assert GraphMemory.get_memory_ids(filed) == ["mug"]
     end
+
+    test "is refused when no part of the batch learnt a graph", %{libraries: libraries} do
+      # A wave whose parts all died before an episode, or whose merge is only
+      # empty memories, has nothing to file: a library with no record in it would
+      # read as a memory that recognises nothing, over the name a real memory is
+      # filed under.
+      {:ok, opened} = Monty.Studio.open(@training)
+      batch = Ecto.UUID.generate()
+      [%{id: module} | _rest] = opened.setup.learning_modules
+
+      assert Memories.keep(batch, opened, %{module => GraphMemory.new()}) ==
+               {:error, :nothing_learned}
+
+      assert Memory.releases_for(Learned.name_for(opened), libraries) == []
+    end
   end
 
   # A memory that knows one object: which part a graph came from is readable from

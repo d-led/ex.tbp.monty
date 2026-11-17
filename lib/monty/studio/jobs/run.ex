@@ -619,6 +619,9 @@ defmodule Monty.Studio.Jobs.Run do
 
         {:ok, record, memory}
 
+      {:error, :nothing_learned} ->
+        {:error, "no part of this wave learnt a graph, so there is no memory to merge", record}
+
       {:error, reason} ->
         {:error, "the merged memory could not be written: #{inspect(reason)}", record}
     end

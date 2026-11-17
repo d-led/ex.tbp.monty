@@ -24,7 +24,12 @@ defmodule ExTbpMonty.Objaverse.Import do
 
   alias ExTbpMonty.Objaverse.Glb
 
-  @longest 0.10
+  # The world's surface agent rides 10 cm up and its patch clips at 5 cm, so an
+  # object shorter than that is only ever half readable — the failure the hand-over
+  # records for spoons. A corpus is therefore normalised by **height**, not by its
+  # longest side: a dog is long and low, and scaling its length to 10 cm leaves it
+  # under the clip.
+  @height 0.10
   @default_colour {0.6, 0.6, 0.6}
 
   @type entry :: %{
@@ -88,17 +93,20 @@ defmodule ExTbpMonty.Objaverse.Import do
 
   # Where the object sits and how big it is, in the world's frame: the glTF Y-up
   # frame turned Z-up, centred on its own footprint, resting on z = 0, and scaled
-  # so its longest side is one length for the whole corpus.
-  defp placement(vertices, entry) do
+  # to one height for the whole corpus. A flat object (a height of nought) falls
+  # back to its longest side, which is the only dimension it has.
+  defp placement(vertices, _entry) do
     zup = Enum.map(vertices, fn {x, y, z} -> {x, -z, y} end)
     {min_x, max_x, min_y, max_y, min_z, max_z} = bounds(zup)
 
     longest = Enum.max([max_x - min_x, max_y - min_y, max_z - min_z])
+    height = max_z - min_z
+    by = if height > longest / 3, do: height, else: longest
 
-    if longest <= 0 do
+    if by <= 0 do
       {:error, :degenerate_mesh}
     else
-      scale = @longest / longest
+      scale = @height / by
 
       {:ok,
        %{

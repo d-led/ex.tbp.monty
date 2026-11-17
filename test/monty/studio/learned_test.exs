@@ -36,7 +36,7 @@ defmodule Monty.Studio.LearnedTest do
       {:ok, opened} = Monty.Studio.open(@training)
       run_id = Ecto.UUID.generate()
 
-      assert [line] = Learned.keep(run_id, opened, [{:train, 14}], memories(opened))
+      assert [line] = Learned.keep(run_id, opened, [{:train, 14}], learned_memories(opened))
 
       files =
         Path.wildcard(Path.join([Learned.dir(run_id), Learned.release(), "*.jsonl.gz"]))
@@ -127,10 +127,32 @@ defmodule Monty.Studio.LearnedTest do
 
       assert kept == []
     end
+
+    test "is a memory that holds no graph, which is not a library" do
+      # A file with no record in it reads back as "there is a memory here" and
+      # recognises nothing; filed under a name a previous run used, it also
+      # destroys that run's memory. So it is not written, and no line claims it
+      # was.
+      {:ok, opened} = Monty.Studio.open(@training)
+      run_id = Ecto.UUID.generate()
+
+      assert Learned.keep(run_id, opened, [{:train, 1}], memories(opened)) == []
+
+      assert Path.wildcard(Path.join([Learned.dir(run_id), Learned.release(), "*.jsonl.gz"])) ==
+               []
+    end
   end
 
   defp memories(opened) do
     Map.new(opened.setup.learning_modules, &{&1.id, GraphMemory.new()})
+  end
+
+  # The same shape with a graph in every module, which is what a training run
+  # that spent its steps on an object leaves.
+  defp learned_memories(opened) do
+    opened.setup.learning_modules
+    |> Enum.with_index(fn module, index -> {module.id, remembered("object_#{index}")} end)
+    |> Map.new()
   end
 
   # A memory that knows one object, so which module a record belongs to is

@@ -87,14 +87,21 @@ defmodule Monty.Studio.Memories do
   @spec keep(binary(), map(), %{optional(String.t()) => GraphMemory.t()}) ::
           {:ok, String.t()} | {:error, term()}
   def keep(batch, opened, memories) do
-    indexed =
-      Enum.map(indexed(opened, memories), fn {index, _module_id, memory} -> {index, memory} end)
+    case indexed(opened, memories) do
+      [] ->
+        # Nothing to merge is not a library with no record in it: that file would
+        # read as a memory and recognise nothing, and would be filed over the
+        # name a previous wave wrote.
+        {:error, :nothing_learned}
 
-    name = Learned.name_for(opened)
+      holding ->
+        indexed = Enum.map(holding, fn {index, _module_id, memory} -> {index, memory} end)
+        name = Learned.name_for(opened)
 
-    with :ok <- Memory.save_all(indexed, name, Learned.release(), batch_dir(batch)),
-         :ok <- Memory.save_all(indexed, name, Learned.release(), Memory.libraries_dir()) do
-      {:ok, name}
+        with :ok <- Memory.save_all(indexed, name, Learned.release(), batch_dir(batch)),
+             :ok <- Memory.save_all(indexed, name, Learned.release(), Memory.libraries_dir()) do
+          {:ok, name}
+        end
     end
   end
 
@@ -116,17 +123,9 @@ defmodule Monty.Studio.Memories do
 
   # The parts hold their memories per module id; a library is one file with an
   # index per module, so the module's place in the config is the index it is
-  # written under — the same indexing `Learned` uses for one run's memory.
-  defp indexed(opened, memories) do
-    opened.setup.learning_modules
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {module, index} ->
-      case Map.get(memories, module.id) do
-        %GraphMemory{} = memory -> [{index, module.id, memory}]
-        _none -> []
-      end
-    end)
-  end
+  # written under — the same indexing `Learned` uses for one run's memory, and
+  # the same rule about a memory that holds no graph.
+  defp indexed(opened, memories), do: Learned.holding(opened, memories)
 
   defp part_memory(run_id, opened) do
     opened.setup.learning_modules
