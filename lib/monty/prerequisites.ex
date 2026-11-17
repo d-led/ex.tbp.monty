@@ -27,6 +27,8 @@ defmodule Monty.Prerequisites do
           required(:root) => String.t(),
           required(:target) => String.t(),
           optional(:sha256) => String.t() | nil,
+          optional(:upstream) => String.t() | nil,
+          optional(:licence) => String.t() | nil,
           optional(:extract) => boolean(),
           optional(:unpacks_to) => String.t() | nil,
           optional(:provides) => [String.t()]
@@ -629,6 +631,11 @@ defmodule Monty.Prerequisites do
       root: Map.fetch!(entry, "root"),
       target: Map.fetch!(entry, "target"),
       sha256: Map.get(entry, "sha256"),
+      # Whose work the archive is and on what terms, beside the URL it comes
+      # from: a download is data, and data an application fetches on a person's
+      # behalf has to say where it came from.
+      upstream: Map.get(entry, "upstream"),
+      licence: Map.get(entry, "licence"),
       # An archive is unpacked where it lands: a prerequisite Monty's docs say
       # to unpack is not in place until it is unpacked.
       extract: Map.get(entry, "extract", false),

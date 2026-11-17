@@ -1,0 +1,163 @@
+# Where the data in this tree came from, and proof it is still that.
+#
+# This application reads data it did not write: Monty's config tree and the
+# snapshots Hydra composed from it, censuses taken of a checkout, the episodes
+# recorded from Monty's own answers, the CAD parts a world steps. Each is an
+# entry below — its origin, whose it is, what produced it, and the sha256 of the
+# bytes — and `test/monty/data_provenance_test.exs` holds the record to the tree:
+# a data file that no entry mentions fails the suite, and so does an entry whose
+# hash has drifted. `mix monty.data.check` prints the same four lists for a
+# person, with the hash a stale entry should carry.
+#
+# `kind` says how the bytes came to exist:
+#
+#   copied     verbatim from another project, at the release `source` names, and
+#              re-running `produced_by` reproduces it
+#   generated  a task in this tree writes it from a checkout or from the config
+#   recorded   an experiment or a recording harness produced it
+#   written    this project's own authorship — a config, a scene — whose history
+#              is the repository's and whose number only has to be current
+#
+# `hash` is the file's sha256, or — for a `path` that is a directory — the tree
+# hash: sha256 over the sorted lines "<relative path> <sha256>", so a set of four
+# hundred configs is stated once and any edit inside it is still caught.
+#
+# ## What is deliberately not here: a model
+#
+# No pretrained memory is in this repository, and none may be. A memory is what
+# Monty's training wrote; exporting it is `mix monty.prerequisites.fetch`'s work
+# and it arrives through `/prerequisites` like the object meshes do — a hundred
+# megabytes of a release, with its archive's checksum in `priv/prerequisites.yaml`.
+# A model checked in would be a model with no way to re-derive it: the numbers
+# would be true of one machine one day, and no record here could say more. What
+# this file records about them is that they are downloaded, and from which
+# release — see the `pretrained_*` entries of the prerequisite manifest.
+
+roots:
+  - priv/monty
+  - priv/monty_experiments
+  - priv/cad_experiments
+  - test/fixtures
+
+exclude:
+  # A pattern is relative to each root above, so this one names the memories
+  # under `priv/monty` and nothing else in the project. A pretrained memory is
+  # exported from the archive `/prerequisites` downloads;
+  # `priv/monty/libraries/README.md` stays in git and says how the layout works,
+  # and the memories beside it do not — their record is the archive's checksum.
+  - libraries/**/*
+  # The file a fetch streams into before its checksum matches and it is renamed.
+  - "**/*.part"
+
+data:
+  # Monty's Hydra config tree, copied so that a build, a test run and CI need no
+  # Monty checkout. The commit the copy is from is in `inputs.json` below, which
+  # the same task writes: re-running `mix monty.inputs --check` asks whether this
+  # tree is what a checkout at that commit would give.
+  - path: priv/monty/conf
+    kind: copied
+    title: Monty's Hydra config tree
+    source: github.com/thousandbrainsproject/tbp.monty, src/tbp/monty/conf (the commit in priv/monty/inputs.json)
+    licence: MIT — Copyright 2025 Thousand Brains Project, Copyright 2021-2024 Numenta Inc.
+    produced_by: mix monty.inputs
+    hash: fc0a06e7a19680a978520ce3dc10ccc6efd9b9a0c3112227356864f4cc0af46c
+
+  - path: priv/monty/snapshots
+    kind: copied
+    title: the trees Hydra composed for Monty's snapshot tests
+    source: github.com/thousandbrainsproject/tbp.monty, tests/conf/snapshots (the commit in priv/monty/inputs.json)
+    licence: MIT
+    produced_by: mix monty.inputs
+    hash: 7227270a16ff968db275ba720a6788a7a65ed381ce272d84853d96d0c17e6a9f
+
+  - path: priv/monty/LICENSE
+    kind: copied
+    title: Monty's licence, for the config tree and the snapshots
+    source: github.com/thousandbrainsproject/tbp.monty, LICENSE
+    licence: MIT
+    produced_by: mix monty.inputs
+    hash: 4ce6450bb1f14d2c1de0b90613994db04364446259ee8b5c8e2a519a0685949b
+
+  - path: priv/monty/inputs.json
+    kind: generated
+    title: which commit the Monty copy is, and how many files arrived from it
+    source: the checkout in MONTY_SOURCE, else ../monty-orig
+    produced_by: mix monty.inputs
+    hash: c9e09a4fbc10a1dc63f9e53b2278bd39fe9f2fcbb8fb065faf31eacb074aecae
+
+  - path: priv/monty/port_census.json
+    kind: generated
+    title: what each of Monty's Python classes is in this port
+    source: the checkout in MONTY_SOURCE, else ../monty-orig
+    produced_by: mix monty.port_census --json
+    hash: dcc92b6d69d8c77e921d3be0777f9dbd4735c0d3cdcf1a3c253241883adb4ac4
+
+  - path: priv/monty/target_census.json
+    kind: generated
+    title: which of Monty's classes its own configs name
+    source: priv/monty/conf, and the checkout in MONTY_SOURCE
+    produced_by: mix monty.target_census --json
+    hash: fe1412a707b44b140ffdf9b0dace91e89ed6bfc65963b8521f90c6ddd7622c93
+
+  # This port's own experiments. They are authored here, so their provenance is
+  # the commit that wrote them; the hash is here so that a change to a config
+  # someone forgot about still shows up as a change to the data a run reads.
+  - path: priv/monty_experiments/sets
+    kind: written
+    title: this port's own experiments, as Hydra sets
+    licence: MPL-2.0
+    hash: 0063d249d81c14817c53574ac273d60cf8c8088a7ada81c28bfcf99c4bcfa7dc
+
+  - path: priv/cad_experiments/conf
+    kind: written
+    title: the CAD experiments — the part in front of the agent, its sensors, its budget
+    licence: MPL-2.0
+    hash: d60bbbe44a926cbe591f85f3753a80256fa96cf4c276fb514d43115db7fef5eb
+
+  # The geometry the CAD world steps. Four small files, and what each one is —
+  # a bore plate with a riser, and blends — is what the CAD experiments'
+  # recognition has to find, so which file a run opened is part of its result.
+  - path: priv/cad_experiments/parts/plate.step
+    kind: copied
+    title: a plate with three bores and a riser — the CAD world's starting geometry
+    source: github.com/d-led/ex.monty.cad, its own test fixture
+    licence: MPL-2.0
+    hash: 478471dc57efaaa393d018d69094f40239c1df7d16cacddc4138baa5b3bc641a
+
+  - path: priv/cad_experiments/parts/blend.step
+    kind: copied
+    title: a fillet between two faces — the feature quiddity's recognition names a fillet
+    source: github.com/d-led/ex.quiddity, its own test fixture
+    licence: MPL-2.0
+    hash: 91decec860d19ea407af10ac1a10935e55e287200cb3611d17fd8705bac2f359
+
+  - path: priv/cad_experiments/parts/blend-big.step
+    kind: copied
+    title: the same fillet at a radius the sampler resolves to more than a few points
+    source: github.com/d-led/ex.quiddity, its own test fixture
+    licence: MPL-2.0
+    hash: 84a6c6f0b9a3db468f14af4cdb197e46f2223b2b407c1f84cd893195fa28def5
+
+  # Not computed here and not an export of an example we chose: the bytes are
+  # SolidCraft's sample plate as it publishes it. Nothing of SolidCraft is
+  # linked, copied into a library or modified — a STEP file is geometry, and the
+  # world opens it with quiddity.
+  - path: priv/cad_experiments/parts/solidcraft-plate.step
+    kind: copied
+    title: SolidCraft's sample plate — three bores, the largest in the middle
+    source: github.com/tangency-labs/solidcraft, its published sample plate
+    licence: MIT OR Apache-2.0 — Copyright (c) SolidCraft contributors
+    note: unmodified STEP export; the centre bore is what a bounding-box start pose looks down
+    hash: f35c461d5ef68dc44f02691378e386c1a58ed3aa80532588a8ad22313974842b
+
+  # What Monty *answered*, so the parity tests replay it instead of recomputing
+  # it. The recordings were made against the pretrained release the scenarios
+  # name — `docs/validation.md` says which — by the harnesses in `scripts/`; the
+  # one tree hash covers the set, and adding a recording is an edit here.
+  - path: test/fixtures
+    kind: recorded
+    title: Monty's own answers, recorded for the parity tests
+    source: a Python environment with Monty in it (MONTY_PYTHON), driving the scenarios in scripts/record_monty_*.py
+    licence: MIT — the values are Monty's output
+    produced_by: scripts/record_monty_*.py
+    hash: 0c2ac273731d2885e454503f9b95536a35f533fe5a6633182367330f0b4b2e08

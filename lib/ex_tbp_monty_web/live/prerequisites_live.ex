@@ -156,6 +156,17 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 >
                   {size_label(@sizes[prerequisite.id])}
                 </p>
+                <%!-- Where it comes from, on what terms, and which bytes. A
+                person about to wait for two gigabytes is entitled to the three,
+                and the checksum is the one the fetch verifies what it received
+                against. --%>
+                <p
+                  id={"provenance-#{prerequisite.id}"}
+                  class="text-xs text-base-content/50"
+                  title={prerequisite[:sha256]}
+                >
+                  {provenance_label(prerequisite)}
+                </p>
               </div>
 
               <div class="flex items-center gap-2">
@@ -497,6 +508,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp size_label(%{archive: archive, unpacked: unpacked}),
     do: "#{bytes(archive)} archive · #{bytes(unpacked)} unpacked"
+
+  # Where an archive comes from, whose it is, on what terms, and which bytes —
+  # read off the manifest rather than written here, so a page cannot say
+  # something about a download that the download's own record does not.
+  defp provenance_label(prerequisite) do
+    [prerequisite[:upstream], prerequisite[:licence], checksum_label(prerequisite[:sha256])]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" · ")
+  end
+
+  defp checksum_label(nil), do: nil
+
+  defp checksum_label(sha256),
+    do: "sha256 #{String.slice(sha256, 0, 8)}…#{String.slice(sha256, -8, 8)}"
 
   defp bytes(nil), do: "—"
   defp bytes(value), do: Humanizer.bytes(value, system: :binary)

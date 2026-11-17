@@ -68,6 +68,19 @@ defmodule Monty.PrerequisitesTest do
         assert String.starts_with?(entry[:url] || "", "https://"), "#{entry.id} has no https url"
         assert is_binary(entry.target) and entry.target != "", "#{entry.id} has no target"
         assert entry.root in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS), "#{entry.id}: #{entry.root}"
+
+        # Data that arrives over the network is described as well as fetched:
+        # the bytes this entry is about, whose archive it is, and on what terms.
+        # A checksum is what makes a re-upload upstream a failed download
+        # instead of a silent change of what every experiment reads.
+        assert Regex.match?(~r/\A[0-9a-f]{64}\z/, entry[:sha256] || ""),
+               "#{entry.id} does not record the sha256 of the bytes it fetches"
+
+        assert is_binary(entry[:upstream]) and entry[:upstream] != "",
+               "#{entry.id} does not say whose archive it is"
+
+        assert is_binary(entry[:licence]) and entry[:licence] != "",
+               "#{entry.id} does not say on what terms the archive is published"
       end
     end
 

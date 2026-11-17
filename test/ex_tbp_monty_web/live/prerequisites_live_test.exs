@@ -16,6 +16,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
       - id: tiny
         title: Tiny archive
         url: https://example.test/tiny.tgz
+        sha256: b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+        upstream: the test manifest
+        licence: MIT
         root: MONTY_DATA
         target: tiny.tgz
     """)
@@ -37,6 +40,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert has_element?(view, "#prereq-tiny")
     assert render(view) =~ Path.join([tmp, "data", "tiny.tgz"])
     assert render(view) =~ "not downloaded"
+  end
+
+  # The row says what a person agreeing to a download is agreeing to: whose
+  # archive it is, on what terms, and the bytes it should turn out to be. It
+  # reads all three off the manifest, so the page cannot promise something the
+  # fetch does not check.
+  test "says where an archive comes from, on what terms, and which bytes", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    provenance = view |> element("#provenance-tiny") |> render()
+
+    assert provenance =~ "MIT"
+    assert provenance =~ "sha256 b94d27b9…"
+    assert provenance =~ "the test manifest"
   end
 
   # A finding that says a run is waiting for an archive offers the click, and the
