@@ -91,7 +91,7 @@ config :ex_tbp_monty, precompute: false
 # do: a check that cries wolf is a check somebody ignores. The suite's own runs
 # go beside it, and `test/test_helper.exs` clears the directory before it starts.
 config :ex_tbp_monty,
-       studio_artifacts_dir: Path.join(System.tmp_dir!(), "ex_tbp_monty_test_artifacts")
+  studio_artifacts_dir: Path.join(System.tmp_dir!(), "ex_tbp_monty_test_artifacts")
 
 # Nor a download behind the suite's back: the boot fetch is on by default, and a
 # suite that started one would spend a gigabyte and write outside its temporary
