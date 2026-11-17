@@ -2,6 +2,7 @@ defmodule Monty.PrerequisitesTest do
   use ExUnit.Case, async: false
 
   alias Monty.Prerequisites
+  alias Monty.Prerequisites.Build
   alias Monty.Test.Tmp
 
   setup do
@@ -61,27 +62,42 @@ defmodule Monty.PrerequisitesTest do
     # be safe to extend: an entry that forgets where it goes, or points at a root
     # this application does not define, is a download that fails at a person's
     # click rather than at the edit.
-    test "every entry names what a download needs, and only roots Monty defines" do
+    #
+    # Two kinds of entry, and each has its own obligations. A download needs an
+    # https url, the checksum of the bytes it fetches, whose work it is and on
+    # what terms — a re-upload upstream must fail here rather than change
+    # silently what every experiment reads. A build needs the name of work this
+    # application can do and nothing from the network: it fetches nothing, so a
+    # checksum of nothing is not a fact about it.
+    test "every entry names what it needs, and only roots this application defines" do
       for entry <- Prerequisites.all() do
         assert is_binary(entry.id) and entry.id != "", "an entry has no id: #{inspect(entry)}"
         assert is_binary(entry.title) and entry.title != "", "#{entry.id} has no title"
-        assert String.starts_with?(entry[:url] || "", "https://"), "#{entry.id} has no https url"
         assert is_binary(entry.target) and entry.target != "", "#{entry.id} has no target"
-        assert entry.root in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS), "#{entry.id}: #{entry.root}"
 
-        # Data that arrives over the network is described as well as fetched:
-        # the bytes this entry is about, whose archive it is, and on what terms.
-        # A checksum is what makes a re-upload upstream a failed download
-        # instead of a silent change of what every experiment reads.
-        assert Regex.match?(~r/\A[0-9a-f]{64}\z/, entry[:sha256] || ""),
-               "#{entry.id} does not record the sha256 of the bytes it fetches"
+        assert entry.root in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS MONTY_LIBRARIES),
+               "#{entry.id}: #{entry.root}"
 
         assert is_binary(entry[:upstream]) and entry[:upstream] != "",
-               "#{entry.id} does not say whose archive it is"
+               "#{entry.id} does not say whose work it is"
 
         assert is_binary(entry[:licence]) and entry[:licence] != "",
-               "#{entry.id} does not say on what terms the archive is published"
+               "#{entry.id} does not say on what terms the work is published"
+
+        case entry[:build] do
+          nil -> assert_download(entry)
+          build -> assert Build.names() |> Enum.member?(build)
+        end
       end
+    end
+
+    # The bytes a download is about, so a re-upload upstream is a failed download
+    # here rather than a silent change of what every experiment reads.
+    defp assert_download(entry) do
+      assert String.starts_with?(entry[:url] || "", "https://")
+
+      assert Regex.match?(~r/\A[0-9a-f]{64}\z/, entry[:sha256] || ""),
+             "#{entry.id} does not record the sha256 of the bytes it fetches"
     end
 
     test "gives each entry its own id, so two archives cannot be one file" do

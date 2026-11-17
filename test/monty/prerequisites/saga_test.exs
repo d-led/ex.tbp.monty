@@ -29,6 +29,11 @@ defmodule Monty.Prerequisites.SagaTest do
         root: MONTY_DATA
         target: tiny-bad.tgz
         sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      - id: made_here
+        title: Something this application makes
+        root: MONTY_DATA
+        target: made-here
+        build: a_part
     """)
 
     previous = System.get_env("MONTY_DATA")
@@ -84,6 +89,42 @@ defmodule Monty.Prerequisites.SagaTest do
       {:ok, second} = Saga.start(prerequisite)
 
       assert first == second
+    end
+  end
+
+  describe "a prerequisite this application makes" do
+    test "says which step it is on, and is done when the builder is" do
+      prerequisite = Prerequisites.get("made_here")
+      Application.put_env(:ex_tbp_monty, :fake_build_steps, ["first", "second"])
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :fake_build_steps) end)
+
+      assert {:ok, pid} = Saga.start(prerequisite, builder: Monty.Test.FakeBuilder)
+
+      assert_receive {:download,
+                      %{
+                        id: "made_here",
+                        status: :building,
+                        built: %{index: 1, total: 2, what: "first"}
+                      }},
+                     2_000
+
+      assert_receive {:download, %{id: "made_here", status: :done}}, 2_000
+      assert Saga.status(pid).status == :done
+    end
+
+    test "a builder that refuses makes it failed, saying which step refused" do
+      prerequisite = Prerequisites.get("made_here")
+      Application.put_env(:ex_tbp_monty, :fake_build_steps, ["first", "refuse"])
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :fake_build_steps) end)
+
+      assert {:ok, pid} = Saga.start(prerequisite, builder: Monty.Test.FakeBuilder)
+
+      assert_receive {:download, %{id: "made_here", status: :failed}}, 2_000
+
+      # What a restart reads is a sentence, not a term: the record is the only
+      # thing that outlives the machine that refused.
+      assert Record.read(prerequisite)["error"] == "could not build: a_part refused at refuse"
+      assert Saga.status(pid).status == :failed
     end
   end
 

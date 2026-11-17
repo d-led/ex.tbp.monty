@@ -21,6 +21,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
         licence: MIT
         root: MONTY_DATA
         target: tiny.tgz
+      - id: made_here
+        title: Something this application makes
+        root: MONTY_DATA
+        target: made-here
+        build: cad_part_memories
     """)
 
     Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
@@ -46,6 +51,15 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
   # archive it is, on what terms, and the bytes it should turn out to be. It
   # reads all three off the manifest, so the page cannot promise something the
   # fetch does not check.
+  # An entry this application makes instead of downloading gets the click that
+  # makes it, rather than one that asks the network for it.
+  test "an entry this application makes offers the click that makes it", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert has_element?(view, "#build-made_here[phx-click=\"build\"]")
+    refute has_element?(view, "#download-made_here")
+  end
+
   test "says where an archive comes from, on what terms, and which bytes", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 

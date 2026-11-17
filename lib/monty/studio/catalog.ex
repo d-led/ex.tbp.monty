@@ -275,5 +275,10 @@ defmodule Monty.Studio.Catalog do
     end
   end
 
-  defp conf_dir(opts), do: Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
+  # Every root this node composes from, which is `Source.conf_dirs/0` and not
+  # `Source.conf_dir/0`: Monty's mirror alone answers "what does Monty ship",
+  # and a catalogue that answered that was a catalogue which could not find the
+  # experiment that trains a model this node offers — `trainer_for/2` said "no
+  # experiment here trains it" about an experiment one page away.
+  defp conf_dir(opts), do: Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
 end

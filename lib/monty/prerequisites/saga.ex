@@ -32,9 +32,12 @@ defmodule Monty.Prerequisites.Saga do
   stateDiagram-v2
     [*] --> queued: start
     queued --> downloading: nothing on disk
+    queued --> building: an entry this application makes
     queued --> extracting: archive here, never unpacked
     queued --> exporting: unpacked, memory not read
     queued --> done: a file that needs nothing else
+    building --> done: every part and object written
+    building --> failed: the geometry or the corpus refused
     downloading --> extracting: bytes verified and moved into place
     downloading --> done: a file that needs nothing else
     downloading --> failed: wrong checksum, transport error
@@ -63,7 +66,14 @@ defmodule Monty.Prerequisites.Saga do
   @broadcast_every 512 * 1024
 
   @type status ::
-          :queued | :downloading | :extracting | :exporting | :done | :failed | :cancelled
+          :queued
+          | :downloading
+          | :building
+          | :extracting
+          | :exporting
+          | :done
+          | :failed
+          | :cancelled
 
   @type progress :: %{
           id: String.t(),
@@ -75,6 +85,7 @@ defmodule Monty.Prerequisites.Saga do
           extracted: non_neg_integer() | nil,
           libraries: map() | nil,
           export: %{model: String.t(), index: pos_integer(), total: pos_integer()} | nil,
+          built: Monty.Prerequisites.Build.progress() | nil,
           error: term() | nil,
           started_at: integer() | nil,
           finished_at: integer() | nil
@@ -87,6 +98,7 @@ defmodule Monty.Prerequisites.Saga do
   @type data :: %{
           prerequisite: Prerequisites.prerequisite(),
           fetcher: module(),
+          builder: module(),
           path: Path.t(),
           part: Path.t(),
           bytes: non_neg_integer(),
@@ -94,6 +106,7 @@ defmodule Monty.Prerequisites.Saga do
           extracted: non_neg_integer() | nil,
           libraries: map() | nil,
           export: map() | nil,
+          built: Monty.Prerequisites.Build.progress() | nil,
           error: term() | nil,
           task: {pid(), reference()} | nil,
           reported_bytes: non_neg_integer(),
@@ -219,6 +232,7 @@ defmodule Monty.Prerequisites.Saga do
       data = %{
         prerequisite: prerequisite,
         fetcher: Keyword.get(opts, :fetcher, fetcher()),
+        builder: Keyword.get(opts, :builder, Monty.Prerequisites.Build),
         path: path,
         part: path <> ".part",
         bytes: 0,
@@ -226,6 +240,7 @@ defmodule Monty.Prerequisites.Saga do
         extracted: nil,
         libraries: nil,
         export: nil,
+        built: nil,
         error: nil,
         task: nil,
         reported_bytes: 0,
@@ -412,8 +427,45 @@ defmodule Monty.Prerequisites.Saga do
 
   def exporting(type, event, data), do: common(:exporting, type, event, data)
 
+  # A prerequisite this application makes instead of downloading: meshing a part
+  # and teaching its memory, or importing a corpus. The work runs in its own
+  # process for the same reason a fetch does — the machine keeps answering, so a
+  # page shows which step it is on and a person can cancel it.
+  #
+  # The builder is named rather than called so a test can drive this state
+  # without the geometry, exactly as `:fetcher` does for a download.
+  def building(:enter, _old, data) do
+    parent = self()
+    name = data.prerequisite.build
+    on_progress = fn progress -> send(parent, {:building, progress}) end
+
+    {pid, reference} =
+      spawn_monitor(fn -> send(parent, {:built, data.builder.run(name, on_progress)}) end)
+
+    data = persist(%{data | task: {pid, reference}, built: nil}, :building)
+    broadcast(data)
+    {:keep_state, data}
+  end
+
+  def building(:info, {:building, progress}, data) do
+    broadcast(%{data | built: progress})
+    {:keep_state, %{data | built: progress}}
+  end
+
+  def building(:info, {:built, {:ok, said}}, data) do
+    {:next_state, :done, %{data | task: nil, built: nil, libraries: %{built: said}}}
+  end
+
+  def building(:info, {:built, {:error, reason}}, data) do
+    {:next_state, :failed, blamed(%{data | task: nil, built: nil}, {:cannot_build, reason})}
+  end
+
+  def building(type, event, data), do: common(:building, type, event, data)
+
   @doc "Everything this prerequisite names is on the disk, and was checked."
   def done(:enter, _old, data) do
+    # Written down before it is announced: a message whose status is the state
+    # before the state it announces is a page that never learns the fetch ended.
     data = persist(%{data | finished_at: now(), error: nil}, :done)
     broadcast(data)
     {:keep_state, data}
@@ -477,9 +529,10 @@ defmodule Monty.Prerequisites.Saga do
   # message arrives first in the normal case. Progress that arrives after the
   # phase it belongs to is not this machine's state to change.
   defp unexpected(state, {:DOWN, reference, :process, pid, reason}, data) do
-    if state in [:downloading, :extracting, :exporting] and data.task == {pid, reference},
-      do: {:next_state, :failed, blamed(data, reason)},
-      else: {:keep_state, data}
+    if state in [:downloading, :building, :extracting, :exporting] and
+         data.task == {pid, reference},
+       do: {:next_state, :failed, blamed(data, reason)},
+       else: {:keep_state, data}
   end
 
   defp unexpected(_state, _message, data), do: {:keep_state, data}
@@ -506,6 +559,13 @@ defmodule Monty.Prerequisites.Saga do
   def ready?(prerequisite) do
     phase(prerequisite, Prerequisites.target_path(prerequisite), Record.read(prerequisite) || %{}) ==
       :done
+  end
+
+  # A prerequisite this application makes is done when the directory it fills
+  # holds something: the same rule `present?/1` applies, so the page and the
+  # machine cannot disagree.
+  defp phase(%{build: build} = prerequisite, _path, _record) when is_binary(build) do
+    if Prerequisites.present?(prerequisite), do: :done, else: :building
   end
 
   # A prerequisite that is one file is done when the file is there.
@@ -587,6 +647,7 @@ defmodule Monty.Prerequisites.Saga do
   defp error_text({:unread_memory, models}), do: "unreadable memory: #{Enum.join(models, ", ")}"
   defp error_text({:cannot_extract, path, _reason}), do: "could not unpack #{path}"
   defp error_text({:cannot_move, path, _reason}), do: "could not move #{path} into place"
+  defp error_text({:cannot_build, reason}), do: "could not build: #{reason}"
   defp error_text({:checksum_mismatch, actual}), do: "wrong checksum (#{actual})"
   defp error_text({:cannot_create, directory, _reason}), do: "could not create #{directory}"
   defp error_text(reason), do: inspect(reason)
@@ -650,6 +711,7 @@ defmodule Monty.Prerequisites.Saga do
       extracted: data.extracted,
       libraries: data.libraries,
       export: data.export,
+      built: data.built,
       error: data.error,
       started_at: data.started_at,
       finished_at: data.finished_at

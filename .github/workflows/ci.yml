@@ -1023,7 +1023,7 @@ jobs:
           # unpacks and still opens; it is a plugin nobody can click.
           case "${{ matrix.rid }}" in
             osx-*)
-              for app in "Example Plugin" "Flyverse Plugin"; do
+              for app in "ex.tbp.monty.plugin.example" "ex.tbp.monty.plugin.flyverse"; do
                 if [ ! -x "smoke/landing/$app.app/Contents/MacOS/$app" ]; then
                   echo "the download unpacked no $app.app beside the window" >&2
                   exit 1

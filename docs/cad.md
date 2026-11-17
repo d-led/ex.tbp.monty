@@ -67,6 +67,20 @@ decision rather than a detail:
   the same STEP file, so the only difference between the two worlds is texture and
   a renderer.
 
+## Which library does what
+
+The geometry is a dependency, not code in this application:
+
+| library                                        | job                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ex_quiddity` (Hex)                            | `Quiddity.open/1` reads the STEP; `Quiddity.features/1` says which face belongs to which feature; `Quiddity.samples/2` is the surface; `Quiddity.frame/2` is one camera's view of the B-rep; `Quiddity.mesh/2` is the tessellation, with the face every triangle came from |
+| `ex_monty_cad` (git dep, pinned in `mix.lock`) | `MontyCad.Training.write_library/3` turns a part into the memory a run reads; `MontyCad.Export.part_mesh/2` and `feature_meshes/2` turn exact faces into meshes; `MontyCad.Scene` is the world a B-rep run steps; `MontyCad.Library` is the memory format                  |
+| `ExTbpMonty.Cad.Objects` (this application)    | writes one mesh as one MuJoCo object — `textured.obj`, `texture_map.png`, `metadata.json`, in metres                                                                                                                                                                       |
+
+Nothing here recomputes a feature, a sample or a triangle: ownership comes from
+`Quiddity.Recognition`, the points and their features from `MontyCad.Training`,
+the triangles from `MontyCad.Export`.
+
 ## Where a part comes from
 
 `$MONTY_DATA/parts/` — `bracket.step` or `bracket.stp`, plain or gzipped — is the
@@ -79,9 +93,15 @@ part the variable names. That is the first thing stage 1 has to grow.
 
 ## How to run one
 
-`mix monty.run` needs the CAD package on the node's code path; the studio does not
-depend on it, because it brings a Rust build. `scripts/cad_experiment.exs`
-appends those builds, samples the parts you name and runs the config:
+The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
+whole setup — no checkout has to sit beside this one, and no build path has to be
+appended. An experiment of ours lives in
+`priv/monty_experiments/sets/cad/conf`, which the experiments page already lists:
+open `/experiments`, choose `cad/plate_part_eval`, press Run. Its own README, in
+that set's directory, is the click path written down.
+
+The same run from a shell, which is what the README's step 3 still needs until
+the memory is written from a page:
 
 ```sh
 mix run scripts/cad_experiment.exs plate plate          # remember plate, sense plate
@@ -93,8 +113,7 @@ A training episode in the CAD world is the same world with a training config, an
 object:
 
 ```sh
-MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run tmp/cad_run.exs \
-  tutorial/surf_agent_2obj_train --world cad --episodes 1 --record
+MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.exs bracket
 ```
 
 [The first results](cad-results.html) are the two runs above, with their pages.

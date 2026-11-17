@@ -1362,7 +1362,8 @@ defmodule Monty.Studio.Jobs.Run do
         scheduling: scheduling_of(state.record),
         settle_steps: settle_of(state.record),
         sensors_step: sensors_step_of(state.record)
-    ]
+      ]
+
     options =
       if state.mode == :eval, do: [{:model_id, phase_model_id(run_id)} | options], else: options
 

@@ -113,7 +113,6 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert select =~ "MuJoCo (compiled in, via ex_mujoco)"
     end
 
-
     # Poka-yoke: MuJoCo reads a downloaded object set and memory. Queuing a run
     # without them answers with a run that dies at its first step, so the page
     # says so first — and says where to get them. No interpreter is on that

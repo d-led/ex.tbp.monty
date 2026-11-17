@@ -23,7 +23,10 @@ defmodule Monty.Prerequisites do
           required(:id) => String.t(),
           required(:title) => String.t(),
           optional(:description) => String.t() | nil,
-          required(:url) => String.t(),
+          # A download has a url; a build has a `build` key naming the work
+          # (`Monty.Prerequisites.Build`). One of the two is always there.
+          optional(:url) => String.t() | nil,
+          optional(:build) => String.t() | nil,
           required(:root) => String.t(),
           required(:target) => String.t(),
           optional(:sha256) => String.t() | nil,
@@ -91,6 +94,12 @@ defmodule Monty.Prerequisites do
 
   def root_default("MONTY_LOGS"), do: Path.expand("~/tbp/results/monty/projects")
 
+  # The libraries a run loads are this application's own output, and it reads
+  # them through `MONTY_LIBRARIES` (`Monty.Paths.libraries/0`, exported by
+  # `config/runtime.exs`). It is a root for the same reason the other three are:
+  # an entry that fills it says where it fills without repeating a path.
+  def root_default("MONTY_LIBRARIES"), do: Monty.Paths.libraries()
+
   @doc "The directory an environment variable points at, with Monty's default."
   @spec root_path(String.t()) :: Path.t()
   def root_path("MONTY_DATA"), do: env_path("MONTY_DATA", "~/tbp/data")
@@ -100,9 +109,12 @@ defmodule Monty.Prerequisites do
 
   def root_path("MONTY_LOGS"), do: env_path("MONTY_LOGS", "~/tbp/results/monty/projects")
 
+  def root_path("MONTY_LIBRARIES"), do: Monty.Paths.libraries()
+
   def root_path(root) when is_binary(root) do
     raise ArgumentError,
-          "unknown prerequisite root #{inspect(root)}; expected MONTY_DATA, MONTY_MODELS or MONTY_LOGS"
+          "unknown prerequisite root #{inspect(root)}; expected MONTY_DATA, MONTY_MODELS, " <>
+            "MONTY_LOGS or MONTY_LIBRARIES"
   end
 
   @doc """
@@ -228,9 +240,17 @@ defmodule Monty.Prerequisites do
 
   The judgement is `Saga.ready?/1`, the same derivation the machine itself uses,
   so the boot and the page cannot disagree about what is left.
+
+  A build is not in this list. A download is a file somebody published and a
+  boot can take it; a build is minutes of this machine's work — meshing a part,
+  teaching a graph — and starting one because a launch happened is not a thing a
+  person asked for.
   """
   @spec unfinished() :: [prerequisite()]
-  def unfinished, do: Enum.reject(all(), &Saga.ready?/1)
+  def unfinished do
+    all()
+    |> Enum.reject(&(&1[:build] || Saga.ready?(&1)))
+  end
 
   @doc """
   Downloads one prerequisite and waits for it, answering how it ended.
@@ -627,7 +647,10 @@ defmodule Monty.Prerequisites do
       id: Map.fetch!(entry, "id"),
       title: Map.fetch!(entry, "title"),
       description: Map.get(entry, "description"),
-      url: Map.fetch!(entry, "url"),
+      # A download names a url and a build names the work; `url` is read without
+      # `fetch!` so an entry that carries `build` instead is not a missing key.
+      url: Map.get(entry, "url"),
+      build: Map.get(entry, "build"),
       root: Map.fetch!(entry, "root"),
       target: Map.fetch!(entry, "target"),
       sha256: Map.get(entry, "sha256"),

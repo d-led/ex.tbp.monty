@@ -208,3 +208,48 @@ prerequisites:
       - supervised_pre_training_cows_small_2d_children
       - supervised_pre_training_cows_small_compositional
       - supervised_pre_training_cows_small_monolithic
+
+  # The inputs that are not downloads.
+  #
+  # Two of the things a run reads are outputs of code this application carries,
+  # so their entry names the work instead of a url: `Monty.Prerequisites.Build`
+  # runs it in the same machine a download goes through, with the same row, the
+  # same progress and the same Cancel. A boot never starts one — a build is
+  # minutes of this machine's work and only a person asks for it.
+  #
+  # The CAD memory is what a B-rep run recognises with and the meshes are what
+  # the same part looks like to a MuJoCo camera; the entry is one name for both,
+  # because a run has neither a graph to match against nor a surface to look at
+  # unless both are written.
+  - id: cad_part_memories
+    title: CAD part memories and meshes
+    description: >
+      One memory and one object set per CAD part this application's configurations
+      name, taught and meshed from the STEP file it ships: the memories in the
+      libraries folder, the meshes in ~/tbp/data/cad_objects. A recognition run of
+      a part has nothing to compare against without them.
+    build: cad_part_memories
+    upstream: ex_monty_cad (Hex) reads the B-rep; the parts are this application's own STEP files
+    licence: the STEP sources ship with this application; the geometry is ex_quiddity's (MPL-2.0)
+    root: MONTY_LIBRARIES
+    target: cad_parts_v1
+    extract: true
+    unpacks_to: cad_parts_v1
+
+  # The dogs' object set, imported from Objaverse's own GLBs. The manifest beside
+  # the experiments says which eight dogs, with author, licence and page for
+  # each; this entry is the import, and the GLBs are cached under downloads/ so a
+  # second run fetches nothing.
+  - id: objaverse_dogs
+    title: Objaverse dogs (object set)
+    description: >
+      The eight scanned dogs the corpus experiments step, imported from Objaverse
+      1.0 into ~/tbp/data/mujoco/objects/objaverse_dogs. Each is CC-BY, and the
+      attribution travels with the object set.
+    build: objaverse_dogs
+    upstream: allenai/objaverse on HuggingFace; each model's author and page are in the set's ATTRIBUTION.md
+    licence: CC-BY, per model
+    root: MONTY_DATA
+    target: mujoco/objects/objaverse_dogs
+    extract: true
+    unpacks_to: mujoco/objects/objaverse_dogs

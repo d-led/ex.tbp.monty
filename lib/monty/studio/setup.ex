@@ -1065,6 +1065,7 @@ defmodule Monty.Studio.Setup do
   end
 
   defp cad_module, do: Module.concat(["MontyCad", "Scene"])
+
   @doc """
   The part `MONTY_CAD_PART` names, or `nil`.
 

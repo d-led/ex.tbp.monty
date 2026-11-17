@@ -103,7 +103,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
       server ->
         with %{status: status} = progress <- Saga.status(server),
-             true <- status in [:queued, :downloading, :extracting, :exporting],
+             true <- status in [:queued, :downloading, :building, :extracting, :exporting],
              do: progress,
              else: (_ -> nil)
     end
@@ -193,13 +193,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                       @pending[prerequisite.id]
                     )
                   }
-                  id={"download-#{prerequisite.id}"}
-                  phx-click="download"
+                  id={"#{if prerequisite[:build], do: "build", else: "download"}-#{prerequisite.id}"}
+                  phx-click={if prerequisite[:build], do: "build", else: "download"}
                   phx-value-id={prerequisite.id}
                   class="btn btn-primary btn-sm"
                 >
-                  <.icon name="hero-arrow-down-tray-mini" class="size-4" />
-                  {if @present[prerequisite.id], do: "Export memory", else: "Download"}
+                  <.icon
+                    name={
+                      if prerequisite[:build],
+                        do: "hero-wrench-screwdriver-mini",
+                        else: "hero-arrow-down-tray-mini"
+                    }
+                    class="size-4"
+                  />
+                  {action_label(prerequisite, @present[prerequisite.id])}
                 </button>
                 <button
                   :if={downloading?(@statuses, prerequisite.id)}
@@ -214,7 +221,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             </div>
 
             <div :if={progress(@statuses, prerequisite.id)} class="mt-3 space-y-1">
+              <%!--
+                A build moves no bytes: an empty byte bar is a download that
+                never started, so that row has the step counter below and nothing
+                else.
+              --%>
               <progress
+                :if={is_nil(making(progress(@statuses, prerequisite.id)))}
                 class="progress progress-primary w-full"
                 value={progress(@statuses, prerequisite.id).bytes}
                 max={max_bytes(progress(@statuses, prerequisite.id))}
@@ -262,6 +275,26 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 )
                 |> Enum.join(", ")}. A run of a model in this list has no memory to recognise with.
               </p>
+              <%!--
+                A build is a step at a time — this part, this dog — and that is
+                the thing a person waiting wants to read.
+              --%>
+              <div
+                :if={making(progress(@statuses, prerequisite.id))}
+                id={"making-#{prerequisite.id}"}
+                class="space-y-1 pt-1"
+              >
+                <progress
+                  class="progress progress-secondary w-full"
+                  value={making(progress(@statuses, prerequisite.id)).index}
+                  max={making(progress(@statuses, prerequisite.id)).total}
+                ></progress>
+                <p class="font-mono text-xs text-base-content/60">
+                  step {making(progress(@statuses, prerequisite.id)).index}/{making(
+                    progress(@statuses, prerequisite.id)
+                  ).total} · {making(progress(@statuses, prerequisite.id)).what}
+                </p>
+              </div>
             </div>
           </article>
         </div>
@@ -315,10 +348,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
             <h2 class="font-semibold">The world</h2>
             <p class="text-sm text-base-content/70">
               A run steps one of three worlds: the <strong>built-in scene</strong>, part of
-              this application, <strong>Monty's simulator</strong>, which steps in the
-              interpreter above, or the <strong>same scene compiled in</strong>, stepped by
-              the <code class="font-mono text-xs">ex_mujoco</code> binding with no interpreter
-              in the process at all.
+              this application, or one of <strong>two MuJoCo worlds</strong>
+              — Monty's own
+              simulator, stepped in Python through the interpreter above, or the same scene <strong>compiled in</strong>, stepped by the
+              <code class="font-mono text-xs">ex_mujoco</code>
+              binding with no interpreter in
+              the process at all. The Python one needs the interpreter above; the compiled
+              one needs nothing but the application.
             </p>
             <p id="world-python" class="font-mono text-xs break-all text-base-content/60">
               {version_label(@python)} — this application's own interpreter
@@ -370,12 +406,12 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   def handle_params(_params, _uri, socket), do: {:noreply, socket}
 
   @impl true
-  def handle_event("download", %{"id" => id}, socket) do
-    case Prerequisites.get(id) do
-      nil -> {:noreply, put_flash(socket, :error, "Unknown prerequisite #{id}")}
-      prerequisite -> start(socket, prerequisite)
-    end
-  end
+  def handle_event("download", %{"id" => id}, socket), do: start_row(socket, id)
+
+  # A build is the same click as a download: the row, the badge, the progress and
+  # Cancel are the machine's, and only what it runs differs
+  # (`Monty.Prerequisites.Build`).
+  def handle_event("build", %{"id" => id}, socket), do: start_row(socket, id)
 
   def handle_event("cancel", %{"id" => id}, socket) do
     case Saga.lookup(id) do
@@ -385,6 +421,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
       server ->
         Saga.cancel(server)
         {:noreply, socket}
+    end
+  end
+
+  defp start_row(socket, id) do
+    case Prerequisites.get(id) do
+      nil -> {:noreply, put_flash(socket, :error, "Unknown prerequisite #{id}")}
+      prerequisite -> start(socket, prerequisite)
     end
   end
 
@@ -442,9 +485,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp status(statuses, id), do: statuses |> Map.get(id) |> then(&(&1 && &1.status))
 
   defp downloading?(statuses, id),
-    do: status(statuses, id) in [:downloading, :extracting, :exporting]
+    do: status(statuses, id) in [:downloading, :building, :extracting, :exporting]
 
   defp progress(statuses, id), do: Map.get(statuses, id)
+
+  # What a build is doing: a part, a dog, a step of the ones this entry has.
+  defp making(%{built: %{} = built}), do: built
+  defp making(_progress), do: nil
+
+  # The word on the button says what the click does: an archive is downloaded, a
+  # memory inside one is exported out of it, and an input this application
+  # produces is made.
+  defp action_label(%{build: build}, _present?) when is_binary(build), do: "Make"
+  defp action_label(_prerequisite, true), do: "Export memory"
+  defp action_label(_prerequisite, _absent), do: "Download"
 
   # What the exporter is reading right now: a model by name, and where it is in
   # the list of models this archive holds.
@@ -464,9 +518,12 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # restored volume is in, and the one a reader with a run to start cannot see
   # from the badge alone.
   defp downloadable?(statuses, id, present?, pending?) do
-    status(statuses, id) not in [:downloading, :extracting, :exporting, :done] and
+    status(statuses, id) not in [:downloading, :building, :extracting, :exporting, :done] and
       (not present? or pending?)
   end
+
+  # A row's button says what the click does: fetch an archive, read a memory out
+  # of one that arrived, or make what this application can only make itself.
 
   defp memory_pending?(%{extract: true} = prerequisite) do
     Prerequisites.present?(prerequisite) and
@@ -480,6 +537,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp status_label(nil, false, _pending?), do: "not downloaded"
   defp status_label(:queued, _present, _pending?), do: "queued"
   defp status_label(:downloading, _present, _pending?), do: "downloading"
+  defp status_label(:building, _present, _pending?), do: "building"
   defp status_label(:extracting, _present, _pending?), do: "unpacking"
   defp status_label(:exporting, _present, _pending?), do: "reading memory"
   defp status_label(:done, _present, _pending?), do: "done"
@@ -492,6 +550,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp badge_class(:done, _present, _pending?), do: "badge-success"
   defp badge_class(:failed, _present, _pending?), do: "badge-error"
   defp badge_class(:downloading, _present, _pending?), do: "badge-info"
+  defp badge_class(:building, _present, _pending?), do: "badge-info"
   defp badge_class(:extracting, _present, _pending?), do: "badge-info"
   defp badge_class(:exporting, _present, _pending?), do: "badge-info"
   defp badge_class(_other, _present, _pending?), do: "badge-ghost"

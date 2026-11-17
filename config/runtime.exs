@@ -328,7 +328,13 @@ end
 # machine can have and one reader on loopback. Nothing here is a property of the
 # build — it is what this launch decided, which is why it is not in
 # `config/desktop.exs`.
-if config_env() == :desktop do
+#
+# `:dev` is here too, and for the same reason: an experiment's environment names
+# its object set as `${oc.env:MONTY_DATA}/…`, so a composition in a development
+# shell fails on a variable nobody exported, and the page reports the world's
+# data as missing. A variable somebody exported still wins — `Monty.Paths`
+# decides, and this writes back what it decided.
+if config_env() in [:desktop, :dev] do
   # One folder on one machine. Monty's own variable names are the mechanism —
   # this application, Monty's YAML resolvers (`${oc.env:MONTY_DATA}`) and the
   # embedded Python world all read them — so the folder is named once, here, and
