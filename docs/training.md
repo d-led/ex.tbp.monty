@@ -416,3 +416,28 @@ rotations**, with every episode concluded, against five of eight names from the
 dist agent's memory. The supervised pair of the corpus now works end to end:
 `dogs/surf_supervised_4rot` builds the memory in thirty-two minutes, and
 `dogs/inference_surf_supervised_4rot` recognises the dogs with it.
+
+### It is the policy, not the sample budget (measured 2026-11-17)
+
+`dogs/supervised_pretraining_dense` is the control: the same dist agent, the same
+fourteen rotations, a 3° scan instead of 5° — 871 samples of the view sphere an
+episode instead of 307, 112 episodes and 97 552 steps, twenty-one minutes.
+
+| memory                            | steps  | nodes  | per dog         | names of 8   |
+| --------------------------------- | ------ | ------ | --------------- | ------------ |
+| dist agent, 5° scan, 14 rotations | 34 384 | 2 518  | 124 – 1 109     | 5            |
+| dist agent, 3° scan, 14 rotations | 97 552 | 6 899  | **316 – 3 050** | 6            |
+| surface agent, 2 rotations        | 42 263 | 7 217  | 704 – 979       | 7            |
+| surface agent, 4 rotations        | 77 892 | 13 501 | 1 424 – 1 928   | **23 of 24** |
+
+Three times the samples triple the nodes (2 518 → 6 899) and buy **one** name. The
+imbalance does not move at all: `milka` is 3 050 nodes against
+`kinder_guard_dog`'s 316, the same ten-to-one the 5° scan produced (1 109 against
+124), because the raster either crosses an object or it does not — a smaller step
+crosses it in more places, not in the places it missed. The surface agent walks the
+object instead, so a dog cannot be met in a dozen samples and left at that: with
+**fewer** steps than the denser raster (42 263 against 97 552) it leaves every dog
+between 704 and 979 nodes, and names seven of eight.
+
+So the corpus's density is decided by the policy, and the sample budget only
+scales whatever the policy already reached.
