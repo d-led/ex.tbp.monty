@@ -198,6 +198,10 @@ defmodule ExTbpMonty.MixProject do
       # still starting, and the VM died there before any application started —
       # every desktop bundle and both images.
       {:ex_mujoco, "~> 0.2.4"},
+      # A corpus of 3D scans arrives as GLB, and its textures are PNG or JPEG.
+      # The world wants `texture_map.png`, and MuJoCo is not asked to read a
+      # JPEG: this reads either and writes the PNG the object set names.
+      {:stb_image, "~> 1.0"},
       {:oban, "~> 2.20"},
       {:req, "~> 0.5"},
       # "24.8 GiB free" is what an operator reads, not 26_636_431_360: one
