@@ -126,7 +126,20 @@ defmodule ExTbpMonty.MixProject do
       # runtime, the learning and sensor modules, the actions and the port a
       # world implements. This application is its main user; `examples/` beside
       # it drives the same code without the studio.
-      {:ex_tbp_monty_core, path: "packages/ex_tbp_monty_core"},
+      #
+      # `override: true` because `ex_monty_cad` asks for the published core and
+      # this checkout *is* the core: one copy, the one being edited.
+      {:ex_tbp_monty_core, path: "packages/ex_tbp_monty_core", override: true},
+      # The geometry, from git rather than from a directory beside this one. A
+      # CAD world needs quiddity's B-rep, and a checkout path is neither
+      # reproducible nor runnable by anyone but its author: `mix deps.get` is the
+      # whole setup, on any machine, at the commit `mix.lock` names.
+      #
+      # A git ref and not a release because `MontyCad.Export` — the meshes this
+      # checkout's evaluation writes — is not in 0.6.3; the ref moves to a
+      # version requirement once the next one is tagged.
+      {:ex_monty_cad,
+       github: "d-led/ex.monty.cad", ref: "c8f4b2d8e14771b830e17eee396b6d521a705a65"},
       {:phoenix, "~> 1.8.16"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

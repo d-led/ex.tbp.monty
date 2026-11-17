@@ -10,15 +10,9 @@
 # The memory is the one `scripts/cad_experiment.exs` wrote for `plate`; run that
 # first, or point `libraries` below at wherever a memory of the part lives.
 
-part = Path.expand("~/src/ex.monty.cad/test/fixtures/golden_simple_through_hole.step")
+part = Path.expand("../priv/cad_experiments/parts/plate.step", __DIR__)
 libraries = "/tmp/cad-experiment/plate"
 name = "plate"
-
-cad = Path.expand("~/src/ex.monty.cad")
-
-for app <- ["ex_monty_cad", "ex_quiddity"] do
-  Code.append_path(Path.join([cad, "_build/dev/lib", app, "ebin"]))
-end
 
 objects = Path.join(Monty.Paths.data(), "cad_objects")
 

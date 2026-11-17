@@ -66,6 +66,20 @@ defmodule Monty.Studio.CentreViewTest do
     assert CentreView.frame(Environment.new(["patch"]), 1) == nil
   end
 
+  # A CAD part is a B-rep: it has no centre and no radius to fit a frame around,
+  # and its own replay is the picture. Asking it for one used to be a step that
+  # died — the world's step paid for a view it never had.
+  test "and neither has a scene that cannot be centred on" do
+    scene = %{part: :a_brep, label: "solidcraft-plate", names: %{}}
+
+    world =
+      Environment.new(["patch"], scene,
+        agent: %{position: [0.0, 0.0, 0.05], rotation: Rotation.identity()}
+      )
+
+    assert CentreView.frame(world, 1) == nil
+  end
+
   # The world the studio builds for a MuJoCo config: a sphere where the sampler
   # puts it, and one or two cameras on the agent.
   defp frame(agent_position, sensors \\ %{"patch" => [0.0, 0.0, 0.0]}) do

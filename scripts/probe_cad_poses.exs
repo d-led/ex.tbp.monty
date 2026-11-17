@@ -33,17 +33,8 @@ distance = fn left, right ->
   |> :math.sqrt()
 end
 
-# The geometry lives in the sibling builds: this application carries the
-# framework, not CAD, and a probe is a script rather than a dependency
-# (`scripts/cad_experiment.exs` says the same at more length).
-for ebin <- [
-      Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_monty_cad/ebin"),
-      Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_quiddity/ebin"),
-      Path.expand("~/src/ex.cadmpeg/_build/dev/lib/ex_cadmpeg/ebin")
-    ] do
-  Code.append_path(ebin) || :already_on_the_path
-end
-
+# The geometry is `ex_monty_cad`'s, from Hex (`mix.exs`), so a probe is a script
+# run against the same dependency the application has.
 steps = System.argv() |> List.first() |> then(&(&1 && String.to_integer(&1))) || 500
 library = System.get_env("CAD_LIBRARY") || Mix.raise("CAD_LIBRARY names the libraries root")
 

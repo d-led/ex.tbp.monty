@@ -320,3 +320,14 @@ fprof.trace
 # `process-compose up` writes the log of the nodes it started next to the file
 # that describes them.
 /processes.log
+
+# A CAD experiment keeps its *sources* here: the config that describes it and
+# the STEP file it reads. Everything it generates — a memory, a mesh, a texture,
+# a downloaded dataset — belongs in the data folder an installed application
+# writes to (`Monty.Paths.data/0`), not in the source tree, so this ignores the
+# directory and lets the two source kinds back in. A dataset once landed here and
+# took 2.8 GB of the repository with it.
+/priv/cad_experiments/*
+!/priv/cad_experiments/conf/
+!/priv/cad_experiments/parts/
+!/priv/cad_experiments/parts/*.step

@@ -60,11 +60,17 @@ defmodule Monty.Studio.CentreView do
   @spec frame(term(), non_neg_integer()) :: t() | nil
   def frame(%Environment{scene: nil}, _step), do: nil
 
-  def frame(%Environment{scene: scene, world: world}, step) do
+  # A scene that cannot be centred on is a scene this view has nothing to say
+  # about: it needs a place to put in the middle of the frame and a size to fit
+  # around it, and a scene that answers neither — a CAD part, which is a B-rep and
+  # not a sphere with a radius — is drawn by its own replay instead. Asked as a
+  # capability rather than by name, so a world added later answers the question by
+  # what it carries.
+  def frame(%Environment{scene: %{centre: _centre, radius: _radius} = scene, world: world}, step) do
     view(scene, world.agent, Kinematics.sensor_world_poses(world), step)
   end
 
-  def frame(_world_without_a_scene, _step), do: nil
+  def frame(_world_without_a_scene_to_centre_on, _step), do: nil
 
   defp view(scene, agent, sensors, step) do
     centre = scene.centre

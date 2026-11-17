@@ -24,7 +24,7 @@ kind of surface, which is what the normal and the curvatures say.
     scripts/probe_part_symmetry.py /tmp/cad-experiment/blend
     scripts/probe_part_symmetry.py /tmp/cad-experiment/plate --object plate
 
-Needs numpy and scipy: `~/src/monty-orig/.venv/bin/python scripts/probe_part_symmetry.py …`
+Needs numpy and scipy: `python3 scripts/probe_part_symmetry.py …`
 """
 
 import argparse

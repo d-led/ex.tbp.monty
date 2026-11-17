@@ -1,0 +1,31 @@
+ExTbpMonty: the Thousand Brains Project's Monty reimplemented on the BEAM.
+
+Copyright (c) Dmitry Ledentsov and contributors.
+
+This Source Code Form is subject to the terms of the Mozilla Public License, v.
+2.0. If a copy of the MPL was not distributed with this file, You can obtain one
+at https://mozilla.org/MPL/2.0/.
+
+It builds on work by others, whose licences it keeps:
+
+  * Monty — the Thousand Brains Project's sensorimotor framework
+    (https://github.com/thousandbrainsproject/tbp.monty), MIT, Copyright (c)
+    Thousand Brains Project. This is a reimplementation of it; the module map in
+    `lib/monty/module_map/data.ex` says which modules correspond.
+  * ExQuiddity — quiddity and the exact B-rep under it, bound for the BEAM
+    (https://github.com/d-led/ex.quiddity), MPL-2.0 for the binding and Apache
+    License 2.0 for the engine (https://github.com/pzfreo/quiddity). Used as a
+    dependency by the CAD world; not modified here.
+
+The STEP parts under `priv/cad_experiments/parts/` are geometry the CAD
+experiments step, copied from the checkouts that draw them so that this
+repository runs without another one beside it:
+
+  * `plate.step` and `blend.step` / `blend-big.step` are this project's own
+    fixtures, from `ex.monty.cad` and `ex.quiddity` respectively (same licence).
+  * `solidcraft-plate.step` is an unmodified STEP export of SolidCraft's own
+    sample plate — https://github.com/tangency-labs/solidcraft — MIT OR
+    Apache-2.0, Copyright (c) SolidCraft contributors. It is a parametric CAD
+    modeller whose examples are JSON models; the part is what
+    `solidcraft-cli run <model>.json --out <part>.step` writes. The model is used
+    as geometry only: nothing of SolidCraft is linked, copied or modified here.

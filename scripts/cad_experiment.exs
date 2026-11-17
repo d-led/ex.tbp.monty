@@ -5,34 +5,30 @@
 #   mix run scripts/cad_experiment.exs plate blend          # two parts, sense the blend
 #   mix run scripts/cad_experiment.exs plate blend blend-big # three
 #
-# A name is matched to a STEP file this checkout has: `plate` is the CAD
-# package's fixture (a boss and a through hole), `blend` and `blend-big` are
-# quiddity's two sizes of one fillet. The last name given is the part the world
-# steps; every name before it is a memory the run may choose between.
+# A name is matched to a STEP file this repository carries, under
+# `priv/cad_experiments/parts`: `plate` is a boss and a through hole, `blend` and
+# `blend-big` are two sizes of one fillet. The last name given is the part the
+# world steps; every name before it is a memory the run may choose between.
 #
-# Why the sibling builds are on the code path: this application carries the
-# framework, not the geometry. `Monty.Studio.Setup` opens a part through
-# `MontyCad.Scene` when one is loaded, and `MontyCad.Training` writes the memory
-# a run reads — both live in `ex_monty_cad`, which the studio deliberately does
-# not depend on (`docs/cad.md`). A node that carries that package
-# needs none of this.
+# The geometry is `ex_monty_cad`'s, from Hex — the same dependency every other
+# package here comes from — so `mix deps.get` is the whole setup and a node that
+# runs this carries the B-rep rather than a path to somebody's checkout.
 #
 # The memory is written to a directory of its own and pointed at with
 # `:monty_libraries_dir`, at the address the config's `model_name_or_path`
 # already names (`<release>/surf_agent_1lm_10distinctobj.jsonl.gz`), so no
 # config is edited to try it.
 
+parts_dir = Path.expand("../priv/cad_experiments/parts", __DIR__)
+part = fn file -> Path.join(parts_dir, file) end
+
 parts = %{
-  "plate" => Path.expand("~/src/ex.monty.cad/test/fixtures/golden_simple_through_hole.step"),
+  "plate" => part.("plate.step"),
   # SolidCraft's own sample plate, exported from its JSON model — MIT OR
-  # Apache-2.0, SolidCraft contributors, credited in `ex_monty_cad`'s `NOTICE`.
-  # It is the first part here a CAD modeller drew rather than a test: an
-  # 80 × 50 × 22 mm plate with three through bores, and its centre is one of
-  # them, so a sensor stood off the middle looks down a hole.
-  "solidcraft-plate" =>
-    Path.expand("~/src/ex.monty.cad/test/fixtures/solidcraft_sample_plate.step"),
-  "blend" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5.step"),
-  "blend-big" => Path.expand("~/src/ex.quiddity/test/fixtures/blend_r5_enlarged.step"),
+  # Apache-2.0, SolidCraft contributors, credited in `NOTICE`.
+  "solidcraft-plate" => part.("solidcraft-plate.step"),
+  "blend" => part.("blend.step"),
+  "blend-big" => part.("blend-big.step"),
   "plate-big" => Path.expand("/tmp/cad-experiment/parts/plate_big.step"),
   "plate-huge" => Path.expand("/tmp/cad-experiment/parts/plate_huge.step")
 }
@@ -83,14 +79,6 @@ scaled = fn source, target, scale ->
     end)
 
   File.write!(target, text)
-end
-
-for ebin <- [
-      Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_monty_cad/ebin"),
-      Path.expand("~/src/ex.monty.cad/_build/dev/lib/ex_quiddity/ebin"),
-      Path.expand("~/src/ex.cadmpeg/_build/dev/lib/ex_cadmpeg/ebin")
-    ] do
-  Code.append_path(ebin) || :already_on_the_path
 end
 
 names = System.argv()
@@ -157,6 +145,18 @@ write_options =
   memory
   |> Enum.map(&{&1, parts[&1]})
   |> MontyCad.Training.write_library(path, write_options)
+
+# A package older than the option ignores it, and the run would then learn the
+# part while the world labels features — silently, which reads as a comparison of
+# composition that never happened. A feature object is `<part>/<feature>`, so a
+# memory whose every object is a bare part name is the wrong shape.
+if System.get_env("MONTY_CAD_LABELS") == "features" and
+     not Enum.all?(written.objects, &String.contains?(&1.object_id, "/")) do
+  Mix.raise(
+    "the memory holds one object a part: this ex_monty_cad does not know " <>
+      "`labels: :features`, and a feature-labelled run needs the release that added it"
+  )
+end
 
 for object <- written.objects do
   IO.puts(
