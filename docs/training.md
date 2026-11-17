@@ -232,13 +232,21 @@ trained, and only one of them can be judged:
   `milka`, `puppy`, … — so `graph_id_to_target` is the identity and a verdict can
   be `match`.
 - **An unsupervised one names them `new_object0`, `new_object1`, …** (Monty's own
-  naming) and keeps the true object in the module's `graph_id_to_target`; the
-  library format holds objects, nodes and features, not that mapping, so a
-  memory read back from `trained/` cannot say which dog `new_object3` was. Its
-  recognition is still a recognition — one graph, one possible object — it just
-  cannot be scored as correct. Monty's own unsupervised experiments are scored
-  because they train and evaluate **in one run**, where the mapping is still in
-  the module.
+  naming) and keeps the true object in the module's `graph_id_to_target`, which
+  used to be a mapping the library could not carry: a memory read back from
+  `trained/` could not say which dog `new_object3` was, so its recognition was a
+  recognition — one graph, one possible object — that could not be scored as
+  correct. Monty's own unsupervised experiments are scored because they train and
+  evaluate **in one run**, where the mapping is still in the module.
+
+  **Since 2026-11-17 the library carries it.** `Memory.save_all/4` takes each
+  module's map beside its memory and writes a `targets` list into every record,
+  `Memory.load_with_targets/4` reads it back, and `Setup` indexes the module it
+  builds by those names, so an unsupervised memory trained now is scorable like a
+  supervised one (`docs/monty-differences.md` records the shape of the records). A
+  library written before that reads exactly as it did — the memories measured in
+  this document, `trained/dogs_surf_unsupervised` among them, carry no `targets`
+  and are still only countable, not scorable.
 
 ### The dog corpus, end to end (measured 2026-11-17)
 
@@ -321,9 +329,10 @@ concludes.**
 `dogs/inference_paired` is the third row of that table: the same dense memory,
 with the module and the budget that `tutorial/surf_agent_2obj_eval` uses. It
 concludes **7 `match` and 1 `no_match` of eight in 2 840 steps** — 355 an
-episode, where the config beside it takes 1 168 for eight time-outs. A `match`
-there cannot be scored against the dog that was placed, for the reason §9 gives:
-an unsupervised memory names its graphs `new_object0`, …
+episode, where the config beside it takes 1 168 for eight time-outs. That memory
+was written before a library could carry its targets (§9), so its seven matches
+cannot be read as seven right answers; a memory trained since carries them and
+can be.
 
 A run recorded with `--record` under `MIX_ENV=test` writes into the suite's own
 database, and the suite wipes the runs it finds there when it starts
