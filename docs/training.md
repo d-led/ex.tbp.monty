@@ -127,12 +127,30 @@ Two debts remain. Neither is a refusal.
    Recognition is unaffected — matching reads the graphs. But training _on top of_
    a pretrained library would extend the wrong kind of model. Monty loads a state
    dict into the module it just built (`monty_experiment.py`). Copy that shape.
+3. **An unsupervised run cannot report its own accuracy, and why is open.** The map
+   a verdict is scored against is filled by `fixme_update_ground_truth/1` from the
+   object the module detected and the object it was told to expect, and the four
+   records of `trained/dogs_surf_unsupervised` carry `targets: ["new_object0"]` …
+   `["new_object3"]` — each graph's own name, which is the fallback for a map with
+   no entry (§9). What is _not_ yet explained is where it is lost, because every
+   part this was blamed on checks out: `Jobs.Run` calls `Run.set_ground_truth/1`
+   once an episode, exactly where Monty's `MontyObjectRecognitionExperiment`
+   calls `fixme_set_ground_truth`; `Step.update_ltm_state/1` runs
+   `update_ltm_from_stm/1` then `fixme_update_ground_truth/1`, Monty's own order
+   (`monty_base.py:420-425`); and the guard either side of the store,
+   `mode == :train and buffer size > 0`, is Monty's (`graph_matching.py:642-645`).
+   The next measurement is a training episode of this corpus stepped by hand with
+   the module's `primary_target`, `detected_object` and buffer size read before
+   each of those three calls. Until then, an unsupervised memory is a count of
+   conclusions, not an accuracy.
 
 ## 4. Order
 
 1. A referee for one config this build steps _(§3.1)_.
 2. Load a written memory into the memory the config would have built _(§3.2)_.
    Then let a later run find the library an earlier one wrote.
+3. Tell an unsupervised train episode the object it explores _(§3.3)_, which is
+   what lets that run score its own evaluation.
 
 No porting order is needed. No shipped experiment is refused for a class this port
 has not written; `mix monty.readiness` prints the counts.
