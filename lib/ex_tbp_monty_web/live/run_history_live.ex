@@ -416,6 +416,49 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # when it starts and never change, and reading them back costs a setup.
   defp put_configuration(socket, run), do: assign(socket, configuration: configuration(run))
 
+  # What kind of run this is, in the words a reader of a run list needs: the
+  # experiment name says which corpus and which agent, never whether the run
+  # trained the memory a recognition then uses.
+  #
+  # The class the record kept is what says it. Monty names the two ends of a
+  # studio run's life in the class — `MontySupervisedObjectPretrainingExperiment`
+  # trains, `MontyObjectRecognitionExperiment` recognises — while the epoch counts
+  # in the same config do not: a recognition config carries a `n_train_epochs` it
+  # never runs, so counting epochs would call every recognition a training.
+  #
+  # `supervised_lm_ids` is Monty's own statement of whether the answer was handed
+  # to the modules, and it is the difference that matters later: a supervised
+  # memory keeps each object's name, so a recognition can be scored against it,
+  # and an unsupervised one keeps `new_object<n>`, so it cannot.
+  defp run_kind(%{config: config}) when is_map(config) do
+    target = get_in(config, ["experiment", "_target_"])
+    params = get_in(config, ["experiment", "config"]) || %{}
+
+    cond do
+      is_binary(target) and String.contains?(target, "Pretraining") ->
+        training_kind(params)
+
+      is_binary(target) and String.contains?(target, "Recognition") ->
+        {"recognition",
+         "Nothing is learned: the modules recognise what the world shows them, against the memory the config names."}
+
+      true ->
+        nil
+    end
+  end
+
+  defp run_kind(_run), do: nil
+
+  defp training_kind(params) do
+    if Map.get(params, "supervised_lm_ids") in [nil, [], ""] do
+      {"training",
+       "The modules are not told what they are looking at: the graphs they learn are new_object<n>, so this memory can be used but a recognition against it cannot be scored."}
+    else
+      {"supervised training",
+       "The object is handed to the learning modules: the memory keeps each object's own name, so a recognition against it can be scored."}
+    end
+  end
+
   defp assign_run(%{"id" => id}, socket) do
     case read_run(socket, id) do
       nil ->
@@ -432,6 +475,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_run(run)
          |> remember(run)
          |> put_configuration(run)
+         |> assign(kind: run_kind(run))
          |> assign(setup: setup_of(run))
          |> put_parts(run)
          |> follow(run)
@@ -1591,6 +1635,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             class={["badge badge-sm", status_class(run_state(@run, @queue[@run.id]))]}
           >
             {run_state(@run, @queue[@run.id])}
+          </span>
+          <%!-- Which kind of run this is — a training (and whether the answer was
+          handed to the module) or a recognition — comes from the class the record
+          kept, because a name alone does not say it and Monty's recognition
+          configs carry a `n_train_epochs` they never run. In this row rather than
+          on a line of its own: a reader of `/runs` sees eight runs of one
+          experiment name and needs the kind, not another line of header. --%>
+          <span
+            :if={@kind}
+            id="run-kind"
+            class="badge badge-ghost badge-sm"
+            title={elem(@kind, 1)}
+          >
+            {elem(@kind, 0)}
           </span>
           <ExTbpMontyWeb.StudioComponents.waiting_for :if={@waiting} waiting={@waiting} />
           <span

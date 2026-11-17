@@ -786,6 +786,20 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     Enum.reduce(0..(steps - 1)//1, run, &record_step(&2, &1))
   end
 
+  # A run whose record names its experiment's class and that class's parameters,
+  # and nothing else — which is what the header has to go on.
+  defp run_of(class, params) do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "dogs/surf_supervised",
+        source: "monty",
+        steps: 0,
+        config: %{"experiment" => %{"_target_" => class, "config" => params}}
+      })
+
+    run
+  end
+
   defp record_step(run, step) do
     {:ok, run} =
       RunHistory.record_step(
@@ -1434,6 +1448,42 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert render(view) =~ "monty/learning_module"
       assert has_element?(view, "#log-0-0")
       assert has_element?(view, "#log-0-1")
+    end
+
+    # A list of runs names experiments, and the name does not say whether a run
+    # trained a memory or used one: "dogs/surf_supervised" and
+    # "dogs/inference_supervised" are told apart by the class, and that class is
+    # in the record. The header says which, in a badge like the rest of its row,
+    # so it costs no line of its own.
+    test "says in its header whether it trained and which kind, or recognised", %{
+      conn: conn
+    } do
+      training =
+        run_of(
+          "…experiments.pretraining_experiments.MontySupervisedObjectPretrainingExperiment",
+          %{"supervised_lm_ids" => "all"}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{training.id}")
+      assert view |> element("#run-kind") |> render() =~ "supervised training"
+
+      recognising =
+        run_of(
+          "…experiments.object_recognition_experiments.MontyObjectRecognitionExperiment",
+          %{}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{recognising.id}")
+      assert view |> element("#run-kind") |> render() =~ "recognition"
+    end
+
+    test "says nothing about a run whose record names no experiment class", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#run-kind")
     end
 
     # The snapshot is the run's whole config — a file, not a table — and the
