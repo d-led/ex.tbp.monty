@@ -15,6 +15,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
   import ExTbpMontyWeb.CoreComponents, only: [icon: 1]
 
   alias Monty.Studio.{Diagram, Finding}
+  alias Monty.Studio.Replay.Chart
 
   @doc """
   Draws an experiment's wiring.
@@ -404,7 +405,10 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :id, :string, default: "replay"
 
   def replay(assigns) do
-    assigns = assign(assigns, :plot_height, if(assigns.expanded, do: "h-[72vh]", else: "h-40"))
+    assigns =
+      assigns
+      |> assign(:plot_height, if(assigns.expanded, do: "h-[72vh]", else: "h-40"))
+      |> assign(:plotted?, plotted?(assigns.chart))
 
     ~H"""
     <section id={@id} class="space-y-1.5">
@@ -497,9 +501,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
       <%!-- Full screen is for reading a shape, not for watching a run: it takes
       the plot out of the page's columns and gives it the window, and the plot
-      grows with it because the viewBox is stretched, not the pixels. --%>
+      grows with it because the viewBox is stretched, not the pixels.
+
+      A chart with nothing on it is not drawn. A run that trained rather than
+      recognised has no evidence to plot, and a box with axes in it reads as a
+      chart that failed rather than as a run with nothing to show; the page's own
+      sentence is what explains the case, and it is left to do so. --%>
       <div
-        :if={@chart}
+        :if={@plotted?}
         id="replay-chart-panel"
         data-fullscreen={to_string(@expanded)}
         class="space-y-2 pt-1"
@@ -1311,6 +1320,14 @@ defmodule ExTbpMontyWeb.StudioComponents do
   # steps over ten objects, 11.4 ms and 488 kB for five thousand (best of four,
   # this box). Immaterial on a finished run's page, and eight renders a second
   # of it while one is live.
+  # Whether there is anything to draw. A chart of no lines — or of lines that hold
+  # no point in the window — is an empty box: a run that trained has no evidence to
+  # plot, and a run zoomed past its last step has nothing visible there either.
+  # The page's own sentence explains the case; drawing axes under it would read as
+  # a chart that failed.
+  defp plotted?(nil), do: false
+  defp plotted?(%Chart{lines: lines}), do: Enum.any?(lines, &(&1.points != []))
+
   @doc """
   The chart's `data-samples`: one entry per drawn point, where it sits and the
   sentence a hover shows.
