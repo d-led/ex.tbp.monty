@@ -61,6 +61,9 @@ defmodule ExTbpMonty.Cad.Objects do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `into` is the directory an operator names and the object name is the
+  # recognition's own record id, so neither comes from a request.
   defp write_all(meshes, into) do
     File.mkdir_p!(into)
 
