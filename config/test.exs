@@ -83,6 +83,16 @@ config :ex_tbp_monty, studio_replay_tick_ms: 5_000
 # asks for them itself, and a warm-up racing it would only make both slower.
 config :ex_tbp_monty, precompute: false
 
+# A test that starts a run writes that run's `run.log`, and three thousand cases
+# of it wrote into `priv/studio_runs` — where `scripts/run_in_flight.sh` reads a
+# `run.log` written in the last five minutes as a run in flight and forbids
+# editing `lib/`. A suite that wrote there would make the guard answer busy for
+# five minutes after every test run, which is the one thing the guard must not
+# do: a check that cries wolf is a check somebody ignores. The suite's own runs
+# go beside it, and `test/test_helper.exs` clears the directory before it starts.
+config :ex_tbp_monty,
+       studio_artifacts_dir: Path.join(System.tmp_dir!(), "ex_tbp_monty_test_artifacts")
+
 # Nor a download behind the suite's back: the boot fetch is on by default, and a
 # suite that started one would spend a gigabyte and write outside its temporary
 # directories. A test that fetches starts the machine itself.

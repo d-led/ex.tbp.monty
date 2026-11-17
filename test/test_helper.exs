@@ -21,6 +21,13 @@ end
 
 ExUnit.start()
 
+# The runs the suite starts are the suite's own, and a directory kept from a run
+# that crashed is not one of them: a run's `run.log` in the last five minutes is
+# what `scripts/run_in_flight.sh` reads as a run in flight, and a leftover from
+# the last suite would forbid editing `lib/` for five minutes after it. Cleared
+# once, before any test writes into it.
+File.rm_rf!(Application.fetch_env!(:ex_tbp_monty, :studio_artifacts_dir))
+
 # The suite owns this database, and owning it means a run recorded in it is not
 # one of the suite's. `MIX_ENV=test mix monty.run --record` writes rows here — the
 # dogs were trained and recognised that way — and a case that asks what this
