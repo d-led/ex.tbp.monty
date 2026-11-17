@@ -188,6 +188,7 @@ defmodule ActionStream do
     # are 0.8 mm apart on the opening step, so the branch has to be named rather
     # than inferred from the movement.
     describe_policy(motor, state.proprioceptive_state)
+    describe_stream(state.model_id)
 
     # The world moves by his action, so the next question is the same one.
     {observations, proprioceptive_state, interface} =
@@ -204,6 +205,19 @@ defmodule ActionStream do
         proprioceptive_state: proprioceptive_state,
         interface: interface
     }
+  end
+
+  # Where the episode's stream stands, as the generator reports it: a position
+  # inside the block of words it draws from, not a count of draws. It is here
+  # because a policy that reads a different number of numbers produces actions
+  # that cannot be compared, and no action shows that on its own. Its first
+  # reading is a surprise: the position does not move for the episode's first
+  # twenty-six steps and then moves by two, which is either a policy that does not
+  # draw from the episode's stream or a position that is not the counter it looks
+  # like.
+  defp describe_stream(model_id) do
+    position = Monty.Random.Stream.state(Monty.Random.Stream.via(model_id)).pos
+    IO.puts("the stream: position #{position}")
   end
 
   # What the policy was holding when it answered. The branch it took follows from

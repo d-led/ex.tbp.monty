@@ -146,7 +146,12 @@ stored heading, projected.
 So the streams part somewhere between steps 20 and 28, in a window whose only
 variable-drawing call is the avoidance search — it draws once per candidate heading
 it tries, and how many it tries depends on the conflicts it finds against the
-points already visited. The next thing to read is that count on both sides.
+points already visited. The instrument for that count is the episode stream's own
+position, which the probe now prints — and its first reading is a surprise of its
+own: the position does not move for the episode's first twenty-six steps and then
+moves by two. Either the policy's draws do not come from the episode's stream, or
+that position is not the per-draw counter it looks like. Until that is settled the
+count cannot be compared with Monty's, so settling it is the next step.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
