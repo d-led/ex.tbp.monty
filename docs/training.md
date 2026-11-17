@@ -127,34 +127,20 @@ Two debts remain. Neither is a refusal.
    Recognition is unaffected — matching reads the graphs. But training _on top of_
    a pretrained library would extend the wrong kind of model. Monty loads a state
    dict into the module it just built (`monty_experiment.py`). Copy that shape.
-3. **An unsupervised run cannot report its own accuracy — measured, and it is the
-   experiment's shape, not a bug.** The map a verdict is scored against is filled
-   by `fixme_update_ground_truth/1` from the object the module detected and the
-   object it was told to expect. One training episode of this corpus, stepped by
-   hand, answers `graph_id_to_target: %{}`: an unsupervised training episode
-   _concludes nothing_ — it builds its graph from the buffer of what it saw — so
-   `detected_object` is `nil` and the first clause of
-   `update_target_graph_mapping/3` has nothing to attribute. That is why the four
-   records of `trained/dogs_surf_unsupervised` carry `targets: ["new_object0"]` …
-   `["new_object3"]`, the fallback for a map with no entry (§9), and it is not a
-   difference from Monty: `monty_base.py:420-425` and `graph_matching.py:642-645`
-   are the order and the guard this port has, and Monty's _supervised_ pretraining
-   is where a module's `detected_object` is set from the truth it was given
-   (`pretraining_experiments.py:91-95`).
 
-   So scoring an unsupervised memory needs the attribution to come from the
-   environment's target when nothing is detected — Monty's own unsupervised
-   experiments report accuracy because they train and evaluate in one run and the
-   evaluation is what names the object. Until that is made to reach the library,
-   an unsupervised memory is a count of conclusions, not an accuracy.
+   (A third debt stood here for part of 2026-11-17 — "an unsupervised run cannot
+   report its own accuracy" — and it was wrong. It rested on a `graph_id_to_target`
+   read from a training episode stepped by hand, and that probe never ran the
+   episode's `update_ltm`, so the map was empty for a reason that has nothing to do
+   with unsupervised training. What was really wrong was the writer reading the map
+   beside the memory write instead of after it; §9 now says what an unsupervised
+   memory's names mean and how many objects one graph can carry.)
 
 ## 4. Order
 
 1. A referee for one config this build steps _(§3.1)_.
 2. Load a written memory into the memory the config would have built _(§3.2)_.
    Then let a later run find the library an earlier one wrote.
-3. Tell an unsupervised train episode the object it explores _(§3.3)_, which is
-   what lets that run score its own evaluation.
 
 No porting order is needed. No shipped experiment is refused for a class this port
 has not written; `mix monty.readiness` prints the counts.
