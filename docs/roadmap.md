@@ -176,16 +176,26 @@ which `Run` calls per episode); it was the probe that replayed on the experiment
 seed. With that fixed the action stream is his, action for action and digit for
 digit, for the episode's first **forty-seven** steps.
 
-**What is left is step 48.** Steps 46 and 47 are two orientations (0.31° and
-36.58°, the second a large one), and step 48 is a `move_tangentially` whose
-direction differs by 0.036 rad with `pose_defined` true and the standard branch on
-both sides. A recording of his policy's own state —
-[`probe_monty_policy_state.py`](../scripts/probe_monty_policy_state.py), which
-wraps `tangential_direction` and the heading steps it can take — puts his heading
-at that step at `3.1306314915043836` against our `3.1306314915043822`, his counter
-at `5/8` as ours, and his stream at the same position and the same key words. So
-the policy agrees and what differs is downstream of it: the orientation the two
-worlds reach across two orient steps, or the frame a direction is expressed in.
+**What is left is step 48, and it is the fixture, not the port.** Steps 46 and 47
+are two orientations (0.31° and 36.58°, the second a large one), and step 48 is a
+`move_tangentially` whose direction differs from the fixture's by 0.036 rad with
+`pose_defined` true and the standard branch on both sides. A recording of Monty's
+own policy state — [`probe_monty_policy_state.py`](../scripts/probe_monty_policy_state.py),
+which wraps `tangential_direction` and the heading steps it can take — puts its
+heading at that step at `3.1306314915043836` against our `3.1306314915043822`, its
+counter at `5/8` as ours, and its stream at the same position and the same key
+words. Its **rotation** at that step is ours to the last digit
+(`[0.6936031516404482, 0.7021783922220687, 0.10566021631460196, -0.12122744004234279]`)
+and so is the direction it answers,
+`[-0.306966766, 0.015300753, -0.951597232]` — **our** direction, not the
+fixture's `[-0.342227355, 0.016033514, -0.939480369]`.
+
+So the port tracks the Monty checkout beside it, and the fixture was recorded at an
+older one (`9130364`) that answered step 48 differently; the two agree for
+forty-seven steps and part where that Monty changed. The next measurement is a
+recording of the same episode from the current checkout, replayed through the same
+probe: the port should then be his for the whole episode, and if it is not, the
+step it parts at is a real defect rather than a difference between two Montys.
 
 The tool is a measurement, not part of the port, and it runs against Monty's own
 checkout where the data, the models and an interpreter that imports `tbp.monty`

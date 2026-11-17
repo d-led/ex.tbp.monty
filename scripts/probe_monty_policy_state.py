@@ -111,6 +111,30 @@ def _watched(policy):
     }
 
 
+def _rotation(state, policy):
+    """The agent's orientation as the policy saw it, in Monty's `wxyz` order.
+
+    A direction is answered in the agent's frame and recorded in the world's, so
+    two runs whose headings agree and whose directions do not are two runs whose
+    bodies stand differently — which is the world's answer, not the policy's. The
+    rotation is what tells the two apart.
+    """
+    try:
+        agent = state[policy.agent_id]
+    except (KeyError, AttributeError, TypeError):
+        return None
+
+    rotation = getattr(agent, "rotation", None)
+
+    if rotation is None:
+        return None
+
+    if hasattr(rotation, "components"):
+        return [float(part) for part in rotation.components]
+
+    return str(rotation)
+
+
 def _stream(ctx):
     """Where the episode's stream stands: its position and its first key words.
 
@@ -162,6 +186,7 @@ class Probe:
                 "step": self._episode_step + 1,
                 "before": before,
                 "after": _watched(policy),
+                "rotation": _rotation(state, policy),
                 "direction": _plain(direction),
                 "rng": _stream(ctx),
             }
