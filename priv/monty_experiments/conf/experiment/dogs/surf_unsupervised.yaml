@@ -27,3 +27,7 @@ experiment:
     python_log_level: DEBUG
     logging:
       run_name: dogs_surf_unsupervised
+
+# This experiment **trains only** (`Setup.epoch_plan/1` answers `[train: 10]`).
+# Monty's unsupervised training is a pair, and the memory this run keeps is what
+# `dogs/inference` recognises against.

@@ -29,3 +29,7 @@ experiment:
     supervised_lm_ids: all
     logging:
       run_name: dogs_supervised_pretraining
+
+# This experiment **trains only** (`Setup.epoch_plan/1` answers `[train: N]`
+# from Monty's own `train_distinctobj_predefined`); recognition against the
+# memory it writes is `dogs/inference`.

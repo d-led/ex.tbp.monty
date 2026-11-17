@@ -28,3 +28,7 @@ experiment:
     python_log_level: DEBUG
     logging:
       run_name: dogs_surf_unsupervised_small
+
+# This experiment **trains only** — one epoch. It has no evaluation phase, so an
+# episode that ends in `no_match` is a training episode that could not match the
+# graph it was building, not a recognition that failed.

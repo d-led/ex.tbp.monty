@@ -28,3 +28,6 @@ experiment:
     python_log_level: DEBUG
     logging:
       run_name: dogs_surf_unsupervised_mid
+
+# This experiment **trains only** — three epochs, which is the smallest number
+# that gives each dog more than one rotation. Recognition is `dogs/inference`.

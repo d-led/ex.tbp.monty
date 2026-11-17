@@ -29,3 +29,6 @@ experiment:
     supervised_lm_ids: all
     logging:
       run_name: dogs_supervised_pretraining_small
+
+# This experiment **trains only** — one epoch, so the graph it builds can be watched
+# in a minute. It has no evaluation phase; recognition is `dogs/inference`.
