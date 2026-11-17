@@ -86,13 +86,39 @@ defmodule Recognitions do
 
       IO.puts(
         "episode #{index + 1}: showed #{object_of(run) || "?"} · #{inspect(said)} · " <>
-          "detected #{inspect(detected)} of #{inspect(target_of(detected, targets))}"
+          "detected #{inspect(detected)} of #{named(detected, target_of(detected, targets))}"
       )
     end
   end
 
+  # A memory can only be scored when the run that wrote it was told which object
+  # each graph came from (`docs/training.md` §9). Two shapes say it was not: an
+  # empty map, and a graph called `new_objectN` whose only "target" is that same
+  # placeholder — which is what an unsupervised pretraining writes, because
+  # nothing told the module the answer. A supervised graph named after its object
+  # is the opposite: the name *is* the answer.
+  defp named(nil, _target), do: "nothing"
+
+  defp named(graph, target) when target in [nil, %{}],
+    do: "#{inspect(graph)} — this memory cannot say which object, so the match is not scorable"
+
+  defp named(graph, [graph]) do
+    if placeholder?(graph) do
+      "#{inspect(graph)} — this memory cannot say which object, so the match is not scorable"
+    else
+      inspect([graph])
+    end
+  end
+
+  defp named(_graph, target), do: inspect(target)
+
+  defp placeholder?(graph), do: is_binary(graph) and Regex.match?(~r/^new_object\d+$/, graph)
+
   defp target_of(nil, _targets), do: nil
-  defp target_of(graph, targets) when is_map(targets), do: Map.get(targets, graph)
+
+  defp target_of(graph, targets) when is_map(targets),
+    do: MapSet.to_list(Map.get(targets, graph, MapSet.new()))
+
   defp target_of(_graph, _targets), do: nil
 end
 
