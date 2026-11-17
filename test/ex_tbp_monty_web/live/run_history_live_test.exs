@@ -1375,12 +1375,12 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     # kilobytes a step, so tens of megabytes a tab, and more with every episode.
     # The page keeps a window and reads the one step a reader winds back to.
     test "holds a window of a long run, and reads an older step from the record", %{
-      conn: conn
+      conn: conn,
+      running: run
     } do
       Application.put_env(:ex_tbp_monty, :run_held_steps, 2)
       on_exit(fn -> Application.delete_env(:ex_tbp_monty, :run_held_steps) end)
 
-      run = running_run(0)
       run = Enum.reduce(0..7, run, &record_a_step_believing(&2, &1, "mug"))
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
@@ -1388,6 +1388,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       assert length(held) == 8
       assert Enum.count(held, &is_map/1) <= 4
+
+      # The header is drawn from the window as much as the rest of the page is:
+      # a step the page no longer holds is not a reason for the page to fail.
+      assert view |> element("#run-progress") |> render() =~ "step 8 /"
 
       # Step 0 is older than the window: its report comes from the record, and
       # the theories beside the replay are the ones that step believed.

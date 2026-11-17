@@ -63,6 +63,7 @@ defmodule Monty.Studio.Replay.Digest do
           module_objects: %{String.t() => %{String.t() => line()}},
           modules: MapSet.t(),
           sensors: MapSet.t(),
+          episodes: %{(non_neg_integer() | nil) => non_neg_integer()},
           best: %{object: String.t(), value: number()} | nil
         }
 
@@ -72,6 +73,7 @@ defmodule Monty.Studio.Replay.Digest do
             module_objects: %{},
             modules: MapSet.new(),
             sensors: MapSet.new(),
+            episodes: %{},
             best: nil
 
   @doc "An empty digest: a run that has not stepped yet."
@@ -126,6 +128,26 @@ defmodule Monty.Studio.Replay.Digest do
   @doc "The learning modules the run reported beliefs for, oldest name first."
   @spec modules(t()) :: [String.t()]
   def modules(%__MODULE__{modules: modules}), do: modules |> MapSet.to_list() |> Enum.sort()
+
+  @doc """
+  How many steps the run's last episode has taken, and which episode that was.
+
+  A header that says "step 47 of 500" is asking about one episode, and counting
+  the transcript for it was a walk of the whole run on every render. The count is
+  kept as the steps arrive, so it is a lookup and it stays right however long the
+  run is.
+  """
+  @spec last_episode(t()) :: {non_neg_integer() | nil, non_neg_integer()}
+  def last_episode(%__MODULE__{episodes: episodes}) do
+    case Enum.filter(episodes, fn {_episode, count} -> count > 0 end) do
+      [] ->
+        {nil, 0}
+
+      pairs ->
+        {episode, _count} = Enum.max_by(pairs, fn {episode, _count} -> episode || -1 end)
+        {episode, Map.get(episodes, episode)}
+    end
+  end
 
   @doc """
   The object the run believed in most, and how much, over the whole run.
@@ -215,6 +237,7 @@ defmodule Monty.Studio.Replay.Digest do
 
     digest
     |> Map.put(:steps, position + 1)
+    |> Map.update!(:episodes, &Map.update(&1, episode, 1, fn count -> count + 1 end))
     |> remember_sensors(Map.keys(sensors))
     |> add_step_lines(position, episode, entry, sensors)
     |> add_object_lines(position, episode, entry)

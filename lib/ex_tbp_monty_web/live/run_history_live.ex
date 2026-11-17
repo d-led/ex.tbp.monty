@@ -1598,7 +1598,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             id="run-progress"
             class="badge badge-ghost badge-sm"
           >
-            step {steps_into_episode(@run)} / {@run.steps}
+            step {steps_into_episode(@digest)} / {@run.steps}
           </span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
 
@@ -2661,11 +2661,15 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # How far into its current episode a run is. Every episode restarts the step
   # counter, so the length of the whole log is not a step count: a run of seventy
   # seven episodes would claim step nine hundred of twelve.
-  defp steps_into_episode(%{log: []}), do: 0
+  # How many steps the run's last episode has taken. The digest counts them as
+  # they arrive, so this is a lookup: counting them in the transcript walked the
+  # whole run on every render, which is a cost that grows with the run and buys
+  # nothing (`Replay.Digest.last_episode/1`).
+  defp steps_into_episode(nil), do: 0
 
-  defp steps_into_episode(%{log: log}) do
-    episode = log |> List.last() |> Map.get("episode")
-    Enum.count(log, &(Map.get(&1, "episode") == episode))
+  defp steps_into_episode(digest) do
+    {_episode, count} = Digest.last_episode(digest)
+    count
   end
 
   # In flight means both halves agree: the record has not settled *and* a job
