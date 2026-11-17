@@ -10,13 +10,16 @@
 # step of his episode, while the world is moved by *his* actions, so both answers
 # answer the same question. The step they part at is the step to read.
 #
-# What it reports: his actions for the first twenty-seven steps of the episode,
-# action for action and digit for digit, and the first difference at step 28 — a
-# `move_tangentially` whose distance is his and whose direction is not, after which
-# every `move_forward` distance is off by a millimetre or less. The prologue is not
-# what to look at: the patch's flat five-centimetre view of the table is his too
-# (his episode's first percepts are empty and the object enters his patch at step
-# 3), and the world at reset is his to the last bit.
+# What it reports: his actions for the episode's first forty-seven steps, action
+# for action and digit for digit, and the first difference at step 48 — a
+# `move_tangentially` whose distance is his and whose direction is not. Before the
+# episode's own seed was used here the parting step was 28, which is what a replay
+# on the experiment's seed rather than the episode's looks like: the policy draws
+# nothing before it, so the first draw was also the first place two streams could
+# be told apart. The prologue is not what to look at: the patch's flat
+# five-centimetre view of the table is his too (his episode's first percepts are
+# empty and the object enters his patch at step 3), and the world at reset is his
+# to the last bit.
 
 defmodule ActionStream do
   @moduledoc false
@@ -24,6 +27,7 @@ defmodule ActionStream do
   alias Monty.Cmp
   alias Monty.Experiment.Environment.Interface
   alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
+  alias Monty.Frameworks.Experiments.Seed
   alias Monty.Frameworks.Models.MotorSystem
   alias Monty.Frameworks.Models.SensorModules.CameraSM
   alias Monty.Runtime.Positioning
@@ -89,10 +93,16 @@ defmodule ActionStream do
 
     # The episode's own stream, which is what a policy draws from in a run:
     # without it the probe would be asking the policy a different question from
-    # the one a run asks.
+    # the one a run asks. It is the *episode's* seed and not the experiment's —
+    # Monty reseeds every episode through `Seed.episode_seed/3`, so replaying on
+    # the experiment's seed answers the first draw from a stream the episode never
+    # had. Nothing showed that until step 28, because the policy draws nothing
+    # before then: every step up to it is momentum along the curvature.
+    episode_seed = Seed.episode_seed(setup.seed || 0, :eval, 0)
+
     {:ok, _registry} = Registry.start_link(keys: :unique, name: Monty.Runtime.Registry)
     model_id = "probe-#{System.unique_integer([:positive])}"
-    {:ok, _stream} = Monty.Random.Stream.start_link(%{model_id: model_id, seed: setup.seed || 0})
+    {:ok, _stream} = Monty.Random.Stream.start_link(%{model_id: model_id, seed: episode_seed})
 
     {observations, proprioceptive_state, interface} = Interface.step(interface, [])
 
@@ -131,10 +141,11 @@ defmodule ActionStream do
       proprioceptive_state: proprioceptive_state,
       sensor_module: sensor_module,
       model_id: model_id,
+      seed: episode_seed,
       rows: []
     }
 
-    seed = setup.seed || 0
+    seed = state.seed
 
     # The replay stops at an episode boundary: the experiment repositions the
     # agent between episodes with an action the policy never takes, so a step
@@ -183,7 +194,14 @@ defmodule ActionStream do
     before = stream_position(state.model_id)
 
     {actions, motor} =
-      MotorSystem.call(state.motor, ctx, state.observations, state.proprioceptive_state, percept, [])
+      MotorSystem.call(
+        state.motor,
+        ctx,
+        state.observations,
+        state.proprioceptive_state,
+        percept,
+        []
+      )
 
     describe_stream(state.model_id, before)
 
@@ -199,9 +217,11 @@ defmodule ActionStream do
 
     %{
       state
-      | rows:
-          [{recorded["episode_step"], Enum.map(recorded["actions"], &describe/1),
-            Enum.map(actions, &describe/1), inputs(percept)} | state.rows],
+      | rows: [
+          {recorded["episode_step"], Enum.map(recorded["actions"], &describe/1),
+           Enum.map(actions, &describe/1), inputs(percept)}
+          | state.rows
+        ],
         motor: motor,
         sensor_module: sensor_module,
         observations: observations,
@@ -223,7 +243,9 @@ defmodule ActionStream do
   end
 
   defp describe_stream(model_id, before) do
-    IO.puts("the stream: position #{before} before the policy, #{stream_position(model_id)} after")
+    IO.puts(
+      "the stream: position #{before} before the policy, #{stream_position(model_id)} after"
+    )
   end
 
   # What the policy was holding when it answered. The branch it took follows from
@@ -321,7 +343,9 @@ defmodule ActionStream do
         "none"
       end
 
-    IO.puts("the #{name} on the first step: depth #{depth}; keys #{inspect(Map.keys(observation))}")
+    IO.puts(
+      "the #{name} on the first step: depth #{depth}; keys #{inspect(Map.keys(observation))}"
+    )
   end
 
   defp describe_observation(name, other),
@@ -340,7 +364,9 @@ defmodule ActionStream do
     do: abs(theirs - ours) <= @tolerance
 
   defp close?(theirs, ours) when is_list(theirs) and is_list(ours),
-    do: length(theirs) == length(ours) and Enum.zip(theirs, ours) |> Enum.all?(fn {a, b} -> close?(a, b) end)
+    do:
+      length(theirs) == length(ours) and
+        Enum.zip(theirs, ours) |> Enum.all?(fn {a, b} -> close?(a, b) end)
 
   defp close?(theirs, ours), do: theirs == ours
 
@@ -354,32 +380,52 @@ defmodule ActionStream do
   defp describe(%OrientHorizontal{} = action),
     do:
       {"orient_horizontal",
-       %{"rotation_degrees" => action.rotation_degrees, "left_distance" => action.left_distance,
-         "forward_distance" => action.forward_distance}}
+       %{
+         "rotation_degrees" => action.rotation_degrees,
+         "left_distance" => action.left_distance,
+         "forward_distance" => action.forward_distance
+       }}
 
   defp describe(%OrientVertical{} = action),
     do:
       {"orient_vertical",
-       %{"rotation_degrees" => action.rotation_degrees, "down_distance" => action.down_distance,
-         "forward_distance" => action.forward_distance}}
+       %{
+         "rotation_degrees" => action.rotation_degrees,
+         "down_distance" => action.down_distance,
+         "forward_distance" => action.forward_distance
+       }}
 
-  defp describe(%{"action" => name} = recorded), do: {name, Map.drop(recorded, ["action", "agent_id"])}
+  defp describe(%{"action" => name} = recorded),
+    do: {name, Map.drop(recorded, ["action", "agent_id"])}
+
   defp describe(other), do: {inspect(other), %{}}
 
-  defp render(actions), do: Enum.map_join(actions, " + ", fn {name, values} -> name <> render_values(values) end)
+  defp render(actions),
+    do: Enum.map_join(actions, " + ", fn {name, values} -> name <> render_values(values) end)
 
   defp render_values(values) when map_size(values) == 0, do: ""
 
   defp render_values(values),
-    do: " " <> (values |> Enum.sort() |> Enum.map_join(" ", fn {key, value} -> "#{key}=#{render_value(value)}" end))
+    do:
+      " " <>
+        (values
+         |> Enum.sort()
+         |> Enum.map_join(" ", fn {key, value} -> "#{key}=#{render_value(value)}" end))
 
   defp render_value(nil), do: "none"
-  defp render_value(value) when is_number(value), do: :erlang.float_to_binary(value * 1.0, decimals: 9)
-  defp render_value(value) when is_list(value), do: "[" <> Enum.map_join(value, ", ", &render_value/1) <> "]"
+
+  defp render_value(value) when is_number(value),
+    do: :erlang.float_to_binary(value * 1.0, decimals: 9)
+
+  defp render_value(value) when is_list(value),
+    do: "[" <> Enum.map_join(value, ", ", &render_value/1) <> "]"
+
   defp render_value(value), do: inspect(value)
 
   defp read do
-    Path.expand(@fixture, Path.join(__DIR__, "..")) |> File.stream!() |> Enum.map(&Jason.decode!/1)
+    Path.expand(@fixture, Path.join(__DIR__, ".."))
+    |> File.stream!()
+    |> Enum.map(&Jason.decode!/1)
   end
 
   defp positioned?(%{"actions" => actions}),
@@ -389,7 +435,11 @@ defmodule ActionStream do
     do: %MoveForward{agent_id: @agent, distance: recorded["distance"]}
 
   defp action(%{"action" => "move_tangentially"} = recorded),
-    do: %MoveTangentially{agent_id: @agent, distance: recorded["distance"], direction: recorded["direction"]}
+    do: %MoveTangentially{
+      agent_id: @agent,
+      distance: recorded["distance"],
+      direction: recorded["direction"]
+    }
 
   defp action(%{"action" => "orient_horizontal"} = recorded),
     do: %OrientHorizontal{

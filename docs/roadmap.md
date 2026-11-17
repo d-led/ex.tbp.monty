@@ -139,45 +139,65 @@ exactly. Rotating **his** recorded direction back by the same rotation gives a
 local heading of `3.001720189` against our `2.894124581` — a tenth of a radian
 apart, which with `alpha` at 0.1 is a target a whole radian apart.
 
-So the streams part somewhere between steps 20 and 28, and the draw is **not** what
-parts them. One line in the policy's draw function answers it: the whole
-twenty-nine-step replay takes exactly **one** number, from the episode's stream —
-`0.3745401188473625`, which is NumPy's first draw at seed 42, the same number
-Monty's own run drew first. Our momentum step then reproduces our own direction to
-four millionths from the heading it held, `3.13055849388839`
+So the streams part between steps 20 and 28, and the draw was the suspect: one line
+in the policy's draw function answers it. The whole twenty-nine-step replay takes
+exactly **one** number, from the episode's stream — `0.3745401188473625`, which is
+NumPy's first draw at seed 42. Our momentum step then reproduces our own direction
+to four millionths from the heading it held, `3.13055849388839`
 (`3.13055849388839 + 0.1 × theta_change(3.13055849388839, −0.788325…)`), so the
-blend is Monty's formula on Monty's number. His direction implies a heading of
-about `3.2284` (or `2.6572` on the other branch of the wrap), so **the heading
-before the blend is what differs** — the curvature step at 24 returned a direction
-that matched ours, so either what it stored did not match, or something between 25
-and 28 replaced it: ours ran no conflict search there (the heading counter stood at
-one of twelve).
+blend is Monty's formula on a number. His direction implies a heading of about
+`3.2284` (or `2.6572` on the other branch of the wrap), so the heading before the
+blend looked like what differed.
 
-Two checks close the obvious explanations without closing the question. Forcing the
-curvature branch at step 28 answers `0.377315189, -0.912522774, -0.157909578` — a
-third direction, so his was not that branch either. And no single draw among
-NumPy's first sixty, blended from our heading by Monty's own formula, produces his
-heading: that search finds nothing.
+Forcing the curvature branch at step 28 answers
+`0.377315189, -0.912522774, -0.157909578` — a third direction, so his was not that
+branch either. And **his own recording says both sides drew at the same place**:
+every line of it carries the stream's position, and it stands at `624` for steps one
+to twenty-seven and `2` at step 28, the same two numbers ours prints.
 
-**His own recording says both sides drew the same number.** Every line of it
-carries the stream's position, and it stands at `624` for steps one to
-twenty-seven and `2` at step 28 — the same two numbers ours prints, from the same
-oracle. So "the draws differ" is closed by his data rather than by ours.
+**The cause was the seed, not the draw.** Monty reseeds every episode —
+`episode_seed = sha256("{seed}-{mode}-{episode}") mod 2³²`, in
+`tbp/monty/frameworks/experiments/seed.py` — so episode 0 of an evaluation epoch at
+seed 42 runs on `1170100843`, not on `42`. The replay seeded the episode's stream
+with the _experiment's_ seed, so its first draw was NumPy's first value at 42
+(`0.3745401188473625`) where the episode's own stream answers
+`0.20329638816634776`. Nothing could have shown that before step 28: the policy
+draws nothing until then — twenty-seven steps of momentum along a curvature — so
+the first draw in the episode was also the first place two streams could be told
+apart, and a position that reads `624` on both sides cannot tell a stream that has
+drawn nothing from one that has drawn a whole block.
 
-That leaves his heading, and it is the one number his recording does not carry. The
-hook that wrote the fixture already records the stream's position per step
-(`record_monty_episode.py`), so a sibling hook writing
-`monty.motor_system`'s policy fields — `tangential_angle`, `prev_angle`,
-`using_pc_guide`, the two counters — is the same shape of thing, and this machine
-has what the run needs: the YCB meshes under `~/tbp/data`, the pretrained models
-under `~/tbp/results`, and a virtual environment where `tbp.monty` imports.
+The arithmetic then closes to the last digit. Our heading at step 28 was his,
+`3.1305584938883904`, and
+`3.1305584938883904 + 0.1 × theta_change(3.1305584938883904, −1.8642437744603189)`
+is `3.0017201900053028` — his blended heading, from _his_ number. The port's own
+run already derived the seed (`Monty.Frameworks.Experiments.Seed.episode_seed/3`,
+which `Run` calls per episode); it was the probe that replayed on the experiment's
+seed. With that fixed the action stream is his, action for action and digit for
+digit, for the episode's first **forty-seven** steps.
+
+**What is left is step 48.** Steps 46 and 47 are two orientations (0.31° and
+36.58°, the second a large one), and step 48 is a `move_tangentially` whose
+direction differs by 0.036 rad with `pose_defined` true and the standard branch on
+both sides. A recording of his policy's own state —
+[`probe_monty_policy_state.py`](../scripts/probe_monty_policy_state.py), which
+wraps `tangential_direction` and the heading steps it can take — puts his heading
+at that step at `3.1306314915043836` against our `3.1306314915043822`, his counter
+at `5/8` as ours, and his stream at the same position and the same key words. So
+the policy agrees and what differs is downstream of it: the orientation the two
+worlds reach across two orient steps, or the frame a direction is expressed in.
+
+The tool is a measurement, not part of the port, and it runs against Monty's own
+checkout where the data, the models and an interpreter that imports `tbp.monty`
+are: see the docstring for the invocation. It also records the stream's first key
+words beside its position, because a position alone cannot tell a stream that has
+drawn nothing from one that has drawn a whole block.
 
 The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
 projections between an angle and a vector) and `pc_moving_average` are identical to
-Monty's, line for line. What is left is the heading counter's bookkeeping and what
-the curvature step stores — `Context.rng_for/2`, which seeds Erlang's `:exsss` per
-module and per step, is a second generator that this episode never used and that
-still wants an owner.
+Monty's, line for line. `Context.rng_for/2`, which seeds Erlang's `:exsss` per
+module and per step, is a second generator that no episode of this kind uses and
+that still wants an owner.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
