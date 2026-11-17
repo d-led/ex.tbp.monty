@@ -7,13 +7,14 @@
 # The download lands in the folder this is run from, in a directory of its own —
 # nothing is copied anywhere, nothing is registered, and deleting the folder is
 # the whole of removing it. Run it again and it opens what is already there;
-# `--update` takes the newest build first. What it takes is the newest build of
-# `main`, and the same file attached to a tagged release, which is what to use
-# for a version that has to stay put.
+# `--update` takes the newest build first. What it takes is the newest **release
+# asset**: CI packages the desktop only as a smoke test that packaging works and
+# uploads nothing, so a build is published from a checkout (`docs/desktop.md`) and
+# the release is where it lives.
 #
 #   --update               download the newest build even if one is here
-#   --base-url URL|DIR     take ex-tbp-monty-<rid>.zip from here instead of
-#                          nightly.link (a directory makes it a copy, not a
+#   --base-url URL|DIR     take ex-tbp-monty-<rid>.zip from here instead of the
+#                          newest release (a directory makes it a copy, not a
 #                          download: how the packaging is tried without a round
 #                          trip)
 #   --rid RID              another platform's build (`osx-arm64`, `linux-x64`),
@@ -23,8 +24,6 @@
 #
 #   EX_TBP_MONTY_DIR       where it lands (default: ./ex-tbp-monty-<rid>)
 #   EX_TBP_MONTY_REPO      owner/repo to download from (default: d-led/ex.tbp.monty)
-#   EX_TBP_MONTY_BRANCH    which branch's build to take (default: main)
-#   EX_TBP_MONTY_WORKFLOW  the workflow that builds it (default: ci)
 #   EX_TBP_MONTY_NO_LAUNCH 1 does what `--no-launch` does
 #
 # The macOS app is not signed or notarised yet (docs/desktop.md), so the first
@@ -39,8 +38,6 @@
 set -euo pipefail
 
 repo="${EX_TBP_MONTY_REPO:-d-led/ex.tbp.monty}"
-branch="${EX_TBP_MONTY_BRANCH:-main}"
-workflow="${EX_TBP_MONTY_WORKFLOW:-ci}"
 base_url="${EX_TBP_MONTY_BASE_URL:-}"
 rid="${EX_TBP_MONTY_RID:-}"
 update=0
@@ -160,6 +157,17 @@ unpack() {
     fi
 }
 
+# Where the newest release's copy of an asset is, asked of the GitHub API. Read
+# with `sed` rather than `jq`: a machine that has `curl` does not necessarily have
+# `jq`, and a download URL cannot contain a double quote. Empty is the honest
+# answer when there is no release, or no such asset in it.
+release_asset() {
+    curl -fsSL --max-time 30 -H 'Accept: application/vnd.github+json' \
+        "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null |
+        sed -n 's/.*"browser_download_url": *"\([^"]*\)".*/\1/p' |
+        grep -- "/$1\$" | head -1 || true
+}
+
 if [ "$update" -eq 0 ] && [ -e "$instance" ]; then
     echo "$instance is already here."
 else
@@ -169,8 +177,17 @@ else
         echo "Taking $asset from $base_url ..."
         fetch "$base_url/$asset.zip" "$dir/$asset.zip"
     else
-        latest="https://nightly.link/$repo/workflows/$workflow/$branch/$asset.zip"
-        echo "Taking the newest $branch build: $latest"
+        latest="$(release_asset "$asset.zip")"
+
+        if [ -z "$latest" ]; then
+            echo "no released $asset.zip on $repo." >&2
+            echo "  A build is published from a checkout: scripts/package.sh writes it into" >&2
+            echo "  artifacts/<platform>/, and the release carries what that wrote." >&2
+            echo "  https://github.com/$repo/releases" >&2
+            exit 1
+        fi
+
+        echo "Taking $asset from the newest release: $latest"
         fetch "$latest" "$dir/$asset.zip"
     fi
 
@@ -199,8 +216,8 @@ else
             echo "The unpacker said:" >&2
             tail -5 "$work/unpack.log" >&2
         fi
-        echo "Whether that build exists is on the workflow page:" >&2
-        echo "  https://github.com/$repo/actions/workflows/$workflow" >&2
+        echo "Whether that build exists is on the releases page:" >&2
+        echo "  https://github.com/$repo/releases" >&2
     }
 
     case "$rid" in

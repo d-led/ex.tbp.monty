@@ -172,77 +172,14 @@ case "$health" in
     ;;
 esac
 
-# The two sample plugin nodes, which `bundle.resources` puts beside `rel/` in
-# every shape: `Contents/Resources/plugins` inside a `.app`, `plugins/` next to
-# the release in the portable folder and the AppImage. Asserted here because the
-# copy is one line of JSON per platform, and a bundle without them is a demo that
-# cannot be given — silently, since the window itself is complete either way.
-plugins="$(dirname "$(dirname "$release")")/plugins"
-
-for wanted in "start-plugins.sh" "start-plugins.ps1" "example_plugin/bin" "flyverse_plugin/bin"; do
-  if [ ! -e "$plugins/$wanted" ]; then
-    echo "the bundle carries no plugins/$wanted — see docs/desktop.md" >&2
-    ls "$plugins" 2>/dev/null | sed 's/^/  /' >&2
-    exit 1
-  fi
-done
-
-echo "and it carries the two sample plugin nodes ($(du -sh "$plugins" | cut -f1))"
-
-# Then the control in the window, pressed the way a page presses it, because a
-# launcher starting a launcher is the one thing only a bundle can get wrong: a
-# child inherits the sidecar's `RELEASE_*`, reads *this* release's version number,
-# and dies looking for a folder of that name inside its own release. It said so on
-# a pipe the sidecar drains at `:debug`, so what a person saw was a control that
-# reported two nodes and a cluster that stayed empty.
-# `rpc` runs the expression in the sidecar's own VM and does not echo the value
-# back, so what the control answered is not visible here — the page is, and that
-# is what a person looks at anyway. A refusal (`MONTY_STUDIO_CLUSTER=0`, a
-# launcher that is not there) fails the wait below either way.
-press() {
-  "$launcher" rpc "$1" >/dev/null 2>&1 || true
-}
-
-# What the cluster card says, as a person reads it off the page.
-cluster_says() {
-  curl -fsS --max-time 5 "http://127.0.0.1:$port/settings" 2>/dev/null |
-    grep -o "[0-9]* nodes in this cluster\|One node in this cluster" | head -1 || true
-}
-
-# Bounded: two nodes joining is a launch, a boot and a gossip round, which is
-# slower on a loaded runner than anywhere else.
-waiting_for() {
-  for _ in $(seq 1 120); do
-    [ "$(cluster_says)" = "$1" ] && return 0
-    sleep 1
-  done
-
-  return 1
-}
-
-echo "pressing the control that starts the two sample plugin nodes"
-press 'ExTbpMonty.SamplePlugins.start()'
-
-if ! waiting_for "3 nodes in this cluster"; then
-  echo "the window started the two sample plugin nodes and they did not join." >&2
-  echo "  the page still says: $(cluster_says)" >&2
-  echo "  the sidecar said, last:" >&2
-  tail -30 "$log" | sed 's/^/    /' >&2
-  exit 1
-fi
-
-echo "and both joined it: $(cluster_says)"
-
-echo "stopping them again, the way the page's second button does"
-press 'ExTbpMonty.SamplePlugins.stop()'
-
-if ! waiting_for "One node in this cluster"; then
-  echo "the two sample plugin nodes did not leave when they were stopped." >&2
-  echo "  the page still says: $(cluster_says)" >&2
-  exit 1
-fi
-
-echo "and they left again: $(cluster_says)"
+# The two sample nodes are **separate apps** now — the window carries none of
+# them (`src-tauri/tauri.bundle*.json` lists only the release), and a window that
+# quietly contained two more nodes would be the opposite of the distribution
+# being demonstrated. What asserts that arrangement is the packaging, which CI
+# runs before this check: `carries_no_plugins` refuses a window that carries
+# them, and `carries_companion_apps` refuses a plugin app that carries no node of
+# its own. Starting them here would need both apps beside the window, which is
+# true of `artifacts/<platform>/` and not of the release this script is given.
 
 # Then the page that reads the disk, because a release can be alive and still
 # have nothing to say about the disk it writes to: it did, on Windows, while

@@ -11,8 +11,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../_build/desktop/rel/ex_tbp_monty": "rel/ex_tbp_monty",
-      "../_build/desktop/plugins": "plugins"
+      "../_build/desktop/rel/ex_tbp_monty": "rel/ex_tbp_monty"
     }
   }
 }

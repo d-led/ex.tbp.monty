@@ -244,8 +244,8 @@ defmodule ExTbpMonty.MixProject do
 
   defp dialyzer do
     [
-      plt_core_path: "priv/plts",
-      plt_local_path: "priv/plts",
+      plt_core_path: "_build/plts",
+      plt_local_path: "_build/plts",
       # `:cover` — which `mix cover.merge` calls — lives in `tools`, so a PLT
       # without it reads those calls as functions that do not exist.
       plt_add_apps: [:mix, :ex_unit, :tools],

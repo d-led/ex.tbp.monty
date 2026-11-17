@@ -248,29 +248,27 @@ done
 run "building the desktop release (a no-change run only reassembles it)" \
   env MIX_ENV=desktop mix release --overwrite
 
-# The two sample plugin nodes the bundle carries, so a person can watch three
-# nodes find each other instead of reading that they can. Built here because
-# `bundle.resources` copies `_build/desktop/plugins` into the window, and
-# `cargo tauri build` is a later step than this one.
-run "building the two sample plugin nodes the bundle carries" \
+# The two sample plugin nodes, as releases of their own. They are **not** part of
+# the window — `bundle.resources` lists the release and nothing else — because a
+# plugin is a node with its own runtime and its own app. `scripts/package.sh`
+# puts one inside each companion app, which is how a person watches three nodes
+# find each other instead of reading that they can.
+run "building the two sample plugin nodes as releases of their own" \
   scripts/build-plugins.sh
 
-# `priv` is copied whole, and the memory a run recognises with is not a property
-# of the build: it is exported at run time from the pickles, into the folder the
-# application keeps its own files in (`Monty.Paths.libraries/0`) — the user's,
-# not the release's. What the checkout happens to hold in
-# `priv/monty/libraries` is the output of yesterday's development runs, and
-# every bundle carried it: two hundred megabytes of libraries this build never
-# reads, in a download a person waits for.
+# `priv` is copied whole, and what a checkout holds there is not a property of
+# the build: `priv/monty/libraries` is the output of a development run's export,
+# and `priv/studio_runs` is what each development run wrote — a log, the step
+# statistics, the frames a sensor drew. Both belong to the user's data folder
+# (`Monty.Paths`), and both have been shipped by mistake: two hundred megabytes
+# of libraries no build reads, and gigabytes of somebody's run history in a
+# download a person waits for.
 #
-# The run recordings are the same mistake at a larger size, and the same
-# deletion: `priv/studio_runs` is what each development run wrote (a log, the
-# step statistics, the frames a sensor drew), the desktop names its own folder
-# elsewhere (`Monty.Paths.artifacts/0`, absolute, under the user's application
-# support), and a checkout mid-experiment would otherwise put gigabytes of its
-# own history into the window a person downloads.
-rm -rf "$release"/lib/ex_tbp_monty-*/priv/monty/libraries \
-       "$release"/lib/ex_tbp_monty-*/priv/studio_runs
+# So the release is refused rather than cleaned up. `scripts/check-release.sh`
+# names what it found, and the fix happens where the data was written — a silent
+# `rm -rf` of the two folders somebody remembered is why the third one shipped.
+run "checking the release carries the application and not a checkout's debris" \
+  scripts/check-release.sh "$release"
 
 # And asked, rather than assumed: a release missing one kernel is a release whose
 # window cannot start, and this is the last moment the build can say so with a

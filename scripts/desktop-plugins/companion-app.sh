@@ -104,9 +104,12 @@ app="${MONTY_STUDIO_APP:-$folder/Monty on the BEAM.app}"
 
 [ -d "$app" ] || die "There is no Monty Studio window beside $name.app. Put the two in the same folder — the .pkg and the .dmg install them that way — or set MONTY_STUDIO_APP to where the window is."
 
-release="$app/Contents/Resources/plugins/$node"
+# The node is this app's own: a plugin is a separate release with its own
+# runtime, which is the whole point of shipping it separately — three apps, three
+# nodes, and the cluster is what they share.
+release="$resources/$node"
 
-[ -x "$release/bin/$node" ] || die "The window beside this app carries no plugins/$node release. Install a bundle that was packaged with the sample plugin nodes, or run scripts/package.sh again."
+[ -x "$release/bin/$node" ] || die "This app carries no $node release beside its launcher. It was packaged without one: rebuild it with scripts/package.sh."
 
 # The port the window prefers, read the way the window reads it:
 # `MONTY_DESKTOP_PORT`, then the settings file a person can edit from Finder,

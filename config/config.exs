@@ -189,7 +189,18 @@ config :ex_tbp_monty, :cluster, enabled: false, seeds: []
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
-# The Python interpreter Monty's wandb loggers run in, in every environment.
-import_config "pythonx.exs"
+#
+# The Python interpreter Monty's wandb loggers and the MuJoCo world run in — in
+# development and in the tests, and **not in a release**. `config/pythonx.exs`
+# has uv build a CPython and its wheels into `priv` at compile time, and a
+# release carries `priv` whole: that is where the gigabytes of a desktop bundle
+# came from, in a program whose own code needs no interpreter to start. A release
+# therefore ships without one, and says so honestly — `python_imports?` answers
+# false and the worlds that need an interpreter are named unavailable — while the
+# interpreter itself becomes a prerequisite that is downloaded, like every other
+# data prerequisite (docs/desktop.md).
+if config_env() in [:dev, :test] do
+  import_config "pythonx.exs"
+end
 
 import_config "#{config_env()}.exs"

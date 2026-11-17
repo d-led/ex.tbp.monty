@@ -170,61 +170,64 @@ build_app() {
   exit 1
 }
 
-# The two sample plugin nodes every shape has to carry, by the name each release
-# uses for itself.
+# The two sample plugin nodes, by the name each release uses for itself. They are
+# **not** part of the window: each is a node with its own runtime, and shipping
+# them as separate apps is the demonstration — three apps, three nodes, one
+# cluster. `bundle.resources` put them inside the window once, which is exactly
+# what this arrangement is meant to stop being true.
 readonly plugin_nodes="example_plugin flyverse_plugin"
 
-# The bundle, asked rather than assumed. `start-desktop.sh --bundle` builds these
-# two and `bundle.resources` copies the folder into the window, which is what
-# Settings → Cluster starts — but a bundle that lost them is still a valid
-# bundle, and three artefacts were shipped from trees built before that step
-# existed and nobody noticed. So the packaging checks its own output: a missing
-# node is this script's failure, said here, not a demo a person finds empty.
-carries_plugins() {
-  local root=$1 node
+# Where `scripts/build-plugins.sh` puts them, before each one is carried into its
+# own app.
+readonly built_plugins="_build/desktop/plugins"
 
-  for node in $plugin_nodes; do
-    if [ ! -x "$root/$node/bin/$node" ]; then
-      echo "the bundle carries no plugins/$node/bin/$node" >&2
-      echo "  looked in: $root" >&2
-      echo "  they are built by scripts/build-plugins.sh during bundling, and" >&2
-      echo "  scripts/start-desktop.sh --bundle is the step that runs it" >&2
-      echo "  see docs/desktop.md" >&2
-      ls "$root" 2>/dev/null | sed 's/^/    /' >&2
-      return 1
-    fi
-  done
+# The window carries no plugin, asked rather than assumed: a window that quietly
+# contains a second and third node is the opposite of the thing being
+# demonstrated, and nothing else on the way would say so.
+carries_no_plugins() {
+  local root=$1
+
+  if [ -d "$root" ] && [ -n "$(ls -A "$root" 2>/dev/null)" ]; then
+    echo "the window carries $root, and the sample nodes are separate apps" >&2
+    ls "$root" 2>/dev/null | sed 's/^/    /' >&2
+    echo "  remove that resource from src-tauri/tauri.bundle*.json" >&2
+    return 1
+  fi
 }
 
-# The window's two companion plugin apps, by the name each shows and the release
-# each one runs. An array and not a space-separated string: both names contain a
-# space, and a list that is split on one makes `Example Plugin` into two apps.
-companions=("Example Plugin:example_plugin" "Flyverse Plugin:flyverse_plugin")
+# The window's companion plugin apps, by the app name each one carries and the
+# release (`node`) it runs. The name is the plugin's id, so a person reading a
+# bundle's name knows which node it is and whose it is; the release keeps its own
+# name, because that is what the cluster sees (`example_plugin@host`).
+companions=("ex.tbp.monty.plugin.example:example_plugin" "ex.tbp.monty.plugin.flyverse:flyverse_plugin")
 readonly companions
 
-# A companion app is a **launcher**, not a copy of a node: it starts the release
-# the window already carries (`Contents/Resources/plugins/<node>`), so the two
-# runtimes are still there once. What it adds is the click — the by-hand route in
-# a bundle, which asks the window who it is (`/health`), reads the cookie it
-# answers with (`releases/COOKIE`), and hands both to the release.
+# A companion app is a **separate node**: its own release, its own runtime, its
+# own name in the cluster. What it is not is a copy of the window's — the window
+# carries no plugin at all, so an app that had none would have nothing to run.
 #
-# It cannot work without the window beside it, because joining one is the whole
-# of what it does; `MONTY_STUDIO_APP` is the one way to point it elsewhere, which
-# is how a checkout tries it without installing anything.
+# What it needs from the window is only what a peer needs: the node name to dial
+# (`/health`) and the cookie to dial it with (`releases/COOKIE`).
 #
 # `scripts/desktop-plugins/companion-app.sh` is the launcher, the same file in both
-# apps; `Contents/Resources/node` is the one line that tells them apart. The
-# executable is named after the app rather than after the script, because that is
-# the name Activity Monitor, Console and `ps` show for a node somebody is looking
-# for.
+# apps; `Contents/Resources/node` is the one line that tells them apart, and
+# `Contents/Resources/<node>` is the release itself. The executable is named after
+# the app, because that is the name Activity Monitor, Console and `ps` show.
 companion_apps() {
-  local rid=$1 pair name node app identifier
+  local rid=$1 pair name node app identifier release
 
   for pair in "${companions[@]}"; do
     name=${pair%%:*}
     node=${pair##*:}
     app="$artifacts/$rid/$name.app"
-    identifier="dev.ex-tbp-monty.plugin.$(printf '%s' "$node" | tr '_' '-')"
+    release="$built_plugins/$node"
+    identifier="$name"
+
+    if [ ! -x "$release/bin/$node" ]; then
+      echo "no $release/bin/$node to put in $name.app" >&2
+      echo "  scripts/build-plugins.sh makes them; scripts/start-desktop.sh --bundle runs it" >&2
+      return 1
+    fi
 
     clean "$app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
@@ -232,6 +235,7 @@ companion_apps() {
     cp scripts/desktop-plugins/companion-app.sh "$app/Contents/MacOS/$name"
     chmod +x "$app/Contents/MacOS/$name"
     printf '%s\n' "$node" >"$app/Contents/Resources/node"
+    cp -R "$release" "$app/Contents/Resources/$node"
 
     # The window's icon, not a new one: a missing one costs the picture and not
     # the app, so it is said rather than refused.
@@ -283,13 +287,21 @@ PLIST
 # asks: an app whose launcher is not executable opens with "The application
 # cannot be opened", and nothing on the way says which step lost it.
 carries_companion_apps() {
-  local root=$1 pair name
+  local root=$1 pair name node
 
   for pair in "${companions[@]}"; do
     name=${pair%%:*}
+    node=${pair##*:}
+
     if [ ! -x "$root/$name.app/Contents/MacOS/$name" ]; then
       echo "the companion app $name.app has no launcher at Contents/MacOS/$name" >&2
       ls "$root/$name.app/Contents" 2>/dev/null | sed 's/^/    /' >&2
+      return 1
+    fi
+
+    if [ ! -x "$root/$name.app/Contents/Resources/$node/bin/$node" ]; then
+      echo "the companion app $name.app carries no $node release of its own" >&2
+      ls "$root/$name.app/Contents/Resources" 2>/dev/null | sed 's/^/    /' >&2
       return 1
     fi
   done
@@ -309,10 +321,6 @@ linux_bundle() {
   mkdir -p "$folder"
   cp src-tauri/target/release/ex-tbp-monty-desktop "$folder/"
   cp -R src-tauri/target/release/rel "$folder/"
-  # And the two sample plugin nodes, which `bundle.resources` copied out beside
-  # the release: the folder is the window without an installer, so it holds
-  # everything the AppImage does — `scripts/boot-check.sh` asserts it.
-  cp -R src-tauri/target/release/plugins "$folder/"
 
   tar czf "$target" -C "$artifacts/$1" "ex-tbp-monty-$1"
   echo "  $target"
@@ -479,7 +487,11 @@ for rid in "${rids[@]}"; do
   case "$rid" in
     osx-*)
       build_app
-      carries_plugins "$bundle/Contents/Resources/plugins" || exit 1
+      carries_no_plugins "$bundle/Contents/Resources/plugins" || exit 1
+      # And nothing a run, a tool or a build wrote: the bundle carries the
+      # application and the couple of small STEP parts, and a prerequisite is a
+      # download. This is the check that keeps that true as the tree changes.
+      scripts/check-release.sh "$bundle/Contents/Resources/rel/ex_tbp_monty" || exit 1
       cp -R "$bundle" "$artifacts/$rid/"
       register "$artifacts/$rid/$product.app"
       echo "  $artifacts/$rid/$product.app"
@@ -504,7 +516,7 @@ for rid in "${rids[@]}"; do
       ;;
     linux-*)
       build_app
-      carries_plugins "src-tauri/target/release/plugins" || exit 1
+      scripts/check-release.sh src-tauri/target/release/rel || exit 1
       linux_bundle "$rid"
       ;;
     *)
