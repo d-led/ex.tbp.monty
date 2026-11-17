@@ -614,14 +614,17 @@ defmodule Monty.Runtime.Step do
 
     vote_info = deliver_lagged_votes(state, epoch, reports)
 
-    learning_goals = Enum.flat_map(reports, fn {_id, report} -> report.goals end)
+    learning_goals = Enum.map(reports, fn {_id, report} -> report.goals end)
     learning_regions = Enum.map(reports, fn {_id, report} -> report.region end)
 
     # Monty's order in each round: goals are learning modules then sensors,
     # regions are sensors then learning modules (`propose_goals/1`,
     # `propose_regions/1`), and reordering them here would be a difference
-    # nothing reads today and a later change would inherit.
-    goals = learning_goals ++ sensor_goals(state)
+    # nothing reads today and a later change would inherit. `Enum.concat/1` over
+    # the joined answers, as `propose_goals/1` has it: every module answers with
+    # a *list* of goals, and the motor system reads each element it is given as
+    # one.
+    goals = Enum.concat(learning_goals ++ sensor_goals(state))
     regions = sensor_regions(state) ++ learning_regions
 
     {vote_info, state.attention.(goals, regions)}

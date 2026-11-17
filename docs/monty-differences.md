@@ -1909,3 +1909,34 @@ inside the mode, and both are tested: the lag is exactly one epoch (never "as fa
 behind as the module happens to be"), so the same episode run twice is the same
 trajectory; and the votes of epoch _e_ apply at the boundary of _e + 1_, so a
 faster module cannot compute a different answer from a slower one.
+
+**What it bought, measured.** `scripts/probe_lagged_steps.exs` steps the same
+episode both ways — same setup, same memory, same episode seed — and reports the
+mean model step and the episode's own wall clock. On this machine (Apple Silicon,
+macOS 26), the MuJoCo world through `ex_mujoco`,
+`tutorial/dist_agent_5lm_2obj_eval`, six sensors and five learning modules, three
+episodes:
+
+| episode | barrier                          | lagged                           | wall clock |
+| ------- | -------------------------------- | -------------------------------- | ---------- |
+| 1       | 34 steps, 741 ms/step, 28 261 ms | 39 steps, 196 ms/step, 10 390 ms | 2.7×       |
+| 2       | 43 steps, 59 ms/step, 5 490 ms   | 40 steps, 58 ms/step, 4 804 ms   | 1.1×       |
+| 3       | 32 steps, 230 ms/step, 9 550 ms  | 48 steps, 136 ms/step, 9 717 ms  | 1.0×       |
+
+So the per-step saving is real and at its largest when the vote round is
+expensive — 3.8× on episode 1 — and the episode's wall clock is that saving
+against the number of steps the different trajectory needs. On this config the
+lagged arm parts from the barrier one at step 6 of every episode and concludes in
+more steps on two of the three, which cancels the saving. **Reading it as "lagged
+is faster" would be wrong.** What is measured is that the round costs what a
+synchronous round of module calls costs, and that the mode removes it.
+
+**What would make it a reliable win.** The step still has one serial dependency
+on the current epoch: `gather_outputs/1` reads each module's top-down output
+before the next hand-off, so the coordinator waits for the epoch it just handed
+over anyway — one epoch of lag in the _round_ buys the round's calls and not the
+work. Lagging the outputs the same way (route epoch _n − 1_'s outputs into epoch
+_n_) is what lets step _n + 1_'s sensors and world step run while step _n_'s
+modules work; §2.28's sensor round is what makes that phase cheap enough to hide
+behind. Until then this is a scheduling option with a measured price, not a
+speed-up.

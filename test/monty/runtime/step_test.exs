@@ -138,6 +138,27 @@ defmodule Monty.Runtime.StepTest do
                Step.state(Registry.via({:step, model_id})).reports
     end
 
+    test "a lagged round hands the motor one list of goals, sensors' included" do
+      model_id =
+        start_model(
+          scheduling: :lagged,
+          sensor_modules: [sensor_module(:patch, goals: [goal_from(:patch)])],
+          learning_modules: [learning_module(:lm_0, goals: [goal_from(:lm_0)])]
+        )
+
+      # Epoch 0 has no report behind it, so its round is the sensors' alone.
+      assert {:ok, _actions, first} = step(model_id)
+      assert first.goals == 1
+      assert_receive {:motor, _percept, [%Cmp.Goal{sender_id: "patch"}]}
+
+      # Epoch 1's round adds the module's goal — as a goal, not as the list the
+      # module answered with: the motor system reads every element it is given as
+      # one.
+      assert {:ok, _actions, second} = step(model_id)
+      assert second.goals == 2
+      assert_receive {:motor, _percept, [%Cmp.Goal{sender_id: "lm_0"}, %Cmp.Goal{}]}
+    end
+
     test "a lagged step integrates the epoch before, from the report it was given" do
       model_id =
         start_model(
