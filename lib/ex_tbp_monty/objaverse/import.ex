@@ -157,7 +157,18 @@ defmodule ExTbpMonty.Objaverse.Import do
 
   # sobelow_skip ["Traversal.FileModule"]
   # `path` is the object's directory above with a fixed file name.
-  defp write_object(path, mesh) do
+  @doc """
+  An OBJ file of a mesh, in the world's frame.
+
+  Vertices are `{x, y, z}` tuples and triangles are `{a, b, c}` indexes into them,
+  counted from nought; OBJ counts from one, which is what is written. Six
+  decimals is a micrometre at the scale these objects are placed at, and it keeps
+  the file free of exponent notation some OBJ readers refuse.
+
+  Public because a second importer needs the same file and the format is the
+  world's, not this manifest's.
+  """
+  def write_object(path, mesh) do
     vertices =
       Enum.map(mesh.vertices, fn {x, y, z} ->
         ["v ", format(x), " ", format(y), " ", format(z), "\n"]
@@ -187,14 +198,21 @@ defmodule ExTbpMonty.Objaverse.Import do
   # keeps the file free of exponent notation some OBJ readers refuse.
   defp format(value), do: :io_lib.format("~.6f", [value * 1.0])
 
-  defp write_texture(path, {:image, bytes, _mime}) do
+  @doc """
+  A one-pixel or full PNG for a mesh's material.
+
+  `{:colour, {r, g, b, a}}` becomes a single pixel; `{:image, bytes, mime}` is de-
+  coded through `stb_image`, because a JPEG is not a PNG and MuJoCo is asked for
+  a PNG.
+  """
+  def write_texture(path, {:image, bytes, _mime}) do
     case StbImage.read_binary(bytes) do
       {:ok, image} -> StbImage.write_file(image, path)
       {:error, reason} -> {:error, {:cannot_read_texture, reason}}
     end
   end
 
-  defp write_texture(path, {:colour, {r, g, b, _a}}) do
+  def write_texture(path, {:colour, {r, g, b, _a}}) do
     pixel = <<channel(r), channel(g), channel(b)>>
 
     pixel
@@ -202,7 +220,7 @@ defmodule ExTbpMonty.Objaverse.Import do
     |> StbImage.write_file(path)
   end
 
-  defp write_texture(path, :none) do
+  def write_texture(path, :none) do
     {r, g, b} = @default_colour
     write_texture(path, {:colour, {r, g, b, 1.0}})
   end
