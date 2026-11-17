@@ -334,7 +334,18 @@ defmodule Monty.Studio.RunHistory do
         do: stepped,
         else: Ecto.Changeset.force_change(stepped, :timeline, timeline)
 
+    update(changes)
+  end
+
+  # A record can be reaped while its run is still going — a training phase's
+  # episode outlives the database's ownership timeout — and Ecto answers an
+  # update of a row that is not there with an exception. The run's own log holds
+  # every step either way, so the answer is this module's own word for a row that
+  # is gone, the same one a checkpoint of a reaped row gives.
+  defp update(changes) do
     Repo.update(changes)
+  rescue
+    Ecto.StaleEntryError -> {:error, :not_found}
   end
 
   @doc "How many distinct episodes a log names, counting the steps that named none as one."

@@ -1245,6 +1245,21 @@ defmodule Monty.Studio.RunHistoryTest do
   # itself, because a test is not a node.
   defp in_a_cluster(fun), do: in_a_node("node1_127.0.0.1", fun)
 
+  # A record can be reaped while its run is still going — a long episode
+  # outlives the database's ownership of its row — and the closing write then
+  # names a row that is not there. The run's own log holds every step either
+  # way, so the answer is a sentence rather than an exception on the last line
+  # of a run that succeeded.
+  describe "a record reaped while its run went on" do
+    test "the closing write answers :not_found rather than raising" do
+      {:ok, run} = RunHistory.start(@attributes)
+
+      Repo.delete_all(from(r in Run, where: r.id == ^run.id))
+
+      assert {:error, :not_found} = RunHistory.store(run, [%{"step" => 0}], [])
+    end
+  end
+
   # The same, for a test that needs two nodes in one VM: run something as one,
   # then as the other.
   defp in_a_node(name, fun) do
