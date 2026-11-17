@@ -32,7 +32,11 @@ defmodule Mix.Tasks.Monty.Run do
 
   ## Options
 
-    * `--steps N` — timesteps to run in an episode (default: #{12})
+    * `--steps N` — timesteps to run in an episode (default: the experiment's
+      own limit). It is a *cap*, and a cap below what the config asks for is
+      what turns a training episode into a fragment: `graph_exp1000_*` explores
+      for a thousand steps, and a run cut at five hundred cannot match the graph
+      it is building, so every epoch adds a new object instead of extending one.
     * `--episodes N` — how many of the experiment's episodes to run (default:
       all of them: every object, in every rotation)
     * `--seed N` — episode seed, overriding the config's

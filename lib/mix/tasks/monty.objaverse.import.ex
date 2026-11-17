@@ -55,8 +55,11 @@ defmodule Mix.Tasks.Monty.Objaverse.Import do
         Mix.shell().info("objaverse: #{length(rows)} object(s) in #{into}")
 
         Enum.each(rows, fn row ->
+          {x, y, z} = row.size
+
           Mix.shell().info(
-            "  #{row.id} — #{row.faces} faces, #{row.vertices} vertices, scale #{hd(row.scale) |> Float.round(5)}"
+            "  #{row.id} — #{row.faces} faces, #{row.vertices} vertices, " <>
+              "#{Float.round(x, 3)} × #{Float.round(y, 3)} × #{Float.round(z, 3)} m"
           )
         end)
 

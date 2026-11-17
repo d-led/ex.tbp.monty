@@ -26,6 +26,9 @@ defmodule Monty.Random.NumpyTest do
     def standard_normals, do: [-0.6520223229652794, -0.9249733768960658, -1.7191542176665382]
 
     def spare_normal, do: 0.173271347103099
+
+    # `RandomState(1170100843).normal(0.0, [0.1, 0.2, 0.2], 3)`.
+    def scaled_normals, do: [-0.06520223229652793, -0.18499467537921313, -0.3438308435333077]
   end
 
   describe "new/1" do
@@ -93,6 +96,29 @@ defmodule Monty.Random.NumpyTest do
 
       assert odd == Fixtures.standard_normals()
       assert spare == Fixtures.spare_normal()
+    end
+
+    test "scales a draw at a time when it is given a scale a draw" do
+      # Monty writes a per-channel noise amount as an array
+      # (`noise_params.features.hsv: [0.1, 0.2, 0.2]`), and NumPy broadcasts it
+      # over the draws. The numbers are numpy 1.23.5's own: its array path sums
+      # `loc + scale * z` a shade differently from scaling the standard draws
+      # here, so the last digits are compared to 1e-12 rather than to equality.
+      {draws, state} = Numpy.normals(Numpy.new(@episode_seed), 3, 0.0, [0.1, 0.2, 0.2])
+
+      assert Enum.zip(draws, Fixtures.scaled_normals())
+             |> Enum.all?(fn {ours, numpy} -> abs(ours - numpy) < 1.0e-12 end)
+
+      # The same normals the scalar calls spend, so what follows is unchanged.
+      {spare, _state} = Numpy.normal(state, 0.0, 1.0)
+
+      assert spare == Fixtures.spare_normal()
+    end
+
+    test "refuses a scale a draw that does not fit the draws, as NumPy would" do
+      assert_raise ArgumentError, ~r/one scale to one draw/, fn ->
+        Numpy.normals(Numpy.new(@episode_seed), 3, 0.0, [0.1, 0.2])
+      end
     end
   end
 

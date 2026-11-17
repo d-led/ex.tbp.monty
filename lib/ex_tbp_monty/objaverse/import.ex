@@ -81,7 +81,8 @@ defmodule ExTbpMonty.Objaverse.Import do
          uid: entry["uid"],
          faces: length(mesh.triangles),
          vertices: length(mesh.vertices),
-         scale: placement["scale"]
+         scale: placement["scale"],
+         size: size(zup, placement["scale"])
        }}
     else
       {:error, reason} -> {:error, {:cannot_import, entry["id"] || entry["uid"], reason}}
@@ -122,6 +123,17 @@ defmodule ExTbpMonty.Objaverse.Import do
   end
 
   defp rounded(value), do: Float.round(value, 6)
+
+  # What the world will see, in metres: the vertex extents times the metadata
+  # scale. This is the number that says whether the object is tall enough for the
+  # patch's 5 cm clip, so it is reported by the import rather than left to a
+  # person re-deriving it from a JSON file.
+  defp size(vertices, [scale | _rest]) do
+    {min_x, max_x, min_y, max_y, min_z, max_z} = bounds(vertices)
+
+    {rounded((max_x - min_x) * scale), rounded((max_y - min_y) * scale),
+     rounded((max_z - min_z) * scale)}
+  end
 
   # The bounds start at the first vertex, not at zero: a scan centred a metre from
   # the origin was being reported as if it began there.
