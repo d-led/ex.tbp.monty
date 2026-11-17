@@ -41,8 +41,12 @@ defmodule Recognitions do
       {:ok, state} = experiment.pre_episode(%{run: run}, index, object_of(run), callbacks())
       run = step(state.run, 0)
 
-      print(index, run)
+      # What this episode concluded is the comprehension's *value*: the stop comes
+      # after it, because a comprehension answers its body's last expression and
+      # the tally below counts those.
+      verdict = print(index, run)
       Monty.Studio.Run.stop(run)
+      verdict
     end
     |> tally(episodes)
   end
