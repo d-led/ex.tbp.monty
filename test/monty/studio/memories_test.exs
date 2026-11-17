@@ -28,11 +28,13 @@ defmodule Monty.Studio.MemoriesTest do
     test "is the union of what the parts learned, module by module" do
       merged =
         Memories.merge([
-          %{"learning_module_0" => remembered("mug")},
-          %{"learning_module_0" => remembered("bowl")}
+          %{"learning_module_0" => part("mug")},
+          %{"learning_module_0" => part("bowl")}
         ])
 
-      assert merged["learning_module_0"] |> GraphMemory.get_memory_ids() |> Enum.sort() == [
+      assert merged["learning_module_0"].memory
+             |> GraphMemory.get_memory_ids()
+             |> Enum.sort() == [
                "bowl",
                "mug"
              ]
@@ -41,28 +43,29 @@ defmodule Monty.Studio.MemoriesTest do
     test "keeps the parts' modules apart, because a heterarchy is several opinions" do
       merged =
         Memories.merge([
-          %{"learning_module_0" => remembered("mug")},
-          %{"learning_module_1" => remembered("bowl")}
+          %{"learning_module_0" => part("mug")},
+          %{"learning_module_1" => part("bowl")}
         ])
 
       assert Enum.sort(Map.keys(merged)) == ["learning_module_0", "learning_module_1"]
-      assert GraphMemory.get_memory_ids(merged["learning_module_0"]) == ["mug"]
-      assert GraphMemory.get_memory_ids(merged["learning_module_1"]) == ["bowl"]
+      assert GraphMemory.get_memory_ids(merged["learning_module_0"].memory) == ["mug"]
+      assert GraphMemory.get_memory_ids(merged["learning_module_1"].memory) == ["bowl"]
     end
 
     test "a graph two parts both trained is the later part's, as Monty's dict update has it" do
-      first = remembered("mug", nodes: 2)
-      second = remembered("mug", nodes: 5)
+      first = part("mug", nodes: 2)
+      second = part("mug", nodes: 5)
 
       merged = Memories.merge([%{"learning_module_0" => first}, %{"learning_module_0" => second}])
 
-      assert GraphMemory.get_num_nodes_in_graph(merged["learning_module_0"], "mug", nil) == 5
+      assert GraphMemory.get_num_nodes_in_graph(merged["learning_module_0"].memory, "mug", nil) ==
+               5
     end
 
     test "a part that learned nothing adds nothing" do
-      merged = Memories.merge([%{"learning_module_0" => remembered("mug")}, %{}])
+      merged = Memories.merge([%{"learning_module_0" => part("mug")}, %{}])
 
-      assert GraphMemory.get_memory_ids(merged["learning_module_0"]) == ["mug"]
+      assert GraphMemory.get_memory_ids(merged["learning_module_0"].memory) == ["mug"]
     end
 
     test "a merged memory can still be asked for its objects and its rows" do
@@ -71,11 +74,11 @@ defmodule Monty.Studio.MemoriesTest do
       # merged model is written, read back and matched against like any other.
       merged =
         Memories.merge([
-          %{"learning_module_0" => remembered("mug")},
-          %{"learning_module_0" => remembered("bowl")}
+          %{"learning_module_0" => part("mug")},
+          %{"learning_module_0" => part("bowl")}
         ])
 
-      memory = merged["learning_module_0"]
+      memory = merged["learning_module_0"].memory
 
       assert GraphMemory.size(memory) == 2
 
@@ -117,7 +120,10 @@ defmodule Monty.Studio.MemoriesTest do
       merged = Memories.merge(learned)
 
       for module <- [first_module, second_module] do
-        assert merged[module] |> GraphMemory.get_memory_ids() |> Enum.sort() == ["bowl", "mug"]
+        assert merged[module].memory |> GraphMemory.get_memory_ids() |> Enum.sort() == [
+                 "bowl",
+                 "mug"
+               ]
       end
     end
 
@@ -126,7 +132,7 @@ defmodule Monty.Studio.MemoriesTest do
       [%{id: module} | _rest] = opened.setup.learning_modules
       batch = Ecto.UUID.generate()
 
-      assert {:ok, name} = Memories.keep(batch, opened, %{module => remembered("mug")})
+      assert {:ok, name} = Memories.keep(batch, opened, %{module => part("mug")})
       assert name == Learned.name_for(opened)
 
       # Both places: the batch's own directory, and the library tree a config
@@ -149,11 +155,61 @@ defmodule Monty.Studio.MemoriesTest do
       batch = Ecto.UUID.generate()
       [%{id: module} | _rest] = opened.setup.learning_modules
 
-      assert Memories.keep(batch, opened, %{module => GraphMemory.new()}) ==
+      assert Memories.keep(batch, opened, %{module => %{memory: GraphMemory.new(), targets: %{}}}) ==
                {:error, :nothing_learned}
 
       assert Memory.releases_for(Learned.name_for(opened), libraries) == []
     end
+
+    # A part's library says what each graph was built from, and a merged library
+    # that dropped that would leave a recognition run able to name a graph and not
+    # the object it was shown — the same defect §2.27 fixed for a single run,
+    # surviving in the path a divided run takes.
+    test "keeps the names the parts trained, so the merged memory can be scored", %{
+      libraries: libraries
+    } do
+      {:ok, opened} = Monty.Studio.open(@training)
+      [%{id: module} | _rest] = opened.setup.learning_modules
+      batch = Ecto.UUID.generate()
+
+      first = Ecto.UUID.generate()
+      second = Ecto.UUID.generate()
+
+      # Two parts of an unsupervised training: the graphs are named after nothing
+      # anyone can check, and only what the part recorded says which dog each is.
+      Learned.keep(
+        first,
+        opened,
+        [{:train, 1}],
+        %{module => remembered("new_object0")},
+        library: false,
+        targets: %{module => %{"new_object0" => ["milka"]}}
+      )
+
+      Learned.keep(
+        second,
+        opened,
+        [{:train, 1}],
+        %{module => remembered("new_object1")},
+        library: false,
+        targets: %{module => %{"new_object1" => ["puppy"]}}
+      )
+
+      merged = [first, second] |> Memories.learned(opened) |> Memories.merge()
+
+      assert {:ok, name} = Memories.keep(batch, opened, merged)
+
+      assert {:ok, %{targets: targets}} =
+               Memory.load_with_targets(name, Learned.release(), 0, libraries)
+
+      assert targets == %{"new_object0" => ["milka"], "new_object1" => ["puppy"]}
+    end
+  end
+
+  # One part's share of a memory, as a part hands it over: the memory, and what
+  # the part said each of its graphs was built from.
+  defp part(object_id, options \\ []) do
+    %{memory: remembered(object_id, options), targets: %{object_id => [object_id]}}
   end
 
   # A memory that knows one object: which part a graph came from is readable from

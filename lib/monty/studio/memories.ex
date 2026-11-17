@@ -48,13 +48,20 @@ defmodule Monty.Studio.Memories do
   both trained is the later part's, which is the same rule Monty's own
   `dict.update` has and for the same reason: there is no better answer to two
   graphs of one object.
+
+  What each part said its graphs were built from travels with them. A merged
+  library that kept the graphs and dropped their names would leave a recognition
+  run able to name a graph and not the object it was shown — the defect
+  `docs/monty-differences.md` §2.27 fixed for one run, kept alive in the path a
+  divided run takes.
   """
-  @spec merge([%{optional(String.t()) => term()}]) :: %{optional(String.t()) => GraphMemory.t()}
+  @spec merge([%{optional(String.t()) => %{memory: GraphMemory.t(), targets: map()}}]) ::
+          %{optional(String.t()) => %{memory: GraphMemory.t(), targets: map()}}
   def merge(parts) do
     parts
     |> Enum.flat_map(&modules_of/1)
-    |> Enum.group_by(fn {module_id, _memory} -> module_id end, fn {_id, memory} -> memory end)
-    |> Map.new(fn {module_id, memories} -> {module_id, over_each_other(memories)} end)
+    |> Enum.group_by(fn {module_id, _learned} -> module_id end, fn {_id, learned} -> learned end)
+    |> Map.new(fn {module_id, learned} -> {module_id, over_each_other(learned)} end)
   end
 
   @doc """
@@ -84,7 +91,9 @@ defmodule Monty.Studio.Memories do
   writes have to land: a memory in the batch's directory that no config can
   find is a memory a reader has and cannot use.
   """
-  @spec keep(binary(), map(), %{optional(String.t()) => GraphMemory.t()}) ::
+  @spec keep(binary(), map(), %{
+          optional(String.t()) => %{memory: GraphMemory.t(), targets: map()}
+        }) ::
           {:ok, String.t()} | {:error, term()}
   def keep(batch, opened, memories) do
     case indexed(opened, memories) do
@@ -95,11 +104,10 @@ defmodule Monty.Studio.Memories do
         {:error, :nothing_learned}
 
       holding ->
-        indexed = Enum.map(holding, fn {index, _module_id, memory} -> {index, memory} end)
         name = Learned.name_for(opened)
 
-        with :ok <- Memory.save_all(indexed, name, Learned.release(), batch_dir(batch)),
-             :ok <- Memory.save_all(indexed, name, Learned.release(), Memory.libraries_dir()) do
+        with :ok <- Memory.save_all(holding, name, Learned.release(), batch_dir(batch)),
+             :ok <- Memory.save_all(holding, name, Learned.release(), Memory.libraries_dir()) do
           {:ok, name}
         end
     end
@@ -109,15 +117,19 @@ defmodule Monty.Studio.Memories do
   @spec batch_dir(binary()) :: Path.t()
   def batch_dir(batch), do: Path.join(Artifacts.dir(batch), "memory")
 
-  defp modules_of(memories) do
-    for {module_id, %GraphMemory{} = memory} <- memories, do: {module_id, memory}
+  defp modules_of(learned) do
+    for {module_id, %{memory: %GraphMemory{}} = one} <- learned, do: {module_id, one}
   end
 
   defp over_each_other([one]), do: one
 
   defp over_each_other([first | rest]) do
-    Enum.reduce(rest, first, fn memory, merged ->
-      GraphMemory.load_state_dict(merged, GraphMemory.state_dict(memory))
+    Enum.reduce(rest, first, fn learned, merged ->
+      %{
+        memory:
+          GraphMemory.load_state_dict(merged.memory, GraphMemory.state_dict(learned.memory)),
+        targets: Map.merge(merged.targets, learned.targets)
+      }
     end)
   end
 
@@ -125,20 +137,29 @@ defmodule Monty.Studio.Memories do
   # index per module, so the module's place in the config is the index it is
   # written under — the same indexing `Learned` uses for one run's memory, and
   # the same rule about a memory that holds no graph.
-  defp indexed(opened, memories), do: Learned.holding(opened, memories)
+  defp indexed(opened, merged) do
+    memories = Map.new(merged, fn {module_id, learned} -> {module_id, learned.memory} end)
+
+    for {index, module_id, memory} <- Learned.holding(opened, memories) do
+      {index, memory, Map.get(merged, module_id, %{}) |> Map.get(:targets, %{})}
+    end
+  end
 
   defp part_memory(run_id, opened) do
     opened.setup.learning_modules
     |> Enum.with_index()
     |> Enum.flat_map(fn {module, index} ->
-      case Memory.load_module(
+      case Memory.load_with_targets(
              Learned.name_for(opened),
              Learned.release(),
              index,
              Learned.dir(run_id)
            ) do
-        {:ok, memory} -> [{module.id, memory}]
-        {:error, _not_written} -> []
+        {:ok, %{memory: memory, targets: targets}} ->
+          [{module.id, %{memory: memory, targets: targets}}]
+
+        {:error, _not_written} ->
+          []
       end
     end)
     |> Map.new()
