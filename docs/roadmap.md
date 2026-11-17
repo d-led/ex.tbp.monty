@@ -324,7 +324,9 @@ credentials, not code.
 
 Two things that are not scope decisions but _later milestones_ — Monty's parallel episodes
 (built: `Partition` + `Jobs.Run.run_wave`) and an episode against a live world — are worked
-out in [parallel-and-live.md](parallel-and-live.md).
+out in [parallel-and-live.md](parallel-and-live.md). The third axis, the one the thousand
+brains is actually about — independent processes each holding a theory, instead of a loop
+asking every module in turn — is worked out in [theories.md](theories.md).
 
 ## Decision: the pretrained library lives as long as the experiment
 

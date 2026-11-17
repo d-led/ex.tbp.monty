@@ -226,7 +226,9 @@ the code.
    inside a step — sensors already run behind a barrier, learning modules are the
    next candidates. A config that is parallel by design (Monty's
    `run_parallel.py`: N workers, own subsets and seeds) is a shape the studio
-   should honour; it is a gap, not a lever.
+   should honour; it is a gap, not a lever. The shape the step should end up with,
+   and the number that decides whether it was worth it, are in
+   [theories.md](theories.md).
 3. **A queue, not a call.** A step publishes; I/O, PNG encoding and the page
    consume and may lag. `RunStream` is that shape already — a cast plus an ETS
    table the writer reads.
