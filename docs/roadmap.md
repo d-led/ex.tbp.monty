@@ -159,8 +159,14 @@ the port of the generator Monty actually draws from. That is not one stream per
 episode either, which is a rule this repository states about itself.
 
 How then the first twenty-seven actions are Monty's to the last digit is the next
-thing to answer, and it needs the _call site_ rather than the value: log which of
-the two draws each sampler takes, then make the answer one stream.
+thing to answer, and it cannot be answered from the actions. The reverse check
+failed in an informative way: taking the episode's first sampled tangential
+direction and the policy's own blend, the number behind it would be
+`0.9740315379181416` — which is NumPy's draw at seed 42 at none of its first forty
+positions, and Erlang's `:exsss` at none of the seeds tried. So that angle was not a
+raw uniform of either generator, and how many numbers were drawn cannot be
+recovered by working backwards. It needs the call site: one line in each of the two
+draw functions, and the answer is which one the policy uses and when.
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the
