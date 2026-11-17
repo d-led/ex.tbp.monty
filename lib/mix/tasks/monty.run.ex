@@ -295,6 +295,7 @@ defmodule Mix.Tasks.Monty.Run do
   defp targets_after(run, _carried, :train), do: Monty.Studio.Run.memory_targets(run)
 
   defp targets_after(_run, carried, :eval), do: carried
+
   defp next_memories(run, carried, mode) do
     Monty.Studio.Run.next_memories(run, carried, mode)
   rescue
