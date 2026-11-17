@@ -1,0 +1,79 @@
+{
+  "corpus": "objaverse_dogs",
+  "description": "Eight scanned dogs from Objaverse 1.0 (LVIS category 'dog'), all downloadable and licensed CC-BY, each with its author and page so the attribution travels with the data.",
+  "lvis_category": "dog",
+  "objects": [
+    {
+      "id": "boykin_spaniel",
+      "uid": "032ccef2632146c59f1db8f55d3ba88b",
+      "shard": "000-000",
+      "name": "Boykin Spaniel",
+      "author": "justicar",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/032ccef2632146c59f1db8f55d3ba88b"
+    },
+    {
+      "id": "milka",
+      "uid": "8c6ac61b545c4910a6d3f97cd59fc71c",
+      "shard": "000-084",
+      "name": "Milka",
+      "author": "free3dmodels",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/8c6ac61b545c4910a6d3f97cd59fc71c"
+    },
+    {
+      "id": "dog_free_fire",
+      "uid": "01df66dbfa41414084c4ca56442525bf",
+      "shard": "000-000",
+      "name": "Dog free fire",
+      "author": "BernardoLucas",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/01df66dbfa41414084c4ca56442525bf"
+    },
+    {
+      "id": "kinder_guard_dog",
+      "uid": "00d56831f9bc49f9a668f418c1af7558",
+      "shard": "000-000",
+      "name": "Kinder Guard dog",
+      "author": "KillerOz1",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/00d56831f9bc49f9a668f418c1af7558"
+    },
+    {
+      "id": "puppy_dog",
+      "uid": "057dd0154cbc47549c73a092aa15199e",
+      "shard": "000-000",
+      "name": "Puppy dog",
+      "author": "sidarthmenon",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/057dd0154cbc47549c73a092aa15199e"
+    },
+    {
+      "id": "puppy",
+      "uid": "993a1aeb956d41708b5aa30c993df276",
+      "shard": "000-145",
+      "name": "Puppy",
+      "author": "JMRaginsky",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/993a1aeb956d41708b5aa30c993df276"
+    },
+    {
+      "id": "smoothie_3d",
+      "uid": "f1944531d33348c9a425956ab2f4c00a",
+      "shard": "000-084",
+      "name": "Smoothie-3D upload",
+      "author": "wolffiresword",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/f1944531d33348c9a425956ab2f4c00a"
+    },
+    {
+      "id": "dogs_head",
+      "uid": "0cd590cd899548e4858010f054a29dbd",
+      "shard": "000-145",
+      "name": "Dog's head",
+      "author": "Gabriel.Eloy.Bernardes",
+      "licence": "by",
+      "page": "https://sketchfab.com/models/0cd590cd899548e4858010f054a29dbd"
+    }
+  ]
+}

@@ -23,6 +23,9 @@ defmodule Monty.Config.Source do
   @type default ::
           :self | {:group, String.t(), String.t() | :missing, String.t() | nil}
 
+  # One config root, or several in the order they are consulted — an overlay.
+  @type tree :: Path.t() | [Path.t()]
+
   @doc """
   The Monty inputs this application ships: the Hydra configs it composes and the
   snapshots it checks them against.
@@ -94,21 +97,36 @@ defmodule Monty.Config.Source do
   Nested directories (`test/`, `tutorial/`) are included with their prefix, so
   `test/run` is a name an experiment can be launched by.
   """
-  @spec experiments(Path.t()) :: [String.t()]
+  @spec experiments(tree()) :: [String.t()]
   def experiments(conf_dir \\ conf_dir()) do
-    Path.join(conf_dir, "experiment")
+    conf_dir
+    |> roots()
+    |> Enum.flat_map(&experiments_in/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp experiments_in(root) do
+    Path.join(root, "experiment")
     |> Path.join("**/*.yaml")
     |> Path.wildcard()
     |> Enum.map(fn path ->
       path
-      |> Path.relative_to(Path.join(conf_dir, "experiment"))
+      |> Path.relative_to(Path.join(root, "experiment"))
       |> String.trim_trailing(".yaml")
     end)
-    |> Enum.sort()
   end
 
-  @doc "Loads one config file of a group."
-  @spec load(Path.t(), String.t(), String.t()) :: {:ok, config()} | {:error, term()}
+  @doc """
+  Loads one config file of a group.
+
+  `conf_dir` may be one root or a list of them. A list is an **overlay**: ours
+  first, Monty's copy second, so a tree of the files that differ composes
+  against the whole of Monty's config without copying it. That is what keeps
+  `mix monty.inputs` able to mirror and prune `priv/monty` without touching an
+  experiment of ours (`ExTbpMonty.AnimalExperiments`).
+  """
+  @spec load(tree(), String.t(), String.t()) :: {:ok, config()} | {:error, term()}
   def load(conf_dir, group, option) do
     path = path_for(conf_dir, group, option)
 
@@ -139,12 +157,25 @@ defmodule Monty.Config.Source do
     end
   end
 
-  @doc "The file a group option lives in."
-  @spec path_for(Path.t(), String.t(), String.t()) :: Path.t()
-  def path_for(conf_dir, group, option) do
+  @doc """
+  The file a group option lives in.
+
+  With several roots, the first one that holds the file wins — that is the
+  overlay — and a group no root holds answers the first root's path, so the
+  error that follows names a file someone could create.
+  """
+  @spec path_for(tree(), String.t(), String.t()) :: Path.t()
+  def path_for(conf_dirs, group, option) do
     segments = group |> String.split("/", trim: true)
-    Path.join([conf_dir | segments] ++ [option <> ".yaml"])
+
+    candidates = Enum.map(roots(conf_dirs), &Path.join([&1 | segments] ++ [option <> ".yaml"]))
+
+    Enum.find(candidates, &File.exists?/1) || hd(candidates)
   end
+
+  @doc "The roots a config tree is read from, always as a list."
+  @spec roots(tree()) :: [Path.t()]
+  def roots(conf_dirs), do: List.wrap(conf_dirs)
 
   @doc """
   The package a group's config lands in when the file does not say.

@@ -68,7 +68,10 @@ defmodule ExTbpMonty.Objaverse.ImportTest do
       assert metadata["refpos"] == [1.5, -3.0, 2.0]
       assert metadata["refquat"] == [1.0, 0.0, 0.0, 0.0]
       assert metadata["scale"] == [0.05, 0.05, 0.05]
-      assert metadata["source"]["licence"] == "by"
+
+      # The world refuses a metadata key it does not know, so the provenance
+      # lives in ATTRIBUTION.md rather than in this file.
+      assert Map.keys(metadata) |> Enum.sort() == ["refpos", "refquat", "scale"]
     end
 
     test "an untextured material becomes the one-pixel PNG MuJoCo is given" do

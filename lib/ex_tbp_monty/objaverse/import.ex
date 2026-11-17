@@ -108,14 +108,7 @@ defmodule ExTbpMonty.Objaverse.Import do
            rounded(min_z)
          ],
          "refquat" => [1.0, 0.0, 0.0, 0.0],
-         "scale" => [scale, scale, scale],
-         "source" => %{
-           "uid" => entry["uid"],
-           "name" => entry["name"],
-           "licence" => entry["licence"],
-           "page" => entry["page"],
-           "up" => "z"
-         }
+         "scale" => [scale, scale, scale]
        }, zup}
     end
   end

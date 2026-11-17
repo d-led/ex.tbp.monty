@@ -38,6 +38,9 @@ defmodule Mix.Tasks.Monty.Run do
     * `--seed N` — episode seed, overriding the config's
     * `--pretrained-dir DIR` — the release to load pretrained models from, when
       the one the config names is not on this machine
+    * `--overlay DIR` — a config tree read before Monty's own copy: the
+      experiments of ours that `mix monty.inputs` must not touch live in one
+      (`priv/monty_experiments/conf`)
     * `--world mujoco|ex_mujoco|synthetic|cad` — which world to step. Both
       `mujoco` and `ex_mujoco` are the experiment's MuJoCo scene: the first is
       driven through the Python this application carries, the second is compiled
@@ -62,6 +65,7 @@ defmodule Mix.Tasks.Monty.Run do
     record: :boolean,
     quiet: :boolean,
     pretrained_dir: :string,
+    overlay: :string,
     world: :string
   ]
 
@@ -360,7 +364,11 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp open(name, opts) do
     open_options =
-      [pretrained_dir: opts[:pretrained_dir], world_simulator: world(opts[:world])]
+      [
+        pretrained_dir: opts[:pretrained_dir],
+        world_simulator: world(opts[:world]),
+        conf_dir: conf_dir(opts[:overlay])
+      ]
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
 
     case Monty.Studio.open(name, open_options) do
@@ -368,6 +376,12 @@ defmodule Mix.Tasks.Monty.Run do
       {:error, reason} -> Mix.raise("could not open #{name}: #{inspect(reason)}")
     end
   end
+
+  # An overlay is the tree of configs that differ, read before the copy of
+  # Monty's own: that is how an experiment of ours composes against the whole of
+  # Monty's config without copying it (`ExTbpMonty.AnimalExperiments`).
+  defp conf_dir(nil), do: nil
+  defp conf_dir(overlay), do: [Path.expand(overlay), Monty.Config.Source.conf_dir()]
 
   # Named here so a misspelling is a refusal rather than a quietly different
   # world: `--world mujoco` that fell back to the stand-in would report numbers
