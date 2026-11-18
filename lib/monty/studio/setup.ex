@@ -2829,20 +2829,31 @@ defmodule Monty.Studio.Setup do
     mujoco_findings(setup) ++ rendering_findings()
   end
 
+  # The CAD scene is MuJoCo with a part's own meshes (`ex_monty_cad`), so a CAD
+  # experiment — one whose config reads the parts the pipeline wrote — steps the
+  # world it was written for and is told nothing about it. Any other config given
+  # this world would be handed a part instead of its objects.
+  defp world_finding(%__MODULE__{world: :cad, environment: %{data_path: path}} = setup)
+       when is_binary(path) do
+    if cad_objects?(path), do: [], else: [not_carried(setup, :cad)]
+  end
+
+  defp world_finding(%__MODULE__{world: :cad} = setup), do: [not_carried(setup, :cad)]
+
   # A world this build does not carry — an operator can configure one — is said
   # plainly rather than crashing the page: the experiment's numbers come from its
   # own simulator, and this is not it.
-  defp world_finding(%__MODULE__{world: world} = setup) do
-    [
-      Finding.new(
-        :warning,
-        :world_not_carried,
-        "This run's world is #{world_name(setup, world)}, so its results are not the " <>
-          "experiment's. Choose MuJoCo in the selector to step the world the config was " <>
-          "written for.",
-        "monty_config"
-      )
-    ]
+  defp world_finding(%__MODULE__{world: world} = setup), do: [not_carried(setup, world)]
+
+  defp not_carried(setup, world) do
+    Finding.new(
+      :warning,
+      :world_not_carried,
+      "This run's world is #{world_name(setup, world)}, so its results are not the " <>
+        "experiment's. Choose MuJoCo in the selector to step the world the config was " <>
+        "written for.",
+      "monty_config"
+    )
   end
 
   # `ex_mujoco` renders the sensor images itself, and a machine whose OpenGL it
@@ -2938,9 +2949,14 @@ defmodule Monty.Studio.Setup do
     end
   end
 
+  # The parts the CAD pipeline wrote are one directory per part under a
+  # `cad_objects` root, and nothing else here reads that folder — so a config
+  # whose objects sit there is a CAD experiment. Two questions ask it: is this
+  # world the config's own, and can this node write the set it is missing.
+  defp cad_objects?(path), do: Path.basename(path) == "cad_objects"
+
   defp preparable?(setup, path) do
-    Path.basename(path) == "cad_objects" and
-      match?({:ok, _plan}, Monty.Studio.Cad.Preparation.plan(setup))
+    cad_objects?(path) and match?({:ok, _plan}, Monty.Studio.Cad.Preparation.plan(setup))
   end
 
   # A finding about a directory a prerequisite fills offers the download itself.

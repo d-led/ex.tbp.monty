@@ -609,6 +609,24 @@ defmodule Monty.Studio.SetupTest do
       refute :world_is_a_stand_in in Enum.map(setup.findings, & &1.code)
     end
 
+    test "and says nothing about the world of a CAD experiment the CAD scene steps" do
+      # The CAD scene is MuJoCo with the part's own meshes, and a CAD
+      # experiment's config reads the parts the pipeline wrote — so this is the
+      # world the config was written for, not a stand-in. The page used to call
+      # it "not carried" and offer MuJoCo, which steps something else.
+      {:ok, setup} = Setup.from_experiment("cad/blend_part_eval", world_simulator: :cad)
+
+      refute :world_not_carried in Enum.map(setup.findings, & &1.code)
+    end
+
+    test "and warns when the CAD scene is given a config whose objects are not parts" do
+      {:ok, setup} = Setup.from_experiment("tutorial/first_experiment", world_simulator: :cad)
+
+      assert [world] = for(%{code: :world_not_carried} = f <- setup.findings, do: f)
+      assert world.level == :warning
+      assert world.message =~ "results are not the"
+    end
+
     test "and refuses a config whose world is another simulator, before a run starts" do
       # A MuJoCo run of an image config cannot be the experiment: the scene is
       # images another program rendered, and there is no mesh to place. Saying so
