@@ -140,6 +140,13 @@ the memory is taught from the part's **faces**, where that cap belongs to the
 body. Any feature of any shape has the same gap wherever its solid is closed by a
 face the recognition did not claim.
 
+The two features that do not have the gap say so. A through-hole's world is a
+tube — two rings of vertices at the plate's own faces, no cap at either end — so
+what it presents is exactly the wall the memory holds, and the bore was answered
+correctly in every episode tried. The boss was answered correctly in none. The
+difference between them is not their shape, their size, their curvature or the
+policy: it is whether the solid the world steps has a face the memory does not.
+
 The next change is therefore in the teacher rather than in a config: teach a
 feature's memory from the feature's own solid, the geometry the world steps, so
 that every surface the sensor can land on is a surface the memory can answer for.
