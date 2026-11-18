@@ -53,6 +53,21 @@ defmodule Monty.Studio.BeliefTest do
     )
   end
 
+  # The NaN the kernel writes for a node it has never scored, as f64 little-endian
+  # bits: no BEAM float can hold it, so the decoder answers `nil` for it.
+  @nan <<0, 0, 0, 0, 0, 0, 248, 127>>
+
+  # The same module with one hypothesis left unscored, which is what a node that
+  # has just been added to a space looks like.
+  defp unscored(lm, graph_id, index) do
+    set = Map.fetch!(lm.hypotheses, graph_id)
+
+    <<head::binary-size(^index * 8), _scored::binary-size(8), rest::binary>> =
+      Hypotheses.evidence_bytes(set)
+
+    %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, %{set | evidence: head <> @nan <> rest})}
+  end
+
   # A module that has concluded: one object is possible, its best hypothesis is
   # at a known place with a known rotation.
   defp believing(lm) do
@@ -95,6 +110,37 @@ defmodule Monty.Studio.BeliefTest do
       belief = learning_module() |> believing() |> Belief.of()
       assert belief.x_percent_threshold == 20
       assert belief.graphs["mug"].within_x_percent == 2
+    end
+
+    # A node that has never been scored carries the kernel's NaN, which the
+    # decoder answers as `nil`. The object's number was the maximum of the whole
+    # column, and `nil` sorts after every number — so one unscored node hid the
+    # object's evidence for that step and the chart drew no point: a CAD feature
+    # run's lines came out dashed and its chart raised on the steps where every
+    # node was unscored.
+    test "one unscored node does not take the graph's number away" do
+      belief =
+        learning_module()
+        |> believing()
+        |> unscored("mug", 2)
+        |> Belief.of()
+
+      assert belief.graphs["mug"].max_evidence == 3.0
+      assert belief.graphs["mug"].within_x_percent == 2
+      assert belief.graphs["mug"].top_evidence == [3.0, 2.9]
+    end
+
+    test "a graph with nothing scored has no number to report" do
+      belief =
+        learning_module()
+        |> believing()
+        |> unscored("mug", 0)
+        |> unscored("mug", 1)
+        |> unscored("mug", 2)
+        |> Belief.of()
+
+      assert belief.graphs["mug"].max_evidence == nil
+      assert belief.graphs["mug"].hypotheses == 3
     end
 
     test "the objects it has not ruled out come back as Monty names them" do

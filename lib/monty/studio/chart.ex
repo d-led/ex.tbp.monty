@@ -459,18 +459,23 @@ defmodule Monty.Studio.Chart do
   # One column of the picture, read run by run: for each object, the stretches of
   # this column it was reported on, each cut to its first, lowest, highest and
   # last sample. Newest run first, because that is the one a step extends.
+  #
+  # A graph whose every node went unscored has no best and no point to draw at
+  # this step (`Monty.Studio.Belief.graph/2` reports its `max_evidence` as
+  # `nil`), so the object is left out of the column — which is the hole in its
+  # line that the absence of an observation would leave. A CAD feature run has
+  # steps where nothing scores, so skipping is the ordinary case, not an edge.
   defp add_column(column, lines) do
     column
     |> Enum.reduce(%{}, fn {episode, x, belief}, runs_of_column ->
-      Enum.reduce(belief.graphs, runs_of_column, fn {object_id, graph}, runs_of_column ->
+      belief.graphs
+      |> Enum.reject(fn {_object_id, graph} -> graph.max_evidence == nil end)
+      |> Enum.reduce(runs_of_column, fn {object_id, graph}, runs_of_column ->
         sample = {episode, x, graph.max_evidence * 1.0}
 
-        Map.update(
-          runs_of_column,
-          object_id,
-          [{sample, sample, sample, sample}],
-          fn runs -> extend_run(runs, sample) end
-        )
+        Map.update(runs_of_column, object_id, [run_of_one(sample)], fn runs ->
+          extend_run(runs, sample)
+        end)
       end)
     end)
     |> Enum.reduce(lines, fn {object_id, runs}, lines ->

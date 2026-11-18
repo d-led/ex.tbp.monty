@@ -206,6 +206,26 @@ defmodule Monty.Studio.ChartTest do
       assert runs_of(mug) == [2, 1]
     end
 
+    # `Belief` reports `max_evidence: nil` for a graph none of whose nodes ever
+    # scored, and says the chart draws no point for it. The drawing multiplied
+    # that nil by 1.0 and raised `badarith`, which the page logged and swallowed —
+    # so a CAD feature run's chart was an empty box, not a drawing with holes.
+    test "draws no point where a graph had nothing scored, and the rest of the line" do
+      chart =
+        Chart.new([
+          {0, 1, belief(%{"mug" => 1.0, "plate_body" => nil})},
+          {0, 2, belief(%{"mug" => 2.0, "plate_body" => nil})},
+          {0, 3, belief(%{"mug" => 3.0, "plate_body" => 4.0})}
+        ])
+
+      mug = Enum.find(chart.series, &(&1.graph_id == "mug"))
+      assert mug.evidence == [{0, 1.0}, {1, 2.0}, {2, 3.0}]
+
+      # The unscored steps are a hole, not a point at zero.
+      body = Enum.find(chart.series, &(&1.graph_id == "plate_body"))
+      assert body.evidence == [{2, 4.0}]
+    end
+
     # The defect this pins: a line drawn through an episode boundary reads as one
     # climb when it is two, and the first episode looks longer than it was. The
     # axis lays an episode one step after the one before it, so the two episodes

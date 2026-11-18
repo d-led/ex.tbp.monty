@@ -174,28 +174,32 @@ defmodule Monty.Studio.Belief do
   # The four numbers a conclusion turns on, computed once for both the chart and
   # the recorder: how many, how strong, how many close behind, and the leaders.
   #
-  # A graph whose every node went unscored has no best — the port's NaN, read
-  # back as `nil` — and then there is no band to compute and nothing to count
-  # within it. Saying so is what a belief can report: the chart draws no point
-  # for that object at that step rather than the run dying on one arithmetic.
+  # A node that has never been scored carries the kernel's NaN, which the decoder
+  # answers as `nil`. Taking the maximum of the whole column made that `nil` the
+  # winner — it sorts after every number — so **one** unscored node took the
+  # object's number away and the chart drew no point for it: a CAD feature run's
+  # lines came out dashed. The object's number is the best of what has a score,
+  # and `nil` is only for a graph whose every node is unscored, where there is
+  # genuinely nothing to draw.
   defp graph(scores, module) do
-    case Enum.max(scores) do
-      best when is_number(best) ->
+    case Enum.filter(scores, &is_number/1) do
+      [] ->
+        %{
+          hypotheses: length(scores),
+          max_evidence: nil,
+          within_x_percent: 0,
+          top_evidence: []
+        }
+
+      scored ->
+        best = Enum.max(scored)
         band = best - best / 100 * module.x_percent_threshold
 
         %{
           hypotheses: length(scores),
           max_evidence: best,
-          within_x_percent: if(best > 0, do: Enum.count(scores, &(&1 > band)), else: 0),
-          top_evidence: leaders(scores)
-        }
-
-      _no_best ->
-        %{
-          hypotheses: length(scores),
-          max_evidence: nil,
-          within_x_percent: 0,
-          top_evidence: leaders(scores)
+          within_x_percent: if(best > 0, do: Enum.count(scored, &(&1 > band)), else: 0),
+          top_evidence: leaders(scored)
         }
     end
   end
