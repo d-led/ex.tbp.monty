@@ -234,12 +234,19 @@ loop, and its step count is Monty's for every episode of the epoch.
      starts the run with a ceiling above the need and prints every process the
      runtime registered with the heap each holds, so the copies are named rather
      than inferred.
-  2. Hold the library once. `Monty.Studio.Memory` already caches it in
-     `:persistent_term`; `Setup.model_spec/3` hands the term itself to
-     `Monty.Runtime.Model`, whose init hands it to each module. The change is to
-     pass the cache key plus the shape a module needs, and let a module read the
-     library where it stands — the same move `Monty.Studio.Memory.built/2` already
-     makes for the loader.
+  2. **Hold the library once — done 2026-11-19.** `Setup.model_spec/3` takes
+     `lazy_state: true` and a module's spec then carries `{:lazy, fun}`, which
+     `Monty.Runtime.LearningModuleServer` runs in its own process; the closure
+     captures the library's identity (path and module index), never the library,
+     and `Memory.load/3` answers from `:persistent_term`. Measured on this Mac: a
+     ten-object setup's spec is **241.3 MB eager and 8.9 KB lazy**, and the
+     acceptance ladder through the lazy path is digit for digit. **Necessary, not
+     sufficient:** `base_77obj_dist_agent --episodes 1 --steps 2` still dies before
+     step 0, now with `maximum heap size reached` at `Total Heap Size:
+     659 053 891` words — one process building more than five gigabytes, so the
+     remaining shape is the *construction* (the per-channel caches a module builds
+     over the library), not a message between processes. The heap report of step 1
+     is what names it.
   3. Only then measure the step, which is where the remaining time goes.
 
 - Profiling before optimisation: `:tprof` for where the time goes, `:eprof` for
