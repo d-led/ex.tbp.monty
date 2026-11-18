@@ -79,6 +79,7 @@ defmodule ExTbpMonty.Cad.Objects do
   # As above: the directory is the caller's, and the name is the recognition's.
   @spec write_mesh(map(), Path.t()) :: row()
   def write_mesh(mesh, into) do
+    mesh = solid(mesh)
     object = object_name(mesh.name)
     directory = Path.join(into, object)
     File.mkdir_p!(directory)
@@ -118,6 +119,89 @@ defmodule ExTbpMonty.Cad.Objects do
   """
   @spec object_name(String.t()) :: String.t()
   def object_name(name), do: String.replace(name, "/", "_")
+
+  # A rigid body has to enclose something. A feature can be an open sheet — the
+  # plate's risers are faces lying in the plate's own plane, with no thickness at
+  # all — and MuJoCo refuses to compile a model whose object has no volume, so
+  # such a run died on the first episode that stepped one.
+  #
+  # The sheet keeps its place and gets `@thickness`: 0.2 mm, a fifteenth of the
+  # 3 mm a memory samples at, so a sensor still sees the surface the memory was
+  # taught on. Its boundary is walled, which is what makes it one solid rather
+  # than two sheets a hair apart.
+  @thickness 2.0e-4
+
+  # A mesh that already encloses something is written as it came; the CAD
+  # package's meshes of a part's body and of its bosses and holes are solids.
+  defp solid(%{vertices: vertices, triangles: triangles} = mesh) do
+    case flat_axis(vertices) do
+      nil ->
+        mesh
+
+      axis ->
+        %{
+          mesh
+          | vertices: two_sheets(vertices, axis),
+            triangles: closed(triangles, length(vertices))
+        }
+    end
+  end
+
+  # The axis the sheet has no extent in. Two such axes is a point or a line,
+  # which is not an object a sensor can look at; that is left to the caller to
+  # notice rather than thickened into something it is not.
+  defp flat_axis(vertices) do
+    flat =
+      vertices
+      |> extents()
+      |> Enum.with_index()
+      |> Enum.filter(fn {extent, _axis} -> extent < @thickness / 2 end)
+
+    case flat do
+      [{_extent, axis}] -> axis
+      _none_or_a_line -> nil
+    end
+  end
+
+  defp extents(vertices) do
+    {min_x, max_x, min_y, max_y, min_z, max_z} = bounds(vertices)
+    [max_x - min_x, max_y - min_y, max_z - min_z]
+  end
+
+  defp two_sheets(vertices, axis) do
+    above = Enum.map(vertices, &offset(&1, axis, @thickness / 2))
+    below = Enum.map(vertices, &offset(&1, axis, -@thickness / 2))
+    above ++ below
+  end
+
+  defp offset(vertex, axis, by), do: List.update_at(vertex, axis, &(&1 + by))
+
+  # Both sheets, the second one wound the other way, and a wall along every edge
+  # the sheet used once — which is its boundary.
+  defp closed(triangles, count) do
+    other_side = Enum.map(triangles, fn [a, b, c] -> [c + count, b + count, a + count] end)
+    triangles ++ other_side ++ walls(triangles, count)
+  end
+
+  defp walls(triangles, count) do
+    triangles
+    |> Enum.flat_map(&directed_edges/1)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.flat_map(fn
+      {_shared, [edge]} -> wall_of(edge, count)
+      {_shared, _interior} -> []
+    end)
+  end
+
+  defp directed_edges([a, b, c]) do
+    [
+      {{min(a, b), max(a, b)}, {a, b}},
+      {{min(b, c), max(b, c)}, {b, c}},
+      {{min(c, a), max(c, a)}, {c, a}}
+    ]
+  end
+
+  defp wall_of({a, b}, count), do: [[a, b, b + count], [a, b + count, a + count]]
 
   # Where the object sits in the world's frame. `refquat` is the identity because
   # a mesh from a part arrives in the part's own frame, which is the world's: both

@@ -14,7 +14,12 @@
 # the same names the memory answers with.
 defaults:
   - /monty: evidencegraph_exp1000_emin_t3
-  - /monty/motor_system_config: surface_curvature_informed_goal1
+  # The part's sibling run steps a 6 cm plate and takes Monty's 2 cm surface
+  # steps; a feature is a centimetre across, and with those steps the patch
+  # leaves it by step nine and the evidence never moves again. This is Monty's
+  # own small-step policy — the same class, 5 mm steps and 5° turns — pointed at
+  # the smaller object.
+  - /monty/motor_system_config: surface_curvature_informed_5_goal0
   - /monty/learning_module: evidence_tutorial_surf_agent_2obj
   - /monty/sensor_module: camera_tutorial_surf_agent_2obj
   - /monty/connectivity: 1lm_1sm
@@ -30,6 +35,16 @@ experiment:
   config:
     show_sensor_output: true
     n_train_epochs: 3
+    # The patch has to be *on* the feature for the observation processor to pass
+    # it to a learning module, and a policy that stands 25 mm off a surface sees
+    # mostly background once the surface is a centimetre across: the run stepped
+    # 2023 times and fed the learning module twice. Monty's own key, at Monty's
+    # own path, with the stand-off a small object needs.
+    monty_config:
+      motor_system_config:
+        policy_selector:
+          policy:
+            desired_object_distance: 0.008
     # Where the memory of the part's features lives. The tail after the
     # libraries root is what must match: `<libraries>/cad_parts_v1/plate_features
     # .jsonl.gz`.

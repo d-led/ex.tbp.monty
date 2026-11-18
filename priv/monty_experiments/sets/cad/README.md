@@ -75,3 +75,16 @@ The STEP file itself is the only thing in the repository:
 
 `cad/plate_part_eval` is the same question about the part as a whole, so the two
 runs differ in what the memory holds and not in the geometry.
+
+### What a feature run needs that a part run does not
+
+Two settings, both Monty's own, and both because a feature is a centimetre across
+where a plate is six:
+
+- the motor system is `surface_curvature_informed_5_goal0` — 5 mm steps and 5°
+  turns, so the patch stays on the object instead of stepping over it;
+- `desired_object_distance` is 8 mm rather than 25, so the patch is mostly
+  surface rather than mostly background. The observation processor passes a patch
+  to a learning module only when enough of it is on the object, and at 25 mm one
+  run stepped 2023 times with the learning module fed on two of them and evidence
+  frozen at 1.69.
