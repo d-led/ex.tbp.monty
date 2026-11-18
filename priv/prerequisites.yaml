@@ -226,8 +226,9 @@ prerequisites:
     description: >
       One memory and one object set per CAD part this application's configurations
       name, taught and meshed from the STEP file it ships: the memories in the
-      libraries folder, the meshes in ~/tbp/data/cad_objects. A recognition run of
-      a part has nothing to compare against without them.
+      libraries folder, the meshes in `cad_objects` under this application's data
+      folder. A recognition run of a part has nothing to compare against without
+      them.
     build: cad_part_memories
     upstream: ex_monty_cad (Hex) reads the B-rep; the parts are this application's own STEP files
     licence: the STEP sources ship with this application; the geometry is ex_quiddity's (MPL-2.0)
