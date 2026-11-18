@@ -115,3 +115,30 @@ IO.puts("per-object share:   #{Float.round(100 * (whole - one) / whole, 1)} % of
 IO.puts(
   "sum of the objects: #{Enum.sum(Map.values(per))} reductions (what a parallel pass would divide)"
 )
+
+# An upper bound on what a per-object pass could buy, measured rather than
+# argued: the same ten calls one after another, then the same ten handed to
+# `async_stream`. Each task builds its own module — the copies a real change
+# would have to arrange more cheaply — so this is the arithmetic divided by the
+# scheduler count with coordination on top, and none of the serial 30 %.
+each = fn id ->
+  memory = %{memory | models_in_memory: Map.take(memory.models_in_memory, [id])}
+  Probe.step(memory, percept)
+end
+
+concurrency = System.schedulers_online()
+
+{serial_us, _} = :timer.tc(fn -> Enum.each(graphs, each) end)
+
+{parallel_us, _} =
+  :timer.tc(fn ->
+    graphs
+    |> Task.async_stream(each, max_concurrency: concurrency, timeout: :infinity, ordered: false)
+    |> Stream.run()
+  end)
+
+IO.puts("serial, ten calls:  #{div(serial_us, 1000)} ms")
+
+IO.puts(
+  "async_stream (#{concurrency}): #{div(parallel_us, 1000)} ms — #{Float.round(serial_us / max(parallel_us, 1), 2)}x"
+)
