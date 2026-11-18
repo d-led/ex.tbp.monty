@@ -1627,14 +1627,16 @@ defmodule Monty.Studio.Setup do
     target = Map.get(lm.config, "_target_")
     path = setup.model_name_or_path
 
-    with {:ok, module} <- learning_module_class(target) do
-      %{
-        id: lm.id,
-        module: module,
-        state: {:lazy, fn -> build_from_library(module, lm.config, path, index, detailed?) end}
-      }
-    else
-      _unknown_or_refused -> stand_in_learning_module(lm)
+    case learning_module_class(target) do
+      {:ok, module} ->
+        %{
+          id: lm.id,
+          module: module,
+          state: {:lazy, fn -> build_from_library(module, lm.config, path, index, detailed?) end}
+        }
+
+      _unknown_or_refused ->
+        stand_in_learning_module(lm)
     end
   end
 
