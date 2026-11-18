@@ -106,9 +106,18 @@ defmodule ExTbpMonty.Cad.Objects do
     }
   end
 
-  # A record id is a name, not a path: `bosses/0` is one directory called
-  # `bosses_0`, and the row says which name it was written for.
-  defp object_name(name), do: String.replace(name, "/", "_")
+  @doc """
+  The directory an object's record id is written as.
+
+  A record id is a name, not a path: `bosses/0` is one directory called
+  `bosses_0`, and `plate/bosses/0` is `plate_bosses_0`. Monty's MuJoCo world
+  reads `<data_path>/*` as one object per directory, so an object cannot be a
+  nested path — and the memory those objects are recognised against has to
+  answer to the same name, which is why this is public: the memory writer and
+  the object set use one rule rather than two.
+  """
+  @spec object_name(String.t()) :: String.t()
+  def object_name(name), do: String.replace(name, "/", "_")
 
   # Where the object sits in the world's frame. `refquat` is the identity because
   # a mesh from a part arrives in the part's own frame, which is the world's: both

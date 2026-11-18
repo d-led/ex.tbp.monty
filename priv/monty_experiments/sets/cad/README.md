@@ -2,7 +2,32 @@
 
 A CAD part's exact surface teaches a memory, and a mesh of that same part is what
 the recognition run then steps. Every name here says what it holds: `plate` is
-the part, `part` is what a face is labelled with, `eval` is the phase.
+the part, `part` is a memory of the whole part, `features` is a memory of the
+features it is made of, `eval` is the phase.
+
+## What an object is called
+
+One name, three places, so that a run steps an object its memory has an answer
+for:
+
+| where                       | the plate as one part | one of its features |
+| --------------------------- | --------------------- | ------------------- |
+| the memory's object id      | `plate`               | `plate_bosses_0`    |
+| the object set's directory  | `plate`               | `plate_bosses_0`    |
+| the config's `object_names` | `plate`               | `plate_bosses_0`    |
+
+The geometry names a feature `bosses/0` — the record id a recognition answers
+with, the part implied. A world steps one _directory_ per object, and a directory
+name is not a path, so what gets written is
+`<part>_<feature with its separators flattened>`: `plate_bosses_0`. The memory
+says the same, because a memory answering `plate/bosses/0` while the run stepped
+`plate_bosses_0` would be a memory of nothing the run asked about.
+`Monty.Studio.Cad.Preparation` is where both halves are written, and
+`ExTbpMonty.Cad.Objects.object_name/1` is the one rule they use.
+
+A part's features are fixed by its geometry — the plate's are `bosses/0`,
+`holes/0`, `risers/0`, and the body for the faces no feature claims — so a config
+lists its objects rather than discovering them while a run is assembled.
 
 ## Which library does what
 
@@ -23,23 +48,30 @@ their features come from `MontyCad.Training`, and the triangles come from
 
 Both are generated, and neither is ever written into the source tree:
 
-| input               | written by                                                               | lands in                                                  |
-| ------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- |
-| the memory          | `MontyCad.Training.write_library/3`                                      | `<data>/monty_libraries/cad_parts_v1/plate_part.jsonl.gz` |
-| the mesh object set | `MontyCad.Export.part_mesh/2` then `ExTbpMonty.Cad.Objects.write_mesh/2` | `<data>/cad_objects/plate/`                               |
+| input          | written by                                                                       | lands in                                                    |
+| -------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| the memory     | `MontyCad.Training.write_library/3` — `labels: :part` or `:features`             | `<libraries>/cad_parts_v1/plate_part.jsonl.gz`              |
+| the object set | `MontyCad.Export.part_mesh/2` or `feature_meshes/1`, then `Objects.write_mesh/2` | `<data>/cad_objects/plate/`, or `plate_bosses_0/` beside it |
 
 The STEP file itself is the only thing in the repository:
 `priv/cad_experiments/parts/plate.step`.
 
 ## The clickable steps
 
-1. **Open `/experiments`** — every experiment this node can run, ours included.
-2. **Click `cad/plate_part_eval`** — the run, named for the part, the labels and the phase, and not for anything of Monty's.
-3. **Run** — the mesh world steps `plate` and the memory recognises it.
-4. **Read the run page** — steps, actions and the outcome the learning module reached.
-5. **Read its evidence chart** — evidence per step, climbing to the point the run concludes.
+1. **Open `/prerequisites`** — the row `cad_part_memories` says `not built` until
+   this machine has made the memories and the meshes.
+2. **Click Make** — one click writes every memory the CAD configs name and the
+   object set each run steps; the row says which part it is on as it goes.
+3. **Open `/experiments`** — the four CAD runs: `cad/plate_part_eval`,
+   `cad/plate_features_eval`, `cad/blend_part_eval`, `cad/blend-big_part_eval`.
+4. **Click `cad/plate_features_eval`** — the compositional one: its memory holds
+   the plate's four features, and every episode asks about one of them.
+5. **Run** — the mesh world steps `plate_bosses_0`, `plate_holes_0`,
+   `plate_risers_0` and `plate_body`, three rotations each.
+6. **Read the run page** — steps, actions and the outcome the learning module
+   reached, per object.
+7. **Read its evidence chart** — evidence per step, climbing to the point the run
+   concludes.
 
-Step 3 is where the gap is: the run opens today with an **empty memory**, because
-nothing writes `cad_parts_v1/plate_part.jsonl.gz` from a page yet. Until it does,
-the memory is written by `scripts/cad_experiment.exs` and lands under Monty's old
-names, which is the thing this set exists to stop.
+`cad/plate_part_eval` is the same question about the part as a whole, so the two
+runs differ in what the memory holds and not in the geometry.

@@ -108,6 +108,9 @@ defmodule Monty.Prerequisites.Build do
 
   # -- the corpus ----------------------------------------------------------
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # The manifest beside the cards that step it, read to learn which objects it
+  # names.
   defp corpus_import(name, notify, opts) do
     with {:ok, corpus, file} <- corpus(name, opts) do
       objects = file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
@@ -150,6 +153,8 @@ defmodule Monty.Prerequisites.Build do
 
   # -- the corpus ----------------------------------------------------------
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # The manifest found by `corpus/2`, out of the ones this application ships.
   defp corpus(name, opts) do
     case Enum.find(corpora(opts), &(elem(&1, 0) == name)) do
       nil ->

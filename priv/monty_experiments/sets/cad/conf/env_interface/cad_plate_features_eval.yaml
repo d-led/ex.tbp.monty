@@ -1,0 +1,25 @@
+# @package experiment.config
+# The plate as the features it is made of: one object per feature, and one for
+# the stock between them.
+#
+# `object_names` are the directories the CAD build writes, and the names are the
+# memory's own — `<part>_<feature>`, with the feature's separators flattened, so
+# the plate's first boss is `plate_bosses_0` in the object set, in the memory
+# this run loads, and in this list. That is the whole of the compositional run:
+# the memory holds four objects and each episode is asked about one of them,
+# which is what makes it a question about composition rather than about a lump.
+#
+# The plate's features are fixed by its geometry — `bosses/0`, `holes/0`,
+# `risers/0`, and the body for the faces no feature claims — so the list is
+# written out rather than discovered while the run is being assembled.
+do_eval: true
+eval_env_interface_args:
+  object_names:
+    - plate_bosses_0
+    - plate_holes_0
+    - plate_risers_0
+    - plate_body
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    rotations: ${constants.rotations_3}
+eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}

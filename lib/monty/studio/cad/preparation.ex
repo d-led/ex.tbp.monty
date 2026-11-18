@@ -19,10 +19,12 @@ defmodule Monty.Studio.Cad.Preparation do
   new config and no code.
   """
 
+  alias ExTbpMonty.Cad.Objects
   alias Monty.Studio.{Memory, Setup}
 
   @trainer Module.concat(["MontyCad", "Training"])
   @exporter Module.concat(["MontyCad", "Export"])
+  @library Module.concat(["MontyCad", "Library"])
 
   @typedoc """
   What preparing a part would write, and from what.
@@ -30,6 +32,8 @@ defmodule Monty.Studio.Cad.Preparation do
     * `part` — the object name the experiment steps (`object_names: [plate]`)
     * `step` — the file the geometry comes from
     * `name` and `release` — the memory's address, as the config names it
+    * `labels` — what the memory holds: the part as one object, or one object
+      per feature it is made of, which is what a `_features` memory promises
     * `memory` — the library file, whether or not it is there
     * `objects` — the directory the object set is written into
   """
@@ -38,6 +42,7 @@ defmodule Monty.Studio.Cad.Preparation do
           step: Path.t(),
           name: String.t(),
           release: String.t(),
+          labels: :part | :features,
           memory: Path.t(),
           objects: Path.t()
         }
@@ -52,9 +57,9 @@ defmodule Monty.Studio.Cad.Preparation do
   """
   @spec plan(Setup.t()) :: {:ok, plan()} | {:error, String.t()}
   def plan(%Setup{} = setup) do
-    with {:ok, part} <- object_of(setup),
+    with {:ok, name, release} <- memory_of(setup),
+         {:ok, part} <- part_of(setup, name),
          {:ok, step} <- step_of(part),
-         {:ok, name, release} <- memory_of(setup),
          {:ok, objects} <- objects_of(setup) do
       {:ok,
        %{
@@ -62,10 +67,32 @@ defmodule Monty.Studio.Cad.Preparation do
          step: step,
          name: name,
          release: release,
+         labels: labels_of(name),
          memory: Memory.path_for(name, release),
          objects: objects
        }}
     end
+  end
+
+  # The part this plan is about, said by the memory's name. A memory of the whole
+  # part is named after the object the run steps — `object_names: [plate]` — so
+  # the experiment says it. A memory of the features is named `<part>_features`
+  # and its objects are `<part>_<feature>`, so the part is the name without the
+  # suffix: it is the thing the objects are made of, not one of them.
+  defp part_of(setup, name) do
+    case labels_of(name) do
+      :features -> {:ok, String.replace_suffix(name, "_features", "")}
+      :part -> object_of(setup)
+    end
+  end
+
+  # A memory's name says what it holds, because nothing else can: `plate_part`
+  # is the plate as one object, `plate_features` is the plate as the features it
+  # is made of. Monty's config has no key for this — what a memory holds is what
+  # its producer wrote — so the name is the statement, and this is the one place
+  # that reads it.
+  defp labels_of(name) do
+    if String.ends_with?(name, "_features"), do: :features, else: :part
   end
 
   @doc """
@@ -84,36 +111,79 @@ defmodule Monty.Studio.Cad.Preparation do
     end
   end
 
-  # The memory is the part as one object, which is what a config naming
-  # `<release>/<part>_part` loads: one graph for the whole part, not one per face.
+  # The memory is what the config names: one object for the whole part, or one
+  # per feature. Both are the CAD package's teaching; what this application adds
+  # is the second half of a feature memory's file, below.
   defp write_memory(plan, trainer) do
     if Code.ensure_loaded?(trainer) do
-      case trainer.write_library([{plan.part, plan.step}], plan.memory, labels: :part) do
-        {:ok, %{nodes: nodes}} ->
-          {:ok, nodes}
-
-        {:error, reason} ->
-          {:error, "#{plan.step} could not be taught: #{inspect(reason)}"}
-      end
+      with {:ok, written} <- taught(plan, trainer), do: names_it_answers_to(plan, written)
     else
       {:error,
        "#{inspect(trainer)} is not on this node: add `ex_monty_cad` to write a part's memory."}
     end
   end
 
+  defp taught(plan, trainer) do
+    case trainer.write_library([{plan.part, plan.step}], plan.memory, labels: plan.labels) do
+      {:ok, written} -> {:ok, written}
+      {:error, reason} -> {:error, "#{plan.step} could not be taught: #{inspect(reason)}"}
+    end
+  end
+
+  # A part's memory is one object called `plate`, which a world steps as the
+  # directory `plate`, so its file is written as the teaching left it. A memory
+  # of features is one object per feature, and the CAD package names those
+  # `plate/bosses/0` — the part, then the feature. A world steps one *directory*
+  # per object, so the name a run answers with is that one with the separators
+  # flattened, `plate_bosses_0`; the memory has to say the same, or a run steps
+  # an object its memory has never heard of and finds nothing.
+  #
+  # The records written are the ones the teaching answered with: this is the
+  # same file, with the one field a directory cannot carry renamed.
+  defp names_it_answers_to(%{labels: :part}, written), do: {:ok, written.nodes}
+
+  defp names_it_answers_to(%{memory: path}, written) do
+    records =
+      written.objects
+      |> Enum.flat_map(& &1.records)
+      |> Enum.map(&Map.update!(&1, "object_id", fn id -> Objects.object_name(id) end))
+
+    case @library.write_records(records, path) do
+      :ok -> {:ok, written.nodes}
+      {:error, reason} -> {:error, "#{path} could not be written: #{inspect(reason)}"}
+    end
+  end
+
   # The object set is the same part as triangles, written where the config's
-  # `data_path` looks — one directory named for the object the memory holds.
+  # `data_path` looks — one directory per object the memory holds.
   defp write_objects(plan, exporter) do
     if Code.ensure_loaded?(exporter) do
-      with {:ok, mesh} <- exporter.part_mesh(plan.step, name: plan.part) do
-        _written = ExTbpMonty.Cad.Objects.write_mesh(mesh, plan.objects)
-        {:ok, 1}
-      end
+      if plan.labels == :features,
+        do: feature_objects(plan, exporter),
+        else: part_object(plan, exporter)
     else
       {:error,
        "#{inspect(exporter)} is not on this node: add `ex_monty_cad` to write a part's meshes."}
     end
   end
+
+  defp part_object(plan, exporter) do
+    with {:ok, mesh} <- exporter.part_mesh(plan.step, name: plan.part) do
+      _written = Objects.write_mesh(mesh, plan.objects)
+      {:ok, 1}
+    end
+  end
+
+  # One object per feature, under the name the memory answers to: the exporter
+  # calls the plate's first boss `bosses/0`, and its object is
+  # `plate_bosses_0`.
+  defp feature_objects(plan, exporter) do
+    with {:ok, meshes} <- exporter.feature_meshes(plan.step) do
+      {:ok, length(Enum.map(meshes, &Objects.write_mesh(named_for_part(plan, &1), plan.objects)))}
+    end
+  end
+
+  defp named_for_part(plan, mesh), do: %{mesh | name: "#{plan.part}/#{mesh.name}"}
 
   defp object_of(setup) do
     case Setup.objects(setup) do

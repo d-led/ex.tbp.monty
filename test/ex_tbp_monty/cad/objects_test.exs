@@ -81,4 +81,13 @@ defmodule ExTbpMonty.Cad.ObjectsTest do
     assert row.object == "plate"
     assert File.regular?(Path.join([dir, "plate", "textured.obj"]))
   end
+
+  # One rule, two writers: a feature the exporter calls `bosses/0` belongs to
+  # the plate it was cut into, and a world steps one directory per object, so the
+  # name is flattened and keeps the part — the same string a memory of the
+  # plate's features answers with.
+  test "names an object for its part and its feature, as one directory" do
+    assert Objects.object_name("plate/bosses/0") == "plate_bosses_0"
+    assert Objects.object_name("plate") == "plate"
+  end
 end

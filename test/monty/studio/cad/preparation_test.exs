@@ -98,6 +98,46 @@ defmodule Monty.Studio.Cad.PreparationTest do
       assert File.regular?(Path.join([objects, "plate", "textured.obj"]))
       assert File.regular?(Path.join([objects, "plate", "metadata.json"]))
     end
+
+    # The compositional half: the memory holds the plate's features rather than
+    # the plate, so one episode can be asked about a boss. What makes that a
+    # question at all is that the object a run steps and the object the memory
+    # answers with are one name — `plate_bosses_0`, not the memory's
+    # `plate/bosses/0` beside the object set's `bosses_0`.
+    test "a memory of features writes one object per feature, under the names it answers with",
+         %{objects: objects} do
+      setup = %{
+        setup_struct(objects)
+        | model_name_or_path: "/somewhere/projects/cad_parts_v1/plate_features"
+      }
+
+      assert {:ok, plan} = Preparation.plan(setup)
+      assert plan.labels == :features
+      assert plan.part == "plate"
+
+      assert {:ok, report} =
+               Preparation.prepare(plan,
+                 trainer: __MODULE__.FeatureTrainer,
+                 exporter: __MODULE__.FeatureExporter
+               )
+
+      assert report.written == 2
+
+      for object <- ~w(plate_bosses_0 plate_body) do
+        assert File.regular?(Path.join([objects, object, "textured.obj"]))
+      end
+
+      assert answered_with(plan.memory) == ["plate_bosses_0", "plate_body"]
+    end
+  end
+
+  # The object ids a run loads, as the file holds them.
+  defp answered_with(memory) do
+    memory
+    |> File.read!()
+    |> :zlib.gunzip()
+    |> String.split("\n", trim: true)
+    |> Enum.map(&JSON.decode!(&1)["object_id"])
   end
 
   # The two writers, as the CAD package answers them: a memory file, and one
@@ -120,6 +160,49 @@ defmodule Monty.Studio.Cad.PreparationTest do
          triangles: [[0, 1, 2]],
          colour: {0.5, 0.5, 0.5}
        }}
+    end
+  end
+
+  # A trainer that answers the way the CAD package does for `labels: :features`:
+  # one object per feature, named `<part>/<feature>`, and the records that go in
+  # the file.
+  defmodule FeatureTrainer do
+    def write_library([{part, _step}], path, options) do
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, "#{part} taught as #{Keyword.fetch!(options, :labels)}")
+
+      objects =
+        for feature <- ["bosses/0", "body"] do
+          id = "#{part}/#{feature}"
+          %{object_id: id, nodes: 3, records: [record(id)]}
+        end
+
+      {:ok, %{path: path, nodes: 6, objects: objects}}
+    end
+
+    defp record(object_id) do
+      %{
+        "object_id" => object_id,
+        "input_channel" => "patch",
+        "positions" => [[0.0, 0.0, 0.0]],
+        "features" => %{"on_object" => [[1.0]]},
+        "lm_index" => 0
+      }
+    end
+  end
+
+  defmodule FeatureExporter do
+    def feature_meshes(_step) do
+      {:ok,
+       for name <- ["bosses/0", "body"] do
+         %{
+           name: name,
+           family: name,
+           vertices: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+           triangles: [[0, 1, 2]],
+           colour: {0.5, 0.5, 0.5}
+         }
+       end}
     end
   end
 end

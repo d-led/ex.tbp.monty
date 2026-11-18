@@ -1,0 +1,44 @@
+# @package _global_
+# A CAD part's features, recognised in a mesh world by a memory taught on the
+# same part's B-rep.
+#
+# The name says what the run is: `plate` is the part, `features` is what the
+# memory holds — one object per feature the plate is made of, rather than the
+# whole part as one lump — and `eval` is the phase. Its sibling `plate_part_eval`
+# asks the same question about the part as a whole; the difference between the
+# two runs is the question, not the geometry.
+#
+# The memory is `<libraries>/cad_parts_v1/plate_features.jsonl.gz`, written by
+# the CAD build from the same STEP file the objects are meshed from, and the
+# object set is `<data>/cad_objects/plate_bosses_0` and its three neighbours —
+# the same names the memory answers with.
+defaults:
+  - /monty: evidencegraph_exp1000_emin_t3
+  - /monty/motor_system_config: surface_curvature_informed_goal1
+  - /monty/learning_module: evidence_tutorial_surf_agent_2obj
+  - /monty/sensor_module: camera_tutorial_surf_agent_2obj
+  - /monty/connectivity: 1lm_1sm
+  - /environment: cad_plate_objects
+  - /env_interface: cad_plate_features_eval
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
+  - /termination: any1_objectrecognition_t1000_e500_tot5000
+  - /logging: basic_info_monty_runs
+  - /telemetry: info
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    show_sensor_output: true
+    n_train_epochs: 3
+    # Where the memory of the part's features lives. The tail after the
+    # libraries root is what must match: `<libraries>/cad_parts_v1/plate_features
+    # .jsonl.gz`.
+    model_name_or_path: ${path.expanduser:"~/tbp/results/monty/projects"}/cad_parts_v1/plate_features
+    n_eval_epochs: 3
+    seed: 42
+    supervised_lm_ids: []
+    python_log_level: DEBUG
+    logging:
+      output_dir: ${path.expanduser:"~/tbp/results/monty/projects"}
+      run_name: cad_plate_features_eval
+      wandb_group: gm_eval_runs
