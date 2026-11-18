@@ -63,6 +63,38 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     end
   end
 
+  describe "a state built in the module's own process" do
+    test "a builder is called there, not where the spec was made", %{model_id: model_id} do
+      # A memory is tens of megabytes and the spec travels through the model and
+      # into this process first; a builder lets the load happen once, in the
+      # process that reads it, where `:persistent_term` hands the term over
+      # instead of copying it.
+      test_pid = self()
+
+      spec = %{
+        id: :lm_0,
+        model_id: model_id,
+        module: LearningModule,
+        state:
+          {:lazy,
+           fn ->
+             send(test_pid, {:built_in, self()})
+             LearningModule.new(:lm_0)
+           end}
+      }
+
+      start_supervised!(
+        Supervisor.child_spec({LearningModuleServer, spec}, id: {:learning, :lm_0})
+      )
+
+      server = Registry.via({:learning_module, model_id, :lm_0})
+
+      assert_receive {:built_in, builder}
+      assert builder == GenServer.whereis(server)
+      assert LearningModuleServer.state(server) == LearningModule.new(:lm_0)
+    end
+  end
+
   describe "voting" do
     test "a module sends its vote and keeps the votes it receives", %{model_id: model_id} do
       server = start_server(model_id, :lm_0)

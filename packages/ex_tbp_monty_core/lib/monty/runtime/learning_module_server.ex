@@ -267,7 +267,7 @@ defmodule Monty.Runtime.LearningModuleServer do
     {:ok,
      %{
        module: spec.module,
-       state: spec.state,
+       state: build_state(spec.state),
        id: spec.id,
        model_id: spec.model_id,
        epoch: nil,
@@ -277,6 +277,16 @@ defmodule Monty.Runtime.LearningModuleServer do
        round: nil
      }}
   end
+
+  # A module's state is built **here**, in the module's own process, when the spec
+  # hands a builder instead of a value. A memory is a graph library of tens of
+  # megabytes and a spec travels through the model and into this process before it
+  # arrives — one copy a hop, of a term the module only reads. Built here, the load
+  # happens once, in the process that uses it, and a load that answers from
+  # `:persistent_term` hands the term over instead of copying it
+  # (`Monty.Studio.Memory.load/3`).
+  defp build_state({:lazy, build}) when is_function(build, 0), do: build.()
+  defp build_state(state), do: state
 
   # A step handed over: the same three things `learn/4` in `Monty.Runtime.Step`
   # used to do through three calls, done here in one, in the same order — the
