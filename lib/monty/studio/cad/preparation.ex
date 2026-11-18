@@ -147,8 +147,23 @@ defmodule Monty.Studio.Cad.Preparation do
   @feature_spacing 1.0
   @feature_visits 20_000
 
-  defp memory_options(%{labels: :features}),
-    do: [labels: :features, spacing: @feature_spacing, limit: @feature_visits]
+  # A patch covers twice its stand-off, so the package's five-millimetre stand
+  # reads sixteen millimetres of surface — as wide as the plate's boss is across,
+  # which leaves a recognition nothing to explore and nothing to come back to
+  # once the patch is off. Three millimetres reads six, a third of a feature's
+  # wall. The run's own `desired_object_distance` is the same dial from the
+  # other side, and the two have to agree or a run matches a memory photographed
+  # from a different distance (`priv/monty_experiments/sets/cad/README.md`).
+  @feature_stand_off 3.0
+
+  defp memory_options(%{labels: :features}) do
+    [
+      labels: :features,
+      spacing: @feature_spacing,
+      limit: @feature_visits,
+      distance: @feature_stand_off
+    ]
+  end
 
   defp memory_options(%{labels: :part}), do: [labels: :part]
 

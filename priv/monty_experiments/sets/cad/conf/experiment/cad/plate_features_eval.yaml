@@ -37,14 +37,18 @@ experiment:
     n_train_epochs: 3
     # The patch has to be *on* the feature for the observation processor to pass
     # it to a learning module, and a policy that stands 25 mm off a surface sees
-    # mostly background once the surface is a centimetre across: the run stepped
-    # 2023 times and fed the learning module twice. Monty's own key, at Monty's
-    # own path, with the stand-off a small object needs.
+    # mostly background once the surface is a centimetre across. The stand-off is
+    # also the patch's size — it covers twice its stand-off — so a feature one
+    # patch wide cannot be explored and is lost once the patch is off it: at 8 mm
+    # the boss's wall was under two patches and an episode read nothing from step
+    # ten on. Three millimetres reads six, and the memory is taught from the same
+    # stand-off (`Monty.Studio.Cad.Preparation`), because a memory photographed
+    # from a different distance is a memory of a different surface.
     monty_config:
       motor_system_config:
         policy_selector:
           policy:
-            desired_object_distance: 0.008
+            desired_object_distance: 0.003
     # Where the memory of the part's features lives. The tail after the
     # libraries root is what must match: `<libraries>/cad_parts_v1/plate_features
     # .jsonl.gz`.

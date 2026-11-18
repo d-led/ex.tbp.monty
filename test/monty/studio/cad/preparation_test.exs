@@ -168,11 +168,14 @@ defmodule Monty.Studio.Cad.PreparationTest do
   # the file.
   defmodule FeatureTrainer do
     def write_library([{part, _step}], path, options) do
-      # A memory of features is sampled at a millimetre, and the visit cap is
-      # raised with it: at the package's default cap the plate's body and risers
-      # spend the budget and the small features are deleted from the memory.
-      unless {options[:spacing], options[:limit]} == {1.0, 20_000} do
-        raise "a feature memory is 1 mm/spacing with 20 000 visits, not #{inspect(options)}"
+      # A memory of features is sampled at a millimetre with the visit cap raised
+      # beside it, and read from closer than a part is: at the package's defaults
+      # the body and risers spend the budget and the small features leave the
+      # memory, and a sixteen-millimetre patch is as wide as a feature.
+      expected = %{spacing: 1.0, limit: 20_000, distance: 3.0}
+
+      unless Map.take(Map.new(options), Map.keys(expected)) == expected do
+        raise "a feature memory is #{inspect(expected)}, not #{inspect(options)}"
       end
 
       File.mkdir_p!(Path.dirname(path))
