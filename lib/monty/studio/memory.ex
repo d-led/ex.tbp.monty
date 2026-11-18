@@ -42,14 +42,19 @@ defmodule Monty.Studio.Memory do
   @doc """
   The directory the libraries are read from.
 
-  `MONTY_LIBRARIES` is read when the question is asked, not when the node
-  booted, so a test — or a shell that points the variable somewhere for one
-  command — reads and writes the folder it just named. An explicit
-  `:monty_libraries_dir` still wins, which is how a node pins one.
+  Pinned once, at boot, from `Monty.Paths.libraries/0` (`config/runtime.exs`),
+  which is where `MONTY_LIBRARIES` is read — so the exporter, a run's reader and
+  a test all name the same folder. A test that wants its own sets
+  `:monty_libraries_dir` (`Monty.Test.Tmp` and `Monty.Test.PrerequisiteRoots`
+  do), and a node without the setting falls back to the copy `priv/` carries.
   """
   @spec libraries_dir() :: Path.t()
   def libraries_dir do
-    Application.get_env(:ex_tbp_monty, :monty_libraries_dir) || Monty.Paths.libraries()
+    Application.get_env(
+      :ex_tbp_monty,
+      :monty_libraries_dir,
+      Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
+    )
   end
 
   @doc """

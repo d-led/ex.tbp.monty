@@ -26,11 +26,17 @@ defmodule Monty.Test.PrerequisiteRoots do
     ]
 
     previous = Enum.map(variables, fn {name, _} -> {name, System.get_env(name)} end)
+    previous_libraries = Application.fetch_env(:ex_tbp_monty, :monty_libraries_dir)
 
     Enum.each(variables, fn {name, value} ->
       File.mkdir_p!(value)
       System.put_env(name, value)
     end)
+
+    # The libraries folder is pinned at boot and read from the application's own
+    # setting, so a test that owns the tree owns that too — the variable alone
+    # would move the path a page shows while the writer kept the node's folder.
+    Application.put_env(:ex_tbp_monty, :monty_libraries_dir, Path.join(root, "libraries"))
 
     try do
       fun.()
@@ -39,6 +45,11 @@ defmodule Monty.Test.PrerequisiteRoots do
         {name, nil} -> System.delete_env(name)
         {name, value} -> System.put_env(name, value)
       end)
+
+      case previous_libraries do
+        {:ok, value} -> Application.put_env(:ex_tbp_monty, :monty_libraries_dir, value)
+        :error -> Application.delete_env(:ex_tbp_monty, :monty_libraries_dir)
+      end
     end
   end
 
