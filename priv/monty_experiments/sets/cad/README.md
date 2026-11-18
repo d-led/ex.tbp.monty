@@ -71,7 +71,7 @@ the server needs that no config can name.
    `cad_part_memories` reads `not built` and carries a **Make** button. Press it:
    it writes one memory per CAD experiment and the mesh of every object the
    configs name, saying which part it is on as it goes (`1/1 plate: memory and
-   meshes`). The row stops saying `not built` when it is done.
+meshes`). The row stops saying `not built` when it is done.
 2. **Sidebar → Experiments**, then pick the run. `cad/plate_part_eval` is the one
    that recognises; `cad/plate_features_eval` is the one that does not, for the
    reason the sections below measure.
@@ -95,21 +95,29 @@ the config's own budget rather than at a long cap.
 
 ### The same thing without a browser
 
-The page and a terminal drive the same code. Four environment variables are the
-whole setup, and the first is what the studio itself runs in:
+The page and a terminal drive the same code, and a terminal run reads the roots
+the page reads — Monty's own environment variables, defaulting to the
+application's support directory. Nothing has to be exported, and a run pointed at
+a copy of a memory is a run of something else:
 
-    export MIX_ENV=desktop
-    export MONTY_DATA=~/cad-run/data             # worlds, under <data>/cad_objects/
-    export MONTY_LIBRARIES=~/cad-run/libraries   # memories, under <libraries>/cad_parts_v1/
-    export MONTY_MODELS=~/cad-run/models         # pretrained releases, unused by
-                                                 # these sets but read at boot
+    MIX_ENV=dev mix run --no-start -e '
+      for root <- ~w(MONTY_DATA MONTY_LIBRARIES MONTY_MODELS),
+        do: IO.puts("#{root} = #{Monty.Prerequisites.root_path(root)}")'
+
+prints where a run reads and where Make writes. (A shell that exports the three
+is answering for itself, and `scripts/run-dev.sh` starts the pages against the
+same roots.)
 
 **Make what a run reads** — step 1 above, as a command. What it does is the plan
 each CAD config gives:
 
-    mix run --no-start -e 'Monty.Prerequisites.Build.run("cad_part_memories", fn p ->
+    MIX_ENV=dev mix run --no-start -e 'Monty.Prerequisites.Build.run("cad_part_memories", fn p ->
       IO.puts("#{p.index}/#{p.total} #{p.what}")
     end)'
+
+The same click under a `MIX_ENV` the page does not use writes where _that_
+environment reads — which is why the roots are printed by the command above
+rather than assumed here.
 
 It prints what it wrote — one memory per CAD experiment
 (`<libraries>/cad_parts_v1/{plate_part,plate_features,blend_part,blend-big_part}.jsonl.gz`)
@@ -119,7 +127,7 @@ and one directory per object the configs name under `<data>/cad_objects/`, so
 **Run the part-level experiment** — one object in the memory, three eval episodes,
 the tutorial's four-millimetre gait:
 
-    mix monty.run cad/plate_part_eval --no-record
+    MIX_ENV=desktop mix monty.run cad/plate_part_eval --no-record
 
     learning_module_0: match 3 of 3
 
@@ -131,12 +139,15 @@ its page, exactly as a press of `Run it` would leave it.
 **Run the feature-level experiment** — four objects in the memory, one per feature,
 four of the config's twelve episodes as a slice:
 
-    mix monty.run cad/plate_features_eval --episodes 4 --steps 500 --no-record
+    MIX_ENV=desktop mix monty.run cad/plate_features_eval --episodes 4 --steps 500 --no-record
 
 `--episodes` and `--steps` are the page's two fields under `Run it`. This one does
 not match, and the sections below say why: it ends with four objects still
 possible, and the read of its `eval_stats.csv` is what named the pair the sensor
 cannot tell apart.
+
+`desktop` is the environment that carries the MuJoCo interpreter a CAD run steps;
+under `dev` the same command wants `MONTY_PYTHON`, as `scripts/run-dev.sh` says.
 
 A recorded run (`mix monty.run cad/plate_part_eval`, no `--no-record`) needs a
 migrated database: `SQLITE_PATH=… mix ecto.migrate_all` first, or the studio's own

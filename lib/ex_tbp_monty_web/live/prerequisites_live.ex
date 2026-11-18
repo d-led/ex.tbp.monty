@@ -23,6 +23,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # archive, reading a memory out of one.
   @said_of_standing %{
     not_built: "not built",
+    partly_built: "partly built",
     memory_not_read: "memory not read",
     present: "present",
     not_downloaded: "not downloaded",
@@ -596,6 +597,14 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp standing(%{build: build}, nil, false, _pending?) when is_binary(build),
     do: :not_built
+
+  # A build that wrote some of what it promises is not "present": the directory
+  # is there and the file a configuration names is not, which is the state that
+  # sends a person to a run page saying no memory can be read.
+  defp standing(%{build: build} = prerequisite, nil, true, _pending?)
+       when is_binary(build) do
+    if missing_provided(prerequisite) == [], do: :present, else: :partly_built
+  end
 
   defp standing(_prerequisite, nil, true, true), do: :memory_not_read
   defp standing(_prerequisite, nil, true, false), do: :present

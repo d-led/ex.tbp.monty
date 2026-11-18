@@ -82,6 +82,23 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     refute view |> element("#size-made_here") |> render() =~ "unpacked"
 
     assert view |> element("#missing-made_here") |> render() =~ "not written yet: two"
+
+    # The directory is there and a memory a configuration names is not: "present"
+    # was a badge that disagreed with the run page saying no memory can be read.
+    assert view |> element("#prereq-made_here") |> render() =~ "partly built"
+  end
+
+  test "a build that wrote everything it promises is present", %{conn: conn} do
+    target = Prerequisites.target_path(Prerequisites.get("made_here"))
+    File.mkdir_p!(target)
+
+    for name <- ["one", "two"], do: File.write!(Path.join(target, "#{name}.jsonl.gz"), "x")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+    render_async(view)
+
+    assert view |> element("#prereq-made_here") |> render() =~ "present"
+    refute has_element?(view, "#missing-made_here")
   end
 
   test "says where an archive comes from, on what terms, and which bytes", %{conn: conn} do
