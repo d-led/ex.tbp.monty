@@ -56,27 +56,92 @@ Both are generated, and neither is ever written into the source tree:
 The STEP file itself is the only thing in the repository:
 `priv/cad_experiments/parts/plate.step`.
 
-## The clickable steps
+## Reproducing it on the page
 
-1. **Open `/prerequisites`** — the row `cad_part_memories` says `not built` until
-   this machine has made the memories and the meshes.
-2. **Click Make** — one click writes every memory the CAD configs name and the
-   object set each run steps; the row says which part it is on as it goes.
-3. **Open `/experiments`** — the four CAD runs: `cad/plate_part_eval`,
-   `cad/plate_features_eval`, `cad/blend_part_eval`, `cad/blend-big_part_eval`.
-4. **Click `cad/plate_features_eval`** — the compositional one: its memory holds
-   the plate's four features, and every episode asks about one of them.
-5. **Run** — the mesh world steps `plate_bosses_0`, `plate_holes_0`,
-   `plate_risers_0` and `plate_body`, three rotations each.
-6. **Read the run page** — steps, actions and the outcome the learning module
-   reached, per object.
-7. **Read its evidence chart** — evidence per step, climbing to the point the run
-   concludes.
+The studio is what runs these, and it carries four CAD runs: `cad/plate_part_eval`
+(the plate as one object), `cad/plate_features_eval` (the same plate as its four
+features), and the two blends. `scripts/init-dev.sh` once, then
+`MONTY_PYTHON=../monty-orig/.venv/bin/python scripts/run-dev.sh` for
+<http://localhost:4000> — the packaged desktop application is the same pages. A
+CAD run steps MuJoCo, so an interpreter with `tbp.monty` in it is the one thing
+the server needs that no config can name.
 
-`cad/plate_part_eval` is the same question about the part as a whole, so the two
-runs differ in what the memory holds and not in the geometry.
+1. **Sidebar → Prerequisites.** On a machine that has not made them, the row
+   `cad_part_memories` reads `not built` and carries a **Make** button. Press it:
+   it writes one memory per CAD experiment and the mesh of every object the
+   configs name, saying which part it is on as it goes (`1/1 plate: memory and
+   meshes`). The row stops saying `not built` when it is done.
+2. **Sidebar → Experiments**, then pick the run. `cad/plate_part_eval` is the one
+   that recognises; `cad/plate_features_eval` is the one that does not, for the
+   reason the sections below measure.
+3. **Press `Run it`.** Under the button are the three numbers a run takes —
+   `episodes` out of the config's own count, `steps each, at most`, and `settle`,
+   beside a `scheduling` choice — and for a reproduction they are left at the
+   config's values. The step budget is a ceiling, not a target: each episode ends
+   on its own recognition policy first.
+4. **Read the page it opens.** The steps stream in with what the module believes,
+   the chart draws evidence per object, and the summary closes on
+   `learning_module_0: match 3 of 3` with a band per episode in the colour of the
+   object it was about. `Stop` is beside `Run it` for as long as it is going.
+5. **Sidebar → Runs** holds it afterwards with the same log and the same page —
+   the record is what a later reproduction can be compared against, and it is
+   where the run's own `eval_stats.csv` lives.
 
-### What a feature run needs that a part run does not
+For the feature run the steps are the same with `cad/plate_features_eval` picked
+in step 2. It ends **without** a conclusion: four objects still possible. Slice it
+to `episodes` 4 — one per feature — and `steps each` 500 to watch the same wall at
+the config's own budget rather than at a long cap.
+
+### The same thing without a browser
+
+The page and a terminal drive the same code. Four environment variables are the
+whole setup, and the first is what the studio itself runs in:
+
+    export MIX_ENV=desktop
+    export MONTY_DATA=~/cad-run/data             # worlds, under <data>/cad_objects/
+    export MONTY_LIBRARIES=~/cad-run/libraries   # memories, under <libraries>/cad_parts_v1/
+    export MONTY_MODELS=~/cad-run/models         # pretrained releases, unused by
+                                                 # these sets but read at boot
+
+**Make what a run reads** — step 1 above, as a command. What it does is the plan
+each CAD config gives:
+
+    mix run --no-start -e 'Monty.Prerequisites.Build.run("cad_part_memories", fn p ->
+      IO.puts("#{p.index}/#{p.total} #{p.what}")
+    end)'
+
+It prints what it wrote — one memory per CAD experiment
+(`<libraries>/cad_parts_v1/{plate_part,plate_features,blend_part,blend-big_part}.jsonl.gz`)
+and one directory per object the configs name under `<data>/cad_objects/`, so
+`plate/` and `plate_bosses_0/` beside it.
+
+**Run the part-level experiment** — one object in the memory, three eval episodes,
+the tutorial's four-millimetre gait:
+
+    mix monty.run cad/plate_part_eval --no-record
+
+    learning_module_0: match 3 of 3
+
+That is the result: the plate recognised in every episode, each one ending on the
+recognition policy rather than on a step cap. `--no-record` keeps it out of the
+studio's database; drop the flag and the run appears in `/runs` with its log and
+its page, exactly as a press of `Run it` would leave it.
+
+**Run the feature-level experiment** — four objects in the memory, one per feature,
+four of the config's twelve episodes as a slice:
+
+    mix monty.run cad/plate_features_eval --episodes 4 --steps 500 --no-record
+
+`--episodes` and `--steps` are the page's two fields under `Run it`. This one does
+not match, and the sections below say why: it ends with four objects still
+possible, and the read of its `eval_stats.csv` is what named the pair the sensor
+cannot tell apart.
+
+A recorded run (`mix monty.run cad/plate_part_eval`, no `--no-record`) needs a
+migrated database: `SQLITE_PATH=… mix ecto.migrate_all` first, or the studio's own
+boot fails on a missing table.
+
+## What a feature run needs that a part run does not
 
 Two settings, both Monty's own, and both because a feature is a centimetre across
 where a plate is six:
@@ -89,7 +154,7 @@ where a plate is six:
   run stepped 2023 times with the learning module fed on two of them and evidence
   frozen at 1.69.
 
-### How a feature memory is sampled
+## How a feature memory is sampled
 
 The CAD package spaces a part's visits from the part's own size, and caps the
 visits at two thousand. Both are sized for a part, and a feature is a fraction of
@@ -104,7 +169,7 @@ So a memory of features is taught at 1 mm with a cap of 20 000 visits
 and converges below the cap: a part's feature memory costs a minute, and
 `mix monty.data.check` still says what the tree is.
 
-### What a feature run hits first, in the order it hits it
+## What a feature run hits first, in the order it hits it
 
 Three things stop `cad/plate_features_eval` before the recognition itself can be
 judged, and each was found by measuring rather than reading.
@@ -139,7 +204,7 @@ That is the writer's to fix — `MontyCad.Percept.node_features/1` should write
 `1.0`/`0.0` as Monty's format does — and it is the blocker: until it is fixed no
 feature episode gets past its first percept, whatever the memory holds.
 
-### Where it stands now
+## Where it stands now
 
 The matcher runs: a feature episode builds its hypotheses, scores them, culls
 them and climbs. Measured over four episodes of one run — 5000 steps each, the
