@@ -54,6 +54,15 @@ defmodule ExTbpMontyWeb.RunCompareLiveTest do
     refute has_element?(view, "#compare-refusal")
   end
 
+  test "the same run twice is refused rather than compared with itself", %{conn: conn} do
+    run = run(%{summary: %{"steps" => 8595}})
+
+    {:ok, view, _html} = live(conn, ~p"/compare?a=#{run.id}&b=#{run.id}")
+
+    assert has_element?(view, "#compare-refusal", "same run twice")
+    refute has_element?(view, "#compare-table")
+  end
+
   test "a column says when its run has not finished", %{conn: conn} do
     finished = run(%{inputs: %{"scheduling" => "barrier"}, summary: %{"steps" => 8595}})
     running = run(%{inputs: %{"scheduling" => "lagged"}, status: "running"})

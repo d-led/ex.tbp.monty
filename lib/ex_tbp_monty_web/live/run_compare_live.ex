@@ -50,6 +50,15 @@ defmodule ExTbpMontyWeb.RunCompareLive do
 
   # Two runs asked for: either the comparison, or the sentence saying why the two
   # cannot be compared.
+  defp compared(%{"a" => a, "b" => b}) when a == b do
+    %{
+      comparison: nil,
+      refusal:
+        "That is the same run twice, so every difference would be nought. Pick the other run.",
+      form: to_form(%{"a" => a, "b" => b}, as: :picked)
+    }
+  end
+
   defp compared(%{"a" => a, "b" => b}) do
     picked = to_form(%{"a" => a, "b" => b}, as: :picked)
 
