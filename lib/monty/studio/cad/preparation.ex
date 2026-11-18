@@ -133,10 +133,10 @@ defmodule Monty.Studio.Cad.Preparation do
   # A memory of features is sampled much more finely than a memory of a part,
   # and has to be: the CAD package's default spacing is sized for a part, and a
   # feature is a fraction of one. At the default the plate's boss keeps 56 nodes
-  # and its hole 16, which reproduces a cylinder as a handful of quadrilaterals
-  # rather than as the surface it is. (Node count is not what decides which
-  # object answers — a patch on a feature's flat end matches the body whatever
-  # the density, which is the set's README.)
+  # and its hole 16, which is a cylinder reproduced as a few rings of
+  # quadrilaterals rather than as the surface it is — and a patch on it is as
+  # wide as the whole feature. What limits a feature run at this size is scale,
+  # not node count; the set's README has the measurement.
   #
   # The finer spacing alone is not enough — the visits are capped at 2 000, and
   # the plate's body and risers alone spend that budget, which deletes the small

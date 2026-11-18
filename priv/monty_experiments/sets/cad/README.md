@@ -104,7 +104,7 @@ So a memory of features is taught at 1 mm with a cap of 20 000 visits
 and converges below the cap: a part's feature memory costs a minute, and
 `mix monty.data.check` still says what the tree is.
 
-### What a feature recognition is missing
+### What a feature recognition is limited by: scale
 
 `mix run scripts/cad_feature_percept.exs` prints both halves of the question, for
 a part and the library taught from it: what patches on a face of each label the
@@ -113,40 +113,41 @@ recognition found read, and how many nodes of each memory object are flat.
     mix run scripts/cad_feature_percept.exs priv/cad_experiments/parts/plate.step \
       <libraries>/cad_parts_v1/plate_features.jsonl.gz
 
-Two facts come out of it, and neither is about the sensor.
+Three things come out of it, and none of them is a defect in the sensor.
+
+**The memory and the world hold the same faces, by construction.** A feature's
+object is written from the triangles whose face belongs to that feature
+(`MontyCad.Export`), and its memory is taught from the samples on those same
+faces — so `plate_bosses_0` is a 128-vertex, 128-face _tube_ with no cap, and its
+memory is 205 nodes of that wall, not one of them flat. A boss is not closed in
+this world and does not need to be: what a run is shown and what it matches
+against are one surface, which is the property that matters.
 
 **The sensor and the memory agree.** A patch on the boss's wall reads principal
 curvatures of the sign and size its radius implies, and one on the bore's wall
-reads the same for the bore — the walls are what the memory's curvature was
-taught from, through the same processor, and the two are one number apart only
-where the patch straddled an edge. Curvature is not what a feature run is
-missing.
+the same for the bore — the numbers the memory stores, measured through the same
+processor that taught it.
 
-**The memory holds the walls; a run is shown the whole solid.** A patch covers
-about sixteen millimetres of surface at the teacher's five-millimetre stand-off,
-and the plate's boss is sixteen millimetres across: no patch fits on its top cap,
-so every reading taken there straddles the cap and its rim. Whatever those
-readings are, the cap is not the feature's to hold — quiddity leaves the disc
-unclaimed, neither a boss nor the body, so its nodes are taught as body — and the
-boss's own graph has no flat node at all. A run standing on the boss therefore
-matches the one graph that holds a flat reading, which is `plate_body`, and that
-is the answer it converges on.
+**A patch is as wide as the feature.** The patch covers about sixteen millimetres
+of surface at the teacher's five-millimetre stand-off, so the boss's wall is
+under two patches and the bore's wall is one; the plate's own faces are eleven or
+twelve. That is what the runs show. In the episode-by-episode log of a feature
+evaluation, `plate_body` concludes in a couple of hundred steps and so do the
+risers, while the boss and the bore each spend the whole step budget: from about
+step ten the patch reads _nothing_ — a uniform depth image, byte-identical for
+the remaining four thousand steps — because the agent has stepped off a wall
+eight millimetres wide and the search does not find it again.
 
-The two features that do not have the gap say so: a through-hole's world is a
-tube, two vertex rings at the plate's own faces and no cap, so what it presents
-is exactly the wall its memory holds, and the bore is answered correctly in every
-episode tried. The boss is answered correctly in none. The difference is not the
-shape, the size, the curvature or the policy — it is whether the solid the world
-steps has a surface the memory does not.
+So the limit is scale rather than shape, and no tolerance or policy will move it:
+an object one patch wide gives a recognition nothing to explore and no way back
+onto it once the patch is off. The two levers that follow are both honest and
+both generic:
 
-So the next change is in the teacher rather than in a config, and it is two
-things that follow from one rule — a run can only answer for a surface its memory
-holds:
-
-- teach a feature's memory from the feature's own solid, the geometry the world
-  steps, so that a cap belongs to the feature whose end it closes; and
-- size the patch to the feature. A cap can only be read as one surface by a patch
-  smaller than it, which at this stand-off it is not — the teacher's `:distance`
-  and the run's `desired_object_distance` are the same dial seen from two sides,
-  and the two have to be chosen for the part rather than inherited from a
-  default sized for furniture.
+- **a patch smaller than the feature.** The footprint is the stand-off, twice
+  over, so a closer stand shrinks it: the teacher's `:distance` and the run's
+  `desired_object_distance` are the same dial seen from two sides, and both have
+  to be set for a part of this size rather than inherited from a default sized
+  for furniture.
+- **parts whose features are the size Monty's sensor resolves** — a larger plate
+  is not a special treatment, it is a workload whose features are several patches
+  across, which is what every one of Monty's own experiments uses.
