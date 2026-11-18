@@ -186,7 +186,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                   id={"size-#{prerequisite.id}"}
                   class="font-mono text-xs text-base-content/50"
                 >
-                  {size_label(@sizes[prerequisite.id])}
+                  {size_label(prerequisite, @sizes[prerequisite.id])}
+                </p>
+                <%!-- A memory this application makes is one of a set, and the
+                question a person has is whether *their* experiment's file is
+                one of the ones written: a directory with the part's memory in it
+                answers no run of the plate's features. --%>
+                <p
+                  :if={missing_provided(prerequisite) != []}
+                  id={"missing-#{prerequisite.id}"}
+                  class="font-mono text-xs text-warning"
+                >
+                  not written yet: {Enum.join(missing_provided(prerequisite), ", ")}
                 </p>
                 <%!-- Where it comes from, on what terms, and which bytes. A
                 person about to wait for two gigabytes is entitled to the three,
@@ -594,14 +605,44 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp max_bytes(%{total: total}), do: total
 
   # What is on the disk, said in the two things it can be: the archive that
-  # arrived, and what it unpacked to. A prerequisite that is not here yet says
-  # so rather than showing zero bytes, which reads like an empty bundle.
-  defp size_label(%{archive: nil, unpacked: nil}), do: "nothing on disk yet"
-  defp size_label(%{archive: archive, unpacked: nil}), do: "#{bytes(archive)} archive"
-  defp size_label(%{archive: nil, unpacked: unpacked}), do: "#{bytes(unpacked)} unpacked"
+  # arrived, and what it unpacked to. A build has no archive — what is there is
+  # what Make wrote, and "unpacked" would name an unpacking nobody did. A
+  # prerequisite that is not here yet says so rather than showing zero bytes,
+  # which reads like an empty bundle.
+  defp size_label(%{build: build}, %{unpacked: nil}) when is_binary(build),
+    do: "nothing on disk yet"
 
-  defp size_label(%{archive: archive, unpacked: unpacked}),
+  defp size_label(%{build: build}, %{unpacked: unpacked}) when is_binary(build),
+    do: "#{bytes(unpacked)} written"
+
+  defp size_label(_prerequisite, %{archive: nil, unpacked: nil}), do: "nothing on disk yet"
+
+  defp size_label(_prerequisite, %{archive: archive, unpacked: nil}),
+    do: "#{bytes(archive)} archive"
+
+  defp size_label(_prerequisite, %{archive: nil, unpacked: unpacked}),
+    do: "#{bytes(unpacked)} unpacked"
+
+  defp size_label(_prerequisite, %{archive: archive, unpacked: unpacked}),
     do: "#{bytes(archive)} archive · #{bytes(unpacked)} unpacked"
+
+  # What a build promises, said against the disk. A row that reports only bytes
+  # leaves a reader guessing whether the file their config names is one of them,
+  # which is exactly the question a stale build raises: the directory is there,
+  # the experiment's own memory is not.
+  defp missing_provided(prerequisite) do
+    case Map.get(prerequisite, :provides, []) do
+      [] ->
+        []
+
+      names ->
+        target = Prerequisites.target_path(prerequisite)
+
+        Enum.reject(names, fn name ->
+          File.exists?(Path.join(target, "#{name}.jsonl.gz"))
+        end)
+    end
+  end
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
   # read off the manifest rather than written here, so a page cannot say

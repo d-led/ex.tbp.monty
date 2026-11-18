@@ -234,6 +234,28 @@ defmodule Monty.Studio.MemoryTest do
       assert message =~ "tutorial/surf_agent_2obj_train"
       assert message =~ "train that first"
     end
+
+    test "names the build that writes a memory this application makes, and offers the click" do
+      # A CAD memory is neither an archive nor a training run: pressing Make on
+      # `/prerequisites` writes it. A finding that said "no archive carries it"
+      # was true of archives and false of this machine, and left the reader
+      # without the one click that helps.
+      Tmp.env_dir("libraries-no-cad", :monty_libraries_dir)
+
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("cad_parts_v1", "plate_features")
+      }
+
+      assert [%{code: :no_pretrained_memory, message: message, link: link}] =
+               Setup.memory_findings(setup)
+
+      assert message =~ "CAD part memories and meshes"
+      assert message =~ "makes it"
+      refute message =~ "No archive carries it"
+
+      assert link == %{label: "Make it", href: "/prerequisites?fetch=cad_part_memories"}
+    end
   end
 
   describe "a directory that holds libraries" do

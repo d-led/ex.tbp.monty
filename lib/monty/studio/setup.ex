@@ -2601,25 +2601,37 @@ defmodule Monty.Studio.Setup do
   end
 
   # Where the memory comes from, said only when it is known. A model an archive
-  # carries is a download; a model a training run writes is not, and sending that
-  # reader to the prerequisites page is a link to a file that is not there.
+  # carries is a download; a model this application makes is a build, whose click
+  # is on the same page; a model a training run writes is neither, and sending
+  # that reader to the prerequisites page is a link to a file that is not there.
   defp where_memory_comes_from(name, release) do
-    cond do
-      archive = Prerequisites.for_model(name, release) ->
+    case Prerequisites.for_model(name, release) do
+      %{build: build} = prerequisite when is_binary(build) ->
+        "#{prerequisite.title} makes it — the click is on /prerequisites."
+
+      nil ->
+        case Catalog.trainer_for(name) do
+          nil -> "No archive carries it and no experiment here trains it."
+          trainer -> "It is what a run of #{trainer} writes — train that first."
+        end
+
+      archive ->
         "It is in #{archive.title}."
-
-      trainer = Catalog.trainer_for(name) ->
-        "It is what a run of #{trainer} writes — train that first."
-
-      true ->
-        "No archive carries it and no experiment here trains it."
     end
   end
 
+  # The click that writes it: a build is made on the page an archive is fetched
+  # from, and the page starts either from the same query parameter.
   defp with_memory_link(finding, name, release) do
     case Prerequisites.for_model(name, release) do
-      nil -> finding
-      archive -> Finding.with_link(finding, "Download it", "/prerequisites?fetch=#{archive.id}")
+      nil ->
+        finding
+
+      %{build: build} = prerequisite when is_binary(build) ->
+        Finding.with_link(finding, "Make it", "/prerequisites?fetch=#{prerequisite.id}")
+
+      archive ->
+        Finding.with_link(finding, "Download it", "/prerequisites?fetch=#{archive.id}")
     end
   end
 

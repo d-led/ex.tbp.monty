@@ -26,6 +26,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
         root: MONTY_DATA
         target: made-here
         build: cad_part_memories
+        provides:
+          - one
+          - two
     """)
 
     Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
@@ -58,6 +61,27 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
     assert has_element?(view, "#build-made_here[phx-click=\"build\"]")
     refute has_element?(view, "#download-made_here")
+  end
+
+  # A build is not an archive: what is on the disk is what Make wrote, and the
+  # row that called that "unpacked" was describing an unpacking nobody did. It
+  # also says which of the memories it promised are not there, because a
+  # directory with half a build in it answers no run of the other half.
+  test "a build says what it wrote, and which of its memories are missing", %{conn: conn} do
+    target = Prerequisites.target_path(Prerequisites.get("made_here"))
+    File.mkdir_p!(target)
+    File.write!(Path.join(target, "one.jsonl.gz"), String.duplicate("a", 2048))
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    # The sizes are measured off the process on mount, so the row says "nothing
+    # on disk yet" until that answer lands.
+    render_async(view)
+
+    assert view |> element("#size-made_here") |> render() =~ ~r/2\.0 KiB written/
+    refute view |> element("#size-made_here") |> render() =~ "unpacked"
+
+    assert view |> element("#missing-made_here") |> render() =~ "not written yet: two"
   end
 
   test "says where an archive comes from, on what terms, and which bytes", %{conn: conn} do

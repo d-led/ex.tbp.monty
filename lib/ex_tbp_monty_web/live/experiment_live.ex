@@ -2968,7 +2968,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     cond do
       archive = Prerequisites.for_model(name, release) ->
-        %{label: "download", href: "/prerequisites?fetch=#{archive.id}"}
+        prerequisite_action(archive)
 
       trainer = Catalog.trainer_for(name) ->
         %{label: "train it", href: "/experiments/#{trainer}"}
@@ -2981,7 +2981,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp action_for(%{path: path}) when is_binary(path) do
     case Prerequisites.for_path(path) do
       nil -> %{label: "prerequisites", href: "/prerequisites"}
-      prerequisite -> %{label: "download", href: "/prerequisites?fetch=#{prerequisite.id}"}
+      prerequisite -> prerequisite_action(prerequisite)
     end
   end
 
@@ -2990,6 +2990,17 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # and the page that says which interpreter it carries and what each needs is
   # where that is answered.
   defp action_for(_need), do: %{label: "what it needs", href: "/prerequisites"}
+
+  # The same page click for both kinds of prerequisite, named for what it does: a
+  # CAD memory is not downloaded from anywhere — pressing Make builds it here —
+  # and a label that said "download" would send a reader looking for a file.
+  defp prerequisite_action(%{build: build} = prerequisite) when is_binary(build) do
+    %{label: "make it", href: "/prerequisites?fetch=#{prerequisite.id}"}
+  end
+
+  defp prerequisite_action(prerequisite) do
+    %{label: "download", href: "/prerequisites?fetch=#{prerequisite.id}"}
+  end
 
   # Which files a run of this experiment reads before it steps, and which of
   # them are not here. A stand-in run reads nothing, so this is empty for one.

@@ -170,9 +170,16 @@ defmodule Monty.Prerequisites do
   def size(prerequisite) do
     %{
       archive: file_size(target_path(prerequisite)),
-      unpacked: if(prerequisite[:extract], do: directory_size(where_it_lands(prerequisite)))
+      unpacked:
+        if(fills_a_directory?(prerequisite), do: directory_size(where_it_lands(prerequisite)))
     }
   end
+
+  # What is on the disk is a directory for an archive that unpacks and for a
+  # build, which writes the tree it names: the entry that says `build:` has no
+  # archive to weigh and its target is the directory itself.
+  defp fills_a_directory?(%{build: build}) when is_binary(build), do: true
+  defp fills_a_directory?(prerequisite), do: Map.get(prerequisite, :extract, false)
 
   defp file_size(path) do
     case File.lstat(path) do

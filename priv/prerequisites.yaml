@@ -235,6 +235,17 @@ prerequisites:
     target: cad_parts_v1
     extract: true
     unpacks_to: cad_parts_v1
+    # The memories one Make writes. Without this a config that loads one is told
+    # that no archive carries it and no experiment trains it — true of archives
+    # and of trainings, false here, and it leaves a reader with no click. Read
+    # off the CAD experiments this application ships
+    # (`priv/monty_experiments/sets/cad`), which name one memory each and where
+    # two runs may name the same file.
+    provides:
+      - plate_part
+      - plate_features
+      - blend_part
+      - blend-big_part
 
   # The dogs' object set, imported from Objaverse's own GLBs. The manifest beside
   # the experiments says which eight dogs, with author, licence and page for
