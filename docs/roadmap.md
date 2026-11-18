@@ -243,8 +243,8 @@ loop, and its step count is Monty's for every episode of the epoch.
      acceptance ladder through the lazy path is digit for digit. **Necessary, not
      sufficient:** `base_77obj_dist_agent --episodes 1 --steps 2` still dies before
      step 0, now with `maximum heap size reached` at `Total Heap Size:
-     659 053 891` words — one process building more than five gigabytes, so the
-     remaining shape is the *construction* (the per-channel caches a module builds
+659 053 891` words — one process building more than five gigabytes, so the
+     remaining shape is the _construction_ (the per-channel caches a module builds
      over the library), not a message between processes. The heap report of step 1
      is what names it.
   3. Only then measure the step, which is where the remaining time goes.
