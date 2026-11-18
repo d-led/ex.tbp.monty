@@ -72,11 +72,21 @@ defmodule Monty.Config.SourceConfDirsTest do
       File.mkdir_p!(Path.join(mirror, "conf/experiment"))
       File.write!(Path.join(mirror, "conf/experiment/gone.yaml"), "defaults: []\n")
 
-      # One of ours, in a set, named like something a prune would want.
-      mine = Path.join(Source.extra_root(), "sets/dogs/conf/experiment/ours_probe.yaml")
+      # One of ours, in a set, named like something a prune would want — in a
+      # temporary tree, not in `Source.extra_root()`.
+      #
+      # The shipped `priv/monty_experiments/sets` is a directory the provenance
+      # record hashes, and `test/monty/data_provenance_test.exs` asserts that the
+      # shipped record still matches this tree. A test that writes there makes
+      # that case fail while the file is up, and can make it *raise* while the
+      # file goes: the walk lists it, the exit below removes it, the read finds
+      # nothing and `File.stream!/2` says so. Two tests, one tree, no owner — so
+      # a test never writes into the tree the record describes.
+      ours = Path.join(System.tmp_dir!(), "ours-#{System.unique_integer([:positive])}")
+      mine = Path.join(ours, "sets/dogs/conf/experiment/ours_probe.yaml")
       File.mkdir_p!(Path.dirname(mine))
       File.write!(mine, "defaults: []\n")
-      on_exit(fn -> File.rm(mine) end)
+      on_exit(fn -> File.rm_rf!(ours) end)
 
       Inputs.sync(monty, mirror)
 
