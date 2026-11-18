@@ -32,8 +32,11 @@
     Everything lands in `artifacts\`, which is not committed.
 
 .NOTES
-    Not yet built or run on a Windows machine - `docs/desktop.md` says what is
-    verified and what is claimed.
+    Run by CI on a `windows-2022` runner, which builds this, opens the window it
+    made, installs the setup and opens the installed copy. What is still unwatched
+    there is a MuJoCo experiment: Windows defaults to WGL and `rel/env.bat.eex`
+    has no `MUJOCO_GL` equivalent to Linux's `osmesa`. `docs/desktop.md` says what
+    is verified and what is claimed.
 #>
 
 param(

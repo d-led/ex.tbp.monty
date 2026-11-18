@@ -28,10 +28,11 @@
     dependencies install themselves.
 
 .NOTES
-    Not yet built or run on a Windows machine - `docs/desktop.md` says what is
-    verified and what is claimed. The parts most likely to need work are the
-    NSIS bundle and MuJoCo's renderer, which defaults to WGL here and has no
-    `MUJOCO_GL` equivalent in `rel/env.bat.eex`.
+    CI runs `scripts/package.ps1` rather than this checkout script, and opens the
+    window and the installed copy it makes; `docs/desktop.md` says what is
+    verified and what is claimed. The part most likely to need work is MuJoCo's
+    renderer, which defaults to WGL here and has no `MUJOCO_GL` equivalent in
+    `rel/env.bat.eex`.
 #>
 
 param(

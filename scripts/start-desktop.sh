@@ -330,17 +330,16 @@ if [[ "$mode" == bundle || "$mode" == app ]]; then
       cargo install tauri-cli --version "^2" --locked
     tauri=(cargo tauri)
   fi
-  # The release and the two plugin nodes are copied into the bundle by
-  # tauri-build, and it copies *over* whatever is there: the previous copy keeps
-  # the modes it was built with (a launcher script is 0555, the `COOKIE` is 0400),
-  # so the copy fails with "Permission denied (os error 13)" on every run after the
-  # first. Removing the copies is cheaper than making 2 700 files writable, and
-  # nothing is lost — they are copies of `_build/desktop/rel` and
-  # `_build/desktop/plugins`.
+  # The release is a resource, and the bundle carries the window's own release and
+  # nothing else. `tauri-build` copies it *over* whatever is there, and the copy
+  # keeps the modes it was built with (a launcher script is 0555, the `COOKIE` is
+  # 0400), so the copy fails with "Permission denied (os error 13)" on every run
+  # after the first. Removing the copy is cheaper than making 2 700 files
+  # writable, and nothing is lost — it is a copy of `_build/desktop/rel`.
   #
-  # `target/release/plugins` is the one that was missed: tauri-build writes its
-  # resources beside the binary before it bundles, and the plugin releases have
-  # the same read-only launchers, so the second run of a packaging failed there.
+  # `plugins` is removed for the same reason and only for old trees: a bundle made
+  # while the design still put the sample plugin nodes inside the window left that
+  # copy behind, and its launchers are read-only in exactly the same way.
   rm -rf \
     src-tauri/target/release/rel \
     src-tauri/target/release/plugins \
