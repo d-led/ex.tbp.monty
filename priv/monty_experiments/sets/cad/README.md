@@ -193,6 +193,17 @@ and the zoom, not a treatment of any one shape.
 carries them is written at a package path and a body at the wrong package
 composes to a value nobody reads.
 
-What that buys is not measured: the box ran out of memory before a fifth episode,
-so the duty cycle under the finer gait is the next session's first number, and
-the run that shows it is the same run that shows a recognition.
+Measured, and it buys what the arithmetic said it would. Twelve episodes at a
+cap of eight hundred steps each (this box's, not the config's five thousand), the
+same four features, the same memory:
+
+    four millimetres a step:  the module was fed on 56 to 625 of 5000 steps, 4 %
+    one millimetre a step:    47, 28, 200, 207, 104, 161, 158, 1, 168, 188,
+                              199, 208 of 800 — 17 % of the run
+
+and the module gained evidence in all but one of the twelve, `plate_risers_0` and
+`plate_body` trading the lead between episodes as they did before. So the policy
+was indeed the whole of the duty cycle — the same memory, sensor and stand-off
+with a smaller step is four times as much feeding — and what is left is the other
+side of it: whether evidence past a hundred and forty in 800 steps becomes a
+recognition in the 5000 the config allows. That is the next run, uncapped.
