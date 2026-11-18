@@ -526,23 +526,12 @@ defmodule Monty.Studio.Setup do
   @spec model_spec(t(), atom() | String.t(), keyword()) :: map()
   def model_spec(%__MODULE__{} = setup, model_id, opts \\ []) do
     detailed? = Keyword.get(opts, :has_detailed_logger, false)
-    memories = Keyword.get_lazy(opts, :memory, fn -> memories(setup) end)
-    targets = Keyword.get_lazy(opts, :memory_targets, fn -> memory_targets(setup) end)
 
     Map.merge(
       %{
         model_id: model_id,
         sensor_modules: Enum.map(setup.sensors, &sensor_module_spec(&1, detailed?)),
-        learning_modules:
-          Enum.map(
-            setup.learning_modules,
-            &learning_module_spec(
-              &1,
-              Map.get(memories, &1.id, :none),
-              Map.get(targets, &1.id, %{}),
-              detailed?
-            )
-          ),
+        learning_modules: learning_modules(setup, opts, detailed?),
         sm_to_lm: inputs_by_learning_module(setup, :sensor_input),
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
         lm_to_lm_vote: vote_wiring(setup),
@@ -1601,6 +1590,78 @@ defmodule Monty.Studio.Setup do
   # else reaches the stand-in, and the module map — which is where a class is
   # called `:implemented` — is what refuses the run: a registered class and a
   # status of `:implemented` are the same fact, and a test holds them together.
+  # A module's state, one of two ways.
+  #
+  # Eagerly — the default — for a memory the *caller* holds: a training run carries
+  # the memory its last episode wrote (`opts[:memory]`), and that is the run's own
+  # state, not a library to read again.
+  #
+  # Lazily for a run that reads its memory from a library (`lazy_state: true`, which
+  # `Monty.Studio.Run` asks for): the state is built in the module's own process,
+  # from the library's identity, because a memory is tens of megabytes and a spec is
+  # copied into the model and into every module server while the module only reads
+  # it. Measured on this Mac: 24.7 MB for the ten-object library, and copies made a
+  # per-object pass 27x slower than doing the work serially
+  # (`scripts/probe_lm_graph_split.exs`).
+  defp learning_modules(setup, opts, detailed?) do
+    if Keyword.get(opts, :lazy_state, false) do
+      setup.learning_modules
+      |> Enum.with_index()
+      |> Enum.map(fn {lm, index} -> lazy_learning_module_spec(setup, lm, index, detailed?) end)
+    else
+      memories = Keyword.get_lazy(opts, :memory, fn -> memories(setup) end)
+      targets = Keyword.get_lazy(opts, :memory_targets, fn -> memory_targets(setup) end)
+
+      Enum.map(setup.learning_modules, fn lm ->
+        learning_module_spec(
+          lm,
+          Map.get(memories, lm.id, :none),
+          Map.get(targets, lm.id, %{}),
+          detailed?
+        )
+      end)
+    end
+  end
+
+  defp lazy_learning_module_spec(setup, lm, index, detailed?) do
+    target = Map.get(lm.config, "_target_")
+    path = setup.model_name_or_path
+
+    with {:ok, module} <- learning_module_class(target) do
+      %{
+        id: lm.id,
+        module: module,
+        state: {:lazy, fn -> build_from_library(module, lm.config, path, index, detailed?) end}
+      }
+    else
+      _unknown_or_refused -> stand_in_learning_module(lm)
+    end
+  end
+
+  # Runs in the module's own process (`Monty.Runtime.LearningModuleServer.init/1`).
+  # The closure carries the library's identity, never the library: capturing
+  # `memory` here would copy what this exists to stop copying.
+  defp build_from_library(module, config, path, index, detailed?) do
+    options = [has_detailed_logger: detailed?, memory_targets: targets_at(path, index)]
+
+    options =
+      case memory_at(path, index) do
+        :none -> options
+        memory -> [memory: memory] ++ options
+      end
+
+    case module.from_config(config, options) do
+      {:ok, state} ->
+        state
+
+      {:error, why} ->
+        # A setup this happens to is refused by `learning_module_findings/1` before a
+        # run starts, so reaching here is a defect rather than a config to report.
+        raise ArgumentError,
+              "#{inspect(module)} could not be built from its config: #{inspect(why)}"
+    end
+  end
+
   defp learning_module_spec(lm, memory, targets, detailed?) do
     target = Map.get(lm.config, "_target_")
     options = [has_detailed_logger: detailed?, memory_targets: targets]
@@ -1652,7 +1713,12 @@ defmodule Monty.Studio.Setup do
           Monty.Frameworks.Models.GraphMatching.GraphMemory.t() | :none
   def memory_for(%__MODULE__{model_name_or_path: nil}, _module_index), do: :none
 
-  def memory_for(%__MODULE__{model_name_or_path: path}, module_index) do
+  def memory_for(%__MODULE__{model_name_or_path: path}, module_index),
+    do: memory_at(path, module_index)
+
+  # The same question asked of a path, which is what a lazily built module captures
+  # instead of the memory itself (`build_from_library/5`).
+  defp memory_at(path, module_index) when is_binary(path) do
     with name when is_binary(name) <- Memory.name_of(path),
          release when is_binary(release) <- Memory.release_of(path) do
       load_memory(name, release, module_index)
@@ -1660,6 +1726,8 @@ defmodule Monty.Studio.Setup do
       _absent -> :none
     end
   end
+
+  defp memory_at(_no_path, _module_index), do: :none
 
   @doc """
   The memory each learning module starts an episode from, by module id.
@@ -1704,7 +1772,9 @@ defmodule Monty.Studio.Setup do
     |> Map.new(fn {module, index} -> {module.id, targets_for(setup, index)} end)
   end
 
-  defp targets_for(%__MODULE__{model_name_or_path: path}, index) do
+  defp targets_for(%__MODULE__{model_name_or_path: path}, index), do: targets_at(path, index)
+
+  defp targets_at(path, index) when is_binary(path) do
     with name when is_binary(name) <- Memory.name_of(path),
          release when is_binary(release) <- Memory.release_of(path),
          {:ok, %{targets: targets}} <- Memory.load_with_targets(name, release, index) do
@@ -1713,6 +1783,8 @@ defmodule Monty.Studio.Setup do
       _absent -> %{}
     end
   end
+
+  defp targets_at(_no_path, _index), do: %{}
 
   defp load_memory(name, release, module_index) do
     case Memory.load_module(name, release, module_index) do

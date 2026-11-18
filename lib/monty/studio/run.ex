@@ -114,7 +114,7 @@ defmodule Monty.Studio.Run do
         spec =
           if held?,
             do: nil,
-            else: Setup.model_spec(setup, model_id, spec_opts(setup, opts))
+            else: Setup.model_spec(setup, model_id, spec_opts(opts))
 
         {:ok, factories} = Setup.positioning_procedures(setup)
         {:ok, policy} = Setup.recognition_strategy(setup)
@@ -499,14 +499,24 @@ defmodule Monty.Studio.Run do
   # library whose graphs all said `new_object0` while the objects they were built
   # from were one episode's worth of names, thrown away when the next episode
   # started.
-  defp spec_opts(setup, opts) do
+  defp spec_opts(opts) do
     base = [
       has_detailed_logger: Keyword.get(opts, :has_detailed_logger, false),
-      memory: Keyword.get_lazy(opts, :memory, fn -> Setup.memories(setup) end),
       sensors_step: Keyword.get(opts, :sensors_step, :auto),
       settle_steps: Keyword.get(opts, :settle_steps, 0),
       scheduling: Keyword.get_lazy(opts, :scheduling, &Monty.Studio.Jobs.scheduling/0)
     ]
+
+    # A memory the caller hands is the run's own — a training phase carries what its
+    # last episode wrote — so it is built into the spec. With no memory handed, each
+    # module loads the library in its own process instead: the term is tens of
+    # megabytes and the spec is copied into the model and into every module server
+    # while the module only reads it (`Setup.model_spec/3`'s `lazy_state`).
+    base =
+      case Keyword.get(opts, :memory) do
+        nil -> [lazy_state: true] ++ base
+        memory -> [memory: memory] ++ base
+      end
 
     case Keyword.fetch(opts, :memory_targets) do
       {:ok, targets} -> [memory_targets: targets] ++ base
