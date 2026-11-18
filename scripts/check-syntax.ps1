@@ -23,7 +23,7 @@
     file that does not and its first errors.
 #>
 param(
-    [string[]]$Path = @('scripts/*.ps1')
+    [string[]]$Path = @('scripts/*.ps1', 'scripts/desktop-plugins/*.ps1')
 )
 
 # The line of the first byte above 127, or 0 when the file is pure ASCII.
