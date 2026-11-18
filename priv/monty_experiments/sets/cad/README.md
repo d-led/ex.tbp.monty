@@ -104,50 +104,37 @@ So a memory of features is taught at 1 mm with a cap of 20 000 visits
 and converges below the cap: a part's feature memory costs a minute, and
 `mix monty.data.check` still says what the tree is.
 
-### What a feature recognition is limited by: scale
+### What a feature run hits first, in the order it hits it
 
-`mix run scripts/cad_feature_percept.exs` prints both halves of the question, for
-a part and the library taught from it: what patches on a face of each label the
-recognition found read, and how many nodes of each memory object are flat.
+Three things stop `cad/plate_features_eval` before the recognition itself can be
+judged, and each was found by measuring rather than reading.
 
-    mix run scripts/cad_feature_percept.exs priv/cad_experiments/parts/plate.step \
-      <libraries>/cad_parts_v1/plate_features.jsonl.gz
+**The agent starts out of sight.** The tutorial's surface agent stands ten
+centimetres above the ground; a part's boss is thirteen millimetres tall, so the
+patch begins eighty-seven millimetres from any surface — beyond the fifty
+millimetres a surface agent's depth is clipped at — and reads a flat grey image
+for as long as it takes to search. Measured on a failed run: `percepts patch`,
+`inputs learning_module_0=0` on every step, and a patch picture of one colour.
+The set's environment now places the agent three centimetres up, where the patch
+sees the object on its first step.
 
-Three things come out of it, and none of them is a defect in the sensor.
+**The memory and the run use different optics.** The environment's patch sensor
+is declared with `zoom: 10`, a nine-degree field of view; the teacher builds its
+patches with the camera's default ninety (`MontyCad.Training` passes a stand-off
+and nothing else). Measured on the boss's wall at the same stand-off, the
+teacher's patch reads `0.137, -0.063` with 80 % coverage and the run's reads
+`0.125, 0.000` with all of it: the same sign and nearly the same size, but the
+node the memory stores was measured through a patch eight times wider than the
+one the run makes. The teacher needs the run's field of view.
 
-**The memory and the world hold the same faces, by construction.** A feature's
-object is written from the triangles whose face belongs to that feature
-(`MontyCad.Export`), and its memory is taught from the samples on those same
-faces — so `plate_bosses_0` is a 128-vertex, 128-face _tube_ with no cap, and its
-memory is 205 nodes of that wall, not one of them flat. A boss is not closed in
-this world and does not need to be: what a run is shown and what it matches
-against are one surface, which is the property that matters.
+**The memory stores a boolean where the format stores a number.** In the file,
+`plate_features.jsonl.gz` holds `"pose_fully_defined": [[false], [false], …]`;
+Monty's own `pretrained_ycb_v14` holds `[[1.0], [1.0], …]`. The matcher keeps its
+columns as floats, so the first percept that reaches the learning module dies:
 
-**The sensor and the memory agree.** A patch on the boss's wall reads principal
-curvatures of the sign and size its radius implies, and one on the bore's wall
-the same for the bore — the numbers the memory stores, measured through the same
-processor that taught it.
+    ** (ArithmeticError) bad argument in arithmetic expression
+        (ex_tbp_monty_core 0.1.4) …/evidence_matching/hypotheses.ex:406: Hypotheses.values_bytes/1
 
-**A patch is as wide as the feature.** The patch covers about sixteen millimetres
-of surface at the teacher's five-millimetre stand-off, so the boss's wall is
-under two patches and the bore's wall is one; the plate's own faces are eleven or
-twelve. That is what the runs show. In the episode-by-episode log of a feature
-evaluation, `plate_body` concludes in a couple of hundred steps and so do the
-risers, while the boss and the bore each spend the whole step budget: from about
-step ten the patch reads _nothing_ — a uniform depth image, byte-identical for
-the remaining four thousand steps — because the agent has stepped off a wall
-eight millimetres wide and the search does not find it again.
-
-So the limit is scale rather than shape, and no tolerance or policy will move it:
-an object one patch wide gives a recognition nothing to explore and no way back
-onto it once the patch is off. The two levers that follow are both honest and
-both generic:
-
-- **a patch smaller than the feature.** The footprint is the stand-off, twice
-  over, so a closer stand shrinks it: the teacher's `:distance` and the run's
-  `desired_object_distance` are the same dial seen from two sides, and both have
-  to be set for a part of this size rather than inherited from a default sized
-  for furniture.
-- **parts whose features are the size Monty's sensor resolves** — a larger plate
-  is not a special treatment, it is a workload whose features are several patches
-  across, which is what every one of Monty's own experiments uses.
+That is the writer's to fix — `MontyCad.Percept.node_features/1` should write
+`1.0`/`0.0` as Monty's format does — and it is the blocker: until it is fixed no
+feature episode gets past its first percept, whatever the memory holds.

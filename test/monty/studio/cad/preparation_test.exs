@@ -172,7 +172,7 @@ defmodule Monty.Studio.Cad.PreparationTest do
       # beside it, and read from closer than a part is: at the package's defaults
       # the body and risers spend the budget and the small features leave the
       # memory, and a sixteen-millimetre patch is as wide as a feature.
-      expected = %{spacing: 1.0, limit: 20_000, distance: 3.0}
+      expected = %{spacing: 1.0, limit: 20_000, distance: 8.0}
 
       unless Map.take(Map.new(options), Map.keys(expected)) == expected do
         raise "a feature memory is #{inspect(expected)}, not #{inspect(options)}"

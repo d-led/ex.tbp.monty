@@ -41,14 +41,17 @@ experiment:
     # also the patch's size — it covers twice its stand-off — so a feature one
     # patch wide cannot be explored and is lost once the patch is off it: at 8 mm
     # the boss's wall was under two patches and an episode read nothing from step
-    # ten on. Three millimetres reads six, and the memory is taught from the same
-    # stand-off (`Monty.Studio.Cad.Preparation`), because a memory photographed
-    # from a different distance is a memory of a different surface.
+    # ten on. Standing closer does not help: the compiled scene draws nothing
+    # inside its five-millimetre near plane, and at six millimetres an episode
+    # reads an empty patch on every step. Eight is the closest that renders. The
+    # memory is taught from the same stand-off (`Monty.Studio.Cad.Preparation`),
+    # because a memory photographed from a different distance is a memory of a
+    # different surface.
     monty_config:
       motor_system_config:
         policy_selector:
           policy:
-            desired_object_distance: 0.003
+            desired_object_distance: 0.008
     # Where the memory of the part's features lives. The tail after the
     # libraries root is what must match: `<libraries>/cad_parts_v1/plate_features
     # .jsonl.gz`.

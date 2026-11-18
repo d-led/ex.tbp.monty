@@ -402,9 +402,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
 
   defp bytes(rows, encode), do: for(row <- rows, into: <<>>, do: encode.(row))
 
+  # A node the features could not score has no evidence, and this port's marker
+  # for a missing number is `nil` in a list and the quiet NaN's bits in a column
+  # (`MatcherNif.decode/1` reads one back as `nil`; Monty's arrays carry the same
+  # NaN). A memory whose nodes are only partly scoreable therefore hands this a
+  # `nil`, and encoding it as a number raised — the learning module died on the
+  # first percept it made from such a memory.
   defp values_bytes(values) do
-    for value <- values, into: <<>>, do: <<value * 1.0::little-float-64>>
+    values
+    |> Enum.map(&value_bytes/1)
+    |> IO.iodata_to_binary()
   end
+
+  defp value_bytes(nil), do: MatcherNif.not_a_number()
+  defp value_bytes(value), do: <<value * 1.0::little-float-64>>
 
   defp rows(bytes, width, decode), do: rows(bytes, width * 8, decode, [])
 

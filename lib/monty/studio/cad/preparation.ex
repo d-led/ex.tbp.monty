@@ -147,14 +147,16 @@ defmodule Monty.Studio.Cad.Preparation do
   @feature_spacing 1.0
   @feature_visits 20_000
 
-  # A patch covers twice its stand-off, so the package's five-millimetre stand
-  # reads sixteen millimetres of surface — as wide as the plate's boss is across,
-  # which leaves a recognition nothing to explore and nothing to come back to
-  # once the patch is off. Three millimetres reads six, a third of a feature's
-  # wall. The run's own `desired_object_distance` is the same dial from the
-  # other side, and the two have to agree or a run matches a memory photographed
-  # from a different distance (`priv/monty_experiments/sets/cad/README.md`).
-  @feature_stand_off 3.0
+  # A patch covers twice its stand-off, and the world can only be read from
+  # further away than it looks: the compiled scene draws nothing inside its
+  # five-millimetre near plane, and measured, a sensor standing at six sees an
+  # empty patch on every step of an episode (at eight it sees the boss, then
+  # loses it). So a feature memory is taught from eight millimetres, which is
+  # also what a feature run stands off by, and a memory photographed from a
+  # different distance would be a memory of a different surface
+  # (`priv/monty_experiments/sets/cad/README.md` has the measurement and the
+  # scale it leaves).
+  @feature_stand_off 8.0
 
   defp memory_options(%{labels: :features}) do
     [

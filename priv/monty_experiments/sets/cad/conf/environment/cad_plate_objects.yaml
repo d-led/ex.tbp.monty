@@ -32,9 +32,14 @@ env_init_args:
             width: 64
             height: 64
           zoom: 1.0
+      # A hand's width above the object's own top, not ten centimetres above the
+      # ground: a part's feature is a centimetre or two tall and a surface
+      # agent's patch sees five, so at the tutorial's height the patch reads
+      # nothing but the clip and never arrives — measured, an episode whose
+      # patch image is a single flat grey for every one of its steps.
       position:
         - 0.0
         - 1.5
-        - 0.1
+        - 0.03
   raise_actuate_missing: false
 env_init_func: ${monty.class:tbp.monty.simulators.mujoco.MuJoCoSimulator}

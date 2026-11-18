@@ -114,6 +114,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesTest do
 
       assert Hypotheses.indices_within(set, 10.0, 0.0) == []
     end
+
+    # A learning module scores what it can and leaves the rest with no evidence:
+    # a node whose features cannot be compared arrives as `nil`, which is this
+    # port's NaN. Encoding the column used to raise on it.
+    test "encodes a hypothesis with no evidence as a NaN" do
+      set = hypothesis_set([1.0])
+
+      assert set
+             |> Hypotheses.put_evidence([nil])
+             |> Hypotheses.evidence()
+             |> Enum.map(fn
+               nil -> :no_evidence
+               value -> value
+             end) == [:no_evidence]
+    end
   end
 
   describe "concatenating" do
