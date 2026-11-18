@@ -45,7 +45,7 @@ defmodule Monty.Prerequisites.BuildTest do
 
         assert {:ok, said} = Build.run("cad_part_memories", &send(steps, {:step, &1}))
 
-        # One line per part: the run a person can make afterwards is one per
+        # One line per memory: the run a person can make afterwards is one per
         # memory, so the count is what the build promised.
         assert length(said) == length(experiments())
         assert_received_step(:first)
@@ -54,10 +54,21 @@ defmodule Monty.Prerequisites.BuildTest do
         objects = Path.join(Prerequisites.root_path("MONTY_DATA"), "cad_objects")
 
         for experiment <- experiments() do
-          part = part_of(experiment)
-          assert File.exists?(Path.join([libraries, "cad_parts_v1", "#{part}_part.jsonl.gz"]))
-          assert File.dir?(Path.join(objects, part))
+          {plan, setup} = plan_of(experiment)
+
+          assert File.exists?(plan.memory),
+                 "#{experiment} loads #{plan.memory}, which the build did not write"
+
+          # Every object the run steps, not only the first: a memory of a part's
+          # features answers four names, and a run is only able to ask about the
+          # ones that were written as directories.
+          for object <- Monty.Studio.Setup.objects(setup) do
+            assert File.dir?(Path.join(objects, object)),
+                   "#{experiment} steps #{object}, which the build did not write"
+          end
         end
+
+        assert File.dir?(libraries)
       end)
     end
   end
@@ -115,11 +126,10 @@ defmodule Monty.Prerequisites.BuildTest do
     |> Enum.sort()
   end
 
-  defp part_of(experiment) do
-    short = experiment |> String.split("/") |> List.last()
-
+  defp plan_of(experiment) do
     {:ok, opened} = Monty.Studio.open(experiment, conf_dir: Monty.Config.Source.conf_dirs())
-    hd(Monty.Studio.Setup.objects(opened.setup)) || short
+    {:ok, plan} = Monty.Studio.Cad.Preparation.plan(opened.setup)
+    {plan, opened.setup}
   end
 
   defp manifest_uids do

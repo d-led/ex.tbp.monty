@@ -174,6 +174,9 @@ defmodule Monty.Prerequisites.Build do
     end)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # A manifest this application ships, on the experiments root; the path is the
+  # one wildcard answered with, not a request's.
   defp corpus?(file) do
     with {:ok, text} <- File.read(file),
          {:ok, document} <- JSON.decode(text) do
@@ -185,6 +188,9 @@ defmodule Monty.Prerequisites.Build do
 
   # One file per object, cached: a second build fetches nothing, and an
   # interrupted one resumes at the next missing file.
+  # sobelow_skip ["Traversal.FileModule"]
+  # The cache is the corpus's own folder under the data root, and its name is the
+  # manifest's.
   defp fetch(objects, into, notify, opts) do
     File.mkdir_p!(into)
     {:ok, _} = Application.ensure_all_started(:req)
@@ -202,15 +208,29 @@ defmodule Monty.Prerequisites.Build do
 
         case glb(object, path, opts) do
           :ok -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
+          {:error, reason} -> {:halt, {:error, download_refused(object, reason)}}
         end
       end
     end)
   end
 
-  defp glb(object, path, opts),
-    do: Keyword.get_lazy(opts, :glb, fn -> &fetch_glb/2 end).(object, path)
+  # A refusal is a sentence about one object, not a bare reason: the row a person
+  # reads has to say which object never arrived, and the reason a getter answers
+  # with may be an atom of its own.
+  defp download_refused(object, reason) do
+    "#{object["name"]}: the download failed (#{if is_binary(reason), do: reason, else: inspect(reason)})"
+  end
 
+  defp glb(object, path, opts),
+    do: Keyword.get_lazy(opts, :glb, fn -> getter() end).(object, path)
+
+  # The download is named rather than called, as the plans and the import are: a
+  # case that says "the network refused" has to reach that refusal on a machine
+  # that has a network, and `:glb_getter` is how it takes the network's place.
+  defp getter, do: Application.get_env(:ex_tbp_monty, :glb_getter, &fetch_glb/2)
+
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is built from the manifest's own shard and uid, in the cache above.
   defp fetch_glb(object, path) do
     url = Enum.join([@glb, object["shard"], object["uid"] <> ".glb"], "/")
 
