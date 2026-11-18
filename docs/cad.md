@@ -93,15 +93,34 @@ part the variable names. That is the first thing stage 1 has to grow.
 
 ## How to run one
 
+Two clicks, in this order, and no shell:
+
+1. **`/prerequisites` → "CAD part memories and meshes" → Make.** One memory and
+   one object set per part this application's configurations name, taught from
+   the STEP file each part ships and meshed into `cad_objects` under the data
+   folder. A part whose memory was never written is a part a run has nothing to
+   match against, and the page says so on the experiment's own checks.
+2. **`/experiments/cad/plate_part_eval` → Run it.** One episode per object the
+   config names, in the world that config names, with the patch's own pictures
+   beside the evidence per object, step by step.
+
 The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
 whole setup — no checkout has to sit beside this one, and no build path has to be
-appended. An experiment of ours lives in
-`priv/monty_experiments/sets/cad/conf`, which the experiments page already lists:
-open `/experiments`, choose `cad/plate_part_eval`, press Run. Its own README, in
-that set's directory, is the click path written down.
+appended. The experiment lives in `priv/monty_experiments/sets/cad/conf`, and
+that set's own README is the same walk-through written down.
 
-The same run from a shell, which is what the README's step 3 still needs until
-the memory is written from a page:
+Measured on this Mac (2026-11-19), those two clicks and nothing else: the plate's
+three evaluation episodes concluded in 101, 184 and 351 steps, and each answered
+`plate` where the target was `plate` — `correct` in all three, at the highest
+evidence of 24.85, 11.02 and 19.72. The run keeps its log, its sensor pictures
+and `eval_stats.csv` in its own directory under the application's data folder.
+
+Both halves read the same experiment, which is what makes the memory and the run
+comparable: the memory is taught through **the run's own patch** — the field of
+view its camera makes and the distance its policy stands off by, read from the
+config — so the two see one surface rather than two.
+
+The same experiment from a shell, for a machine without a page in front of it:
 
 ```sh
 mix run scripts/cad_experiment.exs plate plate          # remember plate, sense plate
@@ -128,7 +147,9 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
 - **No cluster.** Training and evaluation are one node each. What a policy host
   across nodes is for is in [plugins](plugins.html), and it is not this.
 - **No numbers.** Which part, which features, how many nodes a memory holds — those
-  are printed by the command that makes them, not written down here.
+  are printed by the command that makes them rather than written down here. The one
+  exception is the dated measurement in _How to run one_, which names the machine,
+  the experiment and the episodes it is about.
 
 ## What is missing, in the order it is worth doing
 
