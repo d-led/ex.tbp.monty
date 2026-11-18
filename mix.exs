@@ -139,7 +139,7 @@ defmodule ExTbpMonty.MixProject do
       # checkout's evaluation writes — is not in 0.6.3; the ref moves to a
       # version requirement once the next one is tagged.
       {:ex_monty_cad,
-       github: "d-led/ex.monty.cad", ref: "c8f4b2d8e14771b830e17eee396b6d521a705a65"},
+       github: "d-led/ex.monty.cad", ref: "6f9a538"},
       {:phoenix, "~> 1.8.16"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
