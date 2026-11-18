@@ -34,6 +34,14 @@ defmodule Monty.Studio.Cad.ExperimentConfigTest do
       assert sampler["translation_distance"] == 0.001
       assert sampler["rotation_degrees"] == 1.0
     end
+
+    # Monty's own surface agent walks towards what the module believes, and the
+    # tutorial this set is built on does not turn that off. A set that does is
+    # deviating from it: the same four episodes gain twice the evidence with it
+    # on, and the same number of objects stay possible either way.
+    test "the motor system is asked for goal-driven actions" do
+      assert policy()["use_goal_driven_actions"] == true
+    end
   end
 
   defp policy do

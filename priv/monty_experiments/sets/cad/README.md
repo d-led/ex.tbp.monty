@@ -220,6 +220,20 @@ noise the sensor overlay adds to hue and pose already carries the patch past it
 every few steps. The millimetre was measured and reverted, not kept for its tenth
 of evidence.
 
+The motor policy is the one size that did move the evidence, and it does not move
+the answer. Monty's own surface agent walks towards what the module believes
+(`use_goal_driven_actions: true`); this set had been built on the variant that
+turns it off. Four episodes at the config's own five-hundred-step eval budget,
+one per feature:
+
+    goal-driven off: 333 of 2000 steps fed, evidence 20.4, four objects possible
+    goal-driven on:  402 of 2000 steps fed, evidence 44.9, four objects possible
+
+The set now names the goal-driven policy: twenty per cent more feeding, twice the
+evidence, and the same four objects still possible at the end of every episode.
+Two independent moves past the same wall is the strongest evidence this memory
+has that the wall is the memory, not the policy.
+
 What is left is not the matcher, and the memory says so. Asked of the file the
 run loads — every node of every object, by the features the sensor reports:
 
