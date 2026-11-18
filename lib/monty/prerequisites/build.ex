@@ -138,6 +138,9 @@ defmodule Monty.Prerequisites.Build do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `file` is the corpus manifest `corpora/0` found under this application's
+  # own priv, not a path a request hands in.
   defp objects_of(file), do: file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
 
   defp cache_of(corpus), do: Path.join(root("MONTY_DATA"), "downloads/#{corpus}")
