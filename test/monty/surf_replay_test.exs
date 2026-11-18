@@ -40,7 +40,12 @@ defmodule Monty.SurfReplayTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_base_10simobj_episode.jsonl"
-  @pretrained "priv/monty/libraries/pretrained_ycb_v14/surf_agent_1lm_10similarobj.jsonl.gz"
+  # See `recording_episode_test.exs`: the memory lives in the folder a
+  # `mix monty.prerequisites.fetch` writes, not beside the code.
+  @pretrained Path.join([
+                Monty.Studio.Memory.libraries_dir(),
+                "pretrained_ycb_v14/surf_agent_1lm_10similarobj.jsonl.gz"
+              ])
 
   # The module `base_10simobj_surf_agent` builds
   # (`learning_module/evidence_1lm_nn5_dod0025.yaml`) with the burst sampler its

@@ -157,10 +157,12 @@ defmodule Monty.Test.Tmp do
     dir
   end
 
-  defp carried_libraries do
-    Application.get_env(:ex_tbp_monty, :monty_libraries_dir) ||
-      Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
-  end
+  # What the checkout carries is what the application reads: the folder pinned at
+  # boot from `MONTY_LIBRARIES`, or the copy `priv/` carries when a machine named
+  # none. A mirror built from a path the exporter does not write to is a run with
+  # no memory at all — which is what a test that named `priv/` by hand got in CI,
+  # where the export lands in the `_build` copy of it.
+  defp carried_libraries, do: Monty.Studio.Memory.libraries_dir()
 
   defp restore_app_env(app, key, {:ok, value}), do: Application.put_env(app, key, value)
   defp restore_app_env(app, key, :error), do: Application.delete_env(app, key)

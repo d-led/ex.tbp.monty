@@ -35,7 +35,13 @@ defmodule Monty.RecordingEpisodeTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
-  @pretrained "priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
+  # The memory is data, not source: `mix monty.prerequisites.fetch
+  # pretrained_ycb_v10` exports it into the folder the application reads, so the
+  # path is that folder's, never one a checkout used to carry.
+  @pretrained Path.join([
+                Monty.Studio.Memory.libraries_dir(),
+                "pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
+              ])
   @channel "patch"
   @agent "agent_id_0"
 
