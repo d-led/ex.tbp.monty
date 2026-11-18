@@ -237,11 +237,19 @@ object rather than four, recognises all three of its episodes —
 stand-off and the same world. A part-level CAD memory is recognised from a mesh
 world, which is the pipeline this set exists to show.
 
-What the feature-level run needs is then a pair of objects the features can tell
-apart, or an honest report of the pair that they cannot: the boss and the bore
-are distinguishable (convex against concave, nine millimetres against nought),
-the body and the risers are not. Two ways forward are worth a run each — an
-object set whose features differ in the taught features (a second curvature, a
-second depth, one colour, as the tutorial's objects differ by shape _and_
-colour), or reading an inseparable pair as the ambiguity Monty reports for a
-symmetric object, which is what an episode's symmetry evidence exists to show.
+What the feature-level run leaves is in its own `eval_stats.csv`, and it is more
+precise than "no verdict": eleven of the twelve episodes end with no verdict at
+all, because the possible set never falls to one object, and the twelfth is a
+`patch_off_object` of nought steps. Of the six asked about the body or a riser,
+four do end on the object they were asked about — `plate_body` at evidence 61.2
+and 162.6, `plate_risers_0` at 112.4 and 246.0 — and still earn no verdict,
+because the pair is still possible, which is what an inseparable pair looks like
+from inside the module; one ends on `plate_body` when it was asked about a riser,
+at 144.0. Of the six asked about the boss or the bore, every one ends on
+`plate_risers_0`, so those two are never recognised at all. Symmetry evidence is
+nought in every episode, so the pair is not being reported as a symmetry either.
+
+So what this set needs next is an object set whose features differ in the taught
+features — two curvatures, two depths, one colour, the way the tutorial's objects
+differ by shape _and_ colour — or the unavoidably ambiguous pairs settled before
+object identity is asked about at all.
