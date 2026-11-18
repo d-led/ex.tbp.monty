@@ -53,6 +53,32 @@ defmodule ExTbpMontyWeb.RunFramesControllerTest do
     assert conn |> get("/runs/#{missing}/frames/#{name}") |> response(404)
   end
 
+  # The page fetched these once per step, and the route asked the record whether
+  # the run existed before answering: half a second a picture while a run wrote a
+  # row a step, measured — a 404 for an absent run took as long as the 116-byte
+  # PNG beside it. Six pictures that never finish loading at three steps a second
+  # is the picture area flickering between an image and an empty box. A picture is
+  # a file under the run's own directory; the record has nothing to add to it.
+  test "serves the picture from the disk even when the run has no record", %{conn: conn} do
+    id = Ecto.UUID.generate()
+    :ok = Artifacts.start(id)
+    {:ok, name} = Artifacts.put_frame(id, 7, "patch", "depth", @png)
+
+    conn = get(conn, "/runs/#{id}/frames/#{name}")
+
+    assert response(conn, 200) == Base.decode64!(@png)
+  end
+
+  # A step's picture never changes and its name says which step it is, so a
+  # browser that has it should not ask again — it was asking once per step, and
+  # every ask was another round trip the picture had to survive.
+  test "lets the browser keep a picture it already has", %{conn: conn, run: run, name: name} do
+    conn = get(conn, "/runs/#{run.id}/frames/#{name}")
+
+    assert [cache_control] = get_resp_header(conn, "cache-control")
+    assert cache_control =~ "immutable"
+  end
+
   test "does not leave the run's directory, however the path is spelled", %{
     conn: conn,
     run: run
