@@ -26,6 +26,13 @@ defmodule Monty.Studio.Cad.Preparation do
   @exporter Module.concat(["MontyCad", "Export"])
   @library Module.concat(["MontyCad", "Library"])
 
+  # What a run that names neither a camera nor a stand-off is taught with: the
+  # tutorial's `zoom: 10` on a square patch, which reads 11.42°
+  # (`2·atan2(tan(45°), 10)`), and the eight millimetres a feature experiment
+  # stands off by. A CAD experiment names both, and `optics/1` reads them.
+  @default_fov 11.42 * :math.pi() / 180.0
+  @default_stand_off 8.0
+
   @typedoc """
   What preparing a part would write, and from what.
 
@@ -34,6 +41,9 @@ defmodule Monty.Studio.Cad.Preparation do
     * `name` and `release` — the memory's address, as the config names it
     * `labels` — what the memory holds: the part as one object, or one object
       per feature it is made of, which is what a `_features` memory promises
+    * `optics` — the run's patch: its horizontal field of view in radians and
+      the distance it stands off the surface in millimetres, which are the two
+      numbers the teaching camera takes
     * `memory` — the library file, whether or not it is there
     * `objects` — the directory the object set is written into
   """
@@ -43,6 +53,7 @@ defmodule Monty.Studio.Cad.Preparation do
           name: String.t(),
           release: String.t(),
           labels: :part | :features,
+          optics: %{fov_x: float(), distance: float()},
           memory: Path.t(),
           objects: Path.t()
         }
@@ -68,9 +79,48 @@ defmodule Monty.Studio.Cad.Preparation do
          name: name,
          release: release,
          labels: labels_of(name),
+         optics: optics(setup),
          memory: Memory.path_for(name, release),
          objects: objects
        }}
+    end
+  end
+
+  # What the run's patch reads through, and from how far: the two numbers a
+  # memory is a record of. Both are the experiment's, not this module's — a run
+  # taught through a different lens, or from a different distance, matches a
+  # surface it was never shown (`MontyCad.Training` documents the same rule for
+  # its own options).
+  defp optics(setup) do
+    %{fov_x: fov_of(setup), distance: stand_off_of(setup)}
+  end
+
+  # Monty's `zoom_fovy/3`: an agent takes a resolution and a zoom over a 90° base,
+  # so the patch's vertical field of view is
+  # `2·atan2(ratio·tan(hfov/2), zoom)`. A square patch reads the same number
+  # across and down, which is the one the teaching camera takes as `:fov_x`.
+  defp fov_of(setup) do
+    case Map.get(setup.cameras, "patch") do
+      [resolution: {width, height}, zoom: zoom, hfov: hfov]
+      when is_number(zoom) and zoom > 0 ->
+        base = hfov * :math.pi() / 180.0
+        2 * :math.atan2(width / height * :math.tan(base / 2), zoom)
+
+      _no_camera ->
+        @default_fov
+    end
+  end
+
+  # The policy's `desired_object_distance`, in metres, is the distance a run
+  # stands off the surface; the teaching camera takes millimetres.
+  defp stand_off_of(setup) do
+    case get_in(setup.motor_system_config, [
+           "policy_selector",
+           "policy",
+           "desired_object_distance"
+         ]) do
+      metres when is_number(metres) and metres > 0 -> metres * 1000.0
+      _unnamed -> @default_stand_off
     end
   end
 
@@ -153,37 +203,20 @@ defmodule Monty.Studio.Cad.Preparation do
   @feature_spacing 1.0
   @feature_visits 20_000
 
-  # A patch covers twice its stand-off, and the world can only be read from
-  # further away than it looks: the compiled scene draws nothing inside its
-  # five-millimetre near plane, and measured, a sensor standing at six sees an
-  # empty patch on every step of an episode (at eight it sees the boss, then
-  # loses it). So a feature memory is taught from eight millimetres, which is
-  # also what a feature run stands off by, and a memory photographed from a
-  # different distance would be a memory of a different surface
-  # (`priv/monty_experiments/sets/cad/README.md` has the measurement and the
-  # scale it leaves).
-  @feature_stand_off 8.0
-
-  # The patch's field of view is the run's as well, and for the same reason: a
-  # memory photographed through a different lens is a memory of a different
-  # surface. Monty's MuJoCo agent builds `fovy = 2·atan2(ratio·tan(45°), zoom)`
-  # from a 90° base, so the environment overlay's `zoom: 10` on a square patch
-  # reads 11.42°, while the CAD package's own default is 66° — six times wider.
-  # Measured at this stand-off on the package's own fixture: taught through the
-  # wide patch 105 of 200 visits are kept, through the run's 140.
-  @feature_fov_degrees 11.42
-
-  defp memory_options(%{labels: :features}) do
-    [
-      labels: :features,
-      spacing: @feature_spacing,
-      limit: @feature_visits,
-      distance: @feature_stand_off,
-      fov_x: @feature_fov_degrees * :math.pi() / 180.0
-    ]
+  defp memory_options(%{labels: :features} = plan) do
+    [labels: :features, spacing: @feature_spacing, limit: @feature_visits]
+    |> Keyword.merge(optics_options(plan))
   end
 
-  defp memory_options(%{labels: :part}), do: [labels: :part]
+  defp memory_options(%{labels: :part} = plan),
+    do: Keyword.merge([labels: :part], optics_options(plan))
+
+  # A part's memory is taught through the same lens and from the same distance as
+  # a feature's: it is the *run's* patch either way, and a memory of the plate
+  # photographed through the CAD package's own 66° default is a memory of a
+  # surface the run never sees in one percept.
+  defp optics_options(%{optics: %{fov_x: fov_x, distance: distance}}),
+    do: [fov_x: fov_x, distance: distance]
 
   # A part's memory is one object called `plate`, which a world steps as the
   # directory `plate`, so its file is written as the teaching left it. A memory
