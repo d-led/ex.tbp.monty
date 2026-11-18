@@ -173,15 +173,33 @@ defmodule Monty.Studio.Belief do
 
   # The four numbers a conclusion turns on, computed once for both the chart and
   # the recorder: how many, how strong, how many close behind, and the leaders.
+  #
+  # A graph whose every node went unscored has no best — the port's NaN, read
+  # back as `nil` — and then there is no band to compute and nothing to count
+  # within it. Saying so is what a belief can report: the chart draws no point
+  # for that object at that step rather than the run dying on one arithmetic.
   defp graph(scores, module) do
-    best = Enum.max(scores)
-    band = best - best / 100 * module.x_percent_threshold
+    case Enum.max(scores) do
+      best when is_number(best) ->
+        band = best - best / 100 * module.x_percent_threshold
 
-    %{
-      hypotheses: length(scores),
-      max_evidence: best,
-      within_x_percent: if(best > 0, do: Enum.count(scores, &(&1 > band)), else: 0),
-      top_evidence: scores |> Enum.sort(:desc) |> Enum.take(@top)
-    }
+        %{
+          hypotheses: length(scores),
+          max_evidence: best,
+          within_x_percent: if(best > 0, do: Enum.count(scores, &(&1 > band)), else: 0),
+          top_evidence: leaders(scores)
+        }
+
+      _no_best ->
+        %{
+          hypotheses: length(scores),
+          max_evidence: nil,
+          within_x_percent: 0,
+          top_evidence: leaders(scores)
+        }
+    end
   end
+
+  defp leaders(scores),
+    do: scores |> Enum.filter(&is_number/1) |> Enum.sort(:desc) |> Enum.take(@top)
 end

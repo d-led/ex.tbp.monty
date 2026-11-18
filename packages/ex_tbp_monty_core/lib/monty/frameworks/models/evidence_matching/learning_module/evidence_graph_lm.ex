@@ -907,24 +907,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
   end
 
+  # Monty decides this in numpy, where one NaN in the field of evidence makes
+  # every comparison against it false: the spread is not `> 0.1`, the best is
+  # not `< 0`, and no hypothesis is `>= 0` — so the answer falls through to "no
+  # object is ruled out" rather than to a threshold that cannot be computed.
+  # This port's NaN is `nil` (a kernel's column reads one back as `nil`, and so
+  # does an unscored node's evidence), and Elixir's term order would have
+  # answered *true* to each of those comparisons, so each one asks for a number
+  # first.
   defp possible_of(%__MODULE__{} = lm, graph_ids, evidences, x_percent_scale_factor) do
     max_evidence = Enum.max(evidences)
 
     cond do
-      Monty.Math.population_std(evidences) > 0.1 or max_evidence < 0 ->
-        threshold =
-          if max_evidence > 0,
-            do:
-              max_evidence - max_evidence / 100 * lm.x_percent_threshold * x_percent_scale_factor,
-            else: 0.0
-
-        keep_where(graph_ids, evidences, &(&1 > threshold))
+      spread_out?(evidences) or negative?(max_evidence) ->
+        threshold = threshold(lm, max_evidence, x_percent_scale_factor)
+        keep_where(graph_ids, evidences, &(number?(&1) and &1 > threshold))
 
       GraphMemory.size(lm.graph_memory) == 1 ->
-        keep_where(graph_ids, evidences, &(&1 >= 0))
+        keep_where(graph_ids, evidences, &(number?(&1) and &1 >= 0))
 
       true ->
         graph_ids
+    end
+  end
+
+  defp spread_out?(evidences) do
+    case Monty.Math.population_std(evidences) do
+      spread when is_number(spread) -> spread > 0.1
+      _not_a_number -> false
+    end
+  end
+
+  defp negative?(value), do: number?(value) and value < 0
+  defp number?(value), do: is_number(value)
+
+  defp threshold(lm, max_evidence, x_percent_scale_factor) do
+    if number?(max_evidence) and max_evidence > 0 do
+      max_evidence - max_evidence / 100 * lm.x_percent_threshold * x_percent_scale_factor
+    else
+      0.0
     end
   end
 
@@ -1793,10 +1814,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def get_output(%__MODULE__{} = lm) do
     mlh = get_current_mlh(lm)
 
+    # A most likely hypothesis with no evidence behind it — the port's NaN, read
+    # back as `nil` — has no confidence to report. The message's confidence is
+    # not a feature anything matches on, so zero is the honest encoding of "the
+    # module has not concluded anything here".
+    size = FeatureAtLocationBuffer.size(lm.buffer)
+
     confidence =
-      case FeatureAtLocationBuffer.size(lm.buffer) do
-        0 -> 0.0
-        size -> Monty.Math.clip(mlh.evidence / size, 0, 1)
+      cond do
+        size == 0 -> 0.0
+        is_number(mlh.evidence) -> Monty.Math.clip(mlh.evidence / size, 0, 1)
+        true -> 0.0
       end
 
     {:ok, message} =

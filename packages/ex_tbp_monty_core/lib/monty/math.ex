@@ -63,9 +63,9 @@ defmodule Monty.Math do
   empty case is Monty's own convention for a hypothesis space with nothing in
   it: no observations, no average, and zero is the neutral value to add to.
   """
-  @spec mean([number()]) :: float()
+  @spec mean([number() | nil]) :: float() | nil
   def mean([]), do: 0.0
-  def mean(values), do: Enum.sum(values) / length(values)
+  def mean(values) when is_list(values), do: average(values)
 
   @doc """
   The spread of a sample around its mean, dividing by `n`.
@@ -74,16 +74,27 @@ defmodule Monty.Math do
   Monty uses it to decide whether one object stands out from the field: a wide
   spread means there is something to discriminate between.
   """
-  @spec population_std([number()]) :: float()
+  @spec population_std([number() | nil]) :: float() | nil
   def population_std([]), do: 0.0
 
   def population_std(values) do
-    average = mean(values)
+    with average when is_number(average) <- mean(values) do
+      values
+      |> Enum.map(fn value -> (value - average) * (value - average) end)
+      |> mean()
+      |> :math.sqrt()
+    end
+  end
 
-    values
-    |> Enum.map(fn value -> (value - average) * (value - average) end)
-    |> mean()
-    |> :math.sqrt()
+  # A sample with a missing value in it has no average: numpy's `np.mean` over a
+  # NaN is a NaN, and this port's marker for one is `nil`, the value a kernel's
+  # column reads back for the NaN bits. Summarising evidence is where that
+  # shows: a graph whose every node went unscored has no best to compare, and
+  # the honest answer is "not a number" rather than a raise.
+  defp average(values) do
+    if Enum.all?(values, &is_number/1) do
+      Enum.sum(values) / length(values)
+    end
   end
 
   @doc "The value moved inside `[low, high]`, numpy's `np.clip`."
