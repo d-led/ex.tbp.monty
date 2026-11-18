@@ -421,8 +421,7 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
         feature_order: drop_channel(memory.feature_order, graph_id, input_channel),
         feature_rows: drop_channel(memory.feature_rows, graph_id, input_channel),
         node_arrays: drop_channel(memory.node_arrays, graph_id, input_channel),
-        rotation_features:
-          drop_channel(memory.rotation_features, graph_id, input_channel)
+        rotation_features: drop_channel(memory.rotation_features, graph_id, input_channel)
     }
   end
 
@@ -814,10 +813,18 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     nodes = get_graph_node_ids(memory, graph_id, input_channel)
     graph = get_graph(memory, graph_id, input_channel)
 
+    # The order is the graph's own, not the channel's: two graphs of one memory
+    # need not hold the same features — a CAD memory's bore was taught without a
+    # curvature the others have — and a column the graph lacks would otherwise
+    # be asked for and contribute nothing, leaving rows narrower than the order
+    # they are read with. Every node of such a graph then matched no feature at
+    # all, which reads as "this object is impossible" rather than as a missing
+    # column.
     order =
       memory.features_to_use
       |> Map.fetch!(input_channel)
       |> Enum.reject(&(&1 in @pose_features))
+      |> Enum.filter(&memory.object_model.has_feature?(graph, &1))
 
     columns =
       Map.new(order, fn key ->

@@ -99,6 +99,39 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
       assert GraphMemory.get_feature_array(memory, "mug", "patch") == [[0.0], [0.1], [0.2]]
     end
 
+    # A memory's graphs are not all taught the same features: a CAD part's bore
+    # has no curvature to store while its bosses do. The rows are what a graph
+    # holds, so its order is too — asking for a column the graph lacks left
+    # rows narrower than the order they were read with, and every node of that
+    # graph then matched nothing at all.
+    test "a graph's order is the features that graph holds" do
+      colour_only = model("bore", 2)
+
+      both =
+        GraphObjectModel.new("boss")
+        |> GraphObjectModel.build_model(
+          [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]],
+          %{
+            "rgba" => [[0.0], [0.1]],
+            "curvature" => [[1.0], [2.0]],
+            "pose_vectors" => List.duplicate(@pose, 2)
+          },
+          nil,
+          nil
+        )
+
+      memory =
+        GraphMemory.new(features_to_use: %{"patch" => ["rgba", "curvature"]})
+        |> GraphMemory.add_graph_to_memory(%{"patch" => colour_only}, "bore")
+        |> GraphMemory.add_graph_to_memory(%{"patch" => both}, "boss")
+        |> GraphMemory.initialize_feature_arrays()
+
+      assert GraphMemory.get_feature_order(memory, "bore", "patch") == ["rgba"]
+      assert GraphMemory.get_feature_array(memory, "bore", "patch") == [[0.0], [0.1]]
+      assert GraphMemory.get_feature_order(memory, "boss", "patch") == ["rgba", "curvature"]
+      assert GraphMemory.get_feature_array(memory, "boss", "patch") == [[0.0, 1.0], [0.1, 2.0]]
+    end
+
     test "a node's features can be read by id, and by name" do
       memory = loaded(%{"mug" => model("mug", 3)})
 
