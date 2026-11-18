@@ -90,7 +90,7 @@ defmodule ExTbpMontyWeb.RunCompareLive do
   # instants give (`Duration.of_run/1` reports the work, not the clock).
   defp side(run) do
     %{
-      name: "#{run.experiment} · #{String.slice(run.id, 0, 8)}",
+      name: label_of(run),
       experiment: run.experiment,
       inputs: run.inputs || %{},
       summary: run.summary || %{},
@@ -186,6 +186,9 @@ defmodule ExTbpMontyWeb.RunCompareLive do
     [{"—", ""} | Enum.map(runs, &{label_of(&1), &1.id})]
   end
 
+  # The column's name, and the run's state when it is not finished: a summary is
+  # written when a run settles, so an unfinished run's column would otherwise read
+  # as its final numbers with no word saying they are not.
   defp label_of(run) do
     status = if run.status == "finished", do: "", else: " · #{run.status}"
     "#{run.experiment} · #{String.slice(run.id, 0, 8)}#{status}"

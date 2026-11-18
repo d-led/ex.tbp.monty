@@ -54,6 +54,15 @@ defmodule ExTbpMontyWeb.RunCompareLiveTest do
     refute has_element?(view, "#compare-refusal")
   end
 
+  test "a column says when its run has not finished", %{conn: conn} do
+    finished = run(%{inputs: %{"scheduling" => "barrier"}, summary: %{"steps" => 8595}})
+    running = run(%{inputs: %{"scheduling" => "lagged"}, status: "running"})
+
+    {:ok, view, _html} = live(conn, ~p"/compare?a=#{finished.id}&b=#{running.id}")
+
+    assert has_element?(view, "#compare-table", "running")
+  end
+
   test "a run's own page offers to put it beside another", %{conn: conn} do
     run = run(%{})
 
