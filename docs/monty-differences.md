@@ -1879,7 +1879,11 @@ sensors, because there is one thread and it is the step's.
 `:lagged`. A run chooses it on the experiment page — the `scheduling` box beside
 its episode count, recorded on the run as `inputs["scheduling"]`, so the worker
 takes the mode from the record — and `MONTY_STUDIO_SCHEDULING` answers for a run
-started from the command line (`Monty.Studio.Jobs.scheduling/1`). A lagged step:
+started from the command line (`Monty.Studio.Jobs.scheduling/1`). Two runs of one
+experiment, one `scheduling` apart, are read side by side on the studio's
+`/compare` page: the numbers, each module's conclusions and how many episodes
+reached each state, with the inputs that differ named above the table
+(`Monty.Studio.Comparison`). A lagged step:
 
 - hands epoch _n_ to every module and does not wait for it (`hand_off/5`, no
   `await/3`);
