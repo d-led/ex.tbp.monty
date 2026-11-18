@@ -91,6 +91,11 @@ not recalled — run it after anything lands that can move one.
 - `/runs`, `/runs/:id` — history and replay: per-step sensor frames, the object
   centred with the agent in frame, an evidence chart, hypothesis counts, and why the
   run stopped. Run files (`/runs/:id/files/:name`) are served as they are.
+- `/compare` — two runs of one experiment beside each other: steps, model time, world
+  time, wall clock, deadline hits, each learning module's last conclusion and how many
+  episodes reached each state, with the inputs that differ named above the table. Two
+  different experiments are refused rather than compared, and a run's own header links
+  in with one side already chosen.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
