@@ -119,8 +119,14 @@ defmodule Mix.Tasks.Monty.Run do
   # the only way to ask for less — a run that answered one episode out of a
   # hundred and forty answers a different question from the experiment.
   defp run_phases(opened, opts, history) do
+    # A phase starts with nothing in hand and reads its library where it steps:
+    # each module builds its own memory from the library its config names, in the
+    # module's own process (`Setup.model_spec/3`'s `lazy_state`). Loading it here
+    # instead put a two-hundred-megabyte term in this process and in every copy of
+    # the spec the model and its modules are handed, which is what a 77-object run
+    # died of.
     carried = %{
-      memories: Monty.Studio.Setup.memories(opened.setup),
+      memories: %{},
       first_seen: %{},
       # What each graph was built from. A training episode adds to it — the phase
       # learns one object per episode, each under a graph id of its own — and an
@@ -186,6 +192,15 @@ defmodule Mix.Tasks.Monty.Run do
     opts[:steps] || Monty.Studio.Run.cap(opened.setup)
   end
 
+  # What an episode starts from: the memory the last training episode wrote, and
+  # what its graphs were built from. Empty at a phase's first episode, and then
+  # left out rather than handed over empty — a run with no memory in hand reads
+  # the library its config names, and a module reads it in its own process.
+  defp knowledge(%{memories: memories}) when memories == %{}, do: []
+
+  defp knowledge(%{memories: memories, targets: targets}),
+    do: [memory: memories, memory_targets: targets]
+
   # The episode index is also where the object comes from: the queued runner
   # starts its episodes the same way, so both cover the same ground. The world an
   # episode shows, the object in it and the memory it matches against all come
@@ -212,10 +227,8 @@ defmodule Mix.Tasks.Monty.Run do
           episode: episode,
           epoch: epoch,
           mode: scope.mode,
-          memory: carried.memories,
-          memory_targets: carried.targets,
           first_seen: carried.first_seen
-        ] ++ run_levers(opts)
+        ] ++ knowledge(carried) ++ run_levers(opts)
       )
 
     # The run is already started, so the class's `pre_episode` has nothing to
