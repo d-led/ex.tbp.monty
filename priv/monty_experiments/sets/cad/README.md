@@ -93,31 +93,53 @@ where a plate is six:
 
 The CAD package spaces a part's visits from the part's own size, and caps the
 visits at two thousand. Both are sized for a part, and a feature is a fraction of
-one: at the package's defaults the plate's boss kept 56 nodes and its hole 16 —
-few enough that the recognition answered the hole while stepping the boss — and
-at a finer spacing with the same cap the two disappeared from the memory
-altogether, because the plate's body and risers alone spend the budget.
+one: at the package's defaults the plate's boss kept 56 nodes and its hole 16,
+and at a finer spacing with the same cap the two disappeared from the memory
+altogether, because the plate's body and risers alone spend the budget. A wall
+sampled at 16 nodes is a wall reproduced as a few quadrilaterals, and a patch
+that straddles it has nothing to match; the sampling below is about that.
 
 So a memory of features is taught at 1 mm with a cap of 20 000 visits
 (`Monty.Studio.Cad.Preparation`), which keeps every feature the geometry names
 and converges below the cap: a part's feature memory costs a minute, and
 `mix monty.data.check` still says what the tree is.
 
-### What a feature recognition needs from the sensor
+### What the recognition is missing: the faces nobody labels
 
-A feature memory and a feature run have to speak about the same things. The
-memory carries Monty's whole patch feature set, curvature included, and it
-separates a convex feature from a concave one clearly: the plate's boss is mostly
-positive principal curvature, its bore mostly negative.
+A run's question is which object the sensor is on, and the answer is read off the
+surfaces the patch sees. So a feature's memory has to hold every surface its
+world presents — and today it holds half of them.
 
-The run's sensor module does not compute curvature at all. Its patch reports the
-pose vectors, the depth statistics, the coverage and the colour, so the learning
-module is left matching on surface orientation alone — and a ring standing out of
-a plate and a ring cut into one have the same orientation pattern, one scale
-apart. That is a gap in the port rather than a property of these shapes, and it
-is generic: no object, of any shape, can be separated by a feature the sensor
-never measures.
+Measured with the framework's own processor, standing a patch on each kind of
+face the plate is made of (`MontyCad.Percept` over the same STEP file the memory
+was taught from, 5 mm stand-off, curvatures in the part's millimetres):
 
-So the next change for this set is not a config value but the missing feature: a
-patch's principal curvatures, computed the way Monty's own sensor module computes
-them, and offered to the learning module beside the others.
+| where the patch is | principal curvatures |
+| ------------------ | -------------------- |
+| the boss's top     | 0, 0                 |
+| the boss's wall    | +0.131, 0.000        |
+| the bore's wall    | 0.000, −0.278        |
+| the plate's top    | 0, 0                 |
+
+The walls separate cleanly — an 8 mm boss one way, a 4 mm bore the other — and
+both tops are flat, which is what a patch on a cylinder's end is supposed to
+report. The sensor is not the problem: the port computes these, and the set's
+sensor module asks for them.
+
+The memory, though, holds the walls only. `plate_bosses_0` is 205 nodes and not
+one of them is flat; `plate_holes_0` is 96 and none is flat either. The boss's
+top disc is a face quiddity calls body — it is a flat surface of the plate — so
+it is taught into `plate_body`, which holds 2898 flat nodes, and that is the
+answer the run converges on while it stands on the boss. No tolerance, sample
+density or motor policy can change it: a patch on the cap matches the one graph
+that has a flat node, and the graph the run is asked about has nothing there.
+
+So the defect is one line of agreement between two builders. The world steps the
+feature's **solid** — a boss is written as a closed cylinder, caps included — and
+the memory is taught from the part's **faces**, where that cap belongs to the
+body. Any feature of any shape has the same gap wherever its solid is closed by a
+face the recognition did not claim.
+
+The next change is therefore in the teacher rather than in a config: teach a
+feature's memory from the feature's own solid, the geometry the world steps, so
+that every surface the sensor can land on is a surface the memory can answer for.
