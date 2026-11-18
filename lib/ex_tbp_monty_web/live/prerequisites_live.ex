@@ -18,6 +18,37 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   alias Monty.Studio.Pretrained
   alias Monty.Studio.Storage
 
+  # What a row's badge says, by where the row stands. `:extracting` and
+  # `:exporting` are said in the words of what they do to the file: unpacking an
+  # archive, reading a memory out of one.
+  @said_of_standing %{
+    memory_not_read: "memory not read",
+    present: "present",
+    not_downloaded: "not downloaded",
+    queued: "queued",
+    downloading: "downloading",
+    building: "building",
+    extracting: "unpacking",
+    exporting: "reading memory",
+    done: "done",
+    failed: "failed",
+    cancelled: "cancelled"
+  }
+
+  # Work in progress is blue, an ending is green or red, and a quiet row that is
+  # not ready is grey — the default, since that is most of the table on a first
+  # visit.
+  @colour_of_standing %{
+    memory_not_read: "badge-warning",
+    present: "badge-success",
+    done: "badge-success",
+    failed: "badge-error",
+    downloading: "badge-info",
+    building: "badge-info",
+    extracting: "badge-info",
+    exporting: "badge-info"
+  }
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Saga.topic())
@@ -522,9 +553,6 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
       (not present? or pending?)
   end
 
-  # A row's button says what the click does: fetch an archive, read a memory out
-  # of one that arrived, or make what this application can only make itself.
-
   defp memory_pending?(%{extract: true} = prerequisite) do
     Prerequisites.present?(prerequisite) and
       Pretrained.pending?(Prerequisites.where_it_lands(prerequisite))
@@ -532,28 +560,21 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp memory_pending?(_prerequisite), do: false
 
-  defp status_label(nil, true, true), do: "memory not read"
-  defp status_label(nil, true, false), do: "present"
-  defp status_label(nil, false, _pending?), do: "not downloaded"
-  defp status_label(:queued, _present, _pending?), do: "queued"
-  defp status_label(:downloading, _present, _pending?), do: "downloading"
-  defp status_label(:building, _present, _pending?), do: "building"
-  defp status_label(:extracting, _present, _pending?), do: "unpacking"
-  defp status_label(:exporting, _present, _pending?), do: "reading memory"
-  defp status_label(:done, _present, _pending?), do: "done"
-  defp status_label(:failed, _present, _pending?), do: "failed"
-  defp status_label(:cancelled, _present, _pending?), do: "cancelled"
+  # The badge says where the entry stands: what the machine is doing to it, or —
+  # with nothing running — what the disk already holds.
+  defp status_label(phase, present?, pending?),
+    do: Map.fetch!(@said_of_standing, standing(phase, present?, pending?))
 
-  defp badge_class(nil, true, true), do: "badge-warning"
-  defp badge_class(nil, true, false), do: "badge-success"
-  defp badge_class(nil, false, _pending?), do: "badge-ghost"
-  defp badge_class(:done, _present, _pending?), do: "badge-success"
-  defp badge_class(:failed, _present, _pending?), do: "badge-error"
-  defp badge_class(:downloading, _present, _pending?), do: "badge-info"
-  defp badge_class(:building, _present, _pending?), do: "badge-info"
-  defp badge_class(:extracting, _present, _pending?), do: "badge-info"
-  defp badge_class(:exporting, _present, _pending?), do: "badge-info"
-  defp badge_class(_other, _present, _pending?), do: "badge-ghost"
+  defp badge_class(phase, present?, pending?) do
+    Map.get(@colour_of_standing, standing(phase, present?, pending?), "badge-ghost")
+  end
+
+  # The one decision the label and the colour both read: what this row is, right
+  # now. A running phase speaks for itself; a quiet one is answered by the disk.
+  defp standing(phase, _present?, _pending?) when not is_nil(phase), do: phase
+  defp standing(nil, true, true), do: :memory_not_read
+  defp standing(nil, true, false), do: :present
+  defp standing(nil, false, _pending?), do: :not_downloaded
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)
   defp max_bytes(%{total: total}), do: total
