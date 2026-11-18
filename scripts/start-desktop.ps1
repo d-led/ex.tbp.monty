@@ -243,9 +243,9 @@ try {
         mix release --overwrite
     }
 
-    # The two sample plugin nodes the bundle carries. Built here because
-    # `bundle.resources` copies `_build/desktop/plugins` into the window, and
-    # `cargo tauri build` is a later step than this one.
+    # The two sample plugin nodes, whose releases `scripts\package.ps1` wraps in
+    # companion folders beside the window. Built here because the packaging asks
+    # for them and the bundler's build is a later step than this one.
     Invoke-Step 'building the two sample plugin nodes the bundle carries' {
         & (Join-Path $PSScriptRoot 'build-plugins.ps1')
     }
@@ -296,12 +296,24 @@ IO.puts("runs:        #{Paths.artifacts()}")
     }
 
     if ($Bundle -or $App) {
-        # `cargo tauri` is the Tauri CLI, a cargo subcommand of its own.
-        # Installing it takes a few minutes once per machine; failing at the last
-        # step with "no such command" throws away the build that came before it.
-        if (-not (Get-Command cargo-tauri -ErrorAction SilentlyContinue)) {
-            Invoke-Step 'installing the Tauri CLI (a fresh machine has none)' {
-                cargo install tauri-cli --version '^2' --locked
+        # The Tauri CLI comes from npm, not from `cargo install`: @tauri-apps/cli
+        # ships a prebuilt binary per platform, and the `npm ci` above has just
+        # put it at assets\node_modules\.bin. Compiling tauri-cli was five minutes
+        # of Rust per machine, and in CI it was the step that failed. A checkout
+        # with the cargo subcommand instead still works, and one with neither gets
+        # it the old way rather than dying at the last step of a long build.
+        $tauriCli = 'assets/node_modules/.bin/tauri.cmd'
+
+        if (-not (Test-Path $tauriCli)) {
+            if (Get-Command cargo-tauri -ErrorAction SilentlyContinue) {
+                $tauriCli = 'cargo-tauri'
+            }
+            else {
+                Invoke-Step 'installing the Tauri CLI (a fresh machine has none)' {
+                    cargo install tauri-cli --version '^2' --locked
+                }
+
+                $tauriCli = 'cargo-tauri'
             }
         }
 
@@ -315,7 +327,7 @@ IO.puts("runs:        #{Paths.artifacts()}")
         Remove-Item -Recurse -Force 'src-tauri/target/release/bundle' -ErrorAction SilentlyContinue
 
         Invoke-Step 'building the installer bundle (a minute warm, six cold - the window is rebuilt in release)' {
-            cargo tauri build --config $bundleConfig
+            & $tauriCli build --config $bundleConfig
         }
 
         $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -ErrorAction SilentlyContinue |

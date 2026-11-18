@@ -314,12 +314,21 @@ fi
 # which is what makes this the last step of a script rather than a process left
 # behind.
 if [[ "$mode" == bundle || "$mode" == app ]]; then
-  # `cargo tauri` is the Tauri CLI, a cargo subcommand of its own. Installing it
-  # takes a few minutes once per machine; failing at the last step with "no such
-  # command" throws away the build that came before it.
-  if ! cargo tauri --version >/dev/null 2>&1; then
+  # The Tauri CLI comes from npm, not from `cargo install`: `@tauri-apps/cli`
+  # ships a prebuilt binary per platform, which `npm ci` above has just put in
+  # `assets/node_modules/.bin`. That is a download of seconds where compiling
+  # `tauri-cli` was five minutes of Rust per machine — and, on 2026-11-18, the CI
+  # step that failed. A checkout whose CLI is the cargo subcommand still works,
+  # and one with neither gets it the old way rather than dying at the last step of
+  # a long build.
+  if [[ -x assets/node_modules/.bin/tauri ]]; then
+    tauri=(assets/node_modules/.bin/tauri)
+  elif cargo tauri --version >/dev/null 2>&1; then
+    tauri=(cargo tauri)
+  else
     run "installing the Tauri CLI (a fresh machine has none)" \
       cargo install tauri-cli --version "^2" --locked
+    tauri=(cargo tauri)
   fi
   # The release and the two plugin nodes are copied into the bundle by
   # tauri-build, and it copies *over* whatever is there: the previous copy keeps
@@ -362,7 +371,7 @@ fi
   # `${arr[@]+"${arr[@]}"}`, because macOS ships bash 3.2, where an empty array
   # under `set -u` is an unbound variable rather than nothing to pass.
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    env ${bundle_env[@]+"${bundle_env[@]}"} cargo tauri build --config "$bundle_config"
+    env ${bundle_env[@]+"${bundle_env[@]}"} "${tauri[@]}" build --config "$bundle_config"
 
   if [[ "$mode" == bundle ]]; then
     echo
