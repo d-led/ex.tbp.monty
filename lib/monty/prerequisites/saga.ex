@@ -496,7 +496,6 @@ defmodule Monty.Prerequisites.Saga do
   # prerequisite it belongs to.
   # sobelow_skip ["Traversal.FileModule"]
   def cancelled(:enter, _old, data) do
-    if data.task, do: stop_task(data.task)
     File.rm(data.part)
 
     data = persist(%{data | task: nil, error: nil, finished_at: now()}, :cancelled)
@@ -518,11 +517,19 @@ defmodule Monty.Prerequisites.Saga do
 
   # Cancelling is a person changing their mind. A machine that has already
   # finished has nothing to stop, so it answers and stays where it is; anything
-  # else enters `:cancelled`, whose entry cleans up.
+  # else stops the work and then enters `:cancelled`, whose entry cleans up.
+  #
+  # The work is stopped *before* the answer goes out, because the caller's next
+  # act is usually to remove the folder the work was writing into — a test's
+  # teardown, a page clicking another part — and a killed process spends a
+  # moment longer inside whatever it was doing.
   defp cancel(state, from, data) do
-    if state in [:done, :failed, :cancelled],
-      do: {:keep_state, data, [{:reply, from, :ok}]},
-      else: {:next_state, :cancelled, data, [{:reply, from, :ok}]}
+    if state in [:done, :failed, :cancelled] do
+      {:keep_state, data, [{:reply, from, :ok}]}
+    else
+      if data.task, do: stop_task(data.task)
+      {:next_state, :cancelled, %{data | task: nil}, [{:reply, from, :ok}]}
+    end
   end
 
   # A phase's process dying without a result is that phase failing — the finished
@@ -686,10 +693,20 @@ defmodule Monty.Prerequisites.Saga do
     if actual == String.downcase(expected), do: :ok, else: {:error, {:checksum_mismatch, actual}}
   end
 
+  # A killed process is not a stopped one, and the caller's next act is usually
+  # to remove the folder the phase was writing into — a test's teardown, a page
+  # clicking another part — so cancelling waits for the death it asked for.
+  # The wait is bounded because a process inside a NIF cannot be killed until
+  # the NIF returns, and a cancel that never answers is worse than one that
+  # answers while the work is still in there.
   defp stop_task({pid, reference}) do
-    Process.demonitor(reference, [:flush])
     Process.exit(pid, :kill)
-    :ok
+
+    receive do
+      {:DOWN, ^reference, :process, ^pid, _reason} -> :ok
+    after
+      5_000 -> Process.demonitor(reference, [:flush])
+    end
   end
 
   defp fetcher do

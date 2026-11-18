@@ -334,6 +334,33 @@ defmodule Monty.Prerequisites.SagaTest do
 
       assert Saga.cancel(pid) == {:error, :not_found}
     end
+
+    # The work runs in a process of its own, and killing that process is a
+    # signal rather than a death: for a moment afterwards it is still inside
+    # whatever it was doing, which for a build is a write. A teardown that
+    # removed its folder as soon as cancel answered met "file already exists",
+    # so cancel answers only once the work has stopped.
+    test "a build's cancel answers once the work has stopped" do
+      prerequisite = Prerequisites.get("made_here")
+      Tmp.app_env(:fake_build_steps, ["wait"])
+      Tmp.app_env(:fake_build_report_to, self())
+
+      {:ok, _pid} = Saga.start(prerequisite, builder: Monty.Test.FakeBuilder)
+
+      # The build reports from inside itself, which is one step before the
+      # machine has the process in hand; asking for the status waits for that.
+      assert_receive {:fake_builder, builder}, 2_000
+
+      server = Saga.lookup(prerequisite.id)
+      assert Saga.status(server).status == :building
+
+      assert Saga.cancel(server) == :ok
+
+      # What the cancel claims: by the time it answered, the work had stopped —
+      # not merely been told to. A killed process lives a moment longer, and
+      # that moment is a write into the folder the caller removes next.
+      refute Process.alive?(builder)
+    end
   end
 
   describe "the folder a download lands in" do

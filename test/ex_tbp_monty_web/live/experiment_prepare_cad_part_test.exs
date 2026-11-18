@@ -24,9 +24,12 @@ defmodule ExTbpMontyWeb.ExperimentPrepareCadPartTest do
   @experiment "cad/plate_features_2patch_eval"
 
   setup do
+    # The folder first, the build's stop second: the callbacks run in reverse,
+    # so the build is stopped before the folder it writes into is removed.
+    root = Tmp.dir("prepare-cad-part")
     on_exit(&stop_build/0)
 
-    {:ok, root: Tmp.dir("prepare-cad-part")}
+    {:ok, root: root}
   end
 
   test "the page starts the build its finding names", %{conn: conn, root: root} do
