@@ -810,7 +810,14 @@ jobs:
   # PowerShell scripts are answered by a runner rather than by reading them.
   desktop:
     name: desktop (${{ matrix.asset }})
-    needs: [lint, test, types, report]
+    # `lint` and nothing else, because these jobs compile the window and upload
+    # it: they read no coverage merge and no PLT. Waiting for `types` and
+    # `report` cost six minutes of every push's wall clock for nothing
+    # (measured on 62dd86d: the four test partitions finished at 18:04, dialyzer
+    # at 18:05:59, the desktops started at 18:06:02 and the run ended at
+    # 18:29:12). What must not happen is a *release* attached from a tree the
+    # gates have not passed, and that is now `desktop-release`'s `needs`.
+    needs: [lint]
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.ref == 'refs/heads/main' ||
@@ -1266,7 +1273,10 @@ jobs:
   desktop-release:
     name: desktop release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [desktop]
+    # The builds start with `lint`; publishing them waits for every gate, so a
+    # tag still attaches nothing from a tree dialyzer or the coverage merge
+    # would have refused.
+    needs: [desktop, types, report]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
