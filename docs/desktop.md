@@ -111,16 +111,46 @@ are there so the plugin story can be watched rather than read — start them and
 Settings → Cluster lists three nodes.
 
 ```text
-macOS    Monty on the BEAM.app, ex.tbp.monty.plugin.example.app, ex.tbp.monty.plugin.flyverse.app
-Windows  the same three beside the window (and in the installer)
-Linux    the same three in the folder the AppImage unpacks into
+macOS    three apps in one folder: Monty on the BEAM.app,
+         ex.tbp.monty.plugin.example.app, ex.tbp.monty.plugin.flyverse.app
+Linux    one folder: ex-tbp-monty-desktop, rel/, and the same two companions as
+         folders — and one .tar.gz per companion beside the window's
+Windows  one folder: ex-tbp-monty-desktop.exe, rel\, and the same two companions
+         as folders — and one .zip per companion beside the window's
 ```
 
-A companion app is a release and a launcher: `Contents/MacOS/<app name>` runs
-`scripts/desktop-plugins/companion-app.sh` and `Contents/Resources/<node>` is the
-release it starts, with `Contents/Resources/node` naming that folder. The window
-carries no plugins, starts none and looks for none — it is the cluster, not their
-keeper. For a checkout, `scripts/build-plugins.sh` builds both releases into
+What a companion is, is the same three things everywhere: **a launcher**, **one
+line naming the release**, and **that release**, which is a node with a runtime of
+its own. Only the wrapping differs, because only macOS has a bundle to wrap them
+in:
+
+```text
+macOS    Ex.tbp.monty.plugin.example.app/Contents/MacOS/<name>        the launcher
+         …/Contents/Resources/node                                    the line
+         …/Contents/Resources/<node>/                                 the release
+Linux    <name>/<name>                                                the launcher
+         <name>/node                                                  the line
+         <name>/<node>/                                               the release
+Windows  <name>\<name>.cmd  runs  <name>\companion-windows.ps1        the launcher
+         <name>\node                                                  the line
+         <name>\<node>\                                               the release
+```
+
+The three launchers (`companion-app.sh`, `companion-linux.sh`,
+`companion-windows.ps1`) are one contract written three times for the three ways a
+person starts a program; each is the same order of events — ask the window who it
+is at `/health`, read the window's own `releases/COOKIE`, refuse politely when
+neither is there, and `exec` the release in the foreground.
+
+The window carries no plugins, starts none and looks for none — it is the cluster,
+not their keeper. On Linux and Windows the companions sit **inside the window's own
+folder**, which is what makes the window's archive a complete demonstration: unpack
+it and a double-click on a companion joins the window beside it. The `.deb`,
+AppImage and NSIS installer carry the window only, because those formats are made
+by the bundler and cannot be handed extra applications — the two companions are
+downloaded as their own archives and unpacked beside the window.
+
+For a checkout, `scripts/build-plugins.sh` builds both releases into
 `_build/desktop/plugins/` and copies `start-plugins.sh` in beside them; nothing of
 that ships inside the window.
 

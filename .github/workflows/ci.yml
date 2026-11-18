@@ -1017,15 +1017,26 @@ jobs:
           echo "the one-line download put the application in smoke/landing:"
           find smoke/landing -maxdepth 2 | head -10
 
-          # macOS downloads the window with its two companion plugin apps beside
-          # it, and `run-desktop.sh` puts all three in one folder because that is
-          # where each companion looks for its window. A zip that lost them still
-          # unpacks and still opens; it is a plugin nobody can click.
+          # The window comes with its two companions beside it, and `run-desktop.sh`
+          # unpacks them together because that is where each companion looks for
+          # its window. A download that lost them still unpacks and still opens; it
+          # is a plugin nobody can click.
           case "${{ matrix.rid }}" in
             osx-*)
               for app in "ex.tbp.monty.plugin.example" "ex.tbp.monty.plugin.flyverse"; do
                 if [ ! -x "smoke/landing/$app.app/Contents/MacOS/$app" ]; then
                   echo "the download unpacked no $app.app beside the window" >&2
+                  exit 1
+                fi
+              done
+              ;;
+            linux-*)
+              # A folder rather than a bundle: the launcher, the line naming the
+              # release, and that release, inside the window's own folder.
+              for app in "ex.tbp.monty.plugin.example" "ex.tbp.monty.plugin.flyverse"; do
+                if [ ! -x "smoke/landing/${{ matrix.asset }}/$app/$app" ]; then
+                  echo "the download unpacked no $app beside the window" >&2
+                  ls "smoke/landing/${{ matrix.asset }}" >&2 || true
                   exit 1
                 fi
               done
@@ -1053,6 +1064,14 @@ jobs:
           $window = "smoke/landing/${{ matrix.asset }}/ex-tbp-monty-desktop.exe"
           if (-not (Test-Path $window)) { throw "no window at $window" }
           Write-Host "the one-line download put the window at $window"
+
+          # And the two companions beside it, each a `.cmd` a person can
+          # double-click and a release of its own.
+          foreach ($companion in 'ex.tbp.monty.plugin.example', 'ex.tbp.monty.plugin.flyverse') {
+            $cmd = "smoke/landing/${{ matrix.asset }}/$companion/$companion.cmd"
+            if (-not (Test-Path $cmd)) { throw "the download holds no $companion beside the window" }
+          }
+          Write-Host 'the two companions unpacked beside the window'
 
       # `ditto` and `tar` inside the scripts, not `upload-artifact`'s own zip: an
       # app bundle holds symlinks and executable modes and a release holds its
