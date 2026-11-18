@@ -31,6 +31,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModuleTest do
       assert LearningModule.evidence_update_threshold(config, 10.0, [1.0]) == 9.0
     end
 
+    # The best hypothesis can hold no evidence at all, which is numpy's NaN; a
+    # percentage of NaN is NaN, and the threshold says so rather than raising on
+    # the arithmetic.
+    test "a percentage of a best hypothesis with no evidence is not a number" do
+      config = {:percent_of_max, 10.0}
+
+      assert LearningModule.evidence_update_threshold(config, nil, [1.0]) == nil
+    end
+
     test "nothing observed yet lets every hypothesis through" do
       for config <- [0.5, :mean, :median, :all, {:percent_of_max, 10.0}] do
         assert LearningModule.evidence_update_threshold(config, 0.0, []) == 0.0

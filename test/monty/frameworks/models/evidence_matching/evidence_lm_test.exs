@@ -452,6 +452,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
 
       assert EvidenceGraphLM.calculate_most_likely_hypothesis(released).graph_id == believed
     end
+
+    # An object whose hypotheses hold no evidence is numpy's NaN, and Monty keeps
+    # the hypothesis it already has: `NaN > 5.0` is false. Elixir compares terms
+    # instead, and every atom sorts after every number, so the NaN displaced a
+    # real one — the most likely object had no evidence to read, and the step's
+    # threshold was arithmetic over nothing.
+    test "an object with no evidence never displaces one that has some" do
+      lm = @line_locations |> learned_line("alpha") |> a_new_episode()
+
+      {:ok, lm} =
+        EvidenceGraphLM.matching_step([fixture_percept(hd(@line_locations))], Context.new(0), lm)
+
+      scored = lm.hypotheses["alpha"]
+      blank = Hypotheses.put_evidence(scored, List.duplicate(nil, Hypotheses.count(scored)))
+
+      models = lm.graph_memory.models_in_memory
+      both = %{lm.graph_memory | models_in_memory: Map.put(models, "beta", models["alpha"])}
+
+      lm = %{lm | graph_memory: both, hypotheses: %{"alpha" => scored, "beta" => blank}}
+      most_likely = EvidenceGraphLM.calculate_most_likely_hypothesis(lm)
+
+      assert most_likely.graph_id == "alpha"
+      assert is_number(most_likely.evidence)
+    end
   end
 
   defp add(left, right), do: Enum.zip_with(left, right, &(&1 + &2))

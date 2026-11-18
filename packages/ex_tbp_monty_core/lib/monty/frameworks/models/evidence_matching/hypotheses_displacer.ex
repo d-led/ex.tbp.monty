@@ -133,19 +133,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   @spec compute_evidence(
           t(),
           %{optional(String.t()) => map()},
-          float(),
+          float() | nil,
           String.t(),
           Hypotheses.t(),
           keyword()
         ) ::
           {Hypotheses.t(), HypothesisDisplacerTelemetry.t()}
+  def compute_evidence(displacer, features, threshold, graph_id, hypotheses, options \\ [])
+
+  # A threshold that is not a number is numpy's NaN, and `evidence >= NaN` is
+  # false for every element: no hypothesis clears it, so nothing is predicted and
+  # there is no prediction error to report. The kernel compares floats, so this
+  # case cannot reach it.
+  def compute_evidence(%__MODULE__{}, _features, threshold, _graph_id, hypotheses, _options)
+      when not is_number(threshold),
+      do: {hypotheses, %HypothesisDisplacerTelemetry{mlh_prediction_error: nil}}
+
   def compute_evidence(
         %__MODULE__{} = displacer,
         features,
         evidence_update_threshold,
         graph_id,
         hypotheses,
-        options \\ []
+        options
       ) do
     to_test =
       if MatcherNif.loaded?() do

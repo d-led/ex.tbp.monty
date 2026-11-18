@@ -1074,8 +1074,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # `get_all_known_object_ids/1` gives.
   defp better(nil, candidate), do: candidate
 
-  defp better(%{evidence: best}, %{evidence: candidate} = candidate_mlh) when candidate > best,
-    do: candidate_mlh
+  # A hypothesis with no evidence holds NaN, and numpy's `NaN > x` is false:
+  # it never displaces anything. Elixir's `<`/`>` are term order, in which every
+  # atom sorts after every number, so a plain `>` let the NaN win — and the
+  # threshold it was then read from was computed over nothing at all.
+  defp better(%{evidence: best}, %{evidence: candidate} = candidate_mlh)
+       when is_number(best) and is_number(candidate) and candidate > best,
+       do: candidate_mlh
 
   defp better(current, _candidate), do: current
 

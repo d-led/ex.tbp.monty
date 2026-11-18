@@ -91,7 +91,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule do
   @spec evidence_update_threshold(config(), number(), [number()] | Hypotheses.t()) ::
           float() | nil
   def evidence_update_threshold(_config, _max_global_evidence, []), do: 0.0
-  def evidence_update_threshold(_config, _max_global_evidence, %Hypotheses{evidence: <<>>}), do: 0.0
+
+  def evidence_update_threshold(_config, _max_global_evidence, %Hypotheses{evidence: <<>>}),
+    do: 0.0
 
   def evidence_update_threshold(config, _max_global_evidence, _evidence)
       when is_number(config),
@@ -106,8 +108,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule do
   def evidence_update_threshold(:all, _max_global_evidence, column),
     do: column |> lowest()
 
-  def evidence_update_threshold({:percent_of_max, percentage}, max_global_evidence, _column),
-    do: max_global_evidence - max_global_evidence * (percentage / 100)
+  def evidence_update_threshold({:percent_of_max, percentage}, max_global_evidence, _column)
+      when is_number(max_global_evidence),
+      do: max_global_evidence - max_global_evidence * (percentage / 100)
+
+  # The same arithmetic with no number to start from, which numpy answers with
+  # NaN: a maximum that is not a number cannot be scaled down.
+  def evidence_update_threshold({:percent_of_max, _percentage}, _max_global_evidence, _column),
+    do: nil
 
   defp as_values(%Hypotheses{} = hypotheses), do: Hypotheses.evidence(hypotheses)
   defp as_values(evidence), do: evidence
