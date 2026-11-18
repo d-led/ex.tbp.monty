@@ -53,4 +53,12 @@ defmodule ExTbpMontyWeb.RunCompareLiveTest do
     refute has_element?(view, "#compare-table")
     refute has_element?(view, "#compare-refusal")
   end
+
+  test "a run's own page offers to put it beside another", %{conn: conn} do
+    run = run(%{})
+
+    {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+    assert has_element?(view, "#compare-with[href=\"/compare?a=#{run.id}\"]")
+  end
 end

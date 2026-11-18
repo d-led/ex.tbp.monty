@@ -1723,6 +1723,17 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             step {steps_into_episode(@digest)} / {@run.steps}
           </span>
           <span class="badge badge-ghost badge-sm">{@run.source}</span>
+          <%!-- One side of a comparison, filled in: a reader who wants to know
+          what one input changed starts here rather than on a page they have to
+          match this run's id against by eye. --%>
+          <.link
+            :if={@run}
+            id="compare-with"
+            navigate={~p"/compare?a=#{@run.id}"}
+            class="btn btn-ghost btn-xs"
+          >
+            Compare with…
+          </.link>
 
           <%!--
             How far the division of the experiment has got. A parted run is one
