@@ -69,6 +69,34 @@ defmodule Monty.Studio.ComparisonTest do
              Enum.find(rows, &(&1.label == "learning_module_1 concluded"))
   end
 
+  test "how many episodes reached each state, beside the last conclusion" do
+    barrier =
+      side("barrier", %{
+        summary: %{
+          "steps" => 8595,
+          "outcome" => %{"learning_module_1" => "match"},
+          "outcomes" => %{"learning_module_1" => %{"match" => 5}}
+        }
+      })
+
+    lagged =
+      side("lagged", %{
+        summary: %{
+          "steps" => 9000,
+          "outcome" => %{"learning_module_1" => "time_out"},
+          "outcomes" => %{"learning_module_1" => %{"match" => 3, "time_out" => 2}}
+        }
+      })
+
+    {:ok, %{rows: rows}} = Comparison.compare(barrier, lagged)
+
+    assert %{label: "learning_module_1 match", a: 5, b: 3} =
+             Enum.find(rows, &(&1.label == "learning_module_1 match"))
+
+    assert %{label: "learning_module_1 time_out", a: 0, b: 2} =
+             Enum.find(rows, &(&1.label == "learning_module_1 time_out"))
+  end
+
   test "an input only one run has is a difference too" do
     a = side("old", %{inputs: %{}})
     b = side("new", %{})

@@ -95,16 +95,50 @@ defmodule Monty.Studio.Comparison do
   end
 
   # What each learning module concluded, module by module, so a run that lost one
-  # object beside one that lost none is visible as the pair it is.
+  # object beside one that lost none is visible as the pair it is — and then, under
+  # it, how many episodes of each state that module reached. The last conclusion
+  # alone hides a run that lost two of five.
   defp conclusions(a, b) do
-    module_ids =
-      (summary_keys(a, "outcome") ++ summary_keys(b, "outcome"))
-      |> Enum.uniq()
-      |> Enum.sort()
+    module_ids = module_ids(a, b)
 
     Enum.map(module_ids, fn id ->
       %{label: "#{id} concluded", a: concluded(a, id), b: concluded(b, id)}
-    end)
+    end) ++ counts(a, b, module_ids)
+  end
+
+  defp counts(a, b, module_ids) do
+    for id <- module_ids, state <- states(a, b, id) do
+      %{label: "#{id} #{state}", a: count(a, id, state), b: count(b, id, state)}
+    end
+  end
+
+  defp module_ids(a, b) do
+    (summary_keys(a, "outcome") ++
+       summary_keys(b, "outcome") ++ summary_keys(a, "outcomes") ++ summary_keys(b, "outcomes"))
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  # A state either run reached, so a state only one of them reached is a row with
+  # a zero — which is the comparison, not a gap in the table.
+  defp states(a, b, id) do
+    (states_of(a, id) ++ states_of(b, id))
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp states_of(side, id) do
+    case side.summary do
+      %{"outcomes" => %{^id => %{} = counted}} -> Map.keys(counted)
+      _not_reported -> []
+    end
+  end
+
+  defp count(side, id, state) do
+    case side.summary do
+      %{"outcomes" => %{^id => %{^state => count}}} -> count
+      _not_reported -> 0
+    end
   end
 
   defp summary_keys(side, key) do
