@@ -138,3 +138,23 @@ columns as floats, so the first percept that reaches the learning module dies:
 That is the writer's to fix — `MontyCad.Percept.node_features/1` should write
 `1.0`/`0.0` as Monty's format does — and it is the blocker: until it is fixed no
 feature episode gets past its first percept, whatever the memory holds.
+
+### Where it stands now
+
+The writer writes numbers, and a hypothesis with no evidence is encoded as the
+NaN it is rather than raising; the mean, the possible set, a belief and an output
+now let a NaN through the way numpy does. The run gets further with every one of
+those fixed — five steps, six, nine — and now the learning module _takes_ the
+first percept it is offered:
+
+    step 5 · percepts patch · inputs learning_module_0=1 · … learning_module_0: plate/holes/0 ev  (192 hyps, 4 possible
+
+An empty evidence beside 192 hypotheses is the whole of what is left: the module
+built them, scored none, and the next crash in the chain is
+`LearningModule.evidence_update_threshold/3` computing a threshold over a column
+that has no number in it. So the question is no longer the world or the memory's
+shape but one comparison: which of the percept's features cannot be scored
+against the graph's columns at all. `DefaultFeatureEvidenceCalculator.columns/4`
+is where a feature's name is looked up and a missing one turns the whole row into
+no evidence; the percept's `pose_fully_defined` is a boolean (`true`) while the
+memory now carries `1.0`, and that pair is the first thing to compare.
