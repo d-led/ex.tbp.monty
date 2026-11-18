@@ -142,3 +142,11 @@ IO.puts("serial, ten calls:  #{div(serial_us, 1000)} ms")
 IO.puts(
   "async_stream (#{concurrency}): #{div(parallel_us, 1000)} ms — #{Float.round(serial_us / max(parallel_us, 1), 2)}x"
 )
+
+# Why that was slower, in the one number a change has to reduce: a task copies
+# what its closure captured, and the library is what it captured.
+words = :erts_debug.flat_size(memory)
+
+IO.puts(
+  "memory size:        #{words} words, #{Float.round(words * 8 / 1_048_576, 1)} MB, copied once per task"
+)
