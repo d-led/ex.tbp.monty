@@ -206,6 +206,20 @@ and the module gained evidence in all but one of the twelve, `plate_risers_0` an
 was the whole of the duty cycle — the same memory, sensor and stand-off with a
 smaller step is four times as much feeding.
 
+The sensor's own reporting resolution is the next thing that looks like the same
+kind of size, and it is not. `delta_thresholds.distance` is a centimetre, so the
+module is fed on 19.3 % of steps; asking for a millimetre — the gait — feeds it
+on 19.3 % of steps. Four episodes, first three hundred steps each, both ways:
+
+    distance 0.01:   47, 28, 79, 77 fed, evidence 20.8, 5.2, 33.2, 36.4
+    distance 0.001:  231 of 1200 fed — the same 19.3 % — 23.1, 5.2, 38.9, 44.0
+
+The hypothesis counts are the same numbers at the same step either way (4108,
+16432, 24136), which is the tell that the threshold was never the constraint: the
+noise the sensor overlay adds to hue and pose already carries the patch past it
+every few steps. The millimetre was measured and reverted, not kept for its tenth
+of evidence.
+
 What is left is not the matcher, and the memory says so. Asked of the file the
 run loads — every node of every object, by the features the sensor reports:
 
