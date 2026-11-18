@@ -831,15 +831,11 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             asset: ex-tbp-monty-osx-arm64
-            # The Tauri CLI is built from source and cached here; the images
-            # ship Rust itself, so only the CLI is ever installed.
-            tauri_cli: ~/.cargo/bin/cargo-tauri
             rust: scripts/install-rust.sh
             package: ./scripts/package.sh
           - os: windows-2022
             rid: win-x64
             asset: ex-tbp-monty-win-x64
-            tauri_cli: ~\.cargo\bin\cargo-tauri.exe
             # The image ships Rust and the MSVC build tools; saying so fails
             # here, in one line, rather than inside `cargo build`.
             rust: cargo --version
@@ -847,7 +843,6 @@ jobs:
           - os: ubuntu-22.04
             rid: linux-x64
             asset: ex-tbp-monty-linux-x64
-            tauri_cli: ~/.cargo/bin/cargo-tauri
             rust: scripts/install-rust.sh
             package: ./scripts/package.sh
     steps:
@@ -916,29 +911,12 @@ jobs:
       - if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
-      # The bundler. `cargo install` because there is no prebuilt binary, and the
-      # cache keeps it from being rebuilt on every run — five minutes of Rust for
-      # a tool whose output changes when the Tauri version does.
-      - name: Cache the Tauri CLI
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ matrix.tauri_cli }}
-          key: ${{ runner.os }}-tauri-cli-v2
-
-      # `pwsh` for the reason given under the window's tests below: Git Bash puts
-      # `C:\Program Files\Git\usr\bin` at the front of `PATH`, where `link.exe` is
-      # coreutils' `link`, and `cargo install` then dies with "linking with
-      # `link.exe` failed … returned an unexpected error" on a runner whose MSVC
-      # toolchain is installed and on the path. The step only started failing when
-      # the cache below expired: a warm cache skips the install and the trap with
-      # it, so the trap waits for the first cold run.
-      - name: Install the Tauri CLI
-        shell: pwsh
-        run: |
-          if (-not (Get-Command cargo-tauri -ErrorAction SilentlyContinue)) {
-            cargo install tauri-cli --version '^2' --locked
-            if ($LASTEXITCODE -ne 0) { throw 'cargo install tauri-cli failed' }
-          }
+      # The bundler itself — the Tauri CLI — is `@tauri-apps/cli` from npm, which
+      # ships a prebuilt binary per platform and which the packaging's `npm ci`
+      # installs a step before it needs it. It was `cargo install tauri-cli` here
+      # for a while: five minutes of Rust per cold run, four cached paths and a
+      # `pwsh`-only workaround for Git Bash's `link.exe` — and on 2026-11-18 it
+      # was the step that failed, before any of the packaging ran.
 
       # One command: the stylesheet, the scripts, `mix release`, the window with
       # that release beside it, and the portable folder and package of the result
