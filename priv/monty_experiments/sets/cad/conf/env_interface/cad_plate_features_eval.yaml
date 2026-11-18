@@ -14,6 +14,9 @@
 # written out rather than discovered while the run is being assembled.
 do_eval: true
 eval_env_interface_args:
+  # Every feature the memory holds, stepped in turn: the run is the set's
+  # question about composition, so it does not pick the features that are easy to
+  # tell apart and leave the rest out.
   object_names:
     - plate_bosses_0
     - plate_holes_0

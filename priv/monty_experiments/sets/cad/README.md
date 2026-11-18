@@ -88,3 +88,36 @@ where a plate is six:
   to a learning module only when enough of it is on the object, and at 25 mm one
   run stepped 2023 times with the learning module fed on two of them and evidence
   frozen at 1.69.
+
+### How a feature memory is sampled
+
+The CAD package spaces a part's visits from the part's own size, and caps the
+visits at two thousand. Both are sized for a part, and a feature is a fraction of
+one: at the package's defaults the plate's boss kept 56 nodes and its hole 16 —
+few enough that the recognition answered the hole while stepping the boss — and
+at a finer spacing with the same cap the two disappeared from the memory
+altogether, because the plate's body and risers alone spend the budget.
+
+So a memory of features is taught at 1 mm with a cap of 20 000 visits
+(`Monty.Studio.Cad.Preparation`), which keeps every feature the geometry names
+and converges below the cap: a part's feature memory costs a minute, and
+`mix monty.data.check` still says what the tree is.
+
+### What a feature recognition needs from the sensor
+
+A feature memory and a feature run have to speak about the same things. The
+memory carries Monty's whole patch feature set, curvature included, and it
+separates a convex feature from a concave one clearly: the plate's boss is mostly
+positive principal curvature, its bore mostly negative.
+
+The run's sensor module does not compute curvature at all. Its patch reports the
+pose vectors, the depth statistics, the coverage and the colour, so the learning
+module is left matching on surface orientation alone — and a ring standing out of
+a plate and a ring cut into one have the same orientation pattern, one scale
+apart. That is a gap in the port rather than a property of these shapes, and it
+is generic: no object, of any shape, can be separated by a feature the sensor
+never measures.
+
+So the next change for this set is not a config value but the missing feature: a
+patch's principal curvatures, computed the way Monty's own sensor module computes
+them, and offered to the learning module beside the others.

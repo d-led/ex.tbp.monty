@@ -124,11 +124,31 @@ defmodule Monty.Studio.Cad.Preparation do
   end
 
   defp taught(plan, trainer) do
-    case trainer.write_library([{plan.part, plan.step}], plan.memory, labels: plan.labels) do
+    case trainer.write_library([{plan.part, plan.step}], plan.memory, memory_options(plan)) do
       {:ok, written} -> {:ok, written}
       {:error, reason} -> {:error, "#{plan.step} could not be taught: #{inspect(reason)}"}
     end
   end
+
+  # A memory of features is sampled much more finely than a memory of a part,
+  # and has to be: the CAD package's default spacing is sized for a part, and a
+  # feature is a fraction of one. At the default the plate's boss keeps 56 nodes
+  # and its hole 16, few enough that a recognition answered `plate_holes_0`
+  # while stepping `plate_bosses_0`.
+  #
+  # The finer spacing alone is not enough — the visits are capped at 2 000, and
+  # the plate's body and risers alone spend that budget, which deletes the small
+  # features from the memory entirely. The cap is the plan's, so it is raised
+  # with the spacing; at 1 mm the sampling converges below the raised cap
+  # (20 000 and 60 000 teach the same memory), so the build costs a minute a part
+  # rather than more.
+  @feature_spacing 1.0
+  @feature_visits 20_000
+
+  defp memory_options(%{labels: :features}),
+    do: [labels: :features, spacing: @feature_spacing, limit: @feature_visits]
+
+  defp memory_options(%{labels: :part}), do: [labels: :part]
 
   # A part's memory is one object called `plate`, which a world steps as the
   # directory `plate`, so its file is written as the teaching left it. A memory
