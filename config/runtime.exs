@@ -382,14 +382,12 @@ if config_env() in [:desktop, :dev] do
   config :ex_tbp_monty, :studio_artifacts_dir, Monty.Paths.artifacts()
 
   # The memory a run recognises with is exported at run time from the pickles
-  # `MONTY_MODELS` holds, so it is user data of the same kind. This line was
-  # under `config_env() == :prod` alone, and the desktop build therefore fell
-  # back to `Memory.libraries_dir/0`'s `:code.priv_dir/1` — inside the `.app`:
-  # every export written there went with the bundle when it was rebuilt, and an
-  # installed copy cannot write one at all. So a second visit to a desktop
-  # build found the memory a first visit had exported missing, and exported it
-  # again.
-  config :ex_tbp_monty, :monty_libraries_dir, Monty.Paths.libraries()
+  # `MONTY_MODELS` holds, so it is user data of the same kind — and it belongs
+  # outside `:code.priv_dir/1`, which in a desktop build is inside the `.app`
+  # and in an installed copy is not writable at all. Nothing is written here:
+  # `Memory.libraries_dir/0` asks `Monty.Paths.libraries/0`, which reads
+  # `MONTY_LIBRARIES` when the question is asked, so a node pins the folder by
+  # exporting the variable and a test pins it by setting `:monty_libraries_dir`.
 
   # A first start has no data, and nothing is fetched in front of the window:
   # `/prerequisites` shows the download while it happens.

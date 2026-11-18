@@ -39,14 +39,17 @@ defmodule Monty.Studio.Memory do
   # a pretrained model a graph is matched through.
   @features ["hsv", "pose_vectors", "pose_fully_defined", "principal_curvatures_log"]
 
-  @doc "The directory the libraries are read from."
+  @doc """
+  The directory the libraries are read from.
+
+  `MONTY_LIBRARIES` is read when the question is asked, not when the node
+  booted, so a test — or a shell that points the variable somewhere for one
+  command — reads and writes the folder it just named. An explicit
+  `:monty_libraries_dir` still wins, which is how a node pins one.
+  """
   @spec libraries_dir() :: Path.t()
   def libraries_dir do
-    Application.get_env(
-      :ex_tbp_monty,
-      :monty_libraries_dir,
-      Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
-    )
+    Application.get_env(:ex_tbp_monty, :monty_libraries_dir) || Monty.Paths.libraries()
   end
 
   @doc """

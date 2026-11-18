@@ -30,7 +30,7 @@ defmodule Monty.Prerequisites.Build do
   alias Monty.Studio.Cad.Preparation
 
   # The corpus manifests this application ships, one per object set.
-  @corpora "monty_experiments/sets/*/*.json"
+  @corpora "sets/*/*.json"
 
   # Objaverse's GLBs, one file per object, at the address its own dataset names.
   @glb "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs"
@@ -55,52 +55,49 @@ defmodule Monty.Prerequisites.Build do
   minute.
   """
   @spec run(String.t(), (progress() -> any())) :: {:ok, [String.t()]} | {:error, String.t()}
-  def run("cad_part_memories", notify) do
+  def run(name, notify) do
+    case work(name) do
+      nil -> {:error, "unknown build #{inspect(name)}"}
+      work -> work.(notify)
+    end
+  end
+
+  # A name to the work behind it. A table rather than a clause per build, so the
+  # dispatcher stays one line and each build is scored on its own.
+  defp work("cad_part_memories"), do: &cad_part_memories/1
+  defp work("objaverse_dogs"), do: &objaverse_dogs/1
+  defp work(_name), do: nil
+
+  # -- the CAD parts -------------------------------------------------------
+
+  # Every part the CAD set's own configs name, taught and meshed. Each plan is
+  # the experiment's answer to "which part do I step, and which memory do I
+  # load", so the count is the number of recognition runs a machine can make
+  # afterwards.
+  defp cad_part_memories(notify) do
     plans = cad_plans()
     total = length(plans)
 
-    if plans == [] do
-      {:error, "no CAD experiment here names a part a memory could be taught on"}
-    else
-      plans
-      |> Enum.with_index(1)
-      |> Enum.reduce_while({:ok, []}, fn {plan, index}, {:ok, said} ->
-        notify.(%{index: index, total: total, what: "#{plan.part}: memory and meshes"})
-
-        case Preparation.prepare(plan) do
-          {:ok, written} ->
-            {:cont,
-             {:ok,
-              said ++ ["#{plan.part}: #{written.written} object(s), #{written.nodes} node(s)"]}}
-
-          {:error, reason} ->
-            {:halt, {:error, reason}}
-        end
-      end)
-    end
+    if plans == [],
+      do: {:error, "no CAD experiment here names a part a memory could be taught on"},
+      else: teach(plans, total, notify, [])
   end
 
-  # The manifest is this application's own file, found under its priv.
-  # sobelow_skip ["Traversal.FileModule"]
-  def run("objaverse_dogs", notify) do
-    with {:ok, corpus, file} <- corpus("objaverse_dogs") do
-      objects = file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
-      into = Path.join([Monty.Prerequisites.root_path("MONTY_DATA"), "mujoco/objects", corpus])
-      cache = Path.join(Monty.Prerequisites.root_path("MONTY_DATA"), "downloads/#{corpus}")
-      total = length(objects)
+  defp teach([], _total, _notify, said), do: {:ok, Enum.reverse(said)}
 
-      with :ok <- fetch(objects, cache, notify) do
-        notify.(%{index: total, total: total, what: "importing #{total} object(s)"})
+  defp teach([plan | rest], total, notify, said) do
+    notify.(%{index: total - length(rest), total: total, what: "#{plan.part}: memory and meshes"})
 
-        case Import.import(cache, objects, into) do
-          {:ok, rows} -> {:ok, ["#{corpus}: #{length(rows)} object(s) in #{into}"]}
-          {:error, reason} -> {:error, "could not import #{corpus}: #{inspect(reason)}"}
-        end
-      end
+    case Preparation.prepare(plan) do
+      {:ok, written} ->
+        teach(rest, total, notify, [
+          "#{plan.part}: #{written.written} object(s), #{written.nodes} node(s)" | said
+        ])
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
-
-  def run(name, _notify), do: {:error, "unknown build #{inspect(name)}"}
 
   # -- the CAD parts -------------------------------------------------------
 
@@ -123,6 +120,36 @@ defmodule Monty.Prerequisites.Build do
   end
 
   # -- the corpus ----------------------------------------------------------
+
+  # The dogs, from Objaverse's own GLBs: one small file each, cached under
+  # `downloads/`, and the import writes the object set the world steps.
+  defp objaverse_dogs(notify) do
+    with {:ok, corpus, file} <- corpus("objaverse_dogs"),
+         objects = objects_of(file),
+         cache = cache_of(corpus),
+         :ok <- fetch(objects, cache, notify) do
+      notify.(%{
+        index: length(objects),
+        total: length(objects),
+        what: "importing #{length(objects)} object(s)"
+      })
+
+      imported(corpus, cache, objects)
+    end
+  end
+
+  defp objects_of(file), do: file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
+
+  defp cache_of(corpus), do: Path.join(root("MONTY_DATA"), "downloads/#{corpus}")
+
+  defp imported(corpus, cache, objects) do
+    into = Path.join([root("MONTY_DATA"), "mujoco/objects", corpus])
+
+    case Import.import(cache, objects, into) do
+      {:ok, rows} -> {:ok, ["#{corpus}: #{length(rows)} object(s) in #{into}"]}
+      {:error, reason} -> {:error, "could not import #{corpus}: #{inspect(reason)}"}
+    end
+  end
 
   # sobelow_skip ["Traversal.FileModule"]
   defp corpus(name) do
@@ -188,10 +215,13 @@ defmodule Monty.Prerequisites.Build do
 
   # `path` is that cache plus the uid the corpus manifest names.
   # sobelow_skip ["Traversal.FileModule"]
+  # The one call that leaves this machine, named at the call so a test can answer
+  # it without the network (`:glb_getter`, the way `:prerequisite_fetcher` does
+  # for a download).
   defp fetch_glb(object, path) do
     url = Enum.join([@glb, object["shard"], object["uid"] <> ".glb"], "/")
 
-    case Req.get(url,
+    case getter().(url,
            decode_body: false,
            retry: :transient,
            max_retries: 2,
@@ -202,6 +232,10 @@ defmodule Monty.Prerequisites.Build do
       {:error, reason} -> {:error, "GET #{url} failed: #{inspect(reason)}"}
     end
   end
+
+  defp getter, do: Application.get_env(:ex_tbp_monty, :glb_getter, &Req.get/2)
+
+  defp root(variable), do: Monty.Prerequisites.root_path(variable)
 
   defp extra_root, do: Path.join(priv(), "monty_experiments")
 
