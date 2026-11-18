@@ -249,7 +249,11 @@ object rather than four, recognises all three of its episodes —
 
 — at the tutorial's own four-millimetre gait, on the same sensor, the same
 stand-off and the same world. A part-level CAD memory is recognised from a mesh
-world, which is the pipeline this set exists to show.
+world, which is the pipeline this set exists to show. The page is not what makes
+it work: `mix monty.run cad/plate_part_eval --no-record` — the same set, the same
+seed, the same three episodes — reports `match 3 of 3` in 483 steps. The two
+front-ends do not agree on how long the episodes take (101, 184 and 351 steps from
+the page against 99, 204 and 151 headless), and that difference is untraced.
 
 What the feature-level run leaves is in its own `eval_stats.csv`, and it is more
 precise than "no verdict": eleven of the twelve episodes end with no verdict at
