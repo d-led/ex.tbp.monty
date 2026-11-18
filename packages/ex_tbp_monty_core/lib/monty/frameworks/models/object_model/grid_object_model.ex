@@ -230,10 +230,16 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   def find_nearest_neighbor_ids(%__MODULE__{}, _search_locations, _count), do: nil
 
   @doc """
-  A grid model's values are compared rather than stored as columns.
+  Whether the grid holds values for a feature.
+
+  A grid keeps no column index of its own — it reads one through the graph model
+  that knows how — but the graph it fills is an ordinary graph, so its mapping
+  answers. Answering `false` for every name told a caller that a grid model had
+  no features at all, and the caller then dropped every feature of it.
   """
   @impl true
-  def has_feature?(%__MODULE__{}, _feature), do: false
+  def has_feature?(%__MODULE__{} = model, feature),
+    do: model |> as_graph_model() |> GraphObjectModel.has_feature?(feature)
 
   # The index over this model's node positions, kept with the graph it belongs
   # to: the positions only change when the model is rebuilt.

@@ -40,6 +40,22 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
       assert GraphObjectModel.feature_ids_in_graph(built) == ["node_ids", "rgba"]
     end
 
+    # A visit whose feature fit fails is written with empty values. Mapping the
+    # name anyway claims a column nothing fills: every row is then narrower than
+    # the order it is read with, and every node of that graph scores nothing —
+    # which reads as "this object is impossible" rather than as a missing column.
+    test "a feature with no values is not a feature of the graph" do
+      built =
+        model([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], %{
+          "rgba" => [[0.1], [0.2]],
+          "curvature" => [[], []]
+        })
+
+      refute GraphObjectModel.has_feature?(built, "curvature")
+      assert GraphObjectModel.feature_ids_in_graph(built) == ["node_ids", "rgba"]
+      assert GraphObjectModel.graph(built).x == [[0.0, 0.1], [1.0, 0.2]]
+    end
+
     test "the surface normal is kept apart, because a search is oriented by it" do
       pose = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
 

@@ -75,6 +75,19 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModelTest do
     end
   end
 
+  # A caller asks whether the model holds a feature before working on it. A grid
+  # keeps no column index of its own, and answering `false` for every name told
+  # such a caller the model had no features at all, so it dropped every one.
+  describe "the features a grid holds" do
+    test "a feature the grid was filled with is one it holds" do
+      {:ok, built} =
+        GridObjectModel.build_model(model(), locations([0.0]), features([0.2]))
+
+      assert GridObjectModel.has_feature?(built, "value")
+      refute GridObjectModel.has_feature?(built, "curvature")
+    end
+  end
+
   describe "what a voxel averages" do
     test "a feature is the mean of the values seen in that voxel" do
       {:ok, built} =

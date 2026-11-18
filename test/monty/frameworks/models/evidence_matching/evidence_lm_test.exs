@@ -427,6 +427,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
            "expected #{inspect(left)} to be #{inspect(right)}"
   end
 
+  # Monty's `_get_current_mlh` answers with the current hypothesis when there is
+  # no hypothesis space left, and an episode's statistics are read after its
+  # memory is released. Answering `"new_object0"` regardless reported the
+  # placeholder in place of the object the module had recognised.
+  describe "what was recognised, once the memory is released" do
+    test "the module still names the object it believed" do
+      lm = @line_locations |> learned_line("mug") |> a_new_episode()
+
+      {:ok, lm} =
+        EvidenceGraphLM.matching_step(
+          [fixture_percept(hd(@line_locations))],
+          Context.new(0),
+          lm
+        )
+
+      believed = EvidenceGraphLM.get_current_mlh(lm).graph_id
+
+      released = %{
+        lm
+        | graph_memory: %{lm.graph_memory | models_in_memory: %{}},
+          hypotheses: %{}
+      }
+
+      assert EvidenceGraphLM.calculate_most_likely_hypothesis(released).graph_id == believed
+    end
+  end
+
   defp add(left, right), do: Enum.zip_with(left, right, &(&1 + &2))
 
   # Monty's `BaseGraphTest` fixture: one pose at every point of the fake object,
@@ -491,7 +518,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
 
   # Monty's `get_elm_with_fake_object`: explore the fixture's locations, then
   # store what the buffer holds as one object.
-  defp learned_line(locations) do
+  defp learned_line(locations, object_id \\ "new_object0") do
     lm = learning_module() |> EvidenceGraphLM.set_experiment_mode(:train)
 
     lm =
@@ -502,7 +529,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
         lm
       end)
 
-    lm = %{lm | detected_object: "new_object0", detected_rotation_r: nil}
+    lm = %{lm | detected_object: object_id, detected_rotation_r: nil}
 
     lm =
       put_buffer_stat(
@@ -518,7 +545,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
              length(locations),
            "Should have stored exactly #{length(locations)} locations in the buffer."
 
-    assert EvidenceGraphLM.get_all_known_object_ids(lm) == ["new_object0"],
+    assert EvidenceGraphLM.get_all_known_object_ids(lm) == [object_id],
            "Learning the line should leave exactly one object in memory."
 
     lm

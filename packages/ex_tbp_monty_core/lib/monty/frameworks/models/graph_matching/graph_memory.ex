@@ -819,12 +819,13 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
     # be asked for and contribute nothing, leaving rows narrower than the order
     # they are read with. Every node of such a graph then matched no feature at
     # all, which reads as "this object is impossible" rather than as a missing
-    # column.
+    # column. The graph's mapping is the truth about it: a feature with no
+    # numbers was never mapped (`GraphObjectModel.build_adjacency_graph/5`).
     order =
       memory.features_to_use
       |> Map.fetch!(input_channel)
       |> Enum.reject(&(&1 in @pose_features))
-      |> Enum.filter(&holds_values?(memory.object_model, graph, &1))
+      |> Enum.filter(&memory.object_model.has_feature?(graph, &1))
 
     columns =
       Map.new(order, fn key ->
@@ -837,17 +838,6 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemory do
       end)
 
     {rows, order}
-  end
-
-  # A feature the graph holds values for. Its mapping can name one it has no
-  # numbers for — a library taught from patches whose fit failed is written with
-  # empty values — and such a column would leave every row wider than the values
-  # it has, scoring every node of that graph as nothing at all.
-  defp holds_values?(model, graph, key) do
-    case model.has_feature?(graph, key) && model.get_values_for_feature(graph, key) do
-      [first | _rest] when is_list(first) -> first != []
-      _absent -> false
-    end
   end
 
   # An observation with no content for this channel (a sensor that saw nothing)

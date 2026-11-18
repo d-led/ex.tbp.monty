@@ -1079,14 +1079,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp better(current, _candidate), do: current
 
-  # A module nothing was ever seen through has no hypothesis to report and no
-  # current one either — the state a fresh module is built in, and the one an
-  # episode's statistics are read from when the patch never met the object.
-  # Monty's `_get_current_mlh` answers something in that case, and so does this.
-  defp finish_mlh(nil, %__MODULE__{current_mlh: nil}),
-    do: %{empty_mlh() | graph_id: "new_object0"}
+  # Monty's `_get_current_mlh`: nothing to compute, so answer with what the
+  # module last believed. Its default names `"new_object0"`, and every key the
+  # current hypothesis has — the name included — replaces that default. A module
+  # nothing was ever seen through keeps the default and invents no object.
+  defp finish_mlh(nil, %__MODULE__{current_mlh: nil}), do: empty_mlh()
 
-  defp finish_mlh(nil, %__MODULE__{} = lm), do: %{get_current_mlh(lm) | graph_id: "new_object0"}
+  defp finish_mlh(nil, %__MODULE__{} = lm), do: get_current_mlh(lm)
+
   defp finish_mlh(mlh, %__MODULE__{}), do: mlh
 
   @spec empty_mlh() :: mlh()

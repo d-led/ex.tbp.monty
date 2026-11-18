@@ -466,12 +466,20 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModel do
         |> Enum.map(&Enum.at(values, &1))
         |> as_rows()
 
-      first = rows |> hd() |> length()
-      last = first + (selected |> hd() |> length())
-
-      rows = Enum.zip_with(rows, selected, &(&1 ++ &2))
-      {rows, Map.put(mapping, feature, {first, last})}
+      case selected |> hd() |> length() do
+        # No numbers behind the name: a visit whose feature fit failed is
+        # written with empty values. Such a name is not a feature of this
+        # graph, and mapping it would claim a column that nothing fills.
+        0 -> {rows, mapping}
+        width -> add_column(rows, mapping, feature, selected, width)
+      end
     end)
+  end
+
+  defp add_column(rows, mapping, feature, selected, width) do
+    first = rows |> hd() |> length()
+    rows = Enum.zip_with(rows, selected, &(&1 ++ &2))
+    {rows, Map.put(mapping, feature, {first, first + width})}
   end
 
   # Only the surface normal is kept separately: it is what a search is oriented
