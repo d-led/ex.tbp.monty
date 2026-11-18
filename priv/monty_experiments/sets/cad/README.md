@@ -225,10 +225,23 @@ scale it reports them. That is what the run showed, episode after episode: the
 most likely object alternated between exactly those two and the possible set
 never fell below the pair.
 
-So the next question is what the set asks, not what the matcher does. Either the
-object set holds features that differ in the taught features (two curvatures, two
-depths, one colour — the tutorial's objects differ by shape _and_ colour), or the
-question is the part rather than the feature (`cad/plate_part_eval`), or a run
-that cannot separate two objects is reporting an ambiguity rather than a failure —
-which is Monty's own answer for a symmetric object, and what the symmetry
-evidence in an episode's statistics is there to show.
+So the next question is what the set asks, not what the matcher does. And the
+sibling experiment answers it: `cad/plate_part_eval`, the same part as one memory
+object rather than four, recognises all three of its episodes —
+
+    episode 0: 101 steps, `plate`, evidence 24.9, possible ["plate"], match
+    episode 1: 184 steps, `plate`, evidence 11.0, possible ["plate"], match
+    episode 2: 351 steps, `plate`, evidence 19.7, possible ["plate"], match
+
+— at the tutorial's own four-millimetre gait, on the same sensor, the same
+stand-off and the same world. A part-level CAD memory is recognised from a mesh
+world, which is the pipeline this set exists to show.
+
+What the feature-level run needs is then a pair of objects the features can tell
+apart, or an honest report of the pair that they cannot: the boss and the bore
+are distinguishable (convex against concave, nine millimetres against nought),
+the body and the risers are not. Two ways forward are worth a run each — an
+object set whose features differ in the taught features (a second curvature, a
+second depth, one colour, as the tutorial's objects differ by shape _and_
+colour), or reading an inseparable pair as the ambiguity Monty reports for a
+symmetric object, which is what an episode's symmetry evidence exists to show.

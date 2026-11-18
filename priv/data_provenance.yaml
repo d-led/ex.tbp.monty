@@ -106,7 +106,7 @@ data:
     kind: written
     title: this port's own experiments, as Hydra sets
     licence: MPL-2.0
-    hash: 243bc6829572470d64cd8274290037b6a0027d35d0896abebf6d3ff3fc7c3329
+    hash: bdcc5b649fc7a95dd0836f506c0ec24f8ef7051dabd9eb9b597162176e6a8532
 
   - path: priv/cad_experiments/conf
     kind: written
