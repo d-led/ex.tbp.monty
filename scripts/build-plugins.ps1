@@ -4,9 +4,9 @@
 
 .DESCRIPTION
     The counterpart of `scripts/build-plugins.sh`, for the platform whose release
-    is a `.bat`. `bundle.resources` in `tauri.bundle.windows.json` copies the
-    folder into the installer and beside the window, so it has to exist before
-    `cargo tauri build` runs.
+    is a `.bat`. `scripts/package.sh` picks each release up from there to wrap in
+    an application of its own, which is what the distribution ships: a plugin is a
+    node, and it comes as a companion app beside the window rather than inside it.
 
     Releases and not escripts: `ex_tbp_monty_core` compiles native kernels, and an
     escript cannot load one.

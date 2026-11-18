@@ -129,7 +129,7 @@ if (-not $Update -and (Test-Path $exe)) {
     # directory around it is a packaging detail, and the search should not care.
     $bundle = Get-ChildItem -Path $unpacked -Recurse -Depth 1 -Filter '*.zip' -File -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -ne $bundle) {
-        Write-Host 'Expanding the application (about 550 MB) ...'
+        Write-Host 'Expanding the application (about 370 MB) ...'
         $unpacked = Join-Path $work 'app'
         New-Item -ItemType Directory -Force -Path $unpacked | Out-Null
         tar -x -f $bundle.FullName -C $unpacked 2>>$log

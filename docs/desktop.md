@@ -99,37 +99,41 @@ keeps the folder a node that runs alone uses, because an instance id is per
 launch and a run recorded by yesterday's launch has to be on this page;
 `MONTY_NODE_FOLDER` names a folder if a worker wants its own.
 
-## The two sample plugin nodes it carries
+## The two sample plugin nodes, as two apps of their own
 
-The bundle holds **two more nodes**: `examples/example_plugin` (one experiment,
-one learning module, one motor policy) and `examples/flyverse_plugin` (the same
-contract, different answers), built as releases and copied in by
-`bundle.resources` as `plugins/`. They are there so the plugin story can be
-watched rather than read — start them and Settings → Cluster lists three nodes.
+The distribution is **three applications**: the window, and beside it
+`ex.tbp.monty.plugin.example.app` (one experiment, one learning module, one motor
+policy) and `ex.tbp.monty.plugin.flyverse.app` (the same contract, different
+answers). A plugin app is not a folder inside the window: `scripts/package.sh`
+builds `examples/<name>` as a release of its own and wraps it in an application
+named after the plugin id, which is why the names are dotted and not pretty. They
+are there so the plugin story can be watched rather than read — start them and
+Settings → Cluster lists three nodes.
 
 ```text
-macOS    Monty on the BEAM.app/Contents/Resources/plugins/
-Windows  plugins\ beside the window (and in the installer)
-Linux    the same folder inside the AppImage
+macOS    Monty on the BEAM.app, ex.tbp.monty.plugin.example.app, ex.tbp.monty.plugin.flyverse.app
+Windows  the same three beside the window (and in the installer)
+Linux    the same three in the folder the AppImage unpacks into
 ```
 
-The window looks there and nowhere else — `plugins/` beside its own release — and
-`MONTY_STUDIO_PLUGINS` is the one way to point it at a folder built somewhere
-else, which is how a checkout runs the same code against
-`_build/desktop/plugins`.
+A companion app is a release and a launcher: `Contents/MacOS/<app name>` runs
+`scripts/desktop-plugins/companion-app.sh` and `Contents/Resources/<node>` is the
+release it starts, with `Contents/Resources/node` naming that folder. The window
+carries no plugins, starts none and looks for none — it is the cluster, not their
+keeper. For a checkout, `scripts/build-plugins.sh` builds both releases into
+`_build/desktop/plugins/` and copies `start-plugins.sh` in beside them; nothing of
+that ships inside the window.
 
-**Settings → Cluster** has a button that starts both, so the demo needs no
-terminal: the window spawns the two releases as its own children, hands them its
-node name and its cookie, and stops them again when the window closes. Pressing
-it twice is not an error, and a window started with `MONTY_STUDIO_CLUSTER=0` says
-that it has no name to offer rather than starting two nodes that would find
-nobody.
+**Settings → Cluster** lists the nodes and nothing more: with the plugins as
+applications of their own, there is no button for the window to press, and a
+window started with `MONTY_STUDIO_CLUSTER=0` still has no name to offer.
 
-The two launch scripts are for when the window is not in front of you:
+The launch scripts are for the times there is no app to click, which in a
+checkout is always:
 
 ```sh
-plugins/start-plugins.sh          # macOS, Linux
-plugins\start-plugins.ps1         # Windows
+_build/desktop/plugins/start-plugins.sh     # macOS, Linux
+_build\desktop\plugins\start-plugins.ps1    # Windows
 ```
 
 They ask the window who it is — `/health` names the node that answered — and hand
@@ -150,22 +154,22 @@ file, because `MONTY_CLUSTER_SECRET` replaces it at boot. That cookie is also ho
 a started node is stopped: a release started with `start` is not a daemon, so
 there is no pid file to trust — the node is asked to stop.
 
-**On macOS the same two nodes are also two apps.** `Example Plugin.app` and
-`Flyverse Plugin.app` sit beside the window: the `.pkg` installs all three into
-`/Applications`, the `.dmg` holds all three to drag across, and `run-desktop.sh`
-unpacks all three into the same folder. Double-clicking one starts that node and
-joins it to the window. There is nothing to configure and nothing to type: it
-asks the window who it is (`/health`), opens the window when nothing answers yet
-and waits for it, reads the window's cookie from
-`Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and runs the release the
-window already carries (`Contents/Resources/plugins/<node>`) in the foreground —
-`exec`, so the app and the node are one process rather than a wrapper around one.
-It is a launcher and not a copy of a node, which is also why it says so plainly
-when the window is not beside it. `MONTY_STUDIO_APP` points one at a window
-somewhere else, which is how a checkout tries them without installing anything.
-Pressing it twice is not an error: a node that is already up answers, and the
-launcher says so instead of starting a second one and wiping the log of the
-first.
+**Each of the two is an application you can click.** The `.pkg` installs all three
+apps into `/Applications`, the `.dmg` holds all three to drag across, and
+`run-desktop.sh` unpacks all three into the same folder — beside each other,
+because that is where a companion looks for its window. Double-clicking one starts
+that node, joins it to the window, and keeps no terminal in between: the app asks
+the window who it is (`/health`), opens the window when nothing answers yet and
+waits for it, reads the window's cookie from
+`Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and `exec`s its own release
+from `Contents/Resources/<node>` — one process, not a wrapper around one. A
+companion that cannot find a window says so in an alert and in
+`${TMPDIR%/}/monty-studio-<node>.log`, and `MONTY_COMPANION_SILENT=1` keeps it
+quiet for a script. `MONTY_STUDIO_APP` points one at a window somewhere else,
+which is how a checkout tries them without installing anything. Pressing it twice
+is not an error: a node that is already up answers, and the launcher says so
+instead of starting a second one and wiping the log of the first. Each app is
+about 19 MB, most of it its own runtime.
 
 **A plugin is told where the window is; it does not discover it.** The two
 example nodes do not use libcluster: each runs a `Join` process that dials the
@@ -499,10 +503,14 @@ because it needs no release to exist before somebody can try the app:
 4. A `v*` tag runs `desktop-release`, which attaches the same zip to a GitHub
    release — an artefact expires, a release does not.
 
-The app is 550 MB uncompressed (324 MB zipped, 404 MB as a disk image) and that
-is not a mistake: it carries the Elixir release, the BEAM, the embedded Python
-and the wheels a MuJoCo world renders with. Nothing is downloaded on first launch
-except Monty's own data.
+The app is 370 MB uncompressed on macOS arm64 — measured on this checkout's
+`_build/desktop/rel/ex_tbp_monty` — and that is not a mistake: it carries the
+Elixir release, the BEAM, the embedded Python and the wheels a MuJoCo world
+renders with. Nothing is downloaded on first launch except Monty's own data. The
+figure was four gigabytes once, and what made it that was not the interpreter but
+a `priv/studio_runs` full of development recordings, which is why run output lives
+in the data folder and `scripts/check-release.sh` refuses a release that carries
+any.
 
 Where the interpreter is, since it is more than half of that: the release carries
 `lib/pythonx-0.4.11/priv/uv/` — `python/` is the CPython 3.13 build uv fetched

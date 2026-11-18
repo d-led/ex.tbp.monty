@@ -7,20 +7,21 @@ These are the two example plugin hosts from the repository, built as releases:
 Monty Studio — they are a second and a third _node_ that talk to it, which is
 what a plugin is.
 
-Start them from the window itself: **Settings → Cluster → Start them**. The window
-spawns both releases as its own children, lends them the node name and cookie it
-answers with, and stops them again when it closes — so the demo needs no
-terminal, and nothing is left running behind a window that is gone.
+A plugin is a node, so each of these two comes as an application of its own:
+**ex.tbp.monty.plugin.example.app** and **ex.tbp.monty.plugin.flyverse.app**, built
+by `scripts/package.sh` and put beside the window whenever it came from the
+`.pkg`, from the `.dmg`, or from `run-desktop.sh` — all three install the three
+apps into one folder. Double-clicking one starts that node and joins it to the
+window; it finds the window by being next to it, so the two have to stay in one
+folder. The window carries no plugins and starts none: **Settings → Cluster**
+lists what is there.
 
-On macOS the same two nodes also come as two apps beside the window — **Example
-Plugin.app** and **Flyverse Plugin.app** — whenever the window came from the
-`.pkg`, from the `.dmg`, or from `run-desktop.sh`, which all install the three
-together. Double-clicking one starts that node and joins it to the window; it
-finds the window by being next to it, so the two have to stay in one folder.
-
-The two scripts are the by-hand route, for when the window is not in front of you
-or was killed outright (a killed window never reaches its own graceful stop, so
-the two VMs keep their ports and their database until they are told):
+The two scripts are the by-hand route, for a checkout or for a window that was
+killed outright (a killed window never reaches its own graceful stop, so the two
+VMs keep their ports and their database until they are told).
+`scripts/build-plugins.sh` builds both releases into `_build/desktop/plugins/` and
+copies these scripts in beside them, and they read the window's release from
+`../rel/ex_tbp_monty` — so they run from that folder:
 
     ./start-plugins.sh          # macOS, Linux
     .\start-plugins.ps1         # Windows

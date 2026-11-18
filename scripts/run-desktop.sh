@@ -226,7 +226,7 @@ else
             # and "the first `find` prints" would pick a plugin's.
             bundle_zip="$(find "$work" -maxdepth 2 -name "$asset.zip" -print -quit)"
             if [ -n "$bundle_zip" ]; then
-                echo "Expanding the application (about 550 MB) ..."
+                echo "Expanding the application (about 370 MB) ..."
                 mkdir -p "$work/app"
                 unpack "$bundle_zip" "$work/app" 2>>"$work/unpack.log" || true
                 from="$work/app"
@@ -307,7 +307,7 @@ else
                 exit 1
             fi
 
-            echo "Expanding the application (about 550 MB) ..."
+            echo "Expanding the application (about 370 MB) ..."
             rm -rf "$instance"
             tar xzf "$tarball" -C "$dir"
 

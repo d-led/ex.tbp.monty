@@ -415,7 +415,7 @@ installer_package() {
 
   # The staging root is a temporary directory, not one inside `artifacts/`:
   # given a root that sits beside the package it is writing, `pkgbuild` produced a
-  # 4.5 MB package of a 550 MB app, complaining "write: Permission denied" about
+  # 4.5 MB package of a 370 MB app, complaining "write: Permission denied" about
   # files it had just walked. The same tree in `$TMPDIR` makes a complete one.
   #
   # It prints "write: Permission denied" a few times whatever the root — a
