@@ -22,6 +22,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # `:exporting` are said in the words of what they do to the file: unpacking an
   # archive, reading a memory out of one.
   @said_of_standing %{
+    not_built: "not built",
     memory_not_read: "memory not read",
     present: "present",
     not_downloaded: "not downloaded",
@@ -204,12 +205,14 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 <span class={[
                   "badge",
                   badge_class(
+                    prerequisite,
                     status(@statuses, prerequisite.id),
                     @present[prerequisite.id],
                     @pending[prerequisite.id]
                   )
                 ]}>
                   {status_label(
+                    prerequisite,
                     status(@statuses, prerequisite.id),
                     @present[prerequisite.id],
                     @pending[prerequisite.id]
@@ -527,6 +530,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # The word on the button says what the click does: an archive is downloaded, a
   # memory inside one is exported out of it, and an input this application
   # produces is made.
+  # A row's button says what the click does: fetch an archive, read a memory out
+  # of one that arrived, or make what this application can only make itself.
   defp action_label(%{build: build}, _present?) when is_binary(build), do: "Make"
   defp action_label(_prerequisite, true), do: "Export memory"
   defp action_label(_prerequisite, _absent), do: "Download"
@@ -561,20 +566,29 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp memory_pending?(_prerequisite), do: false
 
   # The badge says where the entry stands: what the machine is doing to it, or —
-  # with nothing running — what the disk already holds.
-  defp status_label(phase, present?, pending?),
-    do: Map.fetch!(@said_of_standing, standing(phase, present?, pending?))
+  # with nothing running — what the disk already holds. A memory this application
+  # writes itself is never "not downloaded": there is nothing to download.
+  defp status_label(prerequisite, phase, present?, pending?),
+    do: Map.fetch!(@said_of_standing, standing(prerequisite, phase, present?, pending?))
 
-  defp badge_class(phase, present?, pending?) do
-    Map.get(@colour_of_standing, standing(phase, present?, pending?), "badge-ghost")
+  defp badge_class(prerequisite, phase, present?, pending?) do
+    Map.get(
+      @colour_of_standing,
+      standing(prerequisite, phase, present?, pending?),
+      "badge-ghost"
+    )
   end
 
   # The one decision the label and the colour both read: what this row is, right
   # now. A running phase speaks for itself; a quiet one is answered by the disk.
-  defp standing(phase, _present?, _pending?) when not is_nil(phase), do: phase
-  defp standing(nil, true, true), do: :memory_not_read
-  defp standing(nil, true, false), do: :present
-  defp standing(nil, false, _pending?), do: :not_downloaded
+  defp standing(_prerequisite, phase, _present?, _pending?) when not is_nil(phase), do: phase
+
+  defp standing(%{build: build}, nil, false, _pending?) when is_binary(build),
+    do: :not_built
+
+  defp standing(_prerequisite, nil, true, true), do: :memory_not_read
+  defp standing(_prerequisite, nil, true, false), do: :present
+  defp standing(_prerequisite, nil, false, _pending?), do: :not_downloaded
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)
   defp max_bytes(%{total: total}), do: total

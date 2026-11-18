@@ -29,7 +29,8 @@ defmodule Monty.Prerequisites.Build do
   alias Monty.Studio
   alias Monty.Studio.Cad.Preparation
 
-  # The corpus manifests this application ships, one per object set.
+  # The corpus manifests this application ships, one per object set, under the
+  # experiments root `extra_root/0` answers.
   @corpora "sets/*/*.json"
 
   # Objaverse's GLBs, one file per object, at the address its own dataset names.
@@ -53,58 +54,86 @@ defmodule Monty.Prerequisites.Build do
   `notify` is called with a `t:progress/0` as each step starts, so the row says
   which part or which dog it is on rather than sitting at "building" for a
   minute.
-  """
-  @spec run(String.t(), (progress() -> any())) :: {:ok, [String.t()]} | {:error, String.t()}
-  def run(name, notify) do
-    case work(name) do
-      nil -> {:error, "unknown build #{inspect(name)}"}
-      work -> work.(notify)
-    end
-  end
 
-  # A name to the work behind it. A table rather than a clause per build, so the
-  # dispatcher stays one line and each build is scored on its own.
-  defp work("cad_part_memories"), do: &cad_part_memories/1
-  defp work("objaverse_dogs"), do: &objaverse_dogs/1
-  defp work(_name), do: nil
+  The pieces a run reaches outside itself — the plans, the meshing, the download,
+  the import — are named rather than called, so a test drives this state without
+  geometry or a network, exactly as `Monty.Prerequisites.Saga`'s `:builder` and
+  `:fetcher` do.
+  """
+  @spec run(String.t(), (progress() -> any()), keyword()) ::
+          {:ok, [String.t()]} | {:error, String.t()}
+  def run(name, notify, opts \\ [])
+
+  def run("cad_part_memories", notify, opts), do: cad_memories(notify, opts)
+  def run("objaverse_dogs", notify, opts), do: corpus_import("objaverse_dogs", notify, opts)
+  def run(name, _notify, _opts), do: {:error, "unknown build #{inspect(name)}"}
+
+  @doc """
+  The memories this machine would teach: one per CAD experiment it defines.
+
+  Public because it is the answer to "what would this click make?", and because
+  it is the half of a build that needs no geometry to ask.
+  """
+  @spec plans() :: [map()]
+  def plans, do: cad_plans()
 
   # -- the CAD parts -------------------------------------------------------
 
-  # Every part the CAD set's own configs name, taught and meshed. Each plan is
-  # the experiment's answer to "which part do I step, and which memory do I
-  # load", so the count is the number of recognition runs a machine can make
-  # afterwards.
-  defp cad_part_memories(notify) do
-    plans = cad_plans()
+  # One memory per CAD experiment this application defines, taught from the part
+  # its config names.
+  defp cad_memories(notify, opts) do
+    plans = plans(opts)
     total = length(plans)
 
-    if plans == [],
-      do: {:error, "no CAD experiment here names a part a memory could be taught on"},
-      else: teach(plans, total, notify, [])
-  end
+    if plans == [] do
+      {:error, "no CAD experiment here names a part a memory could be taught on"}
+    else
+      plans
+      |> Enum.with_index(1)
+      |> Enum.reduce_while({:ok, []}, fn {plan, index}, {:ok, said} ->
+        notify.(%{index: index, total: total, what: "#{plan.part}: memory and meshes"})
 
-  defp teach([], _total, _notify, said), do: {:ok, Enum.reverse(said)}
+        case prepare(plan, opts) do
+          {:ok, written} ->
+            {:cont,
+             {:ok,
+              said ++ ["#{plan.part}: #{written.written} object(s), #{written.nodes} node(s)"]}}
 
-  defp teach([plan | rest], total, notify, said) do
-    notify.(%{index: total - length(rest), total: total, what: "#{plan.part}: memory and meshes"})
-
-    case Preparation.prepare(plan) do
-      {:ok, written} ->
-        teach(rest, total, notify, [
-          "#{plan.part}: #{written.written} object(s), #{written.nodes} node(s)" | said
-        ])
-
-      {:error, reason} ->
-        {:error, reason}
+          {:error, reason} ->
+            {:halt, {:error, reason}}
+        end
+      end)
     end
   end
 
-  # -- the CAD parts -------------------------------------------------------
+  # -- the corpus ----------------------------------------------------------
 
-  # One plan per CAD experiment this application defines: the experiment says
-  # which part it steps and which memory it loads, and every part it names is a
-  # memory this build writes. That is what lets several recognition experiments
-  # run against memories of several parts.
+  defp corpus_import(name, notify, opts) do
+    with {:ok, corpus, file} <- corpus(name, opts) do
+      objects = file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
+      data = Monty.Prerequisites.root_path("MONTY_DATA")
+      into = Path.join([data, "mujoco/objects", corpus])
+      cache = Path.join(data, "downloads/#{corpus}")
+      total = length(objects)
+
+      with :ok <- fetch(objects, cache, notify, opts) do
+        notify.(%{index: total, total: total, what: "importing #{total} object(s)"})
+
+        case import(cache, objects, into, opts) do
+          {:ok, rows} -> {:ok, ["#{corpus}: #{length(rows)} object(s) in #{into}"]}
+          {:error, reason} -> {:error, "could not import #{corpus}: #{inspect(reason)}"}
+        end
+      end
+    end
+  end
+
+  # The experiment says which part it steps and which memory it loads, and every
+  # part it names is a memory this build writes. That is what lets several
+  # recognition experiments run against memories of several parts.
+  #
+  # A CAD experiment with nothing to teach — no `model_name_or_path`, a part this
+  # application does not carry — is skipped rather than failed: the click makes
+  # what it can, and the page's Checks are where a broken config is reported.
   defp cad_plans do
     Path.wildcard(Path.join([extra_root(), "sets", "cad", "conf", "experiment", "cad", "*.yaml"]))
     |> Enum.map(&"cad/#{Path.basename(&1, ".yaml")}")
@@ -121,42 +150,8 @@ defmodule Monty.Prerequisites.Build do
 
   # -- the corpus ----------------------------------------------------------
 
-  # The dogs, from Objaverse's own GLBs: one small file each, cached under
-  # `downloads/`, and the import writes the object set the world steps.
-  defp objaverse_dogs(notify) do
-    with {:ok, corpus, file} <- corpus("objaverse_dogs"),
-         objects = objects_of(file),
-         cache = cache_of(corpus),
-         :ok <- fetch(objects, cache, notify) do
-      notify.(%{
-        index: length(objects),
-        total: length(objects),
-        what: "importing #{length(objects)} object(s)"
-      })
-
-      imported(corpus, cache, objects)
-    end
-  end
-
-  # sobelow_skip ["Traversal.FileModule"]
-  # `file` is the corpus manifest `corpora/0` found under this application's
-  # own priv, not a path a request hands in.
-  defp objects_of(file), do: file |> File.read!() |> JSON.decode!() |> Map.fetch!("objects")
-
-  defp cache_of(corpus), do: Path.join(root("MONTY_DATA"), "downloads/#{corpus}")
-
-  defp imported(corpus, cache, objects) do
-    into = Path.join([root("MONTY_DATA"), "mujoco/objects", corpus])
-
-    case Import.import(cache, objects, into) do
-      {:ok, rows} -> {:ok, ["#{corpus}: #{length(rows)} object(s) in #{into}"]}
-      {:error, reason} -> {:error, "could not import #{corpus}: #{inspect(reason)}"}
-    end
-  end
-
-  # sobelow_skip ["Traversal.FileModule"]
-  defp corpus(name) do
-    case Enum.find(corpora(), &(elem(&1, 0) == name)) do
+  defp corpus(name, opts) do
+    case Enum.find(corpora(opts), &(elem(&1, 0) == name)) do
       nil ->
         {:error, "no corpus manifest here is called #{inspect(name)}"}
 
@@ -169,8 +164,8 @@ defmodule Monty.Prerequisites.Build do
 
   # A corpus manifest is a JSON document beside the cards that step it, with an
   # `objects` list naming the GLBs to fetch.
-  defp corpora do
-    Path.wildcard(Path.join(extra_root(), @corpora))
+  defp corpora(opts) do
+    Path.wildcard(Path.join([root(opts), @corpora]))
     |> Enum.filter(&corpus?/1)
     |> Enum.map(fn file ->
       name = file |> Path.basename(".json")
@@ -179,7 +174,6 @@ defmodule Monty.Prerequisites.Build do
     end)
   end
 
-  # sobelow_skip ["Traversal.FileModule"]
   defp corpus?(file) do
     with {:ok, text} <- File.read(file),
          {:ok, document} <- JSON.decode(text) do
@@ -191,9 +185,7 @@ defmodule Monty.Prerequisites.Build do
 
   # One file per object, cached: a second build fetches nothing, and an
   # interrupted one resumes at the next missing file.
-  # `into` is the cache directory under the data root, built here.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp fetch(objects, into, notify) do
+  defp fetch(objects, into, notify, opts) do
     File.mkdir_p!(into)
     {:ok, _} = Application.ensure_all_started(:req)
     total = length(objects)
@@ -208,7 +200,7 @@ defmodule Monty.Prerequisites.Build do
       else
         notify.(%{index: index, total: total, what: object["name"]})
 
-        case fetch_glb(object, path) do
+        case glb(object, path, opts) do
           :ok -> {:cont, :ok}
           {:error, _reason} = error -> {:halt, error}
         end
@@ -216,15 +208,13 @@ defmodule Monty.Prerequisites.Build do
     end)
   end
 
-  # `path` is that cache plus the uid the corpus manifest names.
-  # sobelow_skip ["Traversal.FileModule"]
-  # The one call that leaves this machine, named at the call so a test can answer
-  # it without the network (`:glb_getter`, the way `:prerequisite_fetcher` does
-  # for a download).
+  defp glb(object, path, opts),
+    do: Keyword.get_lazy(opts, :glb, fn -> &fetch_glb/2 end).(object, path)
+
   defp fetch_glb(object, path) do
     url = Enum.join([@glb, object["shard"], object["uid"] <> ".glb"], "/")
 
-    case getter().(url,
+    case Req.get(url,
            decode_body: false,
            retry: :transient,
            max_retries: 2,
@@ -236,9 +226,17 @@ defmodule Monty.Prerequisites.Build do
     end
   end
 
-  defp getter, do: Application.get_env(:ex_tbp_monty, :glb_getter, &Req.get/2)
+  # -- what a run reaches outside itself -----------------------------------
 
-  defp root(variable), do: Monty.Prerequisites.root_path(variable)
+  defp plans(opts), do: Keyword.get_lazy(opts, :plans, &cad_plans/0)
+
+  defp prepare(plan, opts),
+    do: Keyword.get_lazy(opts, :prepare, fn -> &Preparation.prepare/1 end).(plan)
+
+  defp import(cache, objects, into, opts),
+    do: Keyword.get_lazy(opts, :import, fn -> &Import.import/3 end).(cache, objects, into)
+
+  defp root(opts), do: Keyword.get_lazy(opts, :root, &extra_root/0)
 
   defp extra_root, do: Path.join(priv(), "monty_experiments")
 
