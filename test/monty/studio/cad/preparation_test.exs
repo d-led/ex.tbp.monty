@@ -171,8 +171,15 @@ defmodule Monty.Studio.Cad.PreparationTest do
       # A memory of features is sampled at a millimetre with the visit cap raised
       # beside it, and read from closer than a part is: at the package's defaults
       # the body and risers spend the budget and the small features leave the
-      # memory, and a sixteen-millimetre patch is as wide as a feature.
-      expected = %{spacing: 1.0, limit: 20_000, distance: 8.0}
+      # memory, and a sixteen-millimetre patch is as wide as a feature. Its lens
+      # is the run's too — `zoom: 10` on a square patch is 11.42° — because a
+      # memory photographed through a wider one is a memory of another surface.
+      expected = %{
+        spacing: 1.0,
+        limit: 20_000,
+        distance: 8.0,
+        fov_x: 11.42 * :math.pi() / 180.0
+      }
 
       unless Map.take(Map.new(options), Map.keys(expected)) == expected do
         raise "a feature memory is #{inspect(expected)}, not #{inspect(options)}"

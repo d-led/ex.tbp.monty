@@ -158,12 +158,22 @@ defmodule Monty.Studio.Cad.Preparation do
   # scale it leaves).
   @feature_stand_off 8.0
 
+  # The patch's field of view is the run's as well, and for the same reason: a
+  # memory photographed through a different lens is a memory of a different
+  # surface. Monty's MuJoCo agent builds `fovy = 2·atan2(ratio·tan(45°), zoom)`
+  # from a 90° base, so the environment overlay's `zoom: 10` on a square patch
+  # reads 11.42°, while the CAD package's own default is 66° — six times wider.
+  # Measured at this stand-off on the package's own fixture: taught through the
+  # wide patch 105 of 200 visits are kept, through the run's 140.
+  @feature_fov_degrees 11.42
+
   defp memory_options(%{labels: :features}) do
     [
       labels: :features,
       spacing: @feature_spacing,
       limit: @feature_visits,
-      distance: @feature_stand_off
+      distance: @feature_stand_off,
+      fov_x: @feature_fov_degrees * :math.pi() / 180.0
     ]
   end
 

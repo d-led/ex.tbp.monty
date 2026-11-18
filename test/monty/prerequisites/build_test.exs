@@ -45,9 +45,11 @@ defmodule Monty.Prerequisites.BuildTest do
 
         assert {:ok, said} = Build.run("cad_part_memories", &send(steps, {:step, &1}))
 
-        # One line per memory: the run a person can make afterwards is one per
-        # memory, so the count is what the build promised.
-        assert length(said) == length(experiments())
+        # One line per memory, not per config: two runs may ask about the same
+        # memory from different sensors — `cad/plate_features_2patch_eval` is
+        # `plate_features` read through a second patch — and the build writes
+        # what a run loads rather than one file per config.
+        assert length(said) == length(memories())
         assert_received_step(:first)
 
         libraries = Prerequisites.root_path("MONTY_LIBRARIES")
@@ -130,6 +132,18 @@ defmodule Monty.Prerequisites.BuildTest do
     {:ok, opened} = Monty.Studio.open(experiment, conf_dir: Monty.Config.Source.conf_dirs())
     {:ok, plan} = Monty.Studio.Cad.Preparation.plan(opened.setup)
     {plan, opened.setup}
+  end
+
+  # The memories the CAD set asks for, one per distinct file: what the build
+  # promises a run is the file it loads, and two runs that load the same file
+  # are one job for the teacher.
+  defp memories do
+    experiments()
+    |> Enum.map(fn experiment ->
+      {plan, _setup} = plan_of(experiment)
+      plan.memory
+    end)
+    |> Enum.uniq()
   end
 
   defp manifest_uids do

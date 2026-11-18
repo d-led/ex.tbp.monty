@@ -184,14 +184,28 @@ for as long as it takes to search. Measured on a failed run: `percepts patch`,
 The set's environment now places the agent three centimetres up, where the patch
 sees the object on its first step.
 
-**The memory and the run use different optics.** The environment's patch sensor
-is declared with `zoom: 10`, a nine-degree field of view; the teacher builds its
-patches with the camera's default ninety (`MontyCad.Training` passes a stand-off
-and nothing else). Measured on the boss's wall at the same stand-off, the
-teacher's patch reads `0.137, -0.063` with 80 % coverage and the run's reads
-`0.125, 0.000` with all of it: the same sign and nearly the same size, but the
-node the memory stores was measured through a patch eight times wider than the
-one the run makes. The teacher needs the run's field of view.
+**The memory and the run use different optics — fixed, and not the wall.** The
+environment's patch sensor is declared with `zoom: 10`; Monty's MuJoCo agent
+builds `fovy = 2·atan2(ratio·tan(45°), zoom)` from a 90° base, so a square patch
+at that zoom reads 11.42°, while `Camera.patch/3`'s own default is 66° and
+`MontyCad.Training` passed a stand-off and nothing else. Measured on the boss's
+wall at the same stand-off: the teacher's patch read `0.137, -0.063` with 80 %
+coverage and the run's `0.125, 0.000` with all of it — the same sign and nearly
+the same size, but the node the memory stored was measured through a patch six
+times wider than the one the run makes. `MontyCad.Training.nodes/2` now takes
+`:fov_x`, and `Monty.Studio.Cad.Preparation` teaches a feature memory through the
+run's 11.42°, so the two lenses agree.
+
+It is a defect worth removing and it is not the wall. Taught through the run's
+own patch the plate's feature memory grows from 5372 nodes to 5835 — the narrower
+patch straddles a face's edge less often, so more visits are kept — and four
+episodes at the five-hundred-step budget come out where they were:
+
+    memory through 66°:  402 of 2000 steps fed, evidence 44.9, 4108 hypotheses
+    memory through 11.4°: 399 of 2000 steps fed, evidence 43.9, 4370 hypotheses
+
+Four objects possible at the end either way, no conclusion either way. Two flat
+surfaces stay two flat surfaces however wide the lens that measured them.
 
 **The memory stores a boolean where the format stores a number.** In the file,
 `plate_features.jsonl.gz` holds `"pose_fully_defined": [[false], [false], …]`;
