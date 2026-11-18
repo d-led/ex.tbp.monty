@@ -128,10 +128,15 @@ defmodule Monty.Prerequisites do
   the archive: an archive sitting on disk with nothing unpacked beside it is a
   download that was interrupted, and a page that called it present would be
   telling a reader their data is there when no run can read it.
+
+  A build's memories and the places it writes are one product, so it is in place
+  when both are: a machine holding the memory but not the meshes it was taught on
+  can name the object and cannot step it, which is not "here".
   """
   @spec present?(prerequisite()) :: boolean()
   def present?(%{build: build} = prerequisite) when is_binary(build) do
-    holds_something?(where_it_lands(prerequisite)) and absent_memories(prerequisite) == []
+    absent_memories(prerequisite) == [] and
+      Enum.all?(landings(prerequisite), &holds_something?/1)
   end
 
   def present?(%{extract: true} = prerequisite),
@@ -140,24 +145,32 @@ defmodule Monty.Prerequisites do
   def present?(prerequisite), do: File.exists?(target_path(prerequisite))
 
   @doc """
-  The memories a build promises that are not on disk.
+  The memory files a build promises, where a run reads them.
 
   `provides` is what a build says it writes and `unpacks_to` is the release it
   writes them into, which together name the files a run loads. A build that
   stopped after the first part leaves a directory that looks finished and
   memories no run of the other parts can read — so the directory alone is not
-  the answer.
+  the answer, and the files are what to look for.
   """
-  @spec absent_memories(prerequisite()) :: [String.t()]
-  def absent_memories(%{provides: names} = prerequisite) when is_list(names) do
+  @spec promised_memories(prerequisite()) :: [Path.t()]
+  def promised_memories(%{provides: names} = prerequisite) when is_list(names) do
     release = Map.get(prerequisite, :unpacks_to) || Path.basename(where_it_lands(prerequisite))
 
-    Enum.reject(names, fn name ->
-      File.exists?(Path.join([root_path("MONTY_LIBRARIES"), release, name <> ".jsonl.gz"]))
-    end)
+    Enum.map(names, &Path.join([root_path("MONTY_LIBRARIES"), release, &1 <> ".jsonl.gz"]))
   end
 
-  def absent_memories(_prerequisite), do: []
+  def promised_memories(_prerequisite), do: []
+
+  @doc """
+  The memories a build promises that are not on disk, by name.
+  """
+  @spec absent_memories(prerequisite()) :: [String.t()]
+  def absent_memories(prerequisite) do
+    for path <- promised_memories(prerequisite),
+        not File.exists?(path),
+        do: Path.basename(path, ".jsonl.gz")
+  end
 
   # A directory that exists and holds nothing is not data: it is the `mkdir` on
   # the way to some, or an unpack that was interrupted. Counting it as present is

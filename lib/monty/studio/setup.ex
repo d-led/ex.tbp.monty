@@ -260,8 +260,16 @@ defmodule Monty.Studio.Setup do
     end
   end
 
-  defp default_for(name) when name in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS),
-    do: Monty.Prerequisites.root_default(name)
+  # The four roots Monty's own variable names address. The libraries are this
+  # application's own output rather than Monty's, and it is a root all the same
+  # — a config's `model_name_or_path` names it, and a composition in a release
+  # has no shell to have exported it. Without the default, resolution stops at
+  # the first unset variable and *every* value in the config stays as written,
+  # including the object set's path, which then reads as a `${...}` and cannot
+  # be matched to the build that fills it.
+  defp default_for(name)
+       when name in ~w(MONTY_DATA MONTY_MODELS MONTY_LOGS MONTY_LIBRARIES),
+       do: Prerequisites.root_default(name)
 
   defp default_for(_name), do: nil
 

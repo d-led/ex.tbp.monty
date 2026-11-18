@@ -20,7 +20,7 @@ defmodule Monty.Studio.Cad.Preparation do
   """
 
   alias ExTbpMonty.Cad.Objects
-  alias Monty.Studio.{Memory, Setup}
+  alias Monty.Studio.{Failure, Memory, Setup}
 
   @trainer Module.concat(["MontyCad", "Training"])
   @exporter Module.concat(["MontyCad", "Export"])
@@ -118,15 +118,21 @@ defmodule Monty.Studio.Cad.Preparation do
     if Code.ensure_loaded?(trainer) do
       with {:ok, written} <- taught(plan, trainer), do: names_it_answers_to(plan, written)
     else
+      # No module name in the sentence: a person reads "the CAD package is not
+      # here and this is how to add it", not `Elixir.MontyCad.Trainer`.
       {:error,
-       "#{inspect(trainer)} is not on this node: add `ex_monty_cad` to write a part's memory."}
+       "the CAD package is not on this node, so a part's memory cannot be written: " <>
+         "add `ex_monty_cad` to this build."}
     end
   end
 
   defp taught(plan, trainer) do
     case trainer.write_library([{plan.part, plan.step}], plan.memory, memory_options(plan)) do
-      {:ok, written} -> {:ok, written}
-      {:error, reason} -> {:error, "#{plan.step} could not be taught: #{inspect(reason)}"}
+      {:ok, written} ->
+        {:ok, written}
+
+      {:error, reason} ->
+        {:error, "#{Path.basename(plan.step)} could not be taught: #{Failure.sentence(reason)}"}
     end
   end
 

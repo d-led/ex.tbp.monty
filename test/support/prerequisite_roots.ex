@@ -64,12 +64,13 @@ defmodule Monty.Test.PrerequisiteRoots do
   # what the page refuses to call "here", so a fixture that plants one leaves a
   # file where the bundle lands.
   #
-  # A build has no archive: what it produces *is* the directory, so the file goes
-  # there and the target — which is that same directory — is not written over.
+  # A build has no archive: what it produces *is* the directories it names plus
+  # the memories it promises, so the fixture writes all of it. Planting the
+  # directory alone would be a machine whose build stopped half way — the one
+  # shape `present?/1` exists to tell apart from a finished one.
   def plant(%{build: build} = prerequisite) when is_binary(build) do
-    lands = Prerequisites.where_it_lands(prerequisite)
-    File.mkdir_p!(lands)
-    File.write!(Path.join(lands, "planted-by-the-test"), "")
+    Enum.each(Prerequisites.landings(prerequisite), &plant_a_file_in/1)
+    Enum.each(Prerequisites.promised_memories(prerequisite), &plant_a_file_at/1)
   end
 
   def plant(prerequisite) do
@@ -78,6 +79,16 @@ defmodule Monty.Test.PrerequisiteRoots do
     File.write!(Path.join(lands, "planted-by-the-test"), "")
 
     path = Prerequisites.target_path(prerequisite)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "")
+  end
+
+  defp plant_a_file_in(directory) do
+    File.mkdir_p!(directory)
+    File.write!(Path.join(directory, "planted-by-the-test"), "")
+  end
+
+  defp plant_a_file_at(path) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, "")
   end

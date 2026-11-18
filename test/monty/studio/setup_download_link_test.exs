@@ -60,6 +60,26 @@ defmodule Monty.Studio.SetupDownloadLinkTest do
     assert finding.link == nil
   end
 
+  # The click above is answered by matching the object set's path to the build
+  # that fills it, and resolution is all-or-nothing: one variable nobody exported
+  # leaves *every* value in the config as written, so the path is a `${...}` no
+  # build matches. The libraries are this application's own folder — a release
+  # has no shell to have exported `MONTY_LIBRARIES` — so it is a default, not an
+  # assumption about the machine.
+  test "a CAD config's paths are read with no library variable exported" do
+    Tmp.without_env("MONTY_LIBRARIES")
+
+    {:ok, setup} =
+      Setup.from_experiment("cad/plate_features_2patch_eval", world_simulator: :mujoco)
+
+    libraries = Monty.Paths.libraries()
+
+    assert setup.model_name_or_path == Path.join(libraries, "cad_parts_v1/plate_features")
+    assert Path.basename(setup.environment.data_path) == "cad_objects"
+    assert Path.type(setup.environment.data_path) == :absolute
+    refute :values_resolved_at_run_time in Enum.map(setup.findings, & &1.code)
+  end
+
   # A download finishing is the one event that changes an answer without a config
   # changing, and the catalogue's answers are cached because composing all of
   # Monty's costs more than a page mount can pay. The cache therefore has to

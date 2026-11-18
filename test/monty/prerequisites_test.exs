@@ -193,10 +193,49 @@ defmodule Monty.PrerequisitesTest do
       File.mkdir_p!(written)
       File.write!(Path.join(written, "plate_part.jsonl.gz"), "{}")
 
+      assert Prerequisites.promised_memories(prerequisite) == [
+               Path.join(written, "plate_part.jsonl.gz"),
+               Path.join(written, "plate_features.jsonl.gz")
+             ]
+
       assert Prerequisites.absent_memories(prerequisite) == ["plate_features"]
       refute Prerequisites.present?(prerequisite)
 
       File.write!(Path.join(written, "plate_features.jsonl.gz"), "{}")
+      assert Prerequisites.present?(prerequisite)
+    end
+
+    # A memory is half of what a build writes: the other half is what it was
+    # taught on, which a run reads before it steps. A machine with the memory
+    # and no meshes would otherwise be called here and answer "this object set
+    # is not on this machine" one page later.
+    test "is the places it writes as well as the memories it promises" do
+      root = Tmp.dir("build-writes")
+      Tmp.system_env("MONTY_DATA", Path.join(root, "data"))
+      Tmp.system_env("MONTY_LIBRARIES", Path.join(root, "libraries"))
+
+      prerequisite = %{
+        id: "parts",
+        title: "Parts",
+        build: "something",
+        root: "MONTY_LIBRARIES",
+        target: "parts_v1",
+        unpacks_to: "parts_v1",
+        provides: ["plate_part"],
+        writes: [%{root: "MONTY_DATA", target: "cad_objects"}]
+      }
+
+      written = Path.join([Path.join(root, "libraries"), "parts_v1"])
+      File.mkdir_p!(written)
+      File.write!(Path.join(written, "plate_part.jsonl.gz"), "{}")
+
+      refute Prerequisites.present?(prerequisite)
+
+      objects = Path.join([Path.join(root, "data"), "cad_objects"])
+      File.mkdir_p!(objects)
+      refute Prerequisites.present?(prerequisite)
+
+      File.write!(Path.join(objects, "plate_body.obj"), "")
       assert Prerequisites.present?(prerequisite)
     end
   end
