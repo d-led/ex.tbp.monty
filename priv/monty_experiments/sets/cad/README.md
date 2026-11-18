@@ -104,49 +104,49 @@ So a memory of features is taught at 1 mm with a cap of 20 000 visits
 and converges below the cap: a part's feature memory costs a minute, and
 `mix monty.data.check` still says what the tree is.
 
-### What the recognition is missing: the faces nobody labels
+### What a feature recognition is missing
 
-A run's question is which object the sensor is on, and the answer is read off the
-surfaces the patch sees. So a feature's memory has to hold every surface its
-world presents — and today it holds half of them.
+`mix run scripts/cad_feature_percept.exs` prints both halves of the question, for
+a part and the library taught from it: what patches on a face of each label the
+recognition found read, and how many nodes of each memory object are flat.
 
-Measured with the framework's own processor, standing a patch on each kind of
-face the plate is made of (`MontyCad.Percept` over the same STEP file the memory
-was taught from, 5 mm stand-off, curvatures in the part's millimetres):
+    mix run scripts/cad_feature_percept.exs priv/cad_experiments/parts/plate.step \
+      <libraries>/cad_parts_v1/plate_features.jsonl.gz
 
-| where the patch is | principal curvatures |
-| ------------------ | -------------------- |
-| the boss's top     | 0, 0                 |
-| the boss's wall    | +0.131, 0.000        |
-| the bore's wall    | 0.000, −0.278        |
-| the plate's top    | 0, 0                 |
+Two facts come out of it, and neither is about the sensor.
 
-The walls separate cleanly — an 8 mm boss one way, a 4 mm bore the other — and
-both tops are flat, which is what a patch on a cylinder's end is supposed to
-report. The sensor is not the problem: the port computes these, and the set's
-sensor module asks for them.
+**The sensor and the memory agree.** A patch on the boss's wall reads principal
+curvatures of the sign and size its radius implies, and one on the bore's wall
+reads the same for the bore — the walls are what the memory's curvature was
+taught from, through the same processor, and the two are one number apart only
+where the patch straddled an edge. Curvature is not what a feature run is
+missing.
 
-The memory, though, holds the walls only. `plate_bosses_0` is 205 nodes and not
-one of them is flat; `plate_holes_0` is 96 and none is flat either. The boss's
-top disc is a face quiddity calls body — it is a flat surface of the plate — so
-it is taught into `plate_body`, which holds 2898 flat nodes, and that is the
-answer the run converges on while it stands on the boss. No tolerance, sample
-density or motor policy can change it: a patch on the cap matches the one graph
-that has a flat node, and the graph the run is asked about has nothing there.
+**The memory holds the walls; a run is shown the whole solid.** A patch covers
+about sixteen millimetres of surface at the teacher's five-millimetre stand-off,
+and the plate's boss is sixteen millimetres across: no patch fits on its top cap,
+so every reading taken there straddles the cap and its rim. Whatever those
+readings are, the cap is not the feature's to hold — quiddity leaves the disc
+unclaimed, neither a boss nor the body, so its nodes are taught as body — and the
+boss's own graph has no flat node at all. A run standing on the boss therefore
+matches the one graph that holds a flat reading, which is `plate_body`, and that
+is the answer it converges on.
 
-So the defect is one line of agreement between two builders. The world steps the
-feature's **solid** — a boss is written as a closed cylinder, caps included — and
-the memory is taught from the part's **faces**, where that cap belongs to the
-body. Any feature of any shape has the same gap wherever its solid is closed by a
-face the recognition did not claim.
+The two features that do not have the gap say so: a through-hole's world is a
+tube, two vertex rings at the plate's own faces and no cap, so what it presents
+is exactly the wall its memory holds, and the bore is answered correctly in every
+episode tried. The boss is answered correctly in none. The difference is not the
+shape, the size, the curvature or the policy — it is whether the solid the world
+steps has a surface the memory does not.
 
-The two features that do not have the gap say so. A through-hole's world is a
-tube — two rings of vertices at the plate's own faces, no cap at either end — so
-what it presents is exactly the wall the memory holds, and the bore was answered
-correctly in every episode tried. The boss was answered correctly in none. The
-difference between them is not their shape, their size, their curvature or the
-policy: it is whether the solid the world steps has a face the memory does not.
+So the next change is in the teacher rather than in a config, and it is two
+things that follow from one rule — a run can only answer for a surface its memory
+holds:
 
-The next change is therefore in the teacher rather than in a config: teach a
-feature's memory from the feature's own solid, the geometry the world steps, so
-that every surface the sensor can land on is a surface the memory can answer for.
+- teach a feature's memory from the feature's own solid, the geometry the world
+  steps, so that a cap belongs to the feature whose end it closes; and
+- size the patch to the feature. A cap can only be read as one surface by a patch
+  smaller than it, which at this stand-off it is not — the teacher's `:distance`
+  and the run's `desired_object_distance` are the same dial seen from two sides,
+  and the two have to be chosen for the part rather than inherited from a
+  default sized for furniture.
