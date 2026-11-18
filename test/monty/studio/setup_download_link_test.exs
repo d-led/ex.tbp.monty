@@ -46,6 +46,20 @@ defmodule Monty.Studio.SetupDownloadLinkTest do
     assert label == "Download it"
   end
 
+  # A CAD part's object set is the one missing directory this node can write
+  # itself: the meshes come from the part file the memory was taught on, so the
+  # finding offers the click the page can answer instead of a download that does
+  # not exist for them.
+  test "a CAD part's object set offers to be prepared here" do
+    {:ok, setup} =
+      Setup.from_experiment("cad/plate_features_2patch_eval", world_simulator: :mujoco)
+
+    assert [finding] = for(%{code: :world_data_missing} = f <- setup.findings, do: f)
+
+    assert finding.action == %{label: "Prepare cad_objects", event: "prepare_cad_part"}
+    assert finding.link == nil
+  end
+
   # A download finishing is the one event that changes an answer without a config
   # changing, and the catalogue's answers are cached because composing all of
   # Monty's costs more than a page mount can pay. The cache therefore has to

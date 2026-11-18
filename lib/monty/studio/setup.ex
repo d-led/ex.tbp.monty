@@ -2883,7 +2883,7 @@ defmodule Monty.Studio.Setup do
       # The directory itself is the first thing to say: a config whose objects
       # were never downloaded has nothing to look for *in* it, and naming the
       # directory is what tells a person which archive is missing.
-      not File.dir?(path) -> [with_download(missing_data_finding(path), path)]
+      not File.dir?(path) -> [fixable(setup, path)]
       object_label(setup) == nil -> [with_download(no_object_finding(path), path)]
       true -> []
     end
@@ -2912,6 +2912,27 @@ defmodule Monty.Studio.Setup do
         "nothing.",
       "environment.env_init_args.data_path"
     )
+  end
+
+  # A CAD part's object set is written from the part file this node holds — the
+  # same part the memory was taught on — so the fix is a click here, not a
+  # download somewhere else. Whether this node can write it is not a guess: it is
+  # the plan the build itself makes (`Monty.Studio.Cad.Preparation`), which says
+  # no for a config of another world, a memory that names no part, and a part
+  # whose file nobody here holds.
+  defp fixable(setup, path) do
+    finding = missing_data_finding(path)
+
+    if preparable?(setup, path) do
+      Finding.with_action(finding, "Prepare #{Path.basename(path)}", "prepare_cad_part")
+    else
+      with_download(finding, path)
+    end
+  end
+
+  defp preparable?(setup, path) do
+    Path.basename(path) == "cad_objects" and
+      match?({:ok, _plan}, Monty.Studio.Cad.Preparation.plan(setup))
   end
 
   # A finding about a directory a prerequisite fills offers the download itself.

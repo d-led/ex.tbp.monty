@@ -22,6 +22,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   require Logger
 
   alias Monty.Prerequisites
+  alias Monty.Prerequisites.Saga
   alias Monty.Studio
 
   alias Monty.Studio.{
@@ -76,6 +77,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # A test that delivers steps faster than a person can watch sets it to nought:
   # there is no socket to keep alive, and every step's picture is worth asserting.
   @chart_interval 1_000
+
+  # The prerequisite a CAD experiment's object set is written by. A finding that
+  # offers "Prepare cad_objects" starts this build (`Monty.Prerequisites.Build`),
+  # which is the one `/prerequisites` runs for the same directory.
+  @cad_build "cad_part_memories"
+
   @impl true
   def mount(params, _session, socket) do
     # Runs of this experiment arrive as messages, the same way a run's steps do:
@@ -84,6 +91,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     socket =
       if connected?(socket) do
         RunHistory.subscribe()
+        # A build started from this page's own findings reports where every
+        # build reports — the prerequisite row's topic — so the page listens to
+        # it as well and knows when what it said about the disk stopped being
+        # true.
+        Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Saga.topic())
         Logger.info("page opened: #{name_of(params)}", experiment: name_of(params))
         # The staleness check is asked for here and answered in `handle_info/2`:
         # it reads every open run and asks Oban about each, and a page that waits
@@ -1282,6 +1294,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     {:noreply, assign(socket, filter: text)}
   end
 
+  # A setup that names a CAD part's object set as missing offers a click rather
+  # than a link, because the set is written here, from the part file this node
+  # holds. The click starts the same build `/prerequisites` runs, and the page
+  # re-reads its findings when that build finishes — the moment the finding stops
+  # being true.
+  def handle_event("prepare_cad_part", _params, socket) do
+    {:noreply, prepare_cad_part(socket)}
+  end
+
   # A tick's own value, or the opposite of what the page shows when a client
   # sends none (a test, or a page built before this attribute existed).
   defp wanted_follow(%{"follow" => value}, _socket) when value in ["true", "false"],
@@ -1422,6 +1443,36 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     end
   end
 
+  defp prepare_cad_part(socket) do
+    case Prerequisites.get(@cad_build) do
+      nil ->
+        put_flash(socket, :error, "No #{@cad_build} prerequisite in this build's manifest.")
+
+      prerequisite ->
+        case Saga.start(prerequisite) do
+          {:error, reason} ->
+            put_flash(socket, :error, "Could not start: #{Failure.sentence(reason)}")
+
+          _started ->
+            put_flash(
+              socket,
+              :info,
+              "#{prerequisite.title} is writing the object sets; " <>
+                "/prerequisites shows how it is going."
+            )
+        end
+    end
+  end
+
+  defp reread_setup(%{assigns: %{opened: %{name: name}}} = socket) do
+    case Studio.open(name, conf_dir: Monty.Config.Source.conf_dirs()) do
+      {:ok, opened} -> assign(socket, opened: opened)
+      {:error, _reason} -> socket
+    end
+  end
+
+  defp reread_setup(socket), do: socket
+
   @impl true
   # A run of this experiment was written down, or settled. The row this page
   # draws is the record the database just wrote, so a run that is still queued is
@@ -1454,6 +1505,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   def handle_info({:recorded, _other}, socket), do: {:noreply, socket}
+
+  # The build this page's findings started: nothing here draws its progress (the
+  # prerequisite row does), but what the setup said about the disk changes when
+  # it finishes, so the setup is read again.
+  def handle_info({:download, %{id: @cad_build, status: :done}}, socket),
+    do: {:noreply, reread_setup(socket)}
+
+  def handle_info({:download, _progress}, socket), do: {:noreply, socket}
 
   def handle_info({:settled, run}, %{assigns: %{opened: %{name: name}}} = socket)
       when run.experiment == name do

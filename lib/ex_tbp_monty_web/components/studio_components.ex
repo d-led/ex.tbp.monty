@@ -185,6 +185,17 @@ defmodule ExTbpMontyWeb.StudioComponents do
             >
               {entry.finding.link.label}
             </.link>
+            <%!-- Work this node does itself, on the page that already explains
+            it: a part's inputs are written from the part file, so there is no
+            page to send a reader to. --%>
+            <button
+              :if={entry.finding.action}
+              id={"finding-#{entry.finding.code}-#{entry.index}-do"}
+              phx-click={entry.finding.action.event}
+              class="inline-block text-sm btn btn-ghost btn-xs"
+            >
+              {entry.finding.action.label}
+            </button>
           </div>
         </li>
       </ul>

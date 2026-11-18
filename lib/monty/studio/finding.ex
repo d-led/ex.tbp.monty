@@ -12,7 +12,7 @@ defmodule Monty.Studio.Finding do
   """
 
   @enforce_keys [:level, :code, :message]
-  defstruct [:level, :code, :message, :where, :link]
+  defstruct [:level, :code, :message, :where, :link, :action]
 
   @type level :: :error | :warning | :info
 
@@ -25,12 +25,22 @@ defmodule Monty.Studio.Finding do
   """
   @type link :: %{label: String.t(), href: String.t()}
 
+  @typedoc """
+  What a click does on the page it is already on.
+
+  A download is a page away; writing the inputs a CAD part is made of is the
+  node's own work, so the click is an event the page answers rather than a
+  redirect to somewhere that would explain itself in words.
+  """
+  @type action :: %{label: String.t(), event: String.t()}
+
   @type t :: %__MODULE__{
           level: level(),
           code: atom(),
           message: String.t(),
           where: String.t() | nil,
-          link: link() | nil
+          link: link() | nil,
+          action: action() | nil
         }
 
   @doc "A finding about `where` — a config path, a module id or a group name."
@@ -42,6 +52,11 @@ defmodule Monty.Studio.Finding do
   @spec with_link(t(), String.t(), String.t()) :: t()
   def with_link(%__MODULE__{} = finding, label, href),
     do: %{finding | link: %{label: label, href: href}}
+
+  @doc "The same finding, with an event this page answers."
+  @spec with_action(t(), String.t(), String.t()) :: t()
+  def with_action(%__MODULE__{} = finding, label, event),
+    do: %{finding | action: %{label: label, event: event}}
 
   @doc "Only the findings at the given level."
   @spec at([t()], level()) :: [t()]
