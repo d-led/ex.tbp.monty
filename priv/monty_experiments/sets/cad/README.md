@@ -203,7 +203,32 @@ same four features, the same memory:
 
 and the module gained evidence in all but one of the twelve, `plate_risers_0` and
 `plate_body` trading the lead between episodes as they did before. So the policy
-was indeed the whole of the duty cycle — the same memory, sensor and stand-off
-with a smaller step is four times as much feeding — and what is left is the other
-side of it: whether evidence past a hundred and forty in 800 steps becomes a
-recognition in the 5000 the config allows. That is the next run, uncapped.
+was the whole of the duty cycle — the same memory, sensor and stand-off with a
+smaller step is four times as much feeding.
+
+What is left is not the matcher, and the memory says so. Asked of the file the
+run loads — every node of every object, by the features the sensor reports:
+
+| object                    | hue (hsv) | `principal_curvatures_log` | `mean_depth` |
+| ------------------------- | --------- | -------------------------- | ------------ |
+| `plate_body` (3017 nodes) | 0.000     | median 0.00, sd 1.56       | 0.009        |
+| `plate_risers_0` (2054)   | 0.000     | median 0.00, sd 1.77       | 0.009        |
+| `plate_bosses_0` (205)    | 0.000     | median 4.56, sd 4.49       | 0.010        |
+| `plate_holes_0` (96)      | 0.000     | median −2.89, sd 3.14      | 0.000        |
+
+The part is one colour, so hue carries nothing. Depth separates the bore (an
+opening, nought) and barely separates the rest. Curvature separates a boss
+(convex) and a bore (concave) from flat surface — and leaves the body and the
+risers **both flat, both nine millimetres deep, both the same colour**: two of the
+four objects are indistinguishable in the features this sensor reports, at the
+scale it reports them. That is what the run showed, episode after episode: the
+most likely object alternated between exactly those two and the possible set
+never fell below the pair.
+
+So the next question is what the set asks, not what the matcher does. Either the
+object set holds features that differ in the taught features (two curvatures, two
+depths, one colour — the tutorial's objects differ by shape _and_ colour), or the
+question is the part rather than the feature (`cad/plate_part_eval`), or a run
+that cannot separate two objects is reporting an ambiguity rather than a failure —
+which is Monty's own answer for a symmetric object, and what the symmetry
+evidence in an episode's statistics is there to show.
