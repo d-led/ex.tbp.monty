@@ -626,23 +626,24 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp size_label(_prerequisite, %{archive: archive, unpacked: unpacked}),
     do: "#{bytes(archive)} archive · #{bytes(unpacked)} unpacked"
 
-  # What a build promises, said against the disk. A row that reports only bytes
+  # What a *build* promises, said against the disk. A row that reports only bytes
   # leaves a reader guessing whether the file their config names is one of them,
   # which is exactly the question a stale build raises: the directory is there,
   # the experiment's own memory is not.
-  defp missing_provided(prerequisite) do
-    case Map.get(prerequisite, :provides, []) do
-      [] ->
-        []
+  #
+  # Only a build: an archive's `provides` is the list of models it *carries*, and
+  # what is not exported yet from an unpacked archive is a state that row already
+  # has a word for (`memory_not_read`) — saying "not written yet" underneath it
+  # would be the same fact twice in two vocabularies.
+  defp missing_provided(%{build: build} = prerequisite) when is_binary(build) do
+    target = Prerequisites.target_path(prerequisite)
 
-      names ->
-        target = Prerequisites.target_path(prerequisite)
-
-        Enum.reject(names, fn name ->
-          File.exists?(Path.join(target, "#{name}.jsonl.gz"))
-        end)
-    end
+    prerequisite
+    |> Map.get(:provides, [])
+    |> Enum.reject(fn name -> File.exists?(Path.join(target, "#{name}.jsonl.gz")) end)
   end
+
+  defp missing_provided(_prerequisite), do: []
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
   # read off the manifest rather than written here, so a page cannot say
