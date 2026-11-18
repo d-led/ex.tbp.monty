@@ -40,19 +40,24 @@ defmodule Monty.SurfReplayTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_base_10simobj_episode.jsonl"
+
   # See `recording_episode_test.exs`: the memory lives in the folder a
-  # `mix monty.prerequisites.fetch` writes, not beside the code.
-  @pretrained Path.join([
-                Monty.Studio.Memory.libraries_dir(),
-                "pretrained_ycb_v14/surf_agent_1lm_10similarobj.jsonl.gz"
-              ])
+  # `mix monty.prerequisites.fetch` writes, not beside the code — and the folder
+  # is read when the test runs, because it is an application setting another
+  # test can hold while this file is compiled.
+  defp pretrained_path do
+    Path.join([
+      Monty.Studio.Memory.libraries_dir(),
+      "pretrained_ycb_v14/surf_agent_1lm_10similarobj.jsonl.gz"
+    ])
+  end
 
   # The module `base_10simobj_surf_agent` builds
   # (`learning_module/evidence_1lm_nn5_dod0025.yaml`) with the burst sampler its
   # memory was trained for.
   defp learning_module do
     {:ok, lm} =
-      EvidenceGraphLM.new(MontyRecording.load_pretrained!(@pretrained),
+      EvidenceGraphLM.new(MontyRecording.load_pretrained!(pretrained_path()),
         max_match_distance: 0.01,
         max_nneighbors: 5,
         hypotheses_updater: BurstSamplingHypothesesUpdater,

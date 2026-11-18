@@ -10,7 +10,14 @@ defmodule Monty.Studio.MemoryTest do
   recognising with something else.
   """
 
-  use ExTbpMontyWeb.ConnCase, async: true
+  # Not async: three cases here move `:monty_libraries_dir`, the application
+  # setting that decides which memory a *config* reads
+  # (`Monty.Studio.Memory.libraries_dir/0`). It is shared with every test in the
+  # VM, so a reader running beside these saw an empty folder or a trained one:
+  # `Monty.RecordingEpisodeTest` raised `File.Error` on a path that was never
+  # there, and concluded an episode six steps early on a memory it had not asked
+  # for. A test that moves a global cannot run beside one that reads it.
+  use ExTbpMontyWeb.ConnCase, async: false
 
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel

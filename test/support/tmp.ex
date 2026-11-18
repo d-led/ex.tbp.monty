@@ -47,6 +47,11 @@ defmodule Monty.Test.Tmp do
 
   @doc """
   A fresh directory that an application environment key points at for this test.
+
+  The setting is global to the VM, so a test that moves one cannot be
+  `async: true`: it would hand every test running beside it a folder that is not
+  the one they asked for. (Measured the hard way — see
+  `Monty.Studio.MemoryTest`.)
   """
   @spec env_dir(String.t(), atom()) :: Path.t()
   def env_dir(prefix, key) do
@@ -58,7 +63,9 @@ defmodule Monty.Test.Tmp do
   @doc """
   An application environment key set for this test, and put back as it was.
 
-  Restored to its previous value, or deleted when it had none.
+  Restored to its previous value, or deleted when it had none. Global to the
+  VM, so the test using it is a `setup` of the whole run, not of itself: it is
+  not `async: true`.
   """
   @spec app_env(atom(), term()) :: :ok
   def app_env(key, value), do: app_env(:ex_tbp_monty, key, value)

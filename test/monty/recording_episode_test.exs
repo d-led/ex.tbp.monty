@@ -35,21 +35,30 @@ defmodule Monty.RecordingEpisodeTest do
   alias Monty.Test.MontyRecording
 
   @recording "test/fixtures/monty_pretrained_episode.jsonl"
+  @channel "patch"
+  @agent "agent_id_0"
+
   # The memory is data, not source: `mix monty.prerequisites.fetch
   # pretrained_ycb_v10` exports it into the folder the application reads, so the
   # path is that folder's, never one a checkout used to carry.
-  @pretrained Path.join([
-                Monty.Studio.Memory.libraries_dir(),
-                "pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
-              ])
-  @channel "patch"
-  @agent "agent_id_0"
+  #
+  # The folder is read when the test runs, not when the file compiles. It is an
+  # application setting, and `mix test` compiles a test file when the run reaches
+  # it — so a module attribute here froze whichever folder another test was
+  # holding at that moment, and this test then asked for a file that never
+  # existed.
+  defp pretrained_path do
+    Path.join([
+      Monty.Studio.Memory.libraries_dir(),
+      "pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
+    ])
+  end
 
   # The learning module of the experiment the recording came from
   # (`learning_module/evidence_1lm_nn5_dod0025.yaml`).
   defp learning_module do
     {:ok, lm} =
-      EvidenceGraphLM.new(MontyRecording.load_pretrained!(@pretrained),
+      EvidenceGraphLM.new(MontyRecording.load_pretrained!(pretrained_path()),
         max_match_distance: 0.01,
         max_nneighbors: 5,
         hypotheses_updater: BurstSamplingHypothesesUpdater,
