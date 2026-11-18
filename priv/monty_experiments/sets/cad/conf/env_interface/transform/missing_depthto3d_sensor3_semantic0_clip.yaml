@@ -1,0 +1,33 @@
+# @package experiment.config.environment
+# Two patches and a view finder, clipped the way the CAD world is: the scene
+# draws nothing inside its own five-millimetre near plane, so a depth read from
+# closer than that is the plane and not the surface (`cad_plate_objects.yaml`
+# says where the stand-off comes from).
+transform:
+  - _target_: tbp.monty.frameworks.environment_utils.transforms.MissingToMaxDepth
+    agent_id: agent_id_0
+    max_depth: 1
+  - _target_: tbp.monty.frameworks.environment_utils.transforms.DepthTo3DLocations
+    agent_id: agent_id_0
+    sensor_ids:
+      - patch
+      - patch_side
+      - view_finder
+    resolutions:
+      - - 64
+        - 64
+      - - 64
+        - 64
+      - - 64
+        - 64
+    world_coord: true
+    zooms:
+      - 10.0
+      - 10.0
+      - 1.0
+    get_all_points: true
+    use_semantic_sensor: false
+    depth_clip_sensors:
+      - 0
+      - 1
+    clip_value: 0.05

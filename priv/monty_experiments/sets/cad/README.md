@@ -58,9 +58,10 @@ The STEP file itself is the only thing in the repository:
 
 ## Reproducing it on the page
 
-The studio is what runs these, and it carries four CAD runs: `cad/plate_part_eval`
+The studio is what runs these, and it carries five CAD runs: `cad/plate_part_eval`
 (the plate as one object), `cad/plate_features_eval` (the same plate as its four
-features), and the two blends. `scripts/init-dev.sh` once, then
+features), `cad/plate_features_2patch_eval` (the same again with a second patch),
+and the two blends. `scripts/init-dev.sh` once, then
 `MONTY_PYTHON=../monty-orig/.venv/bin/python scripts/run-dev.sh` for
 <http://localhost:4000> — the packaged desktop application is the same pages. A
 CAD run steps MuJoCo, so an interpreter with `tbp.monty` in it is the one thing
@@ -298,6 +299,31 @@ The set now names the goal-driven policy: twenty per cent more feeding, twice th
 evidence, and the same four objects still possible at the end of every episode.
 Two independent moves past the same wall is the strongest evidence this memory
 has that the wall is the memory, not the policy.
+
+A second patch does not move it either, and that one is worth having measured
+rather than argued. `cad/plate_features_2patch_eval` is the same run with a
+second camera four millimetres along the agent's own x — a quarter of the patch's
+width, so the pair spans a rail's edge where one patch sees only its face. The
+port carries it: both patches reach the module (`percepts patch,patch_side`) and
+one learning module reads both, with its own tolerances and weights for each id.
+Same four episodes, same five-hundred-step budget:
+
+    one patch:  402 of 2000 steps fed, evidence 44.9, 4108 hypotheses, four possible
+    two patches: 376 of 2000 steps fed, evidence 34.2, 4108 hypotheses, four possible
+
+The hypothesis count is the same number to the unit, which is the finding: the
+second patch's points fall on nodes the first patch has already matched, so it
+adds no candidate and no evidence that separates anything. A patch here is wider
+than a feature, so a second one sees the same surface twice rather than more of
+the object. Widening the one patch instead (`zoom: 5`, twice the surface at half
+the resolution) fed more steps and lower evidence — 584 of 2000 for 5.7 — and left
+the four objects possible as well; it also moves the run away from the field of
+view the memory was taught through, which is the defect named further up.
+
+Five learning modules would not help either: Monty pairs them with five sensors
+and votes between them, and every multi-patch environment this port carries is a
+distant agent — the surface agent is single-patch by design. Voting two modules
+that read the same patch would agree with themselves.
 
 What is left is not the matcher, and the memory says so. Asked of the file the
 run loads — every node of every object, by the features the sensor reports:

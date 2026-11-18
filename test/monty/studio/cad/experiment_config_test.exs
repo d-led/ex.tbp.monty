@@ -44,16 +44,37 @@ defmodule Monty.Studio.Cad.ExperimentConfigTest do
     end
   end
 
-  defp policy do
-    {:ok, tree} = Composer.compose(@experiment)
+  describe "the two-patch feature run" do
+    # A second patch is a second camera, and Monty's sensor order is what
+    # `sm_to_lm_matrix` counts: the patches first, the view finder last, or the
+    # learning module is fed the wrong sensor's features.
+    test "the learning module reads both patches and not the view finder" do
+      monty = compose("cad/plate_features_2patch_eval")
 
-    get_in(tree, [
-      "experiment",
-      "config",
-      "monty_config",
-      "motor_system_config",
-      "policy_selector",
-      "policy"
-    ])
+      assert monty["sm_to_lm_matrix"] == [[0, 1]]
+      assert Map.keys(monty["sm_to_agent_dict"]) == ["patch", "patch_side", "view_finder"]
+    end
+
+    # A module's tolerances are keyed by the sensor that reported the features,
+    # so a patch id with no entry is a channel it cannot judge.
+    test "the module has tolerances for both patches" do
+      lm =
+        compose("cad/plate_features_2patch_eval")
+        |> get_in(["learning_modules", "learning_module_0"])
+
+      assert Map.keys(lm["tolerances"]) == ["patch", "patch_side"]
+    end
+  end
+
+  defp policy do
+    policy = compose(@experiment) |> get_in(["motor_system_config", "policy_selector", "policy"])
+
+    policy
+  end
+
+  defp compose(experiment) do
+    {:ok, tree} = Composer.compose(experiment)
+
+    get_in(tree, ["experiment", "config", "monty_config"])
   end
 end

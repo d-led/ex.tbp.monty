@@ -1,0 +1,48 @@
+# @package _global_
+# The plate's features, asked with two patches instead of one.
+#
+# Everything that makes the feature run a feature run is unchanged from
+# `plate_features_eval` — the same memory, stand-off, gait, policy and object
+# set. The one difference is that the agent reads the surface from two points a
+# few millimetres apart, so an observation says not only what this patch is on
+# but what sits beside it: a rail's face has an edge within the second patch, the
+# plate's own face does not.
+#
+# The question is whether that is enough to tell the four features apart, which
+# one patch cannot: `plate_body` and `plate_risers_0` are the same surface in the
+# numbers a single patch reports (the set's README has that measurement).
+defaults:
+  - /monty: evidencegraph_exp1000_emin_t3
+  - /monty/motor_system_config: surface_curvature_informed_goal1
+  - /monty/learning_module: evidence_tutorial_surf_agent_2obj_2patches
+  - /monty/sensor_module: camera_tutorial_surf_agent_2patches
+  - /monty/connectivity: 1lm_2sm
+  - /environment: cad_plate_objects_2patch
+  - /env_interface: cad_plate_features_eval
+  - /env_interface/transform: missing_depthto3d_sensor3_semantic0_clip
+  - /termination: any1_objectrecognition_t1000_e500_tot5000
+  - /logging: basic_info_monty_runs
+  - /telemetry: info
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    show_sensor_output: true
+    n_train_epochs: 3
+    monty_config:
+      motor_system_config:
+        policy_selector:
+          policy:
+            desired_object_distance: 0.008
+            action_sampler:
+              rotation_degrees: 1.0
+              translation_distance: 0.001
+    model_name_or_path: ${path.expanduser:"~/tbp/results/monty/projects"}/cad_parts_v1/plate_features
+    n_eval_epochs: 3
+    seed: 42
+    supervised_lm_ids: []
+    python_log_level: DEBUG
+    logging:
+      output_dir: ${path.expanduser:"~/tbp/results/monty/projects"}
+      run_name: cad_plate_features_2patch_eval
+      wandb_group: gm_eval_runs

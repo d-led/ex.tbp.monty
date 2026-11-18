@@ -1,0 +1,62 @@
+# @package experiment.config.environment
+# The CAD world's surface agent with a second patch beside the first: the same
+# object set, the same stand-off, one more camera in the agent's own frame.
+#
+# Why: a feature is a centimetre across and one patch covers two, so a single
+# patch on a riser's face and a single patch on the plate's face report the same
+# numbers — flat, nine millimetres, one colour. The question a second patch asks
+# is the one a single patch cannot: what is *next to* this surface. A face of a
+# raised rail has an edge five millimetres away; the plate's own face does not.
+#
+# The offset is a quarter of the patch's own width (a patch covers twice its
+# stand-off, so sixteen millimetres), which is close enough that the second
+# patch still lands on the same feature and far enough that the pair spans a
+# ridge rather than the same flat patch twice.
+env_init_args:
+  data_path: ${path.expanduser:${oc.env:MONTY_DATA}/cad_objects}
+  agents:
+    - _target_: tbp.monty.simulators.mujoco.agents.SurfaceAgent
+      _partial_: true
+      agent_id: agent_id_0
+      sensor_configs:
+        patch:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.0
+          resolution:
+            width: 64
+            height: 64
+          zoom: 10.0
+        patch_side:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.004
+            - 0.0
+            - 0.0
+          resolution:
+            width: 64
+            height: 64
+          zoom: 10.0
+        view_finder:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.03
+          resolution:
+            width: 64
+            height: 64
+          zoom: 1.0
+      # A hand's width above the object's own top, not ten centimetres above the
+      # ground: a part's feature is a centimetre or two tall and a surface
+      # agent's patch sees five, so at the tutorial's height the patch reads
+      # nothing but the clip and never arrives — measured, an episode whose
+      # patch image is a single flat grey for every one of its steps.
+      position:
+        - 0.0
+        - 1.5
+        - 0.03
+  raise_actuate_missing: false
+env_init_func: ${monty.class:tbp.monty.simulators.mujoco.MuJoCoSimulator}
