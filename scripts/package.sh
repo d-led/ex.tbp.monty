@@ -307,6 +307,100 @@ carries_companion_apps() {
   done
 }
 
+# The same two companions where there is no app bundle to put them in.
+#
+# Linux and Windows have no `Contents/`, so the three things a companion is — its
+# launcher, the one line naming its release, and that release — share a folder of
+# their own, beside the window's executable:
+#
+#   ex-tbp-monty-<rid>/
+#     ex-tbp-monty-desktop            the window
+#     rel/ex_tbp_monty/               the window's release
+#     ex.tbp.monty.plugin.example/    a companion, clicked from `$name.desktop`
+#       ex.tbp.monty.plugin.example   the launcher
+#       ex.tbp.monty.plugin.example.desktop
+#       node
+#       example_plugin/               its own release, its own runtime
+#
+# The window is what sits beside that folder, so the window's tarball (Linux) and
+# portable folder (Windows) carry all three and one download gives the demo.
+companion_folders() {
+  local window_folder=$1 pair name node folder release
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    node=${pair##*:}
+    folder="$window_folder/$name"
+    release="$built_plugins/$node"
+
+    if [ ! -x "$release/bin/$node" ]; then
+      echo "no $release/bin/$node to put in $name" >&2
+      echo "  scripts/build-plugins.sh makes them; scripts/start-desktop.sh --bundle runs it" >&2
+      return 1
+    fi
+
+    clean "$folder"
+    mkdir -p "$folder"
+
+    printf '%s\n' "$node" >"$folder/node"
+    cp -R "$release" "$folder/$node"
+
+    # The macOS launcher is a bundle's `Contents/MacOS/<name>`; these two are the
+    # same contract in a folder (`companion-linux.sh`, `companion-windows.ps1`).
+    cp scripts/desktop-plugins/companion-linux.sh "$folder/$name"
+    chmod +x "$folder/$name"
+
+    # The click. `Exec` runs through `sh` so the launcher is found beside the
+    # entry rather than at a path baked in at packaging time, which would break
+    # the moment the folder is moved — and a file manager opens the entry, not
+    # the script.
+    cat >"$folder/$name.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=$name
+Comment=The $node plugin node, joined to the Monty Studio window beside it
+Exec=sh -c 'cd "\$(dirname "\$1")" && exec "./$name"' sh %k
+Icon=$name
+Terminal=false
+Categories=Science;Education;
+DESKTOP
+
+    # One picture, from the window's own icon set: a missing one costs the
+    # picture and not the app, so it is said rather than refused.
+    if [ -f src-tauri/icons/128x128.png ]; then
+      cp src-tauri/icons/128x128.png "$folder/$name.png"
+    fi
+
+    echo "  $folder"
+  done
+}
+
+# Asked of the folder the tarball or the portable folder is made from, for the
+# reason `carries_companion_apps` asks it of the apps: a companion whose launcher
+# lost its executable bit opens nothing, and nothing on the way says which step
+# lost it.
+carries_companion_folders() {
+  local window_folder=$1 pair name node
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    node=${pair##*:}
+
+    if [ ! -x "$window_folder/$name/$name" ]; then
+      echo "the companion $name has no executable launcher at $name/$name" >&2
+      ls "$window_folder/$name" 2>/dev/null | sed 's/^/    /' >&2
+      return 1
+    fi
+
+    if [ ! -x "$window_folder/$name/$node/bin/$node" ]; then
+      echo "the companion $name carries no $node release of its own" >&2
+      ls "$window_folder/$name" 2>/dev/null | sed 's/^/    /' >&2
+      return 1
+    fi
+  done
+}
+
 # What a Linux person gets: a tarball holding the window with its release beside
 # it, which runs from anywhere, the `.deb` a distribution's package manager
 # installs, and the AppImage — the release squeezed into one executable, which
@@ -322,8 +416,17 @@ linux_bundle() {
   cp src-tauri/target/release/ex-tbp-monty-desktop "$folder/"
   cp -R src-tauri/target/release/rel "$folder/"
 
+  # The two companions, in the same folder as the window and each still a
+  # separate node: its own launcher, its own release, its own runtime. Packing
+  # them here and not into the window is the arrangement the apps have on macOS —
+  # beside the window, never inside it.
+  companion_folders "$folder"
+  carries_companion_folders "$folder" || return 1
+
   tar czf "$target" -C "$artifacts/$1" "ex-tbp-monty-$1"
   echo "  $target"
+
+  zip_companion_folders "$folder" "$1"
 
   # Two installable shapes beside the folder: the `.deb` a package manager
   # tracks, and the AppImage that runs where nothing is installed at all. The
@@ -331,6 +434,26 @@ linux_bundle() {
   # unpacking step — it is the only artefact a person can download and run.
   bundle_one src-tauri/target/release/bundle/deb '*.deb' "$1"
   bundle_one src-tauri/target/release/bundle/appimage '*.AppImage' "$1"
+}
+
+# One archive per companion, beside the window's: three downloads that are three
+# nodes. A release page that listed only the window would list a plugin nobody can
+# click, and the demonstration is the clicking.
+#
+# Each holds the companion's own folder, which is a folder a person unpacks beside
+# the window's — the launcher finds the window by being next to it, in every
+# shape this project ships.
+zip_companion_folders() {
+  local window_folder=$1 rid=$2 pair name target
+
+  for pair in "${companions[@]}"; do
+    name=${pair%%:*}
+    target="$artifacts/$rid/$name-$rid.tar.gz"
+
+    rm -f "$target"
+    tar czf "$target" -C "$window_folder" "$name"
+    echo "  $target"
+  done
 }
 
 # One file the bundle step made, moved beside the folder this platform ships.
