@@ -176,3 +176,16 @@ displaced a real evidence and the most likely object had no number to read —
 `80 %` of it then raised in `evidence_update_threshold/3`, nine steps in. The
 comparison asks `is_number` now, and a threshold that is not a number clears no
 hypothesis, which is what `evidence >= NaN` answers for every element.
+
+The first thing to try about the duty cycle is the gait, and it is a scale
+argument of the same shape as the stand-off's: the set steps a feature a
+centimetre across with `surface_curvature_informed_5_goal0`, whose actions carry
+`rotation_degrees: 5.0` and Monty's default travel — a fifth of the feature a
+step, so a crossing is two or three fed steps and the rest of the episode is the
+policy walking back. `constant_surf.yaml` is the same sampler without a size at
+all, and a set of its own with one millimetre steps would be the same kind of
+choice the stand-off and the zoom already are: sized for the object, not for the
+tutorial's plate. Nothing here is measured yet — the box ran out of memory
+before a fifth episode — so the next session's first number is that duty cycle
+under a finer gait, and the run that shows it is the same run that shows a
+recognition.
