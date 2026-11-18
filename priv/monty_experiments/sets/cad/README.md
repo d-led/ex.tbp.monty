@@ -141,20 +141,38 @@ feature episode gets past its first percept, whatever the memory holds.
 
 ### Where it stands now
 
-The writer writes numbers, and a hypothesis with no evidence is encoded as the
-NaN it is rather than raising; the mean, the possible set, a belief and an output
-now let a NaN through the way numpy does. The run gets further with every one of
-those fixed — five steps, six, nine — and now the learning module _takes_ the
-first percept it is offered:
+The matcher runs: a feature episode builds its hypotheses, scores them, culls
+them and climbs. Measured over four episodes of one run — 5000 steps each, the
+ceiling the termination config gives — the module's most likely hypothesis went
+`0.38 → 51.6` in the first and `0.48 → 239.65` in the fourth, both on a memory of
+four feature objects, and no step raised. What the run does not do is conclude,
+and the reason is upstream of the matcher:
 
-    step 5 · percepts patch · inputs learning_module_0=1 · … learning_module_0: plate/holes/0 ev  (192 hyps, 4 possible
+    episode 0: 5000 steps, the module was fed 190 of them
+    episode 1: 5000 steps, fed 56
+    episode 2: 5000 steps, fed 177
+    episode 3: 5000 steps, fed 625
 
-An empty evidence beside 192 hypotheses is the whole of what is left: the module
-built them, scored none, and the next crash in the chain is
-`LearningModule.evidence_update_threshold/3` computing a threshold over a column
-that has no number in it. So the question is no longer the world or the memory's
-shape but one comparison: which of the percept's features cannot be scored
-against the graph's columns at all. `DefaultFeatureEvidenceCalculator.columns/4`
-is where a feature's name is looked up and a missing one turns the whole row into
-no evidence; the percept's `pose_fully_defined` is a boolean (`true`) while the
-memory now carries `1.0`, and that pair is the first thing to compare.
+A step feeds the learning module only when enough of the patch is on the object,
+so a duty cycle of four per cent is the patch spending the rest of the episode
+looking at background. With whole faces unread the module cannot separate the
+part's body from its risers — it named `plate_risers_0` through the first two
+episodes and `plate_body` through the next two, and the possible set stayed at
+four — so the episode ends at the step ceiling rather than at a recognition.
+That is a motor and geometry question (where the agent starts, how far it steps,
+how far it stands off), not another matcher defect: with the patch on a feature a
+percept is scored, and the evidence moves.
+
+Two defects behind that were in the memory's own two readers, and both are fixed
+where the fault was rather than at the caller. A feature whose values are all
+empty is not mapped into the graph at all — the bore had no curvature to store
+and the mapping claimed a column nothing filled, which left every row of that
+graph narrower than the order it was read with, so all 96 of its nodes scored
+nothing; and a grid model now answers `has_feature?` from the graph it fills
+instead of `false` for every name, which had made every grid memory lose every
+feature. The scoring had two of the same shape: a hypothesis with no evidence is
+this port's NaN, and Elixir's `>` orders atoms after numbers, so a NaN
+displaced a real evidence and the most likely object had no number to read —
+`80 %` of it then raised in `evidence_update_threshold/3`, nine steps in. The
+comparison asks `is_number` now, and a threshold that is not a number clears no
+hypothesis, which is what `evidence >= NaN` answers for every element.
