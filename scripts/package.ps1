@@ -53,6 +53,19 @@ try {
     $artifacts = 'artifacts'
     $product = 'Monty on the BEAM'
 
+    # The two companions, by the app name each one carries and the release it
+    # runs, the same two `scripts/package.sh` builds, so the two packagers answer
+    # to one list. The name is the plugin's id, because it is an application of
+    # its own rather than a folder inside the window.
+    $Companions = @(
+        'ex.tbp.monty.plugin.example:example_plugin',
+        'ex.tbp.monty.plugin.flyverse:flyverse_plugin'
+    )
+
+    # Where `scripts/build-plugins.ps1` puts the releases, before each one is
+    # carried into its own folder.
+    $BuiltPlugins = '_build/desktop/plugins'
+
     function Get-HostRid {
         if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { return 'win-arm64' }
         return 'win-x64'
@@ -118,6 +131,58 @@ try {
         }
     }
 
+    # A companion is a node of its own that sits beside the window rather than in
+    # it: its launcher, the one line naming its release, and that release. Windows
+    # has no app bundle, so those three share a folder, exactly as they do on
+    # Linux: one sentence describes both, and the window is the `.exe` above that
+    # folder. `.cmd` is the click: a file manager will not run a `.ps1`.
+    function New-CompanionFolders {
+        param([string]$WindowFolder)
+
+        foreach ($pair in $Companions) {
+            $parts = $pair.Split(':')
+            $name = $parts[0]
+            $node = $parts[1]
+            $folder = Join-Path $WindowFolder $name
+            $release = Join-Path $BuiltPlugins $node
+
+            if (-not (Test-Path (Join-Path $release "bin\$node.bat"))) {
+                throw "no $release\bin\$node.bat to put in $name"
+            }
+
+            Remove-Item -Recurse -Force $folder -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $folder | Out-Null
+
+            Set-Content -Path (Join-Path $folder 'node') -Value $node
+            Copy-Item -Recurse $release (Join-Path $folder $node)
+            Copy-Item 'scripts/desktop-plugins/companion-windows.ps1' $folder
+            Copy-Item 'scripts/desktop-plugins/companion-windows.cmd' (Join-Path $folder "$name.cmd")
+
+            Write-Host "  $folder"
+        }
+    }
+
+    # Asked of the folder the zip is made from, for the reason `package.sh` asks
+    # it: a companion whose launcher never arrived is a plugin nobody can click,
+    # and nothing on the way would say which step lost it.
+    function Test-CompanionFolders {
+        param([string]$WindowFolder)
+
+        foreach ($pair in $Companions) {
+            $parts = $pair.Split(':')
+            $name = $parts[0]
+            $node = $parts[1]
+
+            if (-not (Test-Path (Join-Path $WindowFolder "$name\$name.cmd"))) {
+                throw "the companion $name has no launcher at $name\$name.cmd"
+            }
+
+            if (-not (Test-Path (Join-Path $WindowFolder "$name\$node\bin\$node.bat"))) {
+                throw "the companion $name carries no $node release of its own"
+            }
+        }
+    }
+
     # What the window reads at run time: `rel\` beside it is `bundle.resources`
     # resolved, so the folder is a self-contained copy of the application.
     function New-PortableFolder {
@@ -129,13 +194,37 @@ try {
 
         Copy-Item 'src-tauri/target/release/ex-tbp-monty-desktop.exe' $target
         Copy-Item -Recurse 'src-tauri/target/release/rel' $target
-        # And the two sample plugin nodes `bundle.resources` copied out beside
-        # it: the portable folder is the window without an installer, so it has
-        # to hold everything the installed one does.
-        Copy-Item -Recurse 'src-tauri/target/release/plugins' $target
+        # And the two companions beside it: separate nodes, separate executables,
+        # in the folder a person unpacks rather than inside the window.
+        New-CompanionFolders -WindowFolder $target
+        Test-CompanionFolders -WindowFolder $target
 
         Write-Host "  $target"
         return $target
+    }
+
+    # One archive per companion, beside the window's: three downloads that are
+    # three nodes. A release page that listed only the window would list a plugin
+    # nobody can click, and the demonstration is the clicking.
+    function New-CompanionArchive {
+        param([string]$Rid, [string]$WindowFolder)
+
+        foreach ($pair in $Companions) {
+            $name = $pair.Split(':')[0]
+            $target = Join-Path $PWD "$artifacts/$Rid/$name-$Rid.zip"
+
+            Remove-Item -Force $target -ErrorAction SilentlyContinue
+
+            Push-Location $WindowFolder
+            try {
+                tar -a -c -f $target --exclude '*.pdb' $name
+            }
+            finally {
+                Pop-Location
+            }
+
+            Write-Host "  $target"
+        }
     }
 
     function New-ZipArchive {
@@ -198,6 +287,7 @@ try {
 
         if (-not $NoZip) {
             New-ZipArchive -Rid $rid -Source $folder
+            New-CompanionArchive -Rid $rid -WindowFolder $folder
         }
 
         if (-not $NoInstaller) {
