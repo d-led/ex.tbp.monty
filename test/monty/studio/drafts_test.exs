@@ -1,5 +1,7 @@
 defmodule Monty.Studio.DraftsTest do
-  use ExUnit.Case, async: true
+  # Not async: a case here moves `:experiments_dir`, a global that decides where
+  # a draft is written (`Tmp.env_dir/2` states the rule).
+  use ExUnit.Case, async: false
 
   alias Monty.Studio.Blueprint
   alias Monty.Studio.Drafts

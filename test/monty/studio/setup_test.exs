@@ -1,5 +1,9 @@
 defmodule Monty.Studio.SetupTest do
-  use ExUnit.Case, async: true
+  # Not async: the default-world cases move `:world_simulator`, which
+  # `Monty.Studio.open/2` reads when a setup names no world — a global, so a
+  # setup opened beside them would be handed this file's world. The rule is
+  # `Tmp.app_env/2`'s.
+  use ExUnit.Case, async: false
 
   alias Monty.Experiment.MatchCriteria.NamedLMsMatch
   alias Monty.Experiment.SensorModule.ExperimentSensorModule

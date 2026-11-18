@@ -11,7 +11,10 @@ defmodule Monty.Studio.LoggingTest do
   can trust.
   """
 
-  use ExUnit.Case, async: true
+  # Not async: a case here moves `:wandb_mode`, a global the logging pipeline
+  # reads, so a run started beside it would log to another mode
+  # (`Tmp.app_env/2` states the rule).
+  use ExUnit.Case, async: false
 
   alias Monty.Frameworks.Loggers.GraphMatchingLoggers.BasicGraphMatchingLogger
   alias Monty.Frameworks.Loggers.MontyHandlers.{BasicCSVStatsHandler, DetailedJSONHandler}
