@@ -1,6 +1,6 @@
 # Features
 
-What this repository does, checked in the tree on 2026-11-08. Every claim links to
+What this repository does, checked in the tree on 2026-11-19. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
 guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
 not recalled — run it after anything lands that can move one.
@@ -10,16 +10,16 @@ not recalled — run it after anything lands that can move one.
 - **One naming rule, no translation table.** `path/file.py::Class` →
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
-- **The map is the contract.** 131 Python files (124 `tbp.monty`, 7 `tbp.teleop`),
-  360 classes. Implemented: 58 files / 211 classes. Planned: 54 / 70. Excluded: 19 / 79.
-  ([`module_map/data.ex`](../lib/monty/module_map/data.ex))
+- **The map is the contract.** 123 Python files (116 `tbp.monty`, 7 `tbp.teleop`),
+  329 classes. Implemented: 58 files / 211 classes. Planned: 55 / 68. Excluded: 10 / 47.
+  ([`module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
   with no module, or an exclusion with no reason.
 - **Monty's Hydra YAML is read unchanged**, with a documented subset of Hydra
   features. ([config-compatibility.md](config-compatibility.md))
 - **Snapshot gate:** composes each experiment Monty commits a snapshot for
-  (63 files at `monty@760ad174`) and diffs it path by path — an extra key is a
+  (63 files at `monty@335c1aa5`) and diffs it path by path — an extra key is a
   failure too. ([`snapshot_check.ex`](../lib/monty/config/snapshot_check.ex))
 - **Numbers checked against Monty**, strongest first: replayed (Monty's own code ran
   and its answers are committed fixtures), recorded (whole episodes), counted
@@ -64,7 +64,7 @@ not recalled — run it after anything lands that can move one.
   machine cannot render with the compiled binding — the default is `:ex_mujoco`
   (`Monty.Studio.Setup.default_world/0`) — and a run records which world it
   stepped.
-  ([`mujoco/environment.ex`](../lib/monty/simulators/mujoco/environment.ex),
+  ([`mujoco/simulator.ex`](../lib/monty/simulators/mujoco/simulator.ex),
   [from-monty.md](from-monty.md))
 - **Habitat, as a handle this build cannot step:**
   `Monty.Simulators.Habitat.Environment.HabitatEnvironment` is `implemented` in the
@@ -75,10 +75,10 @@ not recalled — run it after anything lands that can move one.
   have, rather than given MuJoCo's scene.
 - **Port contract:** 4-byte big-endian length + UTF-8 JSON, one request in flight, a
   timeout is an error, actions in Monty's own JSON shape.
-  ([`port/protocol.ex`](../lib/monty/simulators/port/protocol.ex))
+  ([`port/protocol.ex`](../packages/ex_tbp_monty_core/lib/monty/simulators/port/protocol.ex))
 - **Recorded percepts replay through the real runtime:**
   `Monty.Simulators.Recording.SensorModule`.
-  ([`recording/sensor_module.ex`](../lib/monty/simulators/recording/sensor_module.ex))
+  ([`recording/sensor_module.ex`](../packages/ex_tbp_monty_core/lib/monty/simulators/recording/sensor_module.ex))
 
 ## Studio (Phoenix LiveView)
 
@@ -94,7 +94,7 @@ not recalled — run it after anything lands that can move one.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
-  only when the checksum matches — 7 entries in
+  only when the checksum matches — 10 entries in
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml). A memory is exported by
   reading the pickles, and the page says which model it is reading while it does
   (`reading memory 3/15 · pretrained_ycb_v13/…`), so a first start shows progress
@@ -109,7 +109,7 @@ not recalled — run it after anything lands that can move one.
 
 - `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP, stateless — no session header, no
   SSE (`GET`/`DELETE` → 405), no batches. ([mcp.md](mcp.md))
-- **22 tools**, all `monty_*`: this deployment, docs, roadmap, the port,
+- **23 tools**, all `monty_*`: this deployment, docs, roadmap, the port,
   experiments and runs — [mcp.md](mcp.md) lists them, because a list here goes
   stale while the count does not.
 - Answers come from the sources, not a copy: `docs.thousandbrains.org` for the docs and
@@ -203,7 +203,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 2,593 `test` declarations in the suite.
+- 3,522 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

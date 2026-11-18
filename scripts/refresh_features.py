@@ -40,6 +40,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_PAGE = REPO / "docs" / "features.md"
+# The ported modules are a package of their own, so the generated map lives with
+# them. This script is the one place that reads it outside Mix.
+MODULE_MAP = REPO / "packages" / "ex_tbp_monty_core" / "lib" / "monty" / "module_map" / "data.ex"
 
 
 def _classes(block: str) -> str:
@@ -61,7 +64,7 @@ class Counters:
     """The numbers, measured once and read by every pattern below."""
 
     def __init__(self) -> None:
-        map_text = (REPO / "lib" / "monty" / "module_map" / "data.ex").read_text()
+        map_text = MODULE_MAP.read_text()
         self.map = self._module_map(map_text)
         self.revision = self._revision(map_text)
         self.snapshots = self._snapshots()
