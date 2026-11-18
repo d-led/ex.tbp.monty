@@ -63,6 +63,9 @@ defmodule ExTbpMontyWeb.Router do
     live "/experiments/*name", ExperimentLive, :show
     live "/runs", RunHistoryLive, :index
     live "/runs/:id", RunHistoryLive, :show
+    # Two runs of one experiment beside each other — the page a lever is read on
+    # (`Monty.Studio.Comparison`).
+    live "/compare", RunCompareLive, :compare
     # What this instance does while it runs, and what it cannot be asked to
     # change without a restart (`Monty.Studio.Settings`, `Monty.Studio.System`).
     live "/settings", SettingsLive, :show

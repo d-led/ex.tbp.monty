@@ -1318,7 +1318,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             inputs, and how it ended. A run that is waiting or going can be stopped here.
           </p>
         </div>
-        <.link navigate={~p"/experiments"} class="btn btn-ghost btn-sm">Experiments</.link>
+        <div class="flex items-center gap-1">
+          <.link navigate={~p"/compare"} class="btn btn-ghost btn-sm" id="compare-two-runs">
+            Compare two
+          </.link>
+          <.link navigate={~p"/experiments"} class="btn btn-ghost btn-sm">Experiments</.link>
+        </div>
       </header>
 
       <div class="flex flex-wrap items-center gap-2">
