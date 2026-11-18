@@ -246,6 +246,13 @@ prerequisites:
       - plate_features
       - blend_part
       - blend-big_part
+    # The other half of what one Make writes: the meshes each memory was taught
+    # on, beside the world's objects. A run reads the memory *and* the meshes,
+    # so a machine missing either is missing this build — and the objects folder
+    # is what `for_path/1` has to answer with when a CAD world has nothing in it.
+    writes:
+      - root: MONTY_DATA
+        target: cad_objects
 
   # The dogs' object set, imported from Objaverse's own GLBs. The manifest beside
   # the experiments says which eight dogs, with author, licence and page for

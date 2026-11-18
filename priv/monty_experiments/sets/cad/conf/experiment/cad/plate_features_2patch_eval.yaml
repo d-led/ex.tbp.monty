@@ -37,12 +37,12 @@ experiment:
             action_sampler:
               rotation_degrees: 1.0
               translation_distance: 0.001
-    model_name_or_path: ${path.expanduser:"~/tbp/results/monty/projects"}/cad_parts_v1/plate_features
+    model_name_or_path: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}/cad_parts_v1/plate_features
     n_eval_epochs: 3
     seed: 42
     supervised_lm_ids: []
     python_log_level: DEBUG
     logging:
-      output_dir: ${path.expanduser:"~/tbp/results/monty/projects"}
+      output_dir: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}
       run_name: cad_plate_features_2patch_eval
       wandb_group: gm_eval_runs

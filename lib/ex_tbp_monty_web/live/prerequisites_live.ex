@@ -595,15 +595,18 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # now. A running phase speaks for itself; a quiet one is answered by the disk.
   defp standing(_prerequisite, phase, _present?, _pending?) when not is_nil(phase), do: phase
 
-  defp standing(%{build: build}, nil, false, _pending?) when is_binary(build),
-    do: :not_built
-
-  # A build that wrote some of what it promises is not "present": the directory
-  # is there and the file a configuration names is not, which is the state that
-  # sends a person to a run page saying no memory can be read.
-  defp standing(%{build: build} = prerequisite, nil, true, _pending?)
+  # A build's badge is exactly what it still owes, in three states: nothing
+  # written, some of what it promises, or all of it. `present?/1` is already
+  # "every memory it promises is on disk", so a directory that exists is the
+  # only question left — and a build that wrote half is not "present", which is
+  # what sent a person to a run page saying no memory can be read.
+  defp standing(%{build: build} = prerequisite, nil, present?, _pending?)
        when is_binary(build) do
-    if missing_provided(prerequisite) == [], do: :present, else: :partly_built
+    cond do
+      present? -> :present
+      File.dir?(Prerequisites.target_path(prerequisite)) -> :partly_built
+      true -> :not_built
+    end
   end
 
   defp standing(_prerequisite, nil, true, true), do: :memory_not_read
@@ -644,15 +647,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # what is not exported yet from an unpacked archive is a state that row already
   # has a word for (`memory_not_read`) — saying "not written yet" underneath it
   # would be the same fact twice in two vocabularies.
-  defp missing_provided(%{build: build} = prerequisite) when is_binary(build) do
-    target = Prerequisites.target_path(prerequisite)
-
-    prerequisite
-    |> Map.get(:provides, [])
-    |> Enum.reject(fn name -> File.exists?(Path.join(target, "#{name}.jsonl.gz")) end)
-  end
-
-  defp missing_provided(_prerequisite), do: []
+  # What a build still owes, asked of the same rule the run asks before it steps
+  # (`Monty.Prerequisites.absent_memories/1`): a row and a run that disagreed
+  # about "is it finished" is how a page said "present" while a run said it had
+  # no memory.
+  defp missing_provided(prerequisite), do: Prerequisites.absent_memories(prerequisite)
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
   # read off the manifest rather than written here, so a page cannot say

@@ -34,7 +34,11 @@ defmodule Monty.Prerequisites do
           optional(:licence) => String.t() | nil,
           optional(:extract) => boolean(),
           optional(:unpacks_to) => String.t() | nil,
-          optional(:provides) => [String.t()]
+          optional(:provides) => [String.t()],
+          # The places a build fills besides its own `root`/`target`: a memory
+          # goes in the libraries and the meshes it was taught on beside the
+          # world's objects, and a run reads both.
+          optional(:writes) => [%{root: String.t(), target: String.t()}]
         }
 
   @doc "Every configured prerequisite."
@@ -126,10 +130,34 @@ defmodule Monty.Prerequisites do
   telling a reader their data is there when no run can read it.
   """
   @spec present?(prerequisite()) :: boolean()
+  def present?(%{build: build} = prerequisite) when is_binary(build) do
+    holds_something?(where_it_lands(prerequisite)) and absent_memories(prerequisite) == []
+  end
+
   def present?(%{extract: true} = prerequisite),
     do: holds_something?(where_it_lands(prerequisite))
 
   def present?(prerequisite), do: File.exists?(target_path(prerequisite))
+
+  @doc """
+  The memories a build promises that are not on disk.
+
+  `provides` is what a build says it writes and `unpacks_to` is the release it
+  writes them into, which together name the files a run loads. A build that
+  stopped after the first part leaves a directory that looks finished and
+  memories no run of the other parts can read — so the directory alone is not
+  the answer.
+  """
+  @spec absent_memories(prerequisite()) :: [String.t()]
+  def absent_memories(%{provides: names} = prerequisite) when is_list(names) do
+    release = Map.get(prerequisite, :unpacks_to) || Path.basename(where_it_lands(prerequisite))
+
+    Enum.reject(names, fn name ->
+      File.exists?(Path.join([root_path("MONTY_LIBRARIES"), release, name <> ".jsonl.gz"]))
+    end)
+  end
+
+  def absent_memories(_prerequisite), do: []
 
   # A directory that exists and holds nothing is not data: it is the `mkdir` on
   # the way to some, or an unpack that was interrupted. Counting it as present is
@@ -313,6 +341,22 @@ defmodule Monty.Prerequisites do
   end
 
   @doc """
+  Every place an entry puts files, its own `root`/`target` first.
+
+  A build writes more than one place — a memory in the libraries and the meshes
+  it was taught on beside the world's objects — and a run that is missing either
+  needs the same click. `writes` is that second place, said in the manifest
+  rather than found by a rule about CAD.
+  """
+  @spec landings(prerequisite()) :: [Path.t()]
+  def landings(prerequisite) do
+    [where_it_lands(prerequisite) | Enum.map(Map.get(prerequisite, :writes, []), &writes_path/1)]
+  end
+
+  defp writes_path(%{root: root, target: target}),
+    do: Path.join(root_path(root), Path.rootname(target))
+
+  @doc """
   The prerequisite that fills `path`, if one does.
 
   The other direction from `where_it_lands/1`: a run names a directory — or a
@@ -328,13 +372,19 @@ defmodule Monty.Prerequisites do
     expanded = Path.expand(path)
 
     all(manifest)
-    |> Enum.filter(&fills?(&1, expanded))
-    |> Enum.max_by(&byte_size(Path.expand(where_it_lands(&1))), fn -> nil end)
+    |> Enum.filter(fn prerequisite ->
+      Enum.any?(landings(prerequisite), &inside?(expanded, &1))
+    end)
+    |> Enum.max_by(&deepest_landing/1, fn -> nil end)
   end
 
-  defp fills?(prerequisite, expanded) do
-    landing = Path.expand(where_it_lands(prerequisite))
+  defp inside?(expanded, landing) do
+    landing = Path.expand(landing)
     expanded == landing or String.starts_with?(expanded, landing <> "/")
+  end
+
+  defp deepest_landing(prerequisite) do
+    prerequisite |> landings() |> Enum.map(&byte_size(Path.expand(&1))) |> Enum.max()
   end
 
   @typedoc """
@@ -383,6 +433,27 @@ defmodule Monty.Prerequisites do
   def for_setup(%{world: :habitat} = setup), do: data_need(setup) ++ models_need(setup)
 
   def for_setup(_setup), do: []
+
+  @doc """
+  The builds a run of this setup needs and does not have.
+
+  A run reads the objects its environment names and the memory its config names,
+  and either can be something this application **makes** rather than downloads —
+  the manifest says which with `build:`. This is that list: every missing thing
+  this node can make for the run, answered before the run starts so it can make
+  them itself. A first run on a machine with none of it is one press, instead of
+  a page of prerequisites and a person remembering what it said.
+  """
+  @spec built_for(map()) :: [prerequisite()]
+  def built_for(setup) do
+    setup
+    |> for_setup()
+    |> Enum.reject(&(&1.present? || is_nil(&1[:path])))
+    |> Enum.map(&for_path(&1.path))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.filter(&is_binary(&1[:build]))
+    |> Enum.uniq_by(& &1.id)
+  end
 
   @doc """
   Which engine a setup's own world runs: the simulator its environment names.
@@ -660,6 +731,7 @@ defmodule Monty.Prerequisites do
       build: Map.get(entry, "build"),
       root: Map.fetch!(entry, "root"),
       target: Map.fetch!(entry, "target"),
+      writes: Enum.map(Map.get(entry, "writes", []), &%{root: &1["root"], target: &1["target"]}),
       sha256: Map.get(entry, "sha256"),
       # Whose work the archive is and on what terms, beside the URL it comes
       # from: a download is data, and data an application fetches on a person's

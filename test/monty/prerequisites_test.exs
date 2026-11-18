@@ -3,7 +3,7 @@ defmodule Monty.PrerequisitesTest do
 
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Build
-  alias Monty.Test.Tmp
+  alias Monty.Test.{PrerequisiteRoots, Tmp}
 
   setup do
     previous = System.get_env("MONTY_MODELS")
@@ -140,6 +140,64 @@ defmodule Monty.PrerequisitesTest do
 
       assert %{id: "ycb"} =
                Prerequisites.for_path(Path.join(data, "ycb_objects_1.0"), manifest)
+    end
+
+    # A build writes more than the directory named by its own `root`/`target`:
+    # one Make teaches a memory into the libraries *and* meshes the part into the
+    # world's objects. A run that is missing the meshes is missing the same
+    # build, so the answer for that directory has to be the build — this is what
+    # stops "the objects are not there" from being a dead end.
+    test "names a build that fills a second place it declares" do
+      manifest = Tmp.file("writes.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: parts
+          title: Parts
+          build: something
+          root: MONTY_LIBRARIES
+          target: parts_v1
+          unpacks_to: parts_v1
+          writes:
+            - root: MONTY_DATA
+              target: cad_objects
+      """)
+
+      objects = Path.join([Prerequisites.root_path("MONTY_DATA"), "cad_objects"])
+
+      assert %{id: "parts"} = Prerequisites.for_path(objects, manifest)
+      assert %{id: "parts"} = Prerequisites.for_path(Path.join(objects, "plate_body"), manifest)
+    end
+  end
+
+  describe "what a build still owes" do
+    # A build is not finished when its directory exists: it may have stopped
+    # after the first of four parts, which is a directory that looks complete and
+    # memories no run of the other three can read. A run that asked only about
+    # the directory would start with nothing to recognise with.
+    test "is every memory it promises, not the directory it fills" do
+      root = Tmp.dir("build-owes")
+      Tmp.system_env("MONTY_LIBRARIES", Path.join(root, "libraries"))
+
+      prerequisite = %{
+        id: "parts",
+        title: "Parts",
+        build: "something",
+        root: "MONTY_LIBRARIES",
+        target: "parts_v1",
+        unpacks_to: "parts_v1",
+        provides: ["plate_part", "plate_features"]
+      }
+
+      written = Path.join([Path.join(root, "libraries"), "parts_v1"])
+      File.mkdir_p!(written)
+      File.write!(Path.join(written, "plate_part.jsonl.gz"), "{}")
+
+      assert Prerequisites.absent_memories(prerequisite) == ["plate_features"]
+      refute Prerequisites.present?(prerequisite)
+
+      File.write!(Path.join(written, "plate_features.jsonl.gz"), "{}")
+      assert Prerequisites.present?(prerequisite)
     end
   end
 
@@ -311,6 +369,66 @@ defmodule Monty.PrerequisitesTest do
     # memory reads nothing.
     test "a setup that names neither data nor memory needs nothing" do
       assert Prerequisites.for_setup(%{world: :mujoco}) == []
+    end
+  end
+
+  describe "what a run makes before it steps" do
+    # The chain a first run has to close by itself: the memory a CAD experiment
+    # reads is this application's own output, so the run — not a person on
+    # another page — is the thing that makes it. What the list must not do is
+    # name a download: that is somebody else's file and the boot fetches those.
+    test "names the build a run needs and does not have" do
+      root = Tmp.dir("built-for")
+
+      PrerequisiteRoots.with_roots(root, fn ->
+        manifest = Tmp.file("built-for.yaml")
+        Tmp.app_env(:prerequisites_manifest, manifest)
+
+        File.write!(manifest, """
+        prerequisites:
+          - id: parts
+            title: Part memories
+            build: cad_part_memories
+            root: MONTY_LIBRARIES
+            target: cad_parts_v1
+            unpacks_to: cad_parts_v1
+            provides:
+              - plate_features
+            writes:
+              - root: MONTY_DATA
+                target: cad_objects
+          - id: an_archive
+            title: An archive
+            url: https://example.test/objects.tgz
+            root: MONTY_DATA
+            target: mujoco/objects/other.tgz
+            extract: true
+        """)
+
+        objects = Path.join([Prerequisites.root_path("MONTY_DATA"), "cad_objects"])
+
+        setup = %{
+          world: :mujoco,
+          environment: %{data_path: objects},
+          model_name_or_path:
+            Path.join([
+              Prerequisites.root_path("MONTY_LIBRARIES"),
+              "cad_parts_v1",
+              "plate_features"
+            ])
+        }
+
+        assert [%{id: "parts"}] = Prerequisites.built_for(setup)
+
+        # Everything it promises on disk, and the run makes nothing at all.
+        libraries = Path.join([Prerequisites.root_path("MONTY_LIBRARIES"), "cad_parts_v1"])
+        File.mkdir_p!(libraries)
+        File.write!(Path.join(libraries, "plate_features.jsonl.gz"), "{}")
+        File.mkdir_p!(objects)
+        File.write!(Path.join(objects, "plate_body.obj"), "")
+
+        assert Prerequisites.built_for(setup) == []
+      end)
     end
   end
 

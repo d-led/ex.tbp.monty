@@ -26,6 +26,7 @@ defmodule Monty.Studio.Jobs.Run do
   require Logger
 
   alias ExTbpMonty.Cluster.{Nodes, Placement, Protocol}
+  alias Monty.Prerequisites
   alias Monty.Studio
 
   alias Monty.Studio.{
@@ -235,7 +236,8 @@ defmodule Monty.Studio.Jobs.Run do
     try do
       with {:ok, record} <- fetch(run_id),
            :here <- my_turn(record),
-           {:ok, opened} <- opened_for(record) do
+           {:ok, opened} <- opened_for(record),
+           :ok <- prepared(record, opened) do
         # The record still says `queued`: asking for a run is not running it, and
         # opening the experiment — composing its config, starting the world,
         # loading a pretrained library — is work this run has not begun. The node
@@ -247,8 +249,16 @@ defmodule Monty.Studio.Jobs.Run do
         # A peer offers what this run needs and this node does not: the job goes
         # back to the queue for that peer's worker to take. Nothing is opened,
         # nothing is recorded — the run is still `queued`, which is true.
-        {:wait, seconds} -> {:snooze, seconds}
-        {:error, reason} -> give_up(run_id, reason)
+        {:wait, seconds} ->
+          {:snooze, seconds}
+
+        # Its own tag: `{:error, {a, b}}` is how a missing run answers, and a
+        # clause that matched both read a run id as a prerequisite.
+        {:cannot_prepare, prerequisite, reason} ->
+          give_up(run_id, reason, not_prepared(prerequisite))
+
+        {:error, reason} ->
+          give_up(run_id, reason)
       end
     rescue
       exception ->
@@ -261,6 +271,32 @@ defmodule Monty.Studio.Jobs.Run do
     after
       unregister(run_id)
     end
+  end
+
+  # What this run reads that this application **makes**, made before it steps.
+  #
+  # A build is this machine's own work — a memory taught from a STEP file, the
+  # meshes it was taught on — and no run of that experiment can do without it.
+  # Leaving that to a click on another page is a prerequisite the run itself can
+  # meet, so it does: the same `Monty.Prerequisites.Saga` machine
+  # `/prerequisites` starts, waited for here, its steps written into the run's
+  # own log.
+  #
+  # A download is deliberately not taken here. It is somebody else's file, and a
+  # boot fetches those (`Monty.Prerequisites.unfinished/0`); a build is minutes
+  # of this machine's work that nothing else will do, which is the difference
+  # that decides it.
+  defp prepared(record, opened) do
+    opened.setup
+    |> Prerequisites.built_for()
+    |> Enum.reduce_while(:ok, fn prerequisite, :ok ->
+      say(record.id, "#{prerequisite.title}: making it — this run reads it")
+
+      case Prerequisites.fetch(prerequisite) do
+        {:ok, _progress} -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:cannot_prepare, prerequisite, reason}}
+      end
+    end)
   end
 
   # Whether this node may perform the run, which on a node that runs alone is
@@ -1874,11 +1910,15 @@ defmodule Monty.Studio.Jobs.Run do
     broadcast(run_id, {:failed, %{reason: what}})
   end
 
-  defp give_up(run_id, reason) do
+  defp give_up(
+         run_id,
+         reason,
+         sentence \\ "The run could not start: its experiment would not open."
+       ) do
     Logger.error("studio run #{run_id} did not happen: #{inspect(reason)}")
 
     recorded =
-      "The run could not start: its experiment would not open."
+      sentence
       |> Failure.explain(inspect(reason))
       |> Failure.recorded()
 
@@ -1944,6 +1984,13 @@ defmodule Monty.Studio.Jobs.Run do
   defp fail_log(record, reason) do
     Logger.error("studio run #{record.id}: #{inspect(reason)}")
     record
+  end
+
+  # A run whose memory could not be made is a run that has nothing to recognise
+  # with, so it is refused with the reason rather than started without graphs.
+  defp not_prepared(prerequisite) do
+    "The run could not start: #{prerequisite.title} could not be made, so " <>
+      "there would be nothing to recognise with."
   end
 
   defp say(run_id, line) do

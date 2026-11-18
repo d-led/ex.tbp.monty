@@ -29,12 +29,12 @@ experiment:
     n_train_epochs: 3
     # Where the memory of the part lives. The tail after the libraries root is
     # what must match: `<libraries>/cad_parts_v1/blend-big_part.jsonl.gz`.
-    model_name_or_path: ${path.expanduser:"~/tbp/results/monty/projects"}/cad_parts_v1/blend-big_part
+    model_name_or_path: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}/cad_parts_v1/blend-big_part
     n_eval_epochs: 3
     seed: 42
     supervised_lm_ids: []
     python_log_level: DEBUG
     logging:
-      output_dir: ${path.expanduser:"~/tbp/results/monty/projects"}
+      output_dir: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}
       run_name: cad_blend-big_part_eval
       wandb_group: gm_eval_runs

@@ -23,8 +23,9 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
         target: tiny.tgz
       - id: made_here
         title: Something this application makes
-        root: MONTY_DATA
+        root: MONTY_LIBRARIES
         target: made-here
+        unpacks_to: made-here
         build: cad_part_memories
         provides:
           - one
@@ -32,6 +33,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     """)
 
     Tmp.system_env("MONTY_DATA", Path.join(tmp, "data"))
+    # A build that writes memories writes them where a run reads them: the
+    # libraries, which is also the pin the application keeps, so a test that
+    # moved only the variable would write into the build's own `priv/`.
+    Tmp.system_env("MONTY_LIBRARIES", Path.join(tmp, "libraries"))
+    Tmp.app_env(:monty_libraries_dir, Path.join(tmp, "libraries"))
     Tmp.app_env(:prerequisites_manifest, manifest)
     Tmp.app_env(:prerequisite_fetcher, Monty.Test.FakeFetcher)
 
