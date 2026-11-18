@@ -904,8 +904,17 @@ jobs:
       # Windows runner has no MSVC on PATH until something puts it there — the
       # bundle then fails at "Package the application" with `"nmake" not found in
       # the path`. The same step `ex.mujoco`'s own CI uses.
+      #
+      # Pinned by commit, like every action here, and to the commit `v1` resolves
+      # to — `0b201ec` is `v1.13.0`, which is what this step has been running. It
+      # is not on the project's default branch (the two have diverged since, and
+      # nothing has been released since 2024), so an updater refuses to pin it for
+      # us; that is a fact about the tag, and pinning the commit is what takes the
+      # tag out of the loop. Replacing this action with a `vcvars64.bat` call in
+      # the packaging step would drop the dependency altogether, and would have to
+      # be proved on a Windows runner.
       - if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       # The bundler. `cargo install` because there is no prebuilt binary, and the
       # cache keeps it from being rebuilt on every run — five minutes of Rust for
