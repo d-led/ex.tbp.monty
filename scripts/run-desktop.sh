@@ -301,7 +301,13 @@ else
             # its release beside it — the bundle Tauri makes is a `.deb`, which a
             # distribution installs, and it travels in the same download for
             # whoever wants that instead.
-            tarball="$(find "$work" -maxdepth 2 -name '*.tar.gz' -print -quit)"
+            #
+            # Three tarballs arrive now — the window's and one per companion — and
+            # `find` answers in directory order, so taking the first took a plugin's
+            # as often as the window's and then reported a window that was not
+            # there. The window's is the one named after the asset.
+            tarball="$(find "$work" -maxdepth 2 -name "$asset.tar.gz" -print -quit)"
+            tarball="${tarball:-$(find "$work" -maxdepth 2 -name '*.tar.gz' -print -quit)}"
             if [ -z "$tarball" ]; then
                 say_what_it_held
                 exit 1

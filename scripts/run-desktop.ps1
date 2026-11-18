@@ -127,7 +127,15 @@ if (-not $Update -and (Test-Path $exe)) {
 
     # The inner zip is looked for two levels down, not only at the top: a wrapper
     # directory around it is a packaging detail, and the search should not care.
-    $bundle = Get-ChildItem -Path $unpacked -Recurse -Depth 1 -Filter '*.zip' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    #
+    # The window's zip is taken by name: the download also holds one per companion
+    # plugin, and `-Filter '*.zip'` picked a plugin whenever the directory order
+    # said so, leaving nothing that contained a window.
+    $bundle = Get-ChildItem -Path $unpacked -Recurse -Depth 1 -Filter 'ex-tbp-monty-*.zip' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if ($null -eq $bundle) {
+        $bundle = Get-ChildItem -Path $unpacked -Recurse -Depth 1 -Filter '*.zip' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
     if ($null -ne $bundle) {
         Write-Host 'Expanding the application (about 370 MB) ...'
         $unpacked = Join-Path $work 'app'
