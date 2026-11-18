@@ -535,7 +535,11 @@ for rid in "${rids[@]}"; do
       ;;
     linux-*)
       build_app
-      scripts/check-release.sh src-tauri/target/release/rel || exit 1
+      # The same check as the macOS bundle's, and the same path: `tauri.bundle.conf.json`
+      # copies the release to `rel/ex_tbp_monty` in the resource directory, which on
+      # Linux is the directory beside the binary — `rel` holds the release, it is not
+      # the release. Asking at `rel` is a question no build answers.
+      scripts/check-release.sh src-tauri/target/release/rel/ex_tbp_monty || exit 1
       linux_bundle "$rid"
       ;;
     *)
