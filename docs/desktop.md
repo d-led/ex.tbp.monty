@@ -142,21 +142,25 @@ person starts a program; each is the same order of events — ask the window who
 is at `/health`, read the window's own `releases/COOKIE`, refuse politely when
 neither is there, and `exec` the release in the foreground.
 
-The window carries no plugins, starts none and looks for none — it is the cluster,
-not their keeper. On Linux and Windows the companions sit **inside the window's own
-folder**, which is what makes the window's archive a complete demonstration: unpack
-it and a double-click on a companion joins the window beside it. The `.deb`,
-AppImage and NSIS installer carry the window only, because those formats are made
-by the bundler and cannot be handed extra applications — the two companions are
-downloaded as their own archives and unpacked beside the window.
+The window needs no plugins and starts none by itself — it is the cluster, not
+their keeper; all it can do is offer to start the two that a checkout keeps beside
+it, and a packaged window has none to offer. On Linux and Windows the companions
+sit **inside the window's own folder**, which is what makes the window's archive a
+complete demonstration: unpack it and a double-click on a companion joins the
+window beside it. The `.deb`,
+AppImage and NSIS installer carry the window only: the bundler makes those from
+what the bundle holds, and the companions are staged into the window's folder
+after it has run — so they are downloaded as their own archives and unpacked
+beside the window.
 
 For a checkout, `scripts/build-plugins.sh` builds both releases into
 `_build/desktop/plugins/` and copies `start-plugins.sh` in beside them; nothing of
 that ships inside the window.
 
-**Settings → Cluster** lists the nodes and nothing more: with the plugins as
-applications of their own, there is no button for the window to press, and a
-window started with `MONTY_STUDIO_CLUSTER=0` still has no name to offer.
+**Settings → Cluster** lists the nodes. With the plugins as applications of their
+own, a download has no button to press; the _Start them_ control belongs to a
+checkout, and it refuses rather than starting two nodes that would find nobody
+when the window has no name — `MONTY_STUDIO_CLUSTER=0` is that case.
 
 The launch scripts are for the times there is no app to click, which in a
 checkout is always:
@@ -482,13 +486,14 @@ because it needs no release to exist before somebody can try the app:
    privilege, on a file they chose to unpack.
 
    Two things make a rebuild fail in a way that names nothing. `tauri-build`
-   copies the release and the two plugin nodes **over** whatever is already
-   there, and a copy keeps the modes it was built with — a release launcher is
-   `0555` and its `COOKIE` is `0400` — so the next packaging run of the same tree
-   dies with `Permission denied (os error 13)` inside Tauri's build script, which
-   names no path. Both copies are therefore removed before the build
-   (`target/release/rel`, `target/release/plugins`), the bundle with them. And a
-   bundle left by an earlier run is no longer read as this run's answer: the
+   copies the release **over** whatever is already there, and a copy keeps the
+   modes it was built with — a release launcher is `0555` and its `COOKIE` is
+   `0400` — so the next packaging run of the same tree dies with `Permission
+denied (os error 13)` inside Tauri's build script, which names no path. That
+   copy is therefore removed before the build (`target/release/rel`), the bundle
+   with it; `target/release/plugins` goes too, and only because a bundle made
+   while the window still carried the plugin nodes left a read-only copy there.
+   And a bundle left by an earlier run is no longer read as this run's answer: the
    retry loop used to leave a failed build standing in the folder and report
    success, which is how a tree that built nothing looked packaged.
 
@@ -613,16 +618,18 @@ Two things had to exist before a Windows build could start its own server:
   three are `#[cfg(windows)]` in `src-tauri/src/main.rs`, so the macOS path is
   the same code it was.
 
-**Built by CI, and not yet started.** A `windows-2022` row builds it, and the
+**Built by CI, and started there.** A `windows-2022` row builds it, and the
 first successful upload of `ex-tbp-monty-win-x64.zip` came after two attempts
 that failed on defects only Windows has: first `npm` being `npm.cmd`
 (Elixir's `System.cmd` cannot start one; it failed with `:eacces`), then the
 stylesheet being built before anything compiled the application, so the colocated
 CSS it imports did not exist yet. The second was reproduced without Windows at
-all. What no runner can answer is what happens after launch: `mix release` laying
-down `bin\ex_tbp_monty.bat`, and MuJoCo, which defaults to WGL on Windows —
-`rel/env.sh.eex` sets `MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no
-equivalent, so a MuJoCo experiment is the first thing to watch there.
+all. A runner now opens the window, opens the installed window, and starts the
+release inside the bundle, so `bin\ex_tbp_monty.bat` and the `cmd /C call` that
+starts it are visited rather than argued about. What no runner here answers is a
+MuJoCo experiment, which defaults to WGL on Windows — `rel/env.sh.eex` sets
+`MUJOCO_GL=osmesa` for Linux and `rel/env.bat.eex` has no equivalent, so that is
+the first thing to watch there.
 
 **Started, and it failed — twice, both fixed.** The first launch showed a console
 window that flashed and vanished: a release build on Windows was a _console_
@@ -836,10 +843,16 @@ names.
 - **Three platforms, and how far each is proven.** The `desktop` job builds
   macOS arm64 (the `.app`, its zip, a `.pkg` and a `.dmg`), Linux x64 (a tarball
   of the window with its release beside it, a `.deb`, and an AppImage) and
-  Windows x64 (an NSIS setup and the same portable folder, zipped). The macOS
-  app has been built and opened from a checkout by a person; the Linux AppImage
-  has been started (see below); the Windows one is built and uploaded, and
-  nobody has started it. The rule holds — nothing is claimed beyond what was
+  Windows x64 (an NSIS setup and the same portable folder, zipped). Each job then
+  **opens** what it built: `scripts/smoke-window.sh` waits for the page to report
+  what it drew to `/__painted`, which only a webview that ran the page can send,
+  and the Windows job also installs its own setup and opens the installed window,
+  because an installed copy takes its `rel\` from the bundler's resource copy
+  rather than from the packaging script. Those steps are `continue-on-error` on
+  purpose — a download nobody can get is worse than a red step nobody can act on
+  — so what they prove is their own line, not the job's colour. Beyond CI a
+  person has built and opened the macOS app from a checkout and started the Linux
+  AppImage (see below). The rule holds — nothing is claimed beyond what was
   run. Linux needs `libwebkit2gtk-4.1-dev`,
   `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev` and `patchelf`
   on the runner, which the job installs — and no FUSE, because the AppImage
@@ -913,12 +926,19 @@ names.
   the compiled world the pictures are ~19 KB each, so the lever is the encoding
   (WebP or JPEG for colour, 8-bit depth). Nothing shows a run's size on a page
   yet, which is the cheapest thing to add either way.
-- **The plugin control is proven on every platform CI builds.** The boot check
-  presses it — start, "3 nodes in this cluster", stop, "One node in this cluster"
-  — on macOS arm64, Linux x64 and Windows x64, within seconds of the press and
-  without a window. Windows runs `example_plugin.bat` through `cmd /c`, because a
-  batch file is not an executable image and `CreateProcess` will not start one;
-  `plugins\start-plugins.ps1` is the same launch by hand.
+- **The window's plugin control is a checkout's, and a download shows no button.**
+  `Settings → Cluster` offers _Start them_ only where two releases sit in
+  `plugins/` beside the window's own release: in a checkout that is
+  `_build/desktop/plugins`, where `scripts/build-plugins.sh` puts them, and in a
+  release it would be `rel/plugins`, which nothing creates — the companions ship
+  as applications beside the window instead. `MONTY_STUDIO_PLUGINS` overrides the
+  place. So a packaged window hides the control rather than offering one that
+  cannot work. What is tested is the environment a launcher is started with
+  (`test/desktop/plugins_test.exs`: every inherited `RELEASE_*` passed empty, this
+  node's cookie rather than the one the VM was started with). Windows runs
+  `example_plugin.bat` through `cmd /c`, because a batch file is not an executable
+  image and `CreateProcess` will not start one; `plugins\start-plugins.ps1` is the
+  same launch by hand.
 
 ## Where the data lives, and how it gets there
 

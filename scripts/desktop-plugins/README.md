@@ -13,8 +13,10 @@ by `scripts/package.sh` and put beside the window whenever it came from the
 `.pkg`, from the `.dmg`, or from `run-desktop.sh` — all three install the three
 apps into one folder. Double-clicking one starts that node and joins it to the
 window; it finds the window by being next to it, so the two have to stay in one
-folder. The window carries no plugins and starts none: **Settings → Cluster**
-lists what is there.
+folder. The window starts none of them by itself: **Settings → Cluster** lists
+what is there, and offers _Start them_ only in a checkout that keeps these in
+`plugins/` beside its release (`_build/desktop/plugins`) — a download has them as
+apps of their own, and no control.
 
 The two scripts are the by-hand route, for a checkout or for a window that was
 killed outright (a killed window never reaches its own graceful stop, so the two

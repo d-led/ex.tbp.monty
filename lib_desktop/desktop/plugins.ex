@@ -1,6 +1,6 @@
 defmodule ExTbpMonty.Desktop.Plugins do
   @moduledoc """
-  The two sample plugin nodes the window carries: where they are, how to start
+  The two sample plugin nodes a checkout carries: where they are, how to start
   them, and how to stop them with the window.
 
   They are **releases of their own projects**, in `plugins/` beside the window's
@@ -30,6 +30,16 @@ defmodule ExTbpMonty.Desktop.Plugins do
   launching two nodes that would then find nobody. And nothing here takes a path
   or a command from a page: the two launchers are the ones in `plugins/`, found
   by this module, so the control cannot become a way to run something else.
+
+  ## Which window has it
+
+  A **packaged** window has no `plugins/` — the two nodes ship as applications
+  beside it (`docs/desktop.md`), because a plugin is a node and a node is a
+  release of its own — so `available?/0` is false there and `Settings → Cluster`
+  shows no button rather than one that cannot work. A checkout finds them without
+  being told: `_build/desktop` is three levels up from this app's code, and it is
+  where `scripts/build-plugins.sh` builds them. `MONTY_STUDIO_PLUGINS` is for any
+  other layout.
   """
 
   # The behaviour a page sees, and the only reason this module is named anywhere

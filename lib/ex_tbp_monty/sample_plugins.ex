@@ -3,10 +3,12 @@ defmodule ExTbpMonty.SamplePlugins do
   The two sample plugin nodes, as the page sees them.
 
   A studio does not start processes on the machine it runs on; a **window** does,
-  and only a window ships the two example plugin nodes (`plugins/` beside its
-  release). So what a page can do here is a seam: this module names the
-  implementation in configuration — `config/desktop.exs` points it at the
-  desktop's own server — and every other build answers "this build carries none".
+  and only where the two example plugin nodes are beside its release (`plugins/`
+  beside the release, which in a checkout is `_build/desktop/plugins`). A packaged
+  window has none — the two ship as applications beside it — so what a page can do
+  here is a seam: this module names the implementation in configuration —
+  `config/desktop.exs` points it at the desktop's own server — and every other
+  build answers "this build carries none".
   `lib/` never names a `Desktop.*` module, which is the rule that keeps the
   server and the window one application.
 
