@@ -349,6 +349,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     |> assign(
       beliefs: %{},
       charts: %{},
+      # Why there is no picture, in words, when a drawing failed. A drawing that
+      # raised used to be logged and forgotten: the reader got an empty box and
+      # the only trace was a console warning nobody watches.
+      chart_problem: nil,
       # The object the newest step's strongest evidence belonged to, and how
       # strong — the row above the charts. `nil` until a step believes anything.
       strongest: nil,
@@ -783,7 +787,10 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           rotation its config names.
         </p>
 
-        <section :if={@charts != %{}} id="evidence-chart" class="space-y-2">
+        <section :if={@charts != %{} or @chart_problem} id="evidence-chart" class="space-y-2">
+          <p :if={@chart_problem} id="chart-problem" class="text-sm text-warning">
+            {@chart_problem}
+          </p>
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h3 class="text-sm font-medium">What the learning modules believe</h3>
             <%!-- Zooming is a patch: the server redraws the stretch asked for and
@@ -2656,16 +2663,24 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
     socket =
       if generation == Map.get(socket.assigns, :chart_generation),
-        do: assign(socket, drawing),
+        do: assign(socket, Keyword.put(drawing, :chart_problem, nil)),
         else: socket
 
     {:noreply, if(socket.assigns[:chart_asks_again], do: start_drawing(socket), else: socket)}
   end
 
+  # The reason stays in the log for whoever is debugging; the page says what a
+  # reader needs, which is that the picture is missing and the run is not.
   def handle_async({:charts, _generation}, {:exit, reason}, socket) do
     Logger.warning("a chart could not be drawn: #{inspect(reason)}")
 
-    {:noreply, assign(socket, chart_asking: false, chart_asks_again: false)}
+    {:noreply,
+     assign(socket,
+       chart_asking: false,
+       chart_asks_again: false,
+       chart_problem:
+         "This drawing failed: #{Failure.sentence(reason)} The run itself is unaffected."
+     )}
   end
 
   def handle_async(:world, {:ok, {:ok, opened}}, socket) do
