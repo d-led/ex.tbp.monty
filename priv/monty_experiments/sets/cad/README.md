@@ -177,17 +177,22 @@ displaced a real evidence and the most likely object had no number to read —
 comparison asks `is_number` now, and a threshold that is not a number clears no
 hypothesis, which is what `evidence >= NaN` answers for every element.
 
-The first thing to try about the duty cycle is the gait, and it is a scale
-argument of the same shape as the stand-off's: the set steps a feature a
-centimetre across with `surface_curvature_informed_5_goal0`, whose action
-sampler is `constant_surf_5` — `rotation_degrees: 5.0` and the sampler's own
-`translation_distance: 0.004`, i.e. four millimetres a step. A crossing of a
-centimetre feature is therefore two and a half steps, and the rest of the
-episode is the policy walking back to it. `ConstantSampler` takes both numbers,
-so a sampler of the set's own with one millimetre steps and one-degree turns is
-the same kind of choice the stand-off and the zoom already are: sized for the
-object rather than for the tutorial's plate, and one sampler for every feature
-the part is made of. Nothing here is measured yet — the box ran out of memory
-before a fifth episode — so the next session's first number is that duty cycle
-under a finer gait, and the run that shows it is the same run that shows a
-recognition.
+The answer to the duty cycle is the gait, and it is a scale argument of the same
+shape as the stand-off's. The set stepped a feature a centimetre across with
+`surface_curvature_informed_5_goal0`, whose action sampler is `constant_surf_5` —
+`rotation_degrees: 5.0` and `ConstantSampler`'s own `translation_distance:
+0.004`, i.e. four millimetres a step. A crossing of a centimetre feature is
+therefore two and a half steps, and the rest of the episode is the policy walking
+back to it.
+
+So the experiment now names its own sampler: one millimetre a step and one degree
+a turn, the same arc per degree (0.8 mm) at a tenth of the distance, one sampler
+for every feature the part is made of — the same kind of choice as the stand-off
+and the zoom, not a treatment of any one shape.
+`Monty.Studio.Cad.ExperimentConfigTest` pins both numbers, because the body that
+carries them is written at a package path and a body at the wrong package
+composes to a value nobody reads.
+
+What that buys is not measured: the box ran out of memory before a fifth episode,
+so the duty cycle under the finer gait is the next session's first number, and
+the run that shows it is the same run that shows a recognition.

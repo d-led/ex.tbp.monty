@@ -52,6 +52,19 @@ experiment:
         policy_selector:
           policy:
             desired_object_distance: 0.008
+            # A gait is a size too. The surface policy's sampler steps four
+            # millimetres and turns five degrees, which is a quarter of a
+            # centimetre feature: a crossing is two or three steps and the rest
+            # of an episode is the policy walking back, measured as the module
+            # being fed on 56 to 625 of 5000 steps. One millimetre and one
+            # degree keep the same arc per turn — 0.8 mm a degree — at the
+            # feature's own size, and `ConstantSampler` is where both numbers
+            # live. One sampler for every feature the part is made of: this is
+            # the same kind of choice as the stand-off above, not a treatment of
+            # any one shape.
+            action_sampler:
+              rotation_degrees: 1.0
+              translation_distance: 0.001
     # Where the memory of the part's features lives. The tail after the
     # libraries root is what must match: `<libraries>/cad_parts_v1/plate_features
     # .jsonl.gz`.
