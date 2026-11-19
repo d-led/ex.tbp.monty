@@ -10,8 +10,11 @@ defmodule Monty.Studio.ArtifactsTest do
 
   use ExUnit.Case, async: false
 
+  alias ExTbpMonty.Core.FrameVideo
   alias Monty.Studio.Artifacts
   alias Monty.Test.Tmp
+
+  @png_signature <<137, 80, 78, 71, 13, 10, 26, 10>>
 
   setup do
     Tmp.env_dir("studio-runs", :studio_artifacts_dir)
@@ -171,70 +174,70 @@ defmodule Monty.Studio.ArtifactsTest do
       refute File.exists?(Artifacts.dir(id))
       assert Artifacts.frame_path(id, "1/patch-depth.png") == :error
     end
+  end
 
-    # The row holds a step's moments only as far as the stream wrote them, so a
-    # page drawing a step the row lost asks the files what was there. What the
-    # files say is the same thing the row would have said.
-    test "a step's pictures are read back by sensor, as a record keeps them" do
+  describe "a run's pictures as video" do
+    # A run keeps one video a sensor now, and a step's picture is a frame of it.
+    # The name the record holds did not change — `<place>/<sensor>-<kind>.png` —
+    # and what it resolves to did.
+    test "a name says which video holds the picture, and which frame" do
+      assert Artifacts.picture("0/patch-depth.png") ==
+               {:ok, %{video: "run/patch-depth.mp4", frame: 0, kind: :grey}}
+
+      assert Artifacts.picture("part-2-57/patch_0-colour.png") ==
+               {:ok, %{video: "part-2/patch_0-colour.mp4", frame: 57, kind: :rgb}}
+
+      assert Artifacts.picture("../../run.log") == :error
+      assert Artifacts.picture("0/patch.mov") == :error
+    end
+
+    test "a step's picture is decoded back out of its video, as the PNG the page draws" do
       id = run_id()
-      {:ok, _depth} = Artifacts.put_frame(id, 4, "patch_0", "depth", @png)
-      {:ok, _colour} = Artifacts.put_frame(id, 4, "patch_0", "colour", @png)
-      {:ok, _view} = Artifacts.put_frame(id, 4, "view_finder", "depth", @png)
-      {:ok, _elsewhere} = Artifacts.put_frame(id, 5, "patch_0", "depth", @png)
+      write_video(id, "run", "patch", "depth", :grey, [<<5, 9, 12, 15>>])
 
-      assert Artifacts.frames_at(id, 4) == %{
-               "patch_0" => %{
-                 "images" => %{
-                   "depth" => "/runs/#{id}/frames/4/patch_0-depth.png",
-                   "colour" => "/runs/#{id}/frames/4/patch_0-colour.png"
-                 }
-               },
-               "view_finder" => %{
-                 "images" => %{"depth" => "/runs/#{id}/frames/4/view_finder-depth.png"}
-               }
-             }
+      assert {:ok, png} = Artifacts.frame_bytes(id, "0/patch-depth.png")
+      assert binary_part(png, 0, 8) == @png_signature
     end
 
-    test "a step that wrote nothing is no pictures, not an error" do
-      assert Artifacts.frames_at(run_id(), 0) == %{}
-    end
-
-    # The pictures are drawn behind the step they belong to, so the newest step's
-    # folder is the one that does not exist yet: a page that asked for it drew the
-    # broken-image icon under every live step while the files beside it were fine.
-    test "a step the writer has not reached answers with the newest pictures before it" do
+    test "a colour picture is decoded as colour, three bytes a pixel" do
       id = run_id()
-      {:ok, _at_four} = Artifacts.put_frame(id, 4, "patch", "depth", @png)
-      {:ok, _at_nine} = Artifacts.put_frame(id, 9, "patch", "depth", @png)
+      red = <<255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255>>
+      write_video(id, "run", "patch", "colour", :rgb, [red])
 
-      assert Artifacts.pictures_at(id, 12) ==
-               {:ok, 9,
-                %{
-                  "patch" => %{
-                    "images" => %{"depth" => "/runs/#{id}/frames/9/patch-depth.png"}
-                  }
-                }}
+      assert {:ok, png} = Artifacts.frame_bytes(id, "0/patch-colour.png")
+      assert binary_part(png, 0, 8) == @png_signature
     end
 
-    test "and nothing drawn before it is no pictures rather than an older one" do
+    test "a frame the video has not reached is no picture, not an error page" do
       id = run_id()
-      {:ok, _at_nine} = Artifacts.put_frame(id, 9, "patch", "depth", @png)
+      write_video(id, "run", "patch", "depth", :grey, [<<5, 9, 12, 15>>])
 
-      assert Artifacts.pictures_at(id, 2) == :none
-      assert Artifacts.frames_at(id, 2) == %{}
+      assert Artifacts.frame_bytes(id, "3/patch-depth.png") == :error
     end
 
-    test "and names only what is a picture: a stray file is not a sensor's" do
+    # A step whose moment the row lost has no pictures of its own, so a page
+    # asks the files: the newest step every video of the run can still show.
+    test "the newest step the run can show, named under its own place" do
       id = run_id()
-      step = Path.join(Artifacts.frames_dir(id), "7")
-      File.mkdir_p!(step)
-      File.write!(Path.join(step, "notes.txt"), "not a picture")
-      File.write!(Path.join(step, "patch-depth.json"), "{}")
-      {:ok, _png} = Artifacts.put_frame(id, 7, "patch", "depth", @png)
+      write_video(id, "run", "patch", "depth", :grey, [<<1, 2, 3, 4>>, <<1, 2, 3, 4>>])
 
-      assert Artifacts.frames_at(id, 7) == %{
-               "patch" => %{"images" => %{"depth" => "/runs/#{id}/frames/7/patch-depth.png"}}
-             }
+      assert Artifacts.pictures_at(id, 9) ==
+               {:ok, 1,
+                %{"patch" => %{"images" => %{"depth" => "/runs/#{id}/frames/1/patch-depth.png"}}}}
+
+      assert Artifacts.pictures_at(run_id(), 0) == :none
     end
+  end
+
+  # The write end of the same contract: a video at a place, as `Pictures` leaves
+  # one behind.
+  defp write_video(run_id, part, sensor, kind, picture_kind, pictures) do
+    path = Artifacts.video_path(run_id, part, sensor, kind)
+    {:ok, video} = FrameVideo.open(path, width: 2, height: 2, kind: picture_kind)
+
+    Enum.each(pictures, &(:ok = FrameVideo.push(video, &1, false)))
+    :ok = FrameVideo.finish(video)
+
+    path
   end
 end

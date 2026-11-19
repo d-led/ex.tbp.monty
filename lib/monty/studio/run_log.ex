@@ -528,35 +528,65 @@ defmodule Monty.Studio.RunLog do
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()
   def append_step(history, info, observations, beliefs \\ %{}, options \\ []) do
+    place = place_in(history)
+    write_pictures(history, info, observations, place)
+
     RunHistory.append_step(
       history,
       entry(info, beliefs, options),
-      moment(info.step, observations, %{}, store(history, info))
+      moment(info.step, observations, name_of(history, place))
     )
   end
 
   @doc "Records a step — what was reported, what was seen and what was believed — and returns the row."
   @spec record_step(RunHistory.Run.t(), map(), map(), map()) :: RunHistory.Run.t()
   def record_step(history, info, observations, beliefs \\ %{}, options \\ []) do
+    place = place_in(history)
+    write_pictures(history, info, observations, place)
+
     case RunHistory.record_step(
            history,
            entry(info, beliefs, options),
-           moment(info.step, observations, %{}, store(history, info))
+           moment(info.step, observations, name_of(history, place))
          ) do
       {:ok, history} -> history
       {:error, _changeset} -> history
     end
   end
 
-  # Where a step's pictures go: a file of the run's own, named by the step and
-  # the sensor. Handing `moment/3` no store keeps them in the row, which is what
-  # made a long run wider than a jsonb value can be — and is why the record a
-  # page reads names a path instead of carrying ten kilobytes a step.
-  defp store(history, info) do
-    fn sensor_id, kind, base64 ->
-      with {:ok, name} <-
-             Monty.Studio.Artifacts.put_frame(history.id, info.step, sensor_id, kind, base64),
-           do: {:ok, Monty.Studio.Artifacts.frame_url(history.id, name)}
+  # A step's place in its run, which is what names its picture: every episode
+  # numbers its steps from nought, so the step's own number is every episode's
+  # fourth step at once. The record in hand holds the steps taken so far.
+  defp place_in(history), do: Integer.to_string(length(history.log))
+
+  # The pictures themselves go to the writer the page's runs also use — one video
+  # a sensor, appended — so the archive is one shape whichever way a run was
+  # started. Nobody is watching a run recorded here, so nothing is drawn for a
+  # page.
+  defp write_pictures(history, info, observations, place) do
+    Monty.Studio.RunStream.Pictures.drawn(
+      %{
+        number: info.step,
+        episode: Map.get(info, :episode),
+        part: Map.get(info, :part),
+        observations: observations,
+        sensor_ids: []
+      },
+      history.id,
+      place,
+      announce: false
+    )
+  end
+
+  # Where a step's pictures are named: the video of one sensor, at the step's
+  # place in its run. The name is all the record keeps — the pixels are the
+  # writer's — so a step costs its observations, not its pictures.
+  defp name_of(history, place) do
+    fn sensor_id, kind ->
+      Monty.Studio.Artifacts.frame_url(
+        history.id,
+        Monty.Studio.Artifacts.frame_name(place, sensor_id, kind)
+      )
     end
   end
 

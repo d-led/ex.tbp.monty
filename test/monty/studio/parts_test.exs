@@ -97,7 +97,7 @@ defmodule Monty.Studio.PartsTest do
     } do
       # `RunStream` names a step's pictures before they are drawn, and a writer that
       # falls behind drops a step rather than fall further — so the newest names a
-      # part reports are quite often names of files that were never written, and
+      # part reports are quite often names of frames that were never written, and
       # drawing them is four broken images under a run that is otherwise fine.
       {record, [first | _more]} = run([[0], [1]])
       stream = first["stream"]
@@ -109,13 +109,32 @@ defmodule Monty.Studio.PartsTest do
       # `settle/1` a statement about these two.
       _ = :sys.get_state(RunStream)
       :ok = RunStream.Pictures.settle()
-      File.rm_rf!(Path.join(Artifacts.frames_dir(record.id), "part-0-1"))
+
+      # The writer reached the first step and no further: a video's index is what
+      # says which frames are in it, so one entry short is a frame nobody can read.
+      drop_last_frame(record.id, "part-0", "patch", "depth")
 
       [card | _second] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
 
       assert [frame] = card.frames
       assert frame.note =~ "step 0"
       assert markup(frame) =~ "/frames/part-0-0/"
+    end
+
+    test "a card draws the newest step while the video holds it", %{setup: setup} do
+      {record, [first | _more]} = run([[0], [1]])
+      stream = first["stream"]
+
+      RunStream.publish(stream, pictured_step(0, 1.0), announce: record.id)
+      RunStream.publish(stream, pictured_step(1, 2.0), announce: record.id)
+      _ = :sys.get_state(RunStream)
+      :ok = RunStream.Pictures.settle()
+
+      [card | _second] = record |> Parts.refresh(%{}) |> Parts.cards(setup)
+
+      assert [frame] = card.frames
+      assert frame.note =~ "step 1"
+      assert markup(frame) =~ "/frames/part-0-1/"
     end
   end
 
@@ -336,6 +355,19 @@ defmodule Monty.Studio.PartsTest do
     |> step(evidence)
     |> Map.put(:part, 0)
     |> Map.put(:observations, %{"patch" => %{"depth" => [[0.4, 0.5], [0.6, 0.7]]}})
+  end
+
+  # A video's index is nine bytes a frame, written beside it, and what a reader
+  # counts to know which frames exist (`ExTbpMonty.Core.FrameVideo.frames_in/1`).
+  # Cutting the last entry off is a writer that stopped one frame short.
+  defp drop_last_frame(run_id, part, sensor, kind) do
+    index = Artifacts.video_path(run_id, part, sensor, kind) <> ".index"
+    size = File.stat!(index).size
+
+    {:ok, file} = :file.open(String.to_charlist(index), [:read, :write])
+    {:ok, _at} = :file.position(file, size - 9)
+    :ok = :file.truncate(file)
+    :ok = :file.close(file)
   end
 
   # What a page puts in the document for a frame.

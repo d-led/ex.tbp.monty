@@ -294,7 +294,7 @@ defmodule Monty.Studio.Parts do
 
   defp on_disk?(url, run_id) when is_binary(url) do
     case String.split(url, "/frames/", parts: 2) do
-      [_run, name] -> File.regular?(Path.join(Artifacts.frames_dir(run_id), name))
+      [_run, name] -> Artifacts.picture?(run_id, name)
       _not_a_picture_of_a_run -> false
     end
   end

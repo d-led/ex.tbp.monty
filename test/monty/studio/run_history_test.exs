@@ -649,7 +649,7 @@ defmodule Monty.Studio.RunHistoryTest do
       :ok
     end
 
-    test "are files of the run, named by the row rather than carried in it" do
+    test "are frames of the run's video, named by the row rather than carried in it" do
       {:ok, run} = RunHistory.start(@attributes)
 
       # A MuJoCo step: keyed by sensor, not wrapped in the agent that holds it.
@@ -660,26 +660,31 @@ defmodule Monty.Studio.RunHistoryTest do
         }
       })
 
+      :ok = Monty.Studio.RunStream.Pictures.settle()
+
       %{"patch_0" => %{"images" => images}} = RunHistory.sensors_at(run.id, 0)
 
-      assert images["depth"] == "/runs/#{run.id}/frames/5/patch_0-depth.png"
-      assert images["colour"] == "/runs/#{run.id}/frames/5/patch_0-colour.png"
+      # The place is the step's place in the run, not the number it within its
+      # episode: every episode numbers its steps from nought.
+      assert images["depth"] == "/runs/#{run.id}/frames/0/patch_0-depth.png"
+      assert images["colour"] == "/runs/#{run.id}/frames/0/patch_0-colour.png"
 
-      assert {:ok, path} = Artifacts.frame_path(run.id, "5/patch_0-depth.png")
-      assert <<137, 80, 78, 71, _rest::binary>> = File.read!(path)
+      assert {:ok, <<137, 80, 78, 71, _rest::binary>>} =
+               Artifacts.frame_bytes(run.id, "0/patch_0-depth.png")
     end
 
     test "go with the run, so a deleted run leaves nothing behind" do
       {:ok, run} = RunHistory.start(@attributes)
-      RunLog.record_step(run, step(1), %{"patch_0" => %{"depth" => [[0.05]]}})
+      RunLog.record_step(run, step(1), %{"patch_0" => %{"depth" => [[0.05, 0.05], [0.05, 0.05]]}})
+      :ok = Monty.Studio.RunStream.Pictures.settle()
 
-      assert {:ok, path} = Artifacts.frame_path(run.id, "1/patch_0-depth.png")
-      assert File.exists?(path)
+      video = Artifacts.video_path(run.id, "run", "patch_0", "depth")
+      assert File.exists?(video)
 
       {:ok, _deleted} = RunHistory.delete(run)
 
-      refute File.exists?(path)
-      assert Artifacts.frame_path(run.id, "1/patch_0-depth.png") == :error
+      refute File.exists?(video)
+      assert Artifacts.frame_bytes(run.id, "0/patch_0-depth.png") == :error
     end
   end
 

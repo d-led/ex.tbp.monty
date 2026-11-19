@@ -967,14 +967,12 @@ defmodule Monty.Studio.Jobs.RunTest do
     |> String.split("\n", trim: true)
   end
 
-  # A picture a step kept: PNG, base64 because it travels in JSON.
-  # The URL a record keeps, read back through the file it names: a picture is
-  # worth keeping only if it is still a PNG when a page asks for it.
+  # A picture a step kept, read back through the name the record kept: a picture
+  # is worth keeping only if it is still a PNG when a page asks for it.
   defp picture?(run_id, url) do
     with "/runs/" <> rest <- url,
          [_, name] <- String.split(rest, "/frames/", parts: 2),
-         {:ok, path} <- Monty.Studio.Artifacts.frame_path(run_id, name),
-         <<0x89, "PNG", _rest::binary>> <- File.read!(path) do
+         {:ok, <<0x89, "PNG", _rest::binary>>} <- Monty.Studio.Artifacts.frame_bytes(run_id, name) do
       true
     else
       _not_a_picture -> false

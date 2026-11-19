@@ -14,6 +14,9 @@ defmodule Monty.Studio.Artifacts do
   # The two pictures a sensor draws of a step, as `put_frame/5` names them.
   @kinds ["depth", "colour"]
 
+  alias ExTbpMonty.Core.FrameVideo
+  alias ExTbpMonty.Core.Png
+
   @doc """
   The directory run artifacts are kept under.
 
@@ -441,6 +444,146 @@ defmodule Monty.Studio.Artifacts do
   def frame_name(step, sensor_id, kind),
     do: Path.join(to_string(step), "#{sensor_id}-#{kind}.png")
 
+  @doc """
+  The video a run's pictures of one sensor and kind are kept in, under `frames/`.
+
+  `<part>/<sensor>-<kind>.mp4`, where a part is `run` for a run of one stream and
+  `part-<n>` for one part of a divided run — the parts step on different nodes,
+  writing into one shared directory, so they must not append to one file.
+
+  This is the whole of what replaces a file a step: a run of 53 826 steps left
+  215 304 PNGs, 48.7 MB of pixels and **882 MB of disk**, because a 100-byte
+  picture costs a block whatever it weighs. The same pictures as H.264 are about
+  fifty bytes a frame in eight files.
+  """
+  @spec video_name(String.t(), String.t(), String.t()) :: String.t()
+  def video_name(part, sensor_id, kind), do: Path.join(part, "#{sensor_id}-#{kind}.mp4")
+
+  @doc "Where one of those videos lives, under the run's own directory."
+  @spec video_path(binary(), String.t(), String.t(), String.t()) :: Path.t()
+  def video_path(run_id, part, sensor_id, kind),
+    do: Path.join(frames_dir(run_id), video_name(part, sensor_id, kind))
+
+  @doc """
+  What a picture's name says: which video holds it, which frame of it, and which
+  kind of pixels those are.
+
+  The name is a run's own convention — `<place>/<sensor>-<kind>.png` — and it
+  still is; only the file behind it changed from the picture to the video that
+  contains it. `:error` for anything that is not that shape, which is what
+  refuses a path built from a request.
+  """
+  @spec picture(String.t()) ::
+          {:ok,
+           %{
+             video: String.t(),
+             frame: non_neg_integer(),
+             kind: :grey | :rgb
+           }}
+          | :error
+  def picture(name) do
+    with [place, file] <- String.split(name, "/"),
+         {:ok, sensor, kind} <- picture_of(file),
+         {:ok, position} <- place_position(place) do
+      {:ok,
+       %{
+         video: video_name(part_of(place), sensor, kind),
+         frame: position,
+         kind: if(kind == "depth", do: :grey, else: :rgb)
+       }}
+    else
+      _not_a_picture -> :error
+    end
+  end
+
+  defp picture_of(file) do
+    case String.split(file, "-") do
+      [_single] ->
+        :error
+
+      parts ->
+        kind = parts |> List.last() |> String.replace_suffix(".png", "")
+        sensor = parts |> Enum.drop(-1) |> Enum.join("-")
+
+        if kind in @kinds and sensor != "", do: {:ok, sensor, kind}, else: :error
+    end
+  end
+
+  @doc """
+  The part a place names: `run` for a run's own stream, `part-<n>` for one part
+  of a divided run.
+
+  A place is the step's place in the run (`57`) or a part's place in it
+  (`part-2-57`), and the video a picture belongs to is named by the part.
+  """
+  @spec part_of(String.t()) :: String.t()
+  def part_of(place) do
+    case String.split(place, "-") do
+      [_position] -> "run"
+      parts -> parts |> Enum.drop(-1) |> Enum.join("-")
+    end
+  end
+
+  defp place_position(place) do
+    place
+    |> String.split("-")
+    |> List.last()
+    |> Integer.parse()
+    |> case do
+      {position, ""} when position >= 0 -> {:ok, position}
+      _other -> :error
+    end
+  end
+
+  @doc """
+  One picture of one step, as the PNG bytes the route answers with.
+
+  Two artifacts answer this. A run written now keeps its pictures in videos, so
+  the frame is decoded out of the one that holds it; a run written before that
+  keeps a file a step, and that file is read. Both are the run's own pictures of
+  the step named, and a caller cannot tell which it got — which is the point of
+  putting the choice here rather than in the page.
+  """
+  @spec frame_bytes(binary(), String.t()) :: {:ok, binary()} | :error
+  def frame_bytes(run_id, name) do
+    with {:ok, picture} <- picture(name) do
+      case from_video(run_id, picture) do
+        {:ok, bytes} -> {:ok, bytes}
+        :error -> from_file(run_id, name)
+      end
+    end
+  end
+
+  defp from_video(run_id, %{video: video, frame: frame, kind: kind}) do
+    path = Path.join(frames_dir(run_id), video)
+
+    case FrameVideo.frame_at(path, frame, kind: kind) do
+      {:ok, {width, height, pixels}} -> {:ok, png(kind, pixels, width, height)}
+      _no_such_frame -> :error
+    end
+  end
+
+  defp png(:grey, pixels, width, height), do: Png.greyscale_bytes(pixels, width, height)
+  defp png(:rgb, pixels, width, height), do: Png.rgb_bytes(pixels, width, height)
+
+  # `frame_path/2` expands both sides, keeps the candidate inside the directory of
+  # a run named by a UUID, and answers only for a regular file there — so `..` in
+  # a name is `:error`, not a file.
+  defp from_file(run_id, name) do
+    with {:ok, path} <- frame_path(run_id, name),
+         {:ok, bytes} <- read_picture(path) do
+      {:ok, bytes}
+    else
+      _no_such_file -> :error
+    end
+  end
+
+  # The path is `frame_path/2`'s, which confines it to the directory of a run
+  # named by a UUID; a file that vanished between that check and this read is a
+  # missing picture rather than a crash.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp read_picture(path), do: File.read(path)
+
   # `Base.decode64/1` answers `:error`, not `{:error, _}`: a picture that is not
   # base64 is refused in the shape this function promises, rather than in the
   # one a caller who checked for `{:error, _}` would miss.
@@ -483,35 +626,48 @@ defmodule Monty.Studio.Artifacts do
   def frame_url(run_id, name), do: "/runs/#{uuid(run_id)}/frames/#{name}"
 
   @doc """
-  The pictures one step wrote, by sensor, in the shape a record keeps them.
+  Whether a picture's name can be answered: a frame in its video, or a file.
 
-  A run's row holds its moments only as far as the stream got to write them —
-  a process that dies mid-run takes the transcript with it — while the step's
-  two files were already on disk when it drew them. What the files say is the
-  same thing the row would have said, so a page can draw a step whose moment
-  was lost.
+  A card that draws a step asks this before it draws: a name the record kept is
+  a name the writer may not have reached, and four broken images under a run that
+  is otherwise fine is worse than a caption saying which step the picture is of.
   """
-  @spec frames_at(binary(), non_neg_integer()) :: map()
-  def frames_at(run_id, position) do
-    case pictures_at(run_id, position) do
-      {:ok, _pictured, sensors} -> sensors
-      :none -> %{}
+  @spec picture?(binary(), String.t()) :: boolean()
+  def picture?(run_id, name) do
+    case picture(name) do
+      {:ok, %{video: video, frame: frame}} ->
+        FrameVideo.frames_in(Path.join(frames_dir(run_id), video)) > frame or
+          match?({:ok, _path}, frame_path(run_id, name))
+
+      :error ->
+        false
     end
   end
 
   @doc """
   A step's pictures, and which step's they are.
 
-  A picture is written behind the step it belongs to (`Monty.Studio.RunStream.Pictures`),
-  so the folder of the newest step is by construction the one that does not exist
-  yet: asking for it drew the broken-image icon under every live step of a run
-  that was otherwise fine. The answer is therefore the newest step at or before
-  the one asked — a picture of the object a moment ago rather than none — and the
-  number it answers with is the one the note beside it states, so a picture can
-  never pose as the step on screen.
+  A page draws a step from the pictures its moment carries, and a moment the row
+  lost has none — so this asks the run's own files, and answers with the newest
+  step at or before the one asked that they can still show. The number it answers
+  with is the one the note beside the picture states, so a picture can never pose
+  as the step on screen.
+
+  With pictures kept as video, "can still show" is what each video's index says:
+  a writer that has not reached the step yet has written no frame for it, and the
+  answer is the last frame every sensor does have.
   """
   @spec pictures_at(binary(), non_neg_integer()) :: {:ok, non_neg_integer(), map()} | :none
   def pictures_at(run_id, position) do
+    case video_files(run_id) do
+      [] -> pictured_files(run_id, position)
+      videos -> pictured(run_id, videos, position)
+    end
+  end
+
+  # A run written before the pictures moved into videos: `<place>/<sensor>-<kind>.png`,
+  # and the newest place at or before the one asked.
+  defp pictured_files(run_id, position) do
     case pictured_folder(run_id, position) do
       nil -> :none
       {folder, names} -> {:ok, described(folder, position), frames_of(run_id, folder, names)}
@@ -557,37 +713,87 @@ defmodule Monty.Studio.Artifacts do
   defp newest_before(run_id, position) do
     with {:ok, folders} <- File.ls(frames_dir(run_id)),
          [_ | _] = written <-
-           folders |> Enum.flat_map(&position_of/1) |> Enum.filter(&(&1 < position)) do
+           folders |> Enum.flat_map(&position_in/1) |> Enum.filter(&(&1 < position)) do
       Integer.to_string(Enum.max(written))
     else
       _no_frames_or_none_before -> nil
     end
   end
 
-  defp position_of(folder) do
+  defp position_in(folder) do
     case Integer.parse(folder) do
       {position, ""} -> [position]
       _part_named -> []
     end
   end
 
-  # `<sensor>-<depth|colour>.png`, which is what `put_frame/5` wrote. A name that
+  # `<sensor>-<depth|colour>.png`, which is what `put_frame/5` writes. A name that
   # is neither is not a picture this function can name a sensor for.
   defp pictured(name) do
     with ".png" <- Path.extname(name),
-         {kind, sensor_id, _suffix} <- split_kind(Path.rootname(name)) do
-      [{sensor_id, kind, name}]
+         {:ok, sensor, kind} <- video_of(Path.rootname(name)) do
+      [{sensor, kind, name}]
     else
       _not_a_picture -> []
     end
   end
 
-  defp split_kind(root) do
-    Enum.find_value(@kinds, :neither, fn kind ->
+  defp pictured(run_id, videos, position) do
+    step = videos |> Enum.map(&last_frame/1) |> Enum.min() |> min(position)
+
+    if step < 0, do: :none, else: {:ok, step, sensors_at(run_id, videos, step)}
+  end
+
+  defp last_frame(video), do: FrameVideo.frames_in(video.path) - 1
+
+  # A video in `run/` holds a run's whole stream, whose places are the positions;
+  # one in `part-2/` holds that part's, whose places carry the part.
+  defp sensors_at(run_id, videos, step) do
+    Enum.reduce(videos, %{}, fn video, sensors ->
+      name = frame_name(place_of(video.part, step), video.sensor, video.kind)
+      url = frame_url(run_id, name)
+
+      Map.update(sensors, video.sensor, %{"images" => %{video.kind => url}}, fn observation ->
+        Map.update(observation, "images", %{video.kind => url}, &Map.put(&1, video.kind, url))
+      end)
+    end)
+  end
+
+  defp place_of("run", step), do: Integer.to_string(step)
+  defp place_of(part, step), do: "#{part}-#{step}"
+
+  # The videos a run has written: `<part>/<sensor>-<kind>.mp4` under `frames/`.
+  defp video_files(run_id) do
+    dir = frames_dir(run_id)
+
+    case File.ls(dir) do
+      {:ok, parts} ->
+        for part <- parts,
+            File.dir?(Path.join(dir, part)),
+            file <- files_in(Path.join(dir, part)),
+            String.ends_with?(file, ".mp4"),
+            {:ok, sensor, kind} <- [video_of(Path.rootname(file))] do
+          %{part: part, sensor: sensor, kind: kind, path: Path.join([dir, part, file])}
+        end
+
+      _no_frames_yet ->
+        []
+    end
+  end
+
+  defp files_in(dir) do
+    case File.ls(dir) do
+      {:ok, files} -> files
+      _no_files -> []
+    end
+  end
+
+  defp video_of(root) do
+    Enum.find_value(@kinds, fn kind ->
       suffix = "-" <> kind
 
       if String.ends_with?(root, suffix),
-        do: {kind, String.replace_suffix(root, suffix, ""), suffix}
-    end)
+        do: {:ok, String.replace_suffix(root, suffix, ""), kind}
+    end) || :neither
   end
 end

@@ -178,7 +178,7 @@ defmodule Monty.Studio.RunStreamTest do
     # the record keeps where a picture will be, and the drawing happens behind it:
     # a queue of undrawn steps is not something a boundary waits for.
     test "are named by the record, whether or not they have been drawn", %{run_id: run_id} do
-      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07]]))
+      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07], [0.05, 0.07]]))
 
       assert {[entry], [moment]} = RunStream.steps(run_id)
       assert entry["step"] == 1
@@ -195,13 +195,12 @@ defmodule Monty.Studio.RunStreamTest do
       # named by the step's own number is every episode's fourth step at once and
       # each episode wrote over the one before it. A replay of a hundred and forty
       # objects then showed the last one — banana — at every step.
-      RunStream.publish(run_id, seeing(step: 4, episode: 0, depth: [[0.05, 0.07]]))
+      RunStream.publish(run_id, seeing(step: 4, episode: 0, depth: [[0.05, 0.07], [0.05, 0.07]]))
       :ok = drawn(run_id)
 
-      assert {:ok, before} = Artifacts.frame_path(run_id, "0/patch-depth.png")
-      picture = File.read!(before)
+      assert {:ok, before} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
 
-      RunStream.publish(run_id, seeing(step: 4, episode: 1, depth: [[0.5, 0.7]]))
+      RunStream.publish(run_id, seeing(step: 4, episode: 1, depth: [[0.05, 0.05], [0.05, 0.05]]))
       :ok = drawn(run_id)
 
       assert {[first_entry, second_entry], [first, second]} = RunStream.steps(run_id)
@@ -214,25 +213,25 @@ defmodule Monty.Studio.RunStreamTest do
       assert first_frame == "/runs/#{run_id}/frames/0/patch-depth.png"
       assert second_frame == "/runs/#{run_id}/frames/1/patch-depth.png"
 
-      # And the later episode's pictures are its own, not a second write over the
-      # earlier episode's.
-      assert File.read!(before) == picture
-      assert {:ok, after_second} = Artifacts.frame_path(run_id, "1/patch-depth.png")
-      assert File.exists?(after_second)
+      # And the later episode's pictures are its own: the first step's frame is
+      # still the surface of the first episode, not a second write over it.
+      assert {:ok, ^before} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
+      assert {:ok, other} = Artifacts.frame_bytes(run_id, "1/patch-depth.png")
+      refute other == before
     end
 
-    test "are drawn and written behind the step the page is shown", %{run_id: run_id} do
+    test "are drawn behind the step the page is shown", %{run_id: run_id} do
       Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Studio.Jobs.Run.topic(run_id))
 
-      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07]]))
+      RunStream.publish(run_id, seeing(depth: [[0.05, 0.07], [0.05, 0.07]]))
 
       assert_receive {:studio, ^run_id, {:step, announcement}}, 5_000
       assert [%{sensor_id: "patch", media_type: "text/html"}] = announcement.frames
 
       # The record already pointed at it; this is the bytes arriving.
       :ok = Pictures.settle()
-      assert {:ok, path} = Artifacts.frame_path(run_id, "0/patch-depth.png")
-      assert File.exists?(path)
+      assert {:ok, png} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
+      assert png |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
     end
   end
 
