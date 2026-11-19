@@ -97,11 +97,39 @@ defmodule Monty.Studio.ComparisonTest do
              Enum.find(rows, &(&1.label == "learning_module_1 time_out"))
   end
 
-  test "an input only one run has is a difference too" do
+  test "an input only one run records is not a difference, and is said separately" do
     a = side("old", %{inputs: %{}})
     b = side("new", %{})
 
-    assert Comparison.differences(a.inputs, b.inputs) == ["scheduling", "sensors"]
+    # Nobody changed these; the older record simply predates them. Reporting them as
+    # differences told a reader that a pair in which both ran one part had changed
+    # the parallel count.
+    assert Comparison.differences(a.inputs, b.inputs) == []
+    assert Comparison.unrecorded(a.inputs, b.inputs) == ["scheduling", "sensors"]
+  end
+
+  test "an input both runs record and disagree about is the difference it looks like" do
+    a = side("barrier", %{inputs: %{"scheduling" => "barrier"}})
+    b = side("lagged", %{inputs: %{"scheduling" => "lagged"}})
+
+    assert Comparison.differences(a.inputs, b.inputs) == ["scheduling"]
+    assert Comparison.unrecorded(a.inputs, b.inputs) == []
+  end
+
+  # A part carries the id of the stream that collected its steps, and that id is
+  # new for every run: compared whole, "parts" differed between any two runs, and
+  # the page told a reader they had changed the division when they had not.
+  test "the division is compared by its shape, not by each part's stream" do
+    one = [%{"index" => 0, "of" => 1, "phase" => "eval", "stream" => "11111111"}]
+    same = [%{"index" => 0, "of" => 1, "phase" => "eval", "stream" => "22222222"}]
+    more = [%{"index" => 0, "of" => 2, "phase" => "eval", "stream" => "33333333"}]
+
+    a = side("first", %{inputs: %{"parts" => one}})
+    b = side("second", %{inputs: %{"parts" => same}})
+    c = side("divided", %{inputs: %{"parts" => more}})
+
+    assert Comparison.differences(a.inputs, b.inputs) == []
+    assert Comparison.differences(a.inputs, c.inputs) == ["parts"]
   end
 
   test "wall clock is a row when both sides have it, and absent when none does" do

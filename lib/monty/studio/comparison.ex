@@ -30,6 +30,7 @@ defmodule Monty.Studio.Comparison do
   @type t :: %{
           sides: [String.t()],
           differences: [String.t()],
+          unrecorded: [String.t()],
           rows: [row()]
         }
 
@@ -51,7 +52,12 @@ defmodule Monty.Studio.Comparison do
           {:ok, t()} | {:error, {:different_experiments, String.t(), String.t()}}
   def compare(%{experiment: experiment} = a, %{experiment: experiment} = b) do
     {:ok,
-     %{sides: [a.name, b.name], differences: differences(a.inputs, b.inputs), rows: rows(a, b)}}
+     %{
+       sides: [a.name, b.name],
+       differences: differences(a.inputs, b.inputs),
+       unrecorded: unrecorded(a.inputs, b.inputs),
+       rows: rows(a, b)
+     }}
   end
 
   def compare(%{experiment: a_experiment}, %{experiment: b_experiment}) do
@@ -59,20 +65,57 @@ defmodule Monty.Studio.Comparison do
   end
 
   @doc """
-  The input keys whose values differ, as sentences-ready names.
+  The inputs both runs record, and whose values differ.
 
-  An input only one run has is a difference too: a run started before the lever
-  existed and one started after it are not the same run twice.
+  What a reader is told first, because it is the answer to the question the page
+  asks: what did I change? A key only one of the two holds is *not* here — nobody
+  changed it, one record simply predates the lever — and is answered by
+  `unrecorded/2`. Reporting the two together said "the inputs that differ: parts"
+  of a pair in which both ran one part, and a reader has no way to see that the
+  second run was merely started after that field existed.
   """
   @spec differences(map(), map()) :: [String.t()]
   def differences(a, b) when is_map(a) and is_map(b) do
-    (Map.keys(a) ++ Map.keys(b))
-    |> Enum.uniq()
-    |> Enum.filter(fn key -> Map.get(a, key) != Map.get(b, key) end)
+    a = comparable(a)
+    b = comparable(b)
+
+    a
+    |> Map.keys()
+    |> Enum.filter(&(Map.has_key?(b, &1) and Map.get(a, &1) != Map.get(b, &1)))
     |> Enum.sort()
   end
 
   def differences(_a, _b), do: []
+
+  # The division of a run is an input a reader compares — one part against four is
+  # a different experiment — but each part also carries the id of the stream that
+  # collected its steps, and that id is new for every run. Compared whole, "parts"
+  # differed between *any* two runs, and the page told a reader they had changed
+  # the division when they had not. What is compared is the division: how many
+  # parts, of how many, in which phase.
+  defp comparable(%{"parts" => parts} = inputs) when is_list(parts) do
+    division = Enum.map(parts, &Map.take(&1, ["index", "of", "phase"]))
+    Map.put(inputs, "parts", division)
+  end
+
+  defp comparable(inputs), do: inputs
+
+  @doc """
+  The inputs one run records and the other does not.
+
+  Said in its own sentence because it means something else: a run started before a
+  lever existed and one started after it are not the same run twice, and neither is
+  it a change to the experiment.
+  """
+  @spec unrecorded(map(), map()) :: [String.t()]
+  def unrecorded(a, b) when is_map(a) and is_map(b) do
+    (Map.keys(a) ++ Map.keys(b))
+    |> Enum.uniq()
+    |> Enum.filter(&(Map.has_key?(a, &1) != Map.has_key?(b, &1)))
+    |> Enum.sort()
+  end
+
+  def unrecorded(_a, _b), do: []
 
   defp rows(a, b) do
     Enum.flat_map(@measures, fn {label, key} ->

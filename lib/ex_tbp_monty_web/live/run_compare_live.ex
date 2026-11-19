@@ -154,17 +154,28 @@ defmodule ExTbpMontyWeb.RunCompareLive do
         <p :if={@refusal} id="compare-refusal" class="text-sm text-warning">{@refusal}</p>
 
         <p
-          :if={@comparison && @comparison.differences == []}
+          :if={@comparison && @comparison.differences == [] && @comparison.unrecorded == []}
           id="compare-same"
           class="text-sm text-base-content/70"
         >
-          No input differs between these two runs, so their numbers are the same
-          experiment twice.
+          No input either record keeps differs. The configuration a run stepped is
+          not in the record, so a change to it does not show here.
         </p>
 
         <p :if={@comparison && @comparison.differences != []} id="compare-differences" class="text-sm">
           The inputs that differ:
           <span class="font-mono">{Enum.join(@comparison.differences, ", ")}</span>
+        </p>
+
+        <p
+          :if={@comparison && @comparison.unrecorded != []}
+          id="compare-unrecorded"
+          class="text-sm text-base-content/70"
+        >
+          Recorded by one run only:
+          <span class="font-mono">{Enum.join(@comparison.unrecorded, ", ")}</span>
+          — the other was started before that input existed, so this is not a change
+          anyone made.
         </p>
 
         <table :if={@comparison} id="compare-table" class="w-full text-sm">
