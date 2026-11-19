@@ -313,8 +313,12 @@ objects and 0 nodes`, with every step logging `inputs learning_module_0=0` and
    goal is ever asked for, so nothing moves, no displacement accumulates, the
    buffer stays empty and the write has nothing to write. A training episode in
    this port therefore needs a motor policy that walks the object without a goal
-   the module has to emit — Monty's pretraining pairings are of that kind — which
-   is a config choice to make and measure, not a defect in the step machine.
+   the module has to emit — Monty's pretraining pairings are of that kind. The
+   dog corpus carries one of exactly that shape (`naive_scan_3`, a sweep that asks
+   the module for nothing), so the next attempt is the same config with that
+   policy named instead of the goal-driven surface policy, and the referee is
+   again the one-episode run: it should end with a non-zero node count and a
+   library on disk rather than `<libraries>/cad_parts_v1/plate_learned` absent.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD
