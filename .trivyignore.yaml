@@ -24,3 +24,15 @@ vulnerabilities:
       reason above: with `WANDB_MODE=disabled` the client opens no connection
       and nothing parses a document. Expires earlier than the entry above
       because this one has a fix upstream that only needs a rebuild.
+
+  - id: CVE-2026-97054
+    expired_at: 2027-02-05
+    statement: >-
+      The same binary once more, and this time its Go runtime: `wandb-core` was
+      built with go1.27.2, and this `MaxBytesReader` finding in net/http is
+      fixed in go1.27.4 and go1.26.11. So it is the same fact as the two above —
+      a rebuilt wheel is the whole fix, and there is no wheel to raise the pin
+      to (0.31.0 is still the newest on PyPI, and this repository compiles none
+      of that program). It needs a listening HTTP/1 server to matter, and with
+      `WANDB_MODE=disabled` the client starts none and opens no connection.
+      Same expiry as the entry above: one rebuild answers both.
