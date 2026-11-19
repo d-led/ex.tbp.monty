@@ -267,6 +267,8 @@ defmodule Monty.Studio.Cad.Preparation do
 
   # A part file that is gone is part of the fingerprint too: the memory cannot be
   # said to match a file nobody can read.
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is the one the config names (`step_of/1`), not a request's.
   defp digest(step) do
     case File.read(step) do
       {:ok, bytes} -> :crypto.hash(:sha256, bytes)

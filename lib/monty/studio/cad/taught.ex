@@ -43,6 +43,9 @@ defmodule Monty.Studio.Cad.Taught do
   a record that is not one of ours — because the caller's only question is
   whether it may skip, and every one of those answers is no.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is derived from the memory's own path, which the config names: no
+  # part of it comes from a request.
   @spec read(Path.t()) :: {:ok, provenance()} | :none
   def read(memory) do
     record = path(memory)
@@ -65,6 +68,9 @@ defmodule Monty.Studio.Cad.Taught do
   it taught is a build that will teach it again, and a person reading the row
   should be told that instead of a `:eacces`.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # Beside the memory it describes, under the same libraries root: the path comes
+  # from the config, not from a request.
   @spec remember(Path.t(), %{fingerprint: String.t(), nodes: non_neg_integer()}) ::
           :ok | {:error, String.t()}
   def remember(memory, %{fingerprint: fingerprint, nodes: nodes}) do
