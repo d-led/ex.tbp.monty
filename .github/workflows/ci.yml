@@ -1070,11 +1070,14 @@ jobs:
           if (-not (Test-Path $window)) { throw "no window at $window" }
           Write-Host "the one-line download put the window at $window"
 
-          # And the two companions beside it, each a `.cmd` a person can
-          # double-click and a release of its own.
+          # And the two companions beside it, each a window a person can
+          # double-click and a release of its own. The launcher is the
+          # companion's own `examples/<node>/app` build, copied in as
+          # `<name>.exe` — the per-platform `.cmd` script it replaced answered no
+          # Quit event, which is why the Dock offered "Force Quit" for it.
           foreach ($companion in 'ex.tbp.monty.plugin.example', 'ex.tbp.monty.plugin.flyverse') {
-            $cmd = "smoke/landing/${{ matrix.asset }}/$companion/$companion.cmd"
-            if (-not (Test-Path $cmd)) { throw "the download holds no $companion beside the window" }
+            $launcher = "smoke/landing/${{ matrix.asset }}/$companion/$companion.exe"
+            if (-not (Test-Path $launcher)) { throw "the download holds no $companion beside the window" }
           }
           Write-Host 'the two companions unpacked beside the window'
 
