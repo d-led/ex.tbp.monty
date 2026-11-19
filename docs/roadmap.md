@@ -218,36 +218,26 @@ loop, and its step count is Monty's for every episode of the epoch.
 - `mix monty.bench` (exists) times the timestep loop per experiment shape.
 - Accuracy harness against Monty's own benchmarks (`benchmarks/*.csv`,
   `benchmarks/results/`): the same episodes, the same seeds, one table.
-- **Blocked as of 2026-11-16**: the experiment this phase's milestone names cannot
-  run yet. `base_77obj_dist_agent` is killed while its model is being built, before
-  step 0, when a process passes the 4 GB ceiling — at a 3 GB ceiling of its own it
-  dies at `Total Heap Size: 459 908 514` words, about 3.7 GB. The library is 213 MB
-  of heap and the module holds that library rather than copying it, so the six
-  gigabytes are the library **copied between processes**: a term sent as a message
-  is copied, and this one is maps and lists rather than off-heap binaries. The
-  readings and the correction of a first, wrong one are in
+- **The 77-object experiment runs — since 2026-11-19.** It was killed while its
+  model was being built, before step 0, when a process passed the 4 GB ceiling; at
+  a 3 GB ceiling of its own it died at `Total Heap Size: 459 908 514` words. The
+  library is 213 MB of heap and the module holds it rather than copying it, so what
+  died was the library **copied between processes** — the readings and the
+  correction of a first, wrong one are in
   [`validation.md`](validation.md#where-the-77-object-benchmark-stops-2026-11-16).
+  Two changes closed it: a module's state is built in the module's own process from
+  the library's identity, never from the library (`Setup.model_spec/3` with
+  `lazy_state: true` — a ten-object spec is 241.3 MB eager and 8.9 KB lazy, and the
+  acceptance ladder through it is digit for digit); and the command line stopped
+  loading the library itself (`mix monty.run` passed all 213 MB as `memory:` on
+  every episode, which put it back in every copy the spec became). Measured on this
+  Mac: `base_77obj_dist_agent --episodes 1 --steps 40 --no-record` steps and
+  concludes — 26 steps, evidence 21.22 with one object possible, 43 181 goals, exit
+  0, 8.1 s of model time and 0.2 s of world.
 
-  Unblocking it, in order:
-
-  1. Count the hand-overs. `scripts/measure_step_memory.exs` grows a mode that
-     starts the run with a ceiling above the need and prints every process the
-     runtime registered with the heap each holds, so the copies are named rather
-     than inferred.
-  2. **Hold the library once — done 2026-11-19.** `Setup.model_spec/3` takes
-     `lazy_state: true` and a module's spec then carries `{:lazy, fun}`, which
-     `Monty.Runtime.LearningModuleServer` runs in its own process; the closure
-     captures the library's identity (path and module index), never the library,
-     and `Memory.load/3` answers from `:persistent_term`. Measured on this Mac: a
-     ten-object setup's spec is **241.3 MB eager and 8.9 KB lazy**, and the
-     acceptance ladder through the lazy path is digit for digit. **Necessary, not
-     sufficient:** `base_77obj_dist_agent --episodes 1 --steps 2` still dies before
-     step 0, now with `maximum heap size reached` at `Total Heap Size:
-659 053 891` words — one process building more than five gigabytes, so the
-     remaining shape is the _construction_ (the per-channel caches a module builds
-     over the library), not a message between processes. The heap report of step 1
-     is what names it.
-  3. Only then measure the step, which is where the remaining time goes.
+  What is left here is the phase's own work, not a blocker: the accuracy harness
+  against Monty's benchmarks, and the cost of a step on a library this size —
+  310 ms of model time a step is where the remaining time goes.
 
 - Profiling before optimisation: `:tprof` for where the time goes, `:eprof` for
   call counts, `:fprof` when order matters. Optimise the loop the profile names,
