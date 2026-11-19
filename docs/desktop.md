@@ -151,6 +151,16 @@ person starts a program; each is the same order of events — ask the window who
 is at `/health`, read the window's own `releases/COOKIE`, refuse politely when
 neither is there, and `exec` the release in the foreground.
 
+The node a companion starts has a name of its own, `<node>_app@127.0.0.1`, and
+both halves are deliberate. `epmd` keys on the bare name, so a checkout that runs
+the same plugin as `example_plugin@127.0.0.1` would keep the app from booting at
+all with _the name … seems to be in use by another Erlang node_; and the name is
+long on the loopback because a short one is resolved through DNS by whoever dials
+it, which on a machine whose hostname answers with an address its interface no
+longer has is a cluster that silently never forms. A name `epmd` already holds
+that does not answer the launcher's `rpc` is reported in the alert, because the
+release's own refusal would land only in the log.
+
 The window needs no plugins and starts none by itself — it is the cluster, not
 their keeper; all it can do is offer to start the two that a checkout keeps beside
 it, and a packaged window has none to offer. On Linux and Windows the companions

@@ -12,19 +12,29 @@ defmodule ExTbpMonty.Desktop.PluginsTest do
       # or empty — so an inherited version number sends the child looking for a
       # folder that is not there, and it dies before printing a line.
       Tmp.system_env("RELEASE_VSN", "0.1.3")
-      Tmp.system_env("RELEASE_NODE", "monty-studio-e2e")
+      Tmp.system_env("RELEASE_NAME", "ex_tbp_monty")
 
       environment = environment()
 
       assert environment["RELEASE_VSN"] == ""
-      assert environment["RELEASE_NODE"] == ""
+      assert environment["RELEASE_NAME"] == ""
     end
 
     test "gives the child the node to join and the cookie to join it with" do
       environment = environment()
 
-      assert environment["MONTY_SEEDS"] == "monty-studio-abc@host"
+      assert environment["MONTY_SEEDS"] == "monty-studio-abc@127.0.0.1"
       assert environment["RELEASE_COOKIE"] == cookie_of_this_node()
+    end
+
+    test "names the child on the loopback, so the two dial without DNS" do
+      # A short name is resolved through DNS by whoever dials it, and a hostname
+      # that answers with an address the machine no longer has leaves the child
+      # looping forever with nothing said.
+      environment = environment()
+
+      assert environment["RELEASE_NODE"] == "example_plugin@127.0.0.1"
+      assert environment["RELEASE_DISTRIBUTION"] == "name"
     end
 
     test "passes this node's cookie, not the one this VM was started with" do
@@ -38,7 +48,7 @@ defmodule ExTbpMonty.Desktop.PluginsTest do
 
   # A port takes the environment as charlists; the assertions read it as a map.
   defp environment do
-    Plugins.environment("monty-studio-abc@host")
+    Plugins.environment("monty-studio-abc@127.0.0.1", :"example_plugin@127.0.0.1")
     |> Map.new(fn {name, value} -> {to_string(name), to_string(value)} end)
   end
 

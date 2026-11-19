@@ -214,7 +214,7 @@ defmodule ExTbpMonty.Desktop.Plugins do
         :hide,
         args: leading ++ ["start"],
         cd: release,
-        env: environment(target)
+        env: environment(target, node_name(example))
       ])
 
     {:ok, port}
@@ -233,31 +233,40 @@ defmodule ExTbpMonty.Desktop.Plugins do
 
   @doc """
   The environment a sample plugin's launcher is started with, given the node it
-  should join.
+  should join and the name it should answer to.
 
-  Two variables are the child's to be given — the node to dial and the cookie to
-  dial it with — and the rest of this VM's `RELEASE_*` are the child's to not
-  inherit. They describe *this* release, and a launcher defaults a variable only
-  when it is unset **or empty**, so each one is passed empty and the plugin's
-  launcher reads its own `start_erl.data` and its own name instead.
+  The node to dial, the cookie to dial it with, and the child's own long name on
+  the loopback are the child's to be given. The name is long for the same reason
+  the window's is: a short name is resolved through DNS by whoever dials it, and
+  a machine whose hostname answers with an address its interface no longer has
+  leaves the child looping forever with nothing said. `RELEASE_NODE` is also the
+  name this module later asks whether the node is up (`running?/1`), so the two
+  spellings cannot drift.
+
+  The rest of this VM's `RELEASE_*` are the child's to not inherit. They describe
+  *this* release, and a launcher defaults a variable only when it is unset **or
+  empty**, so each one is passed empty and the plugin's launcher reads its own
+  `start_erl.data` and its own name instead.
 
   Inherited whole, `RELEASE_VSN` sent the child looking for
   `releases/<this release's version>/env.sh` inside a release that never had that
   folder: it died in its first line, and all the window's log showed was a
   control that reported two nodes and a cluster that stayed empty.
   """
-  @spec environment(String.t()) :: [{charlist(), charlist()}]
-  def environment(target) do
+  @spec environment(String.t(), node()) :: [{charlist(), charlist()}]
+  def environment(target, node_name) do
     blanked =
       for {name, _value} <- System.get_env(),
           String.starts_with?(name, "RELEASE_"),
-          name != "RELEASE_COOKIE",
+          name not in ["RELEASE_COOKIE", "RELEASE_NODE", "RELEASE_DISTRIBUTION"],
           do: {to_charlist(name), ~c""}
 
     blanked ++
       [
         {~c"MONTY_SEEDS", to_charlist(target)},
-        {~c"RELEASE_COOKIE", to_charlist(cookie())}
+        {~c"RELEASE_COOKIE", to_charlist(cookie())},
+        {~c"RELEASE_DISTRIBUTION", ~c"name"},
+        {~c"RELEASE_NODE", node_name |> to_string() |> to_charlist()}
       ]
   end
 

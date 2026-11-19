@@ -31,13 +31,15 @@ shared_cookie() {
 }
 
 answering() {
-  RELEASE_COOKIE="$(shared_cookie)" "$here/$1/bin/$1" rpc "true" >/dev/null 2>&1
+  RELEASE_COOKIE="$(shared_cookie)" RELEASE_DISTRIBUTION=name RELEASE_NODE="$1@127.0.0.1" \
+    "$here/$1/bin/$1" rpc "true" >/dev/null 2>&1
 }
 
 if [ "${1:-}" = "--stop" ]; then
   for example in $examples; do
     if answering "$example"; then
-      RELEASE_COOKIE="$(shared_cookie)" "$here/$example/bin/$example" rpc "System.stop()" >/dev/null 2>&1 || true
+      RELEASE_COOKIE="$(shared_cookie)" RELEASE_DISTRIBUTION=name RELEASE_NODE="$example@127.0.0.1" \
+        "$here/$example/bin/$example" rpc "System.stop()" >/dev/null 2>&1 || true
       echo "  stopped $example"
     fi
   done
@@ -97,10 +99,14 @@ fi
 for example in $examples; do
   log="$logs/monty-studio-$example.log"
 
-  # The release names itself after itself (`sname`, `example_plugin@<host>`), and
-  # `MONTY_SEEDS` is the one line its own `Join` module reads.
+  # The release names itself after itself (`sname`, `example_plugin@<host>`);
+  # given a long name on the loopback instead, because a short one is resolved
+  # through DNS by the window that dials it back, and a hostname that answers
+  # with an address the machine no longer has is a cluster that silently never
+  # forms. `MONTY_SEEDS` is the one line its own `Join` module reads.
   ( cd "$here/$example" &&
-    RELEASE_COOKIE="$cookie" MONTY_SEEDS="$target" ./bin/"$example" start >"$log" 2>&1 ) &
+    RELEASE_COOKIE="$cookie" RELEASE_DISTRIBUTION=name RELEASE_NODE="$example@127.0.0.1" \
+      MONTY_SEEDS="$target" ./bin/"$example" start >"$log" 2>&1 ) &
   echo "  $example: log in $log"
 done
 

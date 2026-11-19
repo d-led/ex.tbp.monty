@@ -61,6 +61,13 @@ if (-not (Test-Path $nodeFile)) {
 
 $node = (Get-Content $nodeFile -Raw).Trim()
 
+# This app's node, named on the loopback: `<node>_app@127.0.0.1`. Not the
+# release's own name, because epmd keys on the bare name and a checkout runs the
+# same plugin as `example_plugin@127.0.0.1`; long, because a short name is
+# resolved through DNS when the two dial each other.
+$appNode = "${node}_app"
+$appNodeAddress = "${appNode}@127.0.0.1"
+
 $window = $env:MONTY_STUDIO_APP
 
 if ([string]::IsNullOrEmpty($window)) {
@@ -160,6 +167,8 @@ if ([string]::IsNullOrEmpty($cookie)) {
 # Pressing it twice is not an error: a running node answers, and answers is the
 # whole question. A release started with `start` is not a daemon.
 $env:RELEASE_COOKIE = $cookie
+$env:RELEASE_DISTRIBUTION = 'name'
+$env:RELEASE_NODE = $appNodeAddress
 $already = & (Join-Path $release "bin\$node.bat") rpc "true" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
@@ -180,6 +189,8 @@ Remove-Item Env:\RELEASE_DISTRIBUTION -ErrorAction SilentlyContinue
 Remove-Item Env:\RELEASE_TMP -ErrorAction SilentlyContinue
 Remove-Item Env:\RELEASE_MODE -ErrorAction SilentlyContinue
 
+$env:RELEASE_DISTRIBUTION = 'name'
+$env:RELEASE_NODE = $appNodeAddress
 $env:MONTY_SEEDS = $target
 Set-Location $release
 & (Join-Path $release "bin\$node.bat") start

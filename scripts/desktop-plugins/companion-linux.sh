@@ -21,6 +21,10 @@
 #
 # * the node name is what `/health` says, because the window names itself per
 #   launch (`monty-studio-<instance id>`) and several copies run on one machine;
+# * this node's own name is `<node>_app@127.0.0.1` — not the release's, because
+#   `epmd` keys on the bare name and a checkout runs the same plugin as
+#   `example_plugin@127.0.0.1`, and long on the loopback, because a short name
+#   is resolved through DNS when the two dial each other;
 # * the cookie is the window's own `releases/COOKIE`, because `mix release` writes
 #   one per build and a peer with a different one is refused — which arrives as
 #   "nothing happened", the one failure nobody can diagnose;
@@ -38,6 +42,7 @@ if [ ! -r "$here/node" ]; then
 fi
 
 node=$(tr -d ' \t\r\n' <"$here/node")
+app_node="${node}_app"
 tmp=${TMPDIR:-/tmp}
 log="${tmp%/}/monty-studio-$node.log"
 
@@ -157,9 +162,19 @@ fi
 # Pressing it twice is not an error: a running node answers, and answers is the
 # whole question. A release started with `start` is not a daemon, so there is no
 # pid file to look for.
-if RELEASE_COOKIE="$cookie" "$release/bin/$node" rpc "true" >/dev/null 2>&1; then
+if RELEASE_COOKIE="$cookie" RELEASE_DISTRIBUTION=name RELEASE_NODE="${app_node}@127.0.0.1" \
+  "$release/bin/$node" rpc "true" >/dev/null 2>&1; then
   say "$name is already running, and is in the cluster."
   exit 0
+fi
+
+# A name `epmd` already holds that did not answer above is another VM, and the
+# release started below would die with "the name … seems to be in use by another
+# Erlang node" — a sentence a click has nowhere to show.
+epmd_bin=$(ls "$release"/erts-*/bin/epmd 2>/dev/null | head -1)
+
+if [ -n "$epmd_bin" ] && "$epmd_bin" -names 2>/dev/null | grep -q "^name ${app_node} at "; then
+  die "A node called $app_node is already running on this machine, and it answers with a cookie this app does not have. Stop it, then start this one again."
 fi
 
 say "$name: joining $target (the window answers on port $port)"
@@ -170,4 +185,6 @@ say "$name: joining $target (the window answers on port $port)"
 unset RELEASE_VSN RELEASE_NAME RELEASE_ROOT RELEASE_NODE RELEASE_DISTRIBUTION RELEASE_TMP RELEASE_MODE
 
 cd "$release"
-exec env RELEASE_COOKIE="$cookie" MONTY_SEEDS="$target" "./bin/$node" start >>"$log" 2>&1
+exec env RELEASE_COOKIE="$cookie" RELEASE_DISTRIBUTION=name \
+  RELEASE_NODE="${app_node}@127.0.0.1" MONTY_SEEDS="$target" \
+  "./bin/$node" start >>"$log" 2>&1

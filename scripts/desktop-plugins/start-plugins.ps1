@@ -57,6 +57,11 @@ function Test-Answering {
     $cookie = Get-SharedCookie
     if ($cookie) { $env:RELEASE_COOKIE = $cookie }
 
+    # The node the release was started as: a long name on the loopback, so the
+    # two find each other without asking DNS who this machine is.
+    $env:RELEASE_DISTRIBUTION = 'name'
+    $env:RELEASE_NODE = "$Example@127.0.0.1"
+
     $launcher = Join-Path $here "$Example/bin/$Example.bat"
     & $launcher rpc 'true' *> $null
     return $LASTEXITCODE -eq 0
@@ -113,12 +118,19 @@ foreach ($example in $examples) {
     $log = Join-Path $env:TEMP "monty-studio-$example.log"
     $launcher = Join-Path $release "bin/$example.bat"
 
-    # The release names itself after itself (`sname`, `example_plugin@<host>`),
-    # and `MONTY_SEEDS` is the one line its own `Join` module reads.
+    # The release names itself after itself (`sname`, `example_plugin@<host>`);
+    # given a long name on the loopback instead — a short one is resolved through
+    # DNS by the window that dials it back, and `MONTY_SEEDS` is the one line its
+    # own `Join` module reads. The variables are the process's, so a 5.1
+    # `Start-Process` inherits them without `-Environment`, which only 7 has.
+    $env:RELEASE_COOKIE = $cookie
+    $env:RELEASE_DISTRIBUTION = 'name'
+    $env:RELEASE_NODE = "$example@127.0.0.1"
+    $env:MONTY_SEEDS = $target
+
     Start-Process -FilePath $launcher -ArgumentList 'start' `
         -WorkingDirectory $release -WindowStyle Hidden `
-        -RedirectStandardOutput $log -RedirectStandardError "$log.err" `
-        -Environment @{ MONTY_SEEDS = $target; RELEASE_COOKIE = $cookie } | Out-Null
+        -RedirectStandardOutput $log -RedirectStandardError "$log.err" | Out-Null
 
     Write-Host "  $example`: log in $log"
 }
