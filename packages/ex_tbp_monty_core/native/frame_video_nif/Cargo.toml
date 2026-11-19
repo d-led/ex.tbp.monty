@@ -1,0 +1,14 @@
+[package]
+name = "frame_video_nif"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "frame_video_nif"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rustler = "0.38"
+rusty_h264 = "0.17"
+muxide = { version = "0.5", default-features = false }

@@ -98,9 +98,52 @@ defmodule Monty.Simulators.Synthetic.Camera do
     }
   end
 
+  @doc """
+  The same pictures as pixels, row by row, with no PNG in between.
+
+  What a run's video takes: the encoder wants the values, and a run's archive
+  keeps one video a sensor rather than a file a step. The drawing is the same as
+  `images/1`'s — a caller that showed one and archived the other would keep two
+  slightly different pictures of the same step.
+
+  `width` and `height` are the shape the pixels are in, so a writer needs no
+  second opinion about how big a sensor's picture is.
+
+  Answers `%{depth: nil, colour: nil}` for an observation that carries a
+  *recorded* picture rather than the numbers behind it: a replayed step's
+  pictures are already files, and there is nothing left to encode.
+  """
+  @spec planes(map()) :: %{
+          depth: binary() | nil,
+          colour: binary() | nil,
+          width: pos_integer() | nil,
+          height: pos_integer() | nil
+        }
+  def planes(observation) do
+    case Map.get(observation, "images") do
+      %{} -> %{depth: nil, colour: nil, width: nil, height: nil}
+      nil -> planes_of(Map.get(observation, "depth"), Map.get(observation, "rgba"))
+    end
+  end
+
+  defp planes_of(nil, nil), do: %{depth: nil, colour: nil, width: nil, height: nil}
+
+  defp planes_of(depth, rgba) do
+    rows = depth || rgba
+
+    %{
+      depth: depth && (depth |> depth_view() |> elem(0) |> IO.iodata_to_binary()),
+      colour: rgba && (rgba |> colour_rows() |> IO.iodata_to_binary()),
+      width: rows |> hd() |> length(),
+      height: length(rows)
+    }
+  end
+
+  defp colour_rows(rgba), do: Enum.map(rgba, fn row -> Enum.map(row, &colour_byte/1) end)
+
   defp colour_picture(rgba) do
     rgba
-    |> Enum.map(fn row -> Enum.map(row, &colour_byte/1) end)
+    |> colour_rows()
     |> Png.rgb()
     |> Base.encode64()
   end

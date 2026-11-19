@@ -25,6 +25,19 @@ defmodule ExTbpMonty.Core.Png do
   def greyscale(rows), do: encode(rows, 0, fn value -> <<trunc(value)>> end)
 
   @doc """
+  The same picture from the bytes a decoder hands back: `width` × `height` grey
+  values, row by row, with no list in between.
+  """
+  @spec greyscale_bytes(binary(), non_neg_integer(), non_neg_integer()) :: binary()
+  def greyscale_bytes(bytes, width, height), do: encode_bytes(bytes, width, height, 0, 1)
+
+  @doc """
+  The same picture from RGB bytes, three a pixel.
+  """
+  @spec rgb_bytes(binary(), non_neg_integer(), non_neg_integer()) :: binary()
+  def rgb_bytes(bytes, width, height), do: encode_bytes(bytes, width, height, 2, 3)
+
+  @doc """
   A colour PNG of `rows`, each a list of `[r, g, b]` from 0 to 255.
   """
   @spec rgb([[[number()]]]) :: binary()
@@ -49,5 +62,24 @@ defmodule ExTbpMonty.Core.Png do
 
   defp chunk(type, data) do
     [<<byte_size(data)::32>>, type, data, <<:erlang.crc32([type, data])::32>>]
+  end
+
+  # The same encoding, with the filter bytes placed rather than built row by
+  # row: this is the shape a decoded frame arrives in.
+  defp encode_bytes(bytes, width, height, colour_type, pixel_size) do
+    stride = width * pixel_size
+
+    raw =
+      for row <- 0..(height - 1), into: <<>> do
+        <<0>> <> binary_part(bytes, row * stride, stride)
+      end
+
+    [
+      @signature,
+      chunk("IHDR", <<width::32, height::32, 8, colour_type, 0, 0, 0>>),
+      chunk("IDAT", :zlib.compress(raw)),
+      chunk("IEND", <<>>)
+    ]
+    |> IO.iodata_to_binary()
   end
 end
