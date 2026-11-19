@@ -91,13 +91,14 @@ defmodule Monty.Prerequisites.Build do
       plans
       |> Enum.with_index(1)
       |> Enum.reduce_while({:ok, []}, fn {plan, index}, {:ok, said} ->
-        notify.(%{index: index, total: total, what: "#{plan.part}: memory and meshes"})
+        notify.(%{index: index, total: total, what: "#{label(plan)}: memory and meshes"})
 
         case prepare(plan, opts) do
           {:ok, written} ->
             {:cont,
              {:ok,
-              said ++ ["#{plan.part}: #{written.written} object(s), #{written.nodes} node(s)"]}}
+              said ++
+                ["#{label(plan)}: #{written.written} object(s), #{written.nodes} node(s)"]}}
 
           {:error, reason} ->
             {:halt, {:error, reason}}
@@ -105,6 +106,12 @@ defmodule Monty.Prerequisites.Build do
       end)
     end
   end
+
+  # What the row says the step is about. A memory of several parts names all of
+  # them — the set's row would otherwise say "plate" while the blend is being
+  # taught too, which is the one thing that row is for.
+  defp label(%{parts: parts}), do: Enum.map_join(parts, ", ", &elem(&1, 0))
+  defp label(%{part: part}), do: part
 
   # -- the corpus ----------------------------------------------------------
 

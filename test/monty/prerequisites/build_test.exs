@@ -76,6 +76,26 @@ defmodule Monty.Prerequisites.BuildTest do
       assert_received_step(:first)
     end
 
+    test "names every part of a set, not only the first it teaches" do
+      set = %{
+        part: "plate",
+        parts: [{"plate", "/parts/plate.step"}, {"blend", "/parts/blend.step"}],
+        memory: "/libraries/parts_set.jsonl.gz"
+      }
+
+      steps = self()
+
+      assert {:ok, [said]} =
+               Build.run("cad_part_memories", &send(steps, {:step, &1}),
+                 plans: [set],
+                 prepare: fn _ -> {:ok, %{written: 2, nodes: 9}} end
+               )
+
+      assert_received {:step, %{what: what}}
+      assert what =~ "plate, blend"
+      assert said =~ "plate, blend"
+    end
+
     test "stops at the part it could not teach" do
       plans = [
         %{part: "plate", memory: "/libraries/plate_part.jsonl.gz"},
@@ -140,13 +160,19 @@ defmodule Monty.Prerequisites.BuildTest do
       end)
     end
 
-    test "as features is one object per feature, not one per part", %{root: root} do
+    test "as features holds the objects the feature experiment steps, one per feature", %{
+      root: root
+    } do
       PrerequisiteRoots.with_roots(root, fn ->
         {plan, setup} = experiment("plate_features_eval")
 
         assert {:ok, written} = Preparation.prepare(plan)
 
-        assert written.written > length(Monty.Studio.Setup.objects(setup))
+        # The feature experiment's env interface names the memory's own objects —
+        # `plate_bosses_0` and its three siblings — so a memory holding a different
+        # number of them is a memory the run cannot step, which is the thing worth
+        # asserting rather than "more than one part".
+        assert written.written == length(Monty.Studio.Setup.objects(setup))
         assert File.exists?(plan.memory)
         assert_meshed(setup)
       end)
