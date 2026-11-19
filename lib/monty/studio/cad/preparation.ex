@@ -42,8 +42,9 @@ defmodule Monty.Studio.Cad.Preparation do
       a memory of one part, and one per object the experiment names for a memory of
       several (`parts_set`)
     * `name` and `release` — the memory's address, as the config names it
-    * `labels` — what the memory holds: the part as one object, or one object
-      per feature it is made of, which is what a `_features` memory promises
+    * `labels` — what the memory holds: the part as one object, one object per
+      feature it is made of, which is what a `_features` memory promises, or each
+      part of a set as itself
     * `optics` — the run's patch: its horizontal field of view in radians and
       the distance it stands off the surface in millimetres, which are the two
       numbers the teaching camera takes
@@ -53,9 +54,10 @@ defmodule Monty.Studio.Cad.Preparation do
   @type plan :: %{
           part: String.t(),
           step: Path.t(),
+          parts: [{String.t(), Path.t()}],
           name: String.t(),
           release: String.t(),
-          labels: :part | :features,
+          labels: :part | :features | :set,
           optics: %{fov_x: float(), distance: float()},
           memory: Path.t(),
           objects: Path.t()
