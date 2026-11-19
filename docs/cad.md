@@ -159,16 +159,20 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
 
 ## What is missing, in the order it is worth doing
 
-1. **A set of parts.** Stage 1 wants several features across several parts, and a
-   run names one (`MONTY_CAD_PART`), so a pretraining set is a change to how the
-   world is chosen per episode.
-2. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
+1. **The feature wall, which is now the question rather than the plumbing.** The
+   evaluation on meshes exists and runs (`cad/plate_features_eval` steps the object
+   set the Make wrote, from the memory the Make wrote), and it answers a sibling:
+   asked about `plate_bosses_0` it names `plate_risers_0`. The plate's body and its
+   risers are the same surface in the reported features — flat, nine millimetres of
+   curvature, hue zero — and the boss's own top face is flat too, so a memory of
+   four objects cannot tell them apart until the teaching carries something that
+   does (a second scale, the depth of the feature, or the arrangement of two
+   patches). That is the compositional question the set exists to ask.
+2. **A set of parts.** Three parts are taught and recognised (plate, blend,
+   blend-big), one per experiment. A _pretraining_ set — several parts learned in
+   one run, which is what Monty's pretraining configs are — is still missing.
+3. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
    `_compositional` / `_monolithic` pair, which differ only in whether the labels
    name features or the part. The pair is the measurement: composition against one
-   lump, everything else held. Today a feature-labelled run uses a training config
-   written for whole objects.
-3. **The evaluation on meshes.** `ExTbpMonty.Cad.Objects` writes a part's features
-   as the object set a world steps (`textured.obj`, `texture_map.png`,
-   `metadata.json`, one directory per feature and one for the body, in metres with
-   `scale` one); what is missing is the config that points `data_path` at that set
-   and loads the memory stage 1 wrote.
+   lump, everything else held. Today a feature-labelled run uses an evaluation
+   config written for whole objects.
