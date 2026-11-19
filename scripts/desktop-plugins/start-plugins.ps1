@@ -119,7 +119,7 @@ foreach ($example in $examples) {
     $launcher = Join-Path $release "bin/$example.bat"
 
     # The release names itself after itself (`sname`, `example_plugin@<host>`);
-    # given a long name on the loopback instead — a short one is resolved through
+    # given a long name on the loopback instead, a short one is resolved through
     # DNS by the window that dials it back, and `MONTY_SEEDS` is the one line its
     # own `Join` module reads. The variables are the process's, so a 5.1
     # `Start-Process` inherits them without `-Environment`, which only 7 has.

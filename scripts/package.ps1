@@ -140,7 +140,7 @@ try {
     # Linux: one sentence describes both, and the window is the `.exe` above that
     # folder.
     #
-    # The launcher is the example's own `app/` — the same shape macOS and Linux
+    # The launcher is the example's own `app/`, the same shape macOS and Linux
     # build, from the example's own tree: an example may depend on a Hex package
     # and on nothing else from the project it was written in.
     function Get-CompanionWindow {

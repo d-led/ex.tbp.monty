@@ -238,8 +238,8 @@ try {
     # release ships whatever `priv/static` holds and never builds it.
     #
     # `Plug.Static` prefers a `.gz` beside a file whenever the client accepts
-    # gzip, and only `mix phx.digest` writes one — a desktop build does not run
-    # it. So a compressed copy left by an older digest is what the browser gets,
+    # gzip, and only `mix phx.digest` writes one, which a desktop build does not
+    # run. So a compressed copy left by an older digest is what the browser gets,
     # instead of the file beside it: the packaged window served a stylesheet from
     # before the sidebar had a Dashboard entry, and the icon was missing there
     # while the dev server drew it, because a dev build turns gzip off. A build
