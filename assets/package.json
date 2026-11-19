@@ -4,9 +4,9 @@
   "private": true,
   "description": "Browser dependencies for the Monty-on-the-BEAM dashboard",
   "dependencies": {
-    "driver.js": "^1.11.0"
+    "driver.js": "^1.14.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.5"
+    "@tauri-apps/cli": "^2.12.6"
   }
 }
