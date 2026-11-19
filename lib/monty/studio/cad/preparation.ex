@@ -186,13 +186,13 @@ defmodule Monty.Studio.Cad.Preparation do
     end
   end
 
-  # A memory of features is sampled much more finely than a memory of a part,
-  # and has to be: the CAD package's default spacing is sized for a part, and a
-  # feature is a fraction of one. At the default the plate's boss keeps 56 nodes
-  # and its hole 16, which is a cylinder reproduced as a few rings of
-  # quadrilaterals rather than as the surface it is — and a patch on it is as
-  # wide as the whole feature. What limits a feature run at this size is scale,
-  # not node count; the set's README has the measurement.
+  # A memory of features is sampled more finely than the CAD package's dial, and
+  # has to be: that dial is sized for a part, and a feature is a fraction of one.
+  # At the default the plate's boss keeps 56 nodes and its hole 16, which is a
+  # cylinder reproduced as a few rings of quadrilaterals rather than as the
+  # surface it is — and a patch on it is as wide as the whole feature. What limits
+  # a feature run at this size is scale, not node count; the set's README has the
+  # measurement.
   #
   # The finer spacing alone is not enough — the visits are capped at 2 000, and
   # the plate's body and risers alone spend that budget, which deletes the small
@@ -203,13 +203,36 @@ defmodule Monty.Studio.Cad.Preparation do
   @feature_spacing 1.0
   @feature_visits 20_000
 
+  # A part's memory is sampled for the run's patch too, and this is the number
+  # that decides it. The CAD package's own dial is thirty samples across the
+  # part's largest extent, which is 2 mm on the plate and 9 mm on `blend-big` —
+  # and a graph whose nodes are nine millimetres apart cannot be matched by a
+  # five-millimetre patch. Measured on this Mac: `blend-big` taught at the
+  # package's spacing keeps 35 nodes and its episode reaches evidence 4.37; taught
+  # at a third of the patch's width it keeps 1424 and reaches 9.91. The visit cap
+  # is raised beside it for the same reason the feature cap is: at a finer spacing
+  # the surface has more samples than the package's 2 000.
+  @nodes_across_a_patch 3
+  @part_visits 20_000
+
   defp memory_options(%{labels: :features} = plan) do
     [labels: :features, spacing: @feature_spacing, limit: @feature_visits]
     |> Keyword.merge(optics_options(plan))
   end
 
-  defp memory_options(%{labels: :part} = plan),
-    do: Keyword.merge([labels: :part], optics_options(plan))
+  defp memory_options(%{labels: :part, optics: optics} = plan) do
+    [
+      labels: :part,
+      spacing: patch_width(optics) / @nodes_across_a_patch,
+      limit: @part_visits
+    ]
+    |> Keyword.merge(optics_options(plan))
+  end
+
+  # How much surface one percept covers, across: the patch's field of view at the
+  # distance it stands off by.
+  defp patch_width(%{fov_x: fov_x, distance: distance}),
+    do: 2 * distance * :math.tan(fov_x / 2)
 
   # A part's memory is taught through the same lens and from the same distance as
   # a feature's: it is the *run's* patch either way, and a memory of the plate

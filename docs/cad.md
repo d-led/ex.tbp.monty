@@ -110,15 +110,18 @@ appended. The experiment lives in `priv/monty_experiments/sets/cad/conf`, and
 that set's own README is the same walk-through written down.
 
 Measured on this Mac (2026-11-19), those two clicks and nothing else: the plate's
-three evaluation episodes concluded in 101, 184 and 351 steps, and each answered
+three evaluation episodes concluded in 97, 184 and 351 steps, and each answered
 `plate` where the target was `plate` — `correct` in all three, at the highest
-evidence of 24.85, 11.02 and 19.72. The run keeps its log, its sensor pictures
-and `eval_stats.csv` in its own directory under the application's data folder.
+evidence of 26.49, 11.02 and 19.72; `cad/blend-big_part_eval` concluded its episode
+in 90 steps, `blend-big` correct at 8.59. The run keeps its log, its sensor
+pictures and `eval_stats.csv` in its own directory under the application's data
+folder.
 
 Both halves read the same experiment, which is what makes the memory and the run
 comparable: the memory is taught through **the run's own patch** — the field of
-view its camera makes and the distance its policy stands off by, read from the
-config — so the two see one surface rather than two.
+view its camera makes, the distance its policy stands off by, and three nodes
+across the patch's width, all read from the config — so the two see one surface
+rather than two.
 
 The same experiment from a shell, for a machine without a page in front of it:
 

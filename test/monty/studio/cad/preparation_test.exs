@@ -97,6 +97,26 @@ defmodule Monty.Studio.Cad.PreparationTest do
       assert options[:distance] == 25.0
     end
 
+    # A graph whose nodes are further apart than the patch is wide cannot be
+    # matched by that patch, so a part's sampling follows the sensor rather than
+    # the part's size: three nodes across the patch's width, whatever the part.
+    test "a part memory is sampled for the run's patch, not for the part's size",
+         %{objects: objects} do
+      assert {:ok, plan} = Preparation.plan(with_optics(setup_struct(objects)))
+
+      assert {:ok, _report} =
+               Preparation.prepare(plan,
+                 trainer: __MODULE__.Recorder,
+                 exporter: __MODULE__.Exporter
+               )
+
+      # The patch is five millimetres across at twenty-five millimetres through
+      # 11.42°, and a third of that is the space between two nodes.
+      options = recorded_options(plan.memory)
+      assert_in_delta options[:spacing], 1.66, 0.02
+      assert options[:limit] == 20_000
+    end
+
     # A run that names neither is taught with one answer rather than the CAD
     # package's silent 66°: the tutorial's `zoom: 10` on a square patch, and the
     # eight millimetres a feature experiment stands off by.
