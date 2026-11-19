@@ -230,6 +230,16 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    which is why an assembly of parts laid side by side is a smaller change than
    an assembly of parts turned.
 
+   That sampler exists now, in `ex_monty_cad`: `MontyCad.Assembly.place/3` moves a
+   part's nodes by quiddity's 3×4 placement (location and every pose vector), and
+   `MontyCad.Training.write_assembly/4` writes several placed parts as one object.
+   Called from this application with the plate file twice, a centimetre apart, it
+   writes one record under `plate_pair` with the two instances' nodes in the
+   places the placements put them — so what is left of this arm is the world, not
+   the memory: the same arrangement has to be meshed into a scene the run steps
+   (`MontyCad.Scene.new/2` then `render/3` at each placement), and a config has to
+   name that one object.
+
 2. **A set of parts, taught and loaded but not yet told apart.** One memory can
    now hold several parts: a memory whose name ends in `_set` is taught from the
    objects its experiment names (`Monty.Studio.Cad.Preparation` reads
