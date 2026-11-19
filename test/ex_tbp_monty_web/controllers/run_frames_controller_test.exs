@@ -11,6 +11,7 @@ defmodule ExTbpMontyWeb.RunFramesControllerTest do
 
   use ExTbpMontyWeb.ConnCase
 
+  alias ExTbpMonty.Core.FrameVideo
   alias Monty.Studio.{Artifacts, RunHistory}
   alias Monty.Test.Tmp
 
@@ -87,5 +88,52 @@ defmodule ExTbpMontyWeb.RunFramesControllerTest do
     # same: the file is resolved and then checked to be inside the run's own
     # directory.
     assert conn |> get("/runs/#{run.id}/frames/../run.log") |> response(404)
+  end
+
+  describe "a run's video" do
+    setup %{run: run} do
+      {:ok, video} =
+        FrameVideo.open(Artifacts.video_path(run.id, "run", "patch", "depth"),
+          width: 2,
+          height: 2,
+          kind: :grey
+        )
+
+      for step <- 1..4, do: :ok = FrameVideo.push(video, <<step, 2, 3, 4>>, step == 1)
+      :ok = FrameVideo.finish(video)
+
+      {:ok, video_url: "/runs/#{run.id}/videos/run/patch-depth.mp4"}
+    end
+
+    test "is sent whole when no range is asked for", %{conn: conn, video_url: url, run: run} do
+      conn = get(conn, url)
+      video = Artifacts.video_path(run.id, "run", "patch", "depth")
+
+      assert byte_size(response(conn, 200)) == File.stat!(video).size
+      assert [content_type] = get_resp_header(conn, "content-type")
+      assert content_type =~ "video/mp4"
+      assert get_resp_header(conn, "accept-ranges") == ["bytes"]
+    end
+
+    # What a player does before it plays: ask for a range, and ask for another one
+    # on every seek. A 200 with the whole file is a video that cannot be scrubbed.
+    test "answers the range a player seeks with", %{conn: conn, video_url: url, run: run} do
+      size = File.stat!(Artifacts.video_path(run.id, "run", "patch", "depth")).size
+      conn = conn |> put_req_header("range", "bytes=10-19") |> get(url)
+
+      assert response(conn, 206) |> byte_size() == 10
+      assert get_resp_header(conn, "content-range") == ["bytes 10-19/#{size}"]
+    end
+
+    test "says not found for a video the run does not have", %{conn: conn, run: run} do
+      assert conn |> get("/runs/#{run.id}/videos/run/patch-colour.mp4") |> response(404)
+    end
+
+    test "does not leave the run's directory, however the path is spelled", %{
+      conn: conn,
+      run: run
+    } do
+      assert conn |> get("/runs/#{run.id}/videos/../run.log") |> response(404)
+    end
   end
 end

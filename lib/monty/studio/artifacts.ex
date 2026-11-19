@@ -625,6 +625,63 @@ defmodule Monty.Studio.Artifacts do
   @spec frame_url(binary(), String.t()) :: String.t()
   def frame_url(run_id, name), do: "/runs/#{uuid(run_id)}/frames/#{name}"
 
+  @typedoc """
+  One of a run's videos as a page offers it: which sensor and kind it shows, how
+  many frames it holds, and where to fetch it.
+
+  The frames are the step's places, so a reader who wants step 40 seeks to forty
+  frames in — which is what the frame rate in the video's own header makes a
+  player's clock.
+  """
+  @type video :: %{
+          sensor: String.t(),
+          kind: String.t(),
+          frames: non_neg_integer(),
+          url: String.t()
+        }
+
+  @doc """
+  The videos a run has written, one an entry: what a page watching a run plays.
+
+  Empty for a run written before the pictures moved into videos — its pictures
+  are files a step, and there is nothing to play.
+  """
+  @spec videos(binary()) :: [video()]
+  def videos(run_id) do
+    run_id
+    |> video_files()
+    |> Enum.map(fn file ->
+      %{
+        sensor: file.sensor,
+        kind: file.kind,
+        frames: FrameVideo.frames_in(file.path),
+        url: "/runs/#{uuid(run_id)}/videos/#{file.part}/#{file.sensor}-#{file.kind}.mp4"
+      }
+    end)
+    |> Enum.reject(&(&1.frames == 0))
+    |> Enum.sort_by(&{&1.sensor, &1.kind})
+  end
+
+  @doc """
+  The file behind a video's name, or `:error`.
+
+  Resolved and then checked to still be inside the run's own `frames` directory,
+  as `frame_path/2` does for a picture: a `..` in a name is answered with
+  `:error` rather than a file that was never the run's.
+  """
+  @spec video_file(binary(), String.t()) :: {:ok, Path.t()} | :error
+  def video_file(run_id, name) do
+    # The artifacts directory is a relative path in dev and an absolute one on the
+    # desktop, so both sides are expanded before they are compared.
+    base = Path.expand(frames_dir(run_id))
+    candidate = Path.expand(Path.join(base, name))
+
+    if String.starts_with?(candidate, base <> "/") and String.ends_with?(candidate, ".mp4") and
+         File.regular?(candidate),
+       do: {:ok, candidate},
+       else: :error
+  end
+
   @doc """
   Whether a picture's name can be answered: a frame in its video, or a file.
 

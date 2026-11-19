@@ -227,6 +227,33 @@ defmodule Monty.Studio.ArtifactsTest do
 
       assert Artifacts.pictures_at(run_id(), 0) == :none
     end
+
+    # What a page offers a person to watch: the run in motion, a video a sensor,
+    # in the browser's own player.
+    test "what can be watched is one video a sensor, and nothing for a run with none" do
+      id = run_id()
+      write_video(id, "run", "patch", "depth", :grey, [<<1, 2, 3, 4>>, <<1, 2, 3, 4>>])
+
+      assert Artifacts.videos(id) == [
+               %{
+                 sensor: "patch",
+                 kind: "depth",
+                 frames: 2,
+                 url: "/runs/#{id}/videos/run/patch-depth.mp4"
+               }
+             ]
+
+      assert Artifacts.videos(run_id()) == []
+    end
+
+    test "a video's file is served only from the run's own directory" do
+      id = run_id()
+      path = write_video(id, "run", "patch", "depth", :grey, [<<1, 2, 3, 4>>])
+
+      assert Artifacts.video_file(id, "run/patch-depth.mp4") == {:ok, path}
+      assert Artifacts.video_file(id, "../../run.log") == :error
+      assert Artifacts.video_file(id, "run/patch-colour.mp4") == :error
+    end
   end
 
   # The write end of the same contract: a video at a place, as `Pictures` leaves

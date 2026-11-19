@@ -117,6 +117,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        parts: [],
        parts_held: %{},
        setup: nil,
+       # What a run's videos are, for watching it. Empty until a run is known —
+       # a page for an id that is not a run draws no player, and would raise
+       # asking for an assign nobody made.
+       videos: [],
        # Whether this instance is one of several, which is the only case in which
        # a run's node is a column worth having: a cluster has several run lists,
        # and a page merged over them needs to say whose each row is.
@@ -485,6 +489,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_configuration(run)
          |> assign(kind: run_kind(run))
          |> assign(setup: setup_of(run))
+         # What a person can watch of this run, asked once: the videos are a
+         # property of the run, not of the step on screen.
+         |> assign(videos: Artifacts.videos(run.id))
          |> put_parts(run)
          |> follow(run)
          |> stream(:log, log_tail(run.log), reset: true)
@@ -2005,11 +2012,44 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
         />
       </section>
 
+      <%!-- Watching the run: one video a sensor, a frame a step, in the browser's
+      own player — which seeks by asking for byte ranges, so the page is not in the
+      loop for a single frame of it. Beside the replay panel rather than inside it
+      on purpose: that panel is re-rendered at every step, and a `<video>` in it
+      would be replaced while it played. --%>
+      <section :if={@videos != []} class="space-y-1">
+        <details
+          id={"run-playback-#{:erlang.phash2(Enum.map(@videos, & &1.url))}"}
+          phx-update="ignore"
+        >
+          <summary class="cursor-pointer text-sm font-medium">Watch the run</summary>
+          <p class="mt-1 text-xs text-base-content/60">
+            One video a sensor, a frame a step — the browser's own controls play and scrub it.
+          </p>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <figure
+              :for={video <- @videos}
+              id={"run-video-" <> video.sensor <> "-" <> video.kind}
+              class="space-y-1"
+            >
+              <video
+                src={video.url}
+                controls
+                preload="metadata"
+                class="w-full rounded-box border border-base-300 bg-base-100 [image-rendering:pixelated]"
+              ></video>
+              <figcaption class="text-[11px] text-base-content/60">
+                {video.sensor} · {video.kind} · {video.frames} frames
+              </figcaption>
+            </figure>
+          </div>
+        </details>
+      </section>
+
       <%!-- The other parts of the batch this run belongs to, one card each, one
       after the other: a parallel run is several runs, and this page is about one
       of them. --%>
       <ExTbpMontyWeb.RunParts.parts :if={@parts != []} parts={@parts} />
-
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Log</h2>
         <p :if={@trimmed_log?} id="run-log-trimmed" class="text-xs text-base-content/60">

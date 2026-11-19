@@ -27,6 +27,49 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     end
   end
 
+  describe "watching a run" do
+    # The pictures are read a step at a time; the videos beside them are the run
+    # in motion, played by the browser — which asks for byte ranges of the file and
+    # needs no page of ours in the loop.
+    test "offers each sensor's video in the browser's own player", %{conn: conn} do
+      _root = Monty.Test.Tmp.env_dir("run-playback", :studio_artifacts_dir)
+
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+      write_video(run.id, "patch", "depth")
+
+      {:ok, view, _html} = live(conn, "/runs/#{run.id}")
+
+      assert has_element?(
+               view,
+               "#run-video-patch-depth video[src='/runs/#{run.id}/videos/run/patch-depth.mp4'][controls]"
+             )
+    end
+
+    # A run written before the pictures moved into videos has files a step, and
+    # there is nothing to play: the panel is not offered rather than offered empty.
+    test "offers nothing to watch for a run whose pictures are files", %{conn: conn} do
+      _root = Monty.Test.Tmp.env_dir("run-playback", :studio_artifacts_dir)
+
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+
+      {:ok, _view, html} = live(conn, "/runs/#{run.id}")
+
+      refute html =~ "Watch the run"
+    end
+
+    defp write_video(run_id, sensor, kind) do
+      {:ok, video} =
+        ExTbpMonty.Core.FrameVideo.open(Artifacts.video_path(run_id, "run", sensor, kind),
+          width: 2,
+          height: 2,
+          kind: :grey
+        )
+
+      :ok = ExTbpMonty.Core.FrameVideo.push(video, <<1, 2, 3, 4>>, true)
+      :ok = ExTbpMonty.Core.FrameVideo.finish(video)
+    end
+  end
+
   # A job Oban has started: `executing` from `attempted_at` until an outcome.
   defp running(job) do
     {1, nil} =

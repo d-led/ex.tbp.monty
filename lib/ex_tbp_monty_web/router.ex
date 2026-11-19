@@ -76,6 +76,9 @@ defmodule ExTbpMontyWeb.Router do
     # because a step's pictures live under `frames/<step>/` in the run's own
     # directory.
     get "/runs/:id/frames/*path", RunFramesController, :show
+    # The same directory's videos: a run is also something a person watches, and
+    # a player seeks by asking for byte ranges of the file.
+    get "/runs/:id/videos/*path", RunFramesController, :watch
     # The queue a run waits in before it has anything to report.
     # One page for runs: a queued run is a run, and the old address still opens
     # the list a colleague was sent.
