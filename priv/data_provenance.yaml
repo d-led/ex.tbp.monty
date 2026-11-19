@@ -123,7 +123,13 @@ data:
     # (which stood still), and `supervised_lm_ids` naming the module (an empty
     # list trains nothing, because the experiment wipes every unnamed module's
     # hypotheses before the write). `docs/cad.md` carries the measurements.
-    hash: c30afee512e5a8ad816b7fb06b16a3dc47dada79d741efeb2225322e915f2cb8
+    #
+    # `cad/plate_learned_eval` closes the loop: the evaluation config's world,
+    # sensor and policy, and the memory `plate_pretrain` wrote under `trained/`
+    # instead of the teacher's under `cad_parts_v1/`. One episode matched in 80
+    # steps with 10 goals, which is a run recognising a part from percepts it
+    # taught itself.
+    hash: b285490cbf55ceca357267807da7941fe7e06663d8001f7d347c78acf80cef81
 
   - path: priv/cad_experiments/conf
     kind: written

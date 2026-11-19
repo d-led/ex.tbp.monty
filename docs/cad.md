@@ -328,6 +328,13 @@ objects and 0 nodes`, with every step logging `goals 0`. The motor policy the
    `cad/plate_pretrain` runs one episode over MuJoCo and ends with `the memory now
 holds 1 object and 14 nodes` and a library written under
    `cad_plate_pretrain`. The arm is a config, and every part of it was measured.
+   The loop is closed by one more config and no further code:
+   `cad/plate_learned_eval` is the evaluation config with its
+   `model_name_or_path` naming `trained/cad_plate_pretrain` — the memory the
+   training run wrote — instead of the teacher's under `cad_parts_v1/`. One
+   episode over MuJoCo matched in eighty steps with ten goals: a part recognised
+   from percepts it taught itself. Two runs, one memory, and the only difference
+   between "taught" and "learned" is which file the config names.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD
