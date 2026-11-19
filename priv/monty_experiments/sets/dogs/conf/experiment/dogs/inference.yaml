@@ -5,7 +5,8 @@
 # other config in `dogs/` trains and leaves a memory for this one to read:
 # recognition against the memory `dogs/surf_unsupervised` trained, which the
 # last path segments name — `trained/dogs_surf_unsupervised/` is the library
-# under `priv/monty/libraries`, and `Memory.release_of/1` reads exactly those.
+# under the data folder's `libraries`, and `Memory.release_of/1` reads exactly
+# those.
 defaults:
   - /monty: noresetevidencegraph_exp1000_e100_t3
   - /monty/motor_system_config: surface_curvature_informed_goal1

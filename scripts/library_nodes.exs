@@ -1,7 +1,7 @@
 # How many nodes each object in a library holds — what "dense enough to match"
 # means, measured on the libraries this checkout has.
 #
-#   MIX_ENV=test mix run --no-start /tmp/library_nodes.exs priv/monty/libraries/trained
+#   MIX_ENV=test mix run --no-start /tmp/library_nodes.exs "$MONTY_LIBRARIES/trained"
 
 for dir <- System.argv() do
   for file <- Path.wildcard(Path.join(dir, "*.jsonl.gz")) do

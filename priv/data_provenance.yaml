@@ -132,7 +132,7 @@ data:
     # wide, so 16 mm reads the bore properly and reads a patch wider than a boss.
     # `sets/cad/README.md` carries the table and the twelve-episode result either
     # way.
-    hash: cf191038febceab66978b61b1410f378b0af8e01c0658bdf1255b9783be74941
+    hash: a7e6c5a2c78fba8c3986e5c6b567fecb496622696bc666bcd189e4806c56e92d
 
   - path: priv/cad_experiments/conf
     kind: written

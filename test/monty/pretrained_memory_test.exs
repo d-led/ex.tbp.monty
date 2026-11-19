@@ -17,7 +17,16 @@ defmodule Monty.PretrainedMemoryTest do
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Test.MontyRecording
 
-  @pretrained "priv/monty/libraries/pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
+  # The memory is data, not source: a release's export lands under the data
+  # folder (`Monty.Paths.libraries/0`), and `test_helper.exs` mirrors it into the
+  # folder the suite reads. Read at run time, so the setting the suite holds is the
+  # one used rather than one frozen at compile time.
+  defp pretrained do
+    Path.join(
+      Monty.Studio.Memory.libraries_dir(),
+      "pretrained_ycb_v10/surf_agent_1lm_10distinctobj.jsonl.gz"
+    )
+  end
 
   # Ten models and sixteen thousand nodes: slow enough on a cold runner that
   # ExUnit's minute is not enough, and there is no reason to build it once per
@@ -30,7 +39,7 @@ defmodule Monty.PretrainedMemoryTest do
   @moduletag timeout: 300_000
 
   setup_all do
-    {:ok, memory: MontyRecording.load_pretrained!(@pretrained)}
+    {:ok, memory: MontyRecording.load_pretrained!(pretrained())}
   end
 
   # What the export reported, object by object, and therefore what a loaded
@@ -50,7 +59,7 @@ defmodule Monty.PretrainedMemoryTest do
 
   # The export is plain JSON, so a test can hold a loaded model to it.
   defp first_exported_node(object_id) do
-    @pretrained
+    pretrained()
     |> File.read!()
     |> :zlib.gunzip()
     |> String.split("\n", trim: true)

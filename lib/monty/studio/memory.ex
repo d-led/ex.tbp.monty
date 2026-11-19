@@ -11,7 +11,8 @@ defmodule Monty.Studio.Memory do
 
   ## Where the libraries live
 
-  `priv/monty/libraries/<release>/<name>.jsonl.gz`, where `<name>` is the last
+  `<data>/libraries/<release>/<name>.jsonl.gz` — `Monty.Paths.libraries/0`, the
+  folder the export writes, never the source tree — where `<name>` is the last
   meaningful segment of the `model_name_or_path` a config names — Monty's own
   directory name for that model (`surf_agent_1lm_10distinctobj`) — and
   `<release>` is the directory Monty keeps models of that release in

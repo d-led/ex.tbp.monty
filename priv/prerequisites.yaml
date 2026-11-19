@@ -85,7 +85,7 @@ prerequisites:
     # The models inside the archive, so a config that names one of them is sent
     # here and a config that names a model no archive carries is sent to the run
     # that trains it. Read off the export this release produces
-    # (`priv/monty/libraries/pretrained_ycb_v14`).
+    # (`<data>/libraries/pretrained_ycb_v14`).
     provides:
       - supervised_pre_training_base
       - supervised_pre_training_5lms

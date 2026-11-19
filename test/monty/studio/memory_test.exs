@@ -3,8 +3,9 @@ defmodule Monty.Studio.MemoryTest do
   A run's memory: Monty's pretrained graphs, and what a run says when there are
   none.
 
-  The libraries are exports of Monty's own models (`priv/monty/libraries/README.md`
-  says which release each came from), so the questions that matter are: does a
+  The libraries are exports of Monty's own models, and `test_helper.exs` mirrors
+  the machine's exports into the suite's own folder, so the questions that matter
+  are: does a
   config that names a model and a release get *that* memory, and does a config
   whose memory is missing or from another release say so rather than quietly
   recognising with something else.

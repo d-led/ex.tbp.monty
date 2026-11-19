@@ -23,7 +23,7 @@ defmodule Monty.Studio.Cad.PreparationTest do
     File.write!(Path.join(parts, "plate.step"), "ISO-10303-21;")
     Tmp.system_env("MONTY_DATA", data)
     # The memory lands in the node's library root, which a test keeps to itself:
-    # a suite that wrote into the checkout's `priv/monty/libraries` would be
+    # a suite that wrote into a person's exported libraries would be
     # writing a model where nobody asked for one.
     libraries = Path.join(data, "libraries")
     Tmp.app_env(:monty_libraries_dir, libraries)

@@ -420,9 +420,10 @@ defmodule Monty.Prerequisites do
   the config names, and that loads the objects its environment names and the
   pretrained memory its config names — from the same three directories a Python
   user puts them in. The stand-in steps a
-  scene this port builds, and the memory the *ported* learning modules load ships
-  inside the application (`priv/monty/libraries`), so a stand-in run needs
-  nothing downloaded at all. That is the whole reason there is a stand-in.
+  scene this port builds, and the memory the *ported* learning modules load is
+  exported on the fly under the data folder (`<data>/libraries`), so a stand-in
+  run needs nothing downloaded at all. That is the whole reason there is a
+  stand-in.
 
   Nothing here is a guess about a name: the paths come out of the composed setup,
   which read them from the experiment's own config.

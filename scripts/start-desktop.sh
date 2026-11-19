@@ -267,7 +267,7 @@ run "building the two sample plugin nodes as releases of their own" \
   scripts/build-plugins.sh
 
 # `priv` is copied whole, and what a checkout holds there is not a property of
-# the build: `priv/monty/libraries` is the output of a development run's export,
+# the build: the data folder's `libraries` is the output of an export, never a property of the build,
 # and `priv/studio_runs` is what each development run wrote — a log, the step
 # statistics, the frames a sensor drew. Both belong to the user's data folder
 # (`Monty.Paths`), and both have been shipped by mistake: two hundred megabytes

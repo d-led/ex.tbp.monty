@@ -16,7 +16,7 @@ alias Monty.Studio.Memory
 release = Enum.at(System.argv(), 0) || "pretrained_ycb_v10"
 model = Enum.at(System.argv(), 1) || "surf_agent_1lm_77obj"
 
-path = Path.join([File.cwd!(), "priv/monty/libraries", release, model <> ".jsonl.gz"])
+path = Path.join([Monty.Paths.libraries(), release, model <> ".jsonl.gz"])
 
 case File.read(path) do
   {:error, :enoent} ->

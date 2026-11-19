@@ -4,7 +4,7 @@
 #     MIX_ENV=test mix run --no-start scripts/memory_names.exs dogs_surf_unsupervised
 #     MIX_ENV=test mix run --no-start scripts/memory_names.exs surf_agent_1lm_10distinctobj pretrained_ycb_v10
 #
-# The library is `priv/monty/libraries/<release>/<name>.jsonl.gz`: a run that
+# The library is `<data>/libraries/<release>/<name>.jsonl.gz`: a run that
 # trains keeps the `trained` release, Monty's own models are `pretrained_*`.
 # A graph with two names is an episode that concluded it had recognised an object
 # it had not seen, and then trained into the graph it mistook for it. That is the

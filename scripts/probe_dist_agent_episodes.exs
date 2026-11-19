@@ -6,7 +6,7 @@
 # `base_config_10distinctobj_dist_agent` over the ten YCB objects, recorded step
 # by step while Monty ran it (see `docs/validation.md`). This replays each
 # episode through the port's own composition — the learning module the config
-# describes, with the memory in `priv/monty/libraries/`, the recognition policy
+# describes, with the memory under the data folder's `libraries/`, the recognition policy
 # the config names, the real step coordinator — with the recording standing in
 # for the world, and prints what each side concluded.
 #
