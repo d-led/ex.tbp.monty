@@ -96,6 +96,18 @@ defmodule Monty.Prerequisites.BuildTest do
       assert said =~ "plate, blend"
     end
 
+    test "says when a memory was left as it was rather than taught again" do
+      plans = [%{part: "plate", memory: "/libraries/plate_part.jsonl.gz"}]
+
+      assert {:ok, [said]} =
+               Build.run("cad_part_memories", fn _ -> :ok end,
+                 plans: plans,
+                 prepare: fn _ -> {:ok, %{written: 1, nodes: 7, taught: :before}} end
+               )
+
+      assert said =~ "already taught from the same inputs"
+    end
+
     test "stops at the part it could not teach" do
       plans = [
         %{part: "plate", memory: "/libraries/plate_part.jsonl.gz"},

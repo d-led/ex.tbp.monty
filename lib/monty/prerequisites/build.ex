@@ -98,7 +98,10 @@ defmodule Monty.Prerequisites.Build do
             {:cont,
              {:ok,
               said ++
-                ["#{label(plan)}: #{written.written} object(s), #{written.nodes} node(s)"]}}
+                [
+                  "#{label(plan)}: #{written.written} object(s), #{written.nodes} node(s)" <>
+                    how(written)
+                ]}}
 
           {:error, reason} ->
             {:halt, {:error, reason}}
@@ -106,6 +109,13 @@ defmodule Monty.Prerequisites.Build do
       end)
     end
   end
+
+  # Whether this click had to teach it. A memory the same part file and optics
+  # already produced is left as it is, and the row says so rather than reporting
+  # a one-second step as if it had done ten minutes of geometry
+  # (`Monty.Studio.Cad.Preparation.prepare/2`).
+  defp how(%{taught: :before}), do: " — already taught from the same inputs"
+  defp how(_taught_now), do: ""
 
   # What the row says the step is about. A memory of several parts names all of
   # them — the set's row would otherwise say "plate" while the blend is being

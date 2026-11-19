@@ -100,6 +100,15 @@ Two clicks, in this order, and no shell:
    the STEP file each part ships and meshed into `cad_objects` under the data
    folder. A part whose memory was never written is a part a run has nothing to
    match against, and the page says so on the experiment's own checks.
+
+   The click is idempotent: each memory keeps a note of the part file's bytes,
+   the optics and the sampling it was written from, so a second click teaches
+   only what changed — a new part file, a new stand-off, a deleted memory — and
+   the row says "already taught from the same inputs" for the rest. Measured on
+   this Mac (2026-11-19): the five memories cost 691.6 s the first time and 0.1 s
+   the second, with the same node counts (1 435, 14 713, 34 018, 5 835, 2 113),
+   so what a skip saves is the geometry and not the answer.
+
 2. **`/experiments/cad/plate_part_eval` → Run it.** One episode per object the
    config names, in the world that config names, with the patch's own pictures
    beside the evidence per object, step by step.

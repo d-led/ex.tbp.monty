@@ -217,6 +217,81 @@ defmodule Monty.Studio.Cad.PreparationTest do
     end
   end
 
+  # A build is one click on a page, and a person presses it again after changing
+  # one config. Teaching five memories took twelve minutes on a ten-core Mac
+  # (2026-11-19); a click that finds the same part file and the same optics has
+  # nothing to do, and saying so is cheaper than doing it again.
+  describe "a build with nothing to do" do
+    test "leaves a memory the same part file and optics already produced",
+         %{objects: objects} do
+      {:ok, plan} = Preparation.plan(setup_struct(objects))
+
+      assert {:ok, first} = Preparation.prepare(plan, teaching())
+      assert first.taught == :now
+
+      assert {:ok, second} = Preparation.prepare(plan, teaching())
+
+      assert second.taught == :before
+      assert second.nodes == first.nodes
+      assert second.written == first.written
+      assert taught_times(plan.memory) == 1
+    end
+
+    test "teaches again when the stand-off the memory was taken from changed",
+         %{objects: objects} do
+      {:ok, plan} = Preparation.plan(with_optics(setup_struct(objects)))
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+
+      closer = %{plan | optics: %{plan.optics | distance: 8.0}}
+      assert {:ok, %{taught: :now}} = Preparation.prepare(closer, teaching())
+      assert taught_times(plan.memory) == 2
+      assert recorded_options(plan.memory)[:distance] == 8.0
+    end
+
+    test "teaches again when the part file itself changed", %{objects: objects} do
+      {:ok, plan} = Preparation.plan(setup_struct(objects))
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+
+      File.write!(plan.step, "ISO-10303-21; a different plate")
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+      assert taught_times(plan.memory) == 2
+    end
+
+    test "teaches again when the memory is not there to skip", %{objects: objects} do
+      {:ok, plan} = Preparation.plan(setup_struct(objects))
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+      File.rm!(plan.memory)
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+      assert taught_times(plan.memory) == 2
+    end
+
+    test "keeps no note of what it taught beside a memory it could not write",
+         %{objects: objects} do
+      {:ok, plan} = Preparation.plan(setup_struct(objects))
+
+      assert {:error, _sentence} =
+               Preparation.prepare(plan,
+                 trainer: __MODULE__.FailingTrainer,
+                 exporter: __MODULE__.Exporter
+               )
+
+      refute File.exists?(Monty.Studio.Cad.Taught.path(plan.memory))
+    end
+  end
+
+  defp teaching, do: [trainer: __MODULE__.CountingTrainer, exporter: __MODULE__.Exporter]
+
+  defp taught_times(memory) do
+    memory
+    |> Kernel.<>(".teaches")
+    |> File.read!()
+    |> String.to_integer()
+  end
+
   # The object ids a run loads, as the file holds them.
   defp answered_with(memory) do
     memory
@@ -251,6 +326,38 @@ defmodule Monty.Studio.Cad.PreparationTest do
     |> Kernel.<>(".parts")
     |> File.read!()
     |> :erlang.binary_to_term()
+  end
+
+  # A trainer that counts how many times a memory had to be taught, in a file
+  # beside it: the count is the whole answer a skip case needs, and no process
+  # has to be told about it.
+  defmodule CountingTrainer do
+    def write_library(parts, path, options) do
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, Enum.map_join(parts, " + ", &elem(&1, 0)) <> " taught")
+      File.write!(path <> ".options", :erlang.term_to_binary(options))
+      File.write!(path <> ".teaches", "#{times(path) + 1}")
+
+      {:ok,
+       %{
+         path: path,
+         nodes: 3 * length(parts),
+         objects: for({part, _step} <- parts, do: %{object_id: part, nodes: 3})
+       }}
+    end
+
+    defp times(path) do
+      case File.read(path <> ".teaches") do
+        {:ok, text} -> String.to_integer(text)
+        {:error, _no_answer_yet} -> 0
+      end
+    end
+  end
+
+  # A trainer that refuses the way the CAD package does, for the case that says
+  # what a failed teach leaves behind.
+  defmodule FailingTrainer do
+    def write_library(_parts, _path, _options), do: {:error, :no_geometry}
   end
 
   # The two writers, as the CAD package answers them: a memory file, and one

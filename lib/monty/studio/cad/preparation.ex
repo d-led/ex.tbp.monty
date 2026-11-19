@@ -20,6 +20,7 @@ defmodule Monty.Studio.Cad.Preparation do
   """
 
   alias ExTbpMonty.Cad.Objects
+  alias Monty.Studio.Cad.Taught
   alias Monty.Studio.{Failure, Memory, Setup}
 
   @trainer Module.concat(["MontyCad", "Training"])
@@ -193,16 +194,88 @@ defmodule Monty.Studio.Cad.Preparation do
   Writes the memory and the object set a plan describes.
 
   Answers what was written, so a page can say it rather than guess: the memory's
-  path, the directory the objects went into, and how many objects there are.
+  path, the directory the objects went into, how many objects there are, and
+  whether the memory had to be taught — `taught: :before` means the part file,
+  the optics and the sampling behind it are the ones it was already written
+  from, which is what makes a second Make click cost seconds instead of the
+  twelve minutes the first one does (`Monty.Studio.Cad.Taught` keeps that
+  record).
+
+  The meshes are always written: they are seconds of work, and they are the half
+  of a build a run notices first when it is missing.
   """
   @spec prepare(plan(), keyword()) ::
-          {:ok, %{memory: Path.t(), objects: Path.t(), written: non_neg_integer()}}
+          {:ok,
+           %{
+             memory: Path.t(),
+             objects: Path.t(),
+             written: non_neg_integer(),
+             nodes: non_neg_integer(),
+             taught: :now | :before
+           }}
           | {:error, String.t()}
   def prepare(%{} = plan, options \\ []) do
-    with {:ok, nodes} <- write_memory(plan, Keyword.get(options, :trainer, @trainer)),
+    trainer = Keyword.get(options, :trainer, @trainer)
+    fingerprint = fingerprint(plan, trainer)
+
+    with {:ok, nodes, taught} <- memory(plan, trainer, fingerprint),
          {:ok, written} <- write_objects(plan, Keyword.get(options, :exporter, @exporter)) do
-      {:ok, %{memory: plan.memory, objects: plan.objects, written: written, nodes: nodes}}
+      {:ok,
+       %{
+         memory: plan.memory,
+         objects: plan.objects,
+         written: written,
+         nodes: nodes,
+         taught: taught
+       }}
     end
+  end
+
+  # A memory the same inputs already produced is left alone; anything else is
+  # taught, and what it was taught from is kept beside it — written after the
+  # memory itself succeeds, so a failed build never records one.
+  defp memory(plan, trainer, fingerprint) do
+    case Taught.read(plan.memory) do
+      {:ok, %{fingerprint: ^fingerprint, nodes: nodes}} ->
+        {:ok, nodes, :before}
+
+      _taught_from_something_else ->
+        with {:ok, nodes} <- write_memory(plan, trainer),
+             :ok <- Taught.remember(plan.memory, %{fingerprint: fingerprint, nodes: nodes}) do
+          {:ok, nodes, :now}
+        end
+    end
+  end
+
+  # What the memory is a function of, as one string: the bytes of every part file
+  # it is taught from, the sampler's own answers (spacing, visit cap, lens,
+  # stand-off, what is labelled), the writer, and the packages whose code turns
+  # those into a file. `@taught_format` is this module's own share of it — a
+  # change to *how* a memory is written has to be able to say so, and no input
+  # above would move.
+  @taught_format 1
+
+  defp fingerprint(plan, trainer) do
+    inputs = {plan.parts, memory_options(plan), trainer, @taught_format, packages()}
+    parts = {Enum.map(plan.parts, fn {object, step} -> {object, digest(step)} end), inputs}
+
+    parts
+    |> :erlang.term_to_binary()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  # A part file that is gone is part of the fingerprint too: the memory cannot be
+  # said to match a file nobody can read.
+  defp digest(step) do
+    case File.read(step) do
+      {:ok, bytes} -> :crypto.hash(:sha256, bytes)
+      {:error, _reason} -> :absent
+    end
+  end
+
+  defp packages do
+    for app <- [:ex_monty_cad, :ex_quiddity], do: {app, Application.spec(app, :vsn)}
   end
 
   # The memory is what the config names: one object for the whole part, or one
