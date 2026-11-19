@@ -24,7 +24,9 @@ defmodule ExamplePlugin.Join do
   that is not reached is tried again, and what is logged is a *change* in what
   has been reached rather than one line per attempt — a plugin that shouted every
   five seconds about a node that was still booting would make the interesting
-  lines unfindable.
+  lines unfindable. The **first** attempt is logged whatever it found, because a
+  node that is in no cluster is the failure nobody can see: it runs, it answers,
+  and nothing says it never joined.
 
   A node that runs alone is untouched: with no seeds this process has nothing to
   try, and the plugins are registered on this node exactly as they would be in a
@@ -44,7 +46,11 @@ defmodule ExamplePlugin.Join do
 
   @impl true
   def init(_options) do
-    state = %{seeds: seeds(), reached: []}
+    # `nil`, not `[]`: the first attempt always logs, even when it reached
+    # nothing. A node that is in no cluster is the one thing nobody can see —
+    # it runs, it answers `rpc`, and every page says one node — so the sentence
+    # that names the seeds it could not reach is worth one line at boot.
+    state = %{seeds: seeds(), reached: nil}
     send(self(), :join)
     {:ok, state}
   end

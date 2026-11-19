@@ -17,7 +17,9 @@ defmodule FlyversePlugin.Join do
   The seed list is retried every five seconds, and a change in what has been
   reached is the only thing logged: a studio node takes longer to boot than this
   one, and a plugin that shouted every five seconds about a node that was still
-  compiling would make the interesting lines unfindable.
+  compiling would make the interesting lines unfindable. The **first** attempt
+  is logged whatever it found, because a node that is in no cluster is the
+  failure nobody can see: it runs, it answers, and nothing says it never joined.
   """
 
   use GenServer
@@ -33,7 +35,11 @@ defmodule FlyversePlugin.Join do
 
   @impl true
   def init(_options) do
-    state = %{seeds: seeds(), reached: []}
+    # `nil`, not `[]`: the first attempt always logs, even when it reached
+    # nothing. A node that is in no cluster is the one thing nobody can see —
+    # it runs, it answers `rpc`, and every page says one node — so the sentence
+    # that names the seeds it could not reach is worth one line at boot.
+    state = %{seeds: seeds(), reached: nil}
     send(self(), :join)
     {:ok, state}
   end

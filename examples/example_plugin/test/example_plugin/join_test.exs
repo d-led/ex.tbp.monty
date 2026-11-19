@@ -9,6 +9,8 @@ defmodule ExamplePlugin.JoinTest do
 
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias ExamplePlugin.Join
 
   setup do
@@ -31,11 +33,20 @@ defmodule ExamplePlugin.JoinTest do
   test "the process stays up with nothing to reach, and says so once" do
     System.delete_env("MONTY_SEEDS")
 
-    join = start_supervised!({Join, name: :join_without_seeds})
-    # The first attempt is a message the process sends itself, so this is how the
-    # test waits for it rather than sleeping: the state is what the attempt left.
-    assert %{reached: [], seeds: []} = :sys.get_state(join)
-    refute_received {:EXIT, ^join, _reason}
+    # A node that is in no cluster is the failure nobody can see: it runs, it
+    # answers `rpc`, and every page says one node. The first attempt says which
+    # variable it looked in, so "it never joined" has a line to find.
+    log =
+      capture_log(fn ->
+        join = start_supervised!({Join, name: :join_without_seeds})
+        # The first attempt is a message the process sends itself, so this is how
+        # the test waits for it rather than sleeping: the state is what the
+        # attempt left.
+        assert %{reached: [], seeds: []} = :sys.get_state(join)
+        refute_received {:EXIT, ^join, _reason}
+      end)
+
+    assert log =~ "not in a cluster (no seed answered from MONTY_SEEDS)"
   end
 
   defp restore(nil), do: System.delete_env("MONTY_SEEDS")
