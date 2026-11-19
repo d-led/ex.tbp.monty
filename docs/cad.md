@@ -184,9 +184,30 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    yet. The monolithic arm of the pair does exist — `cad/plate_part_eval`, one lump,
    one memory, three episodes concluded.
 
-2. **A set of parts.** Three parts are taught and recognised (plate, blend,
-   blend-big), one per experiment. A _pretraining_ set — several parts learned in
-   one run, which is what Monty's pretraining configs are — is still missing.
+2. **A set of parts, taught and loaded but not yet told apart.** One memory can
+   now hold several parts: a memory whose name ends in `_set` is taught from the
+   objects its experiment names (`Monty.Studio.Cad.Preparation` reads
+   `object_names`), and `cad/parts_set_eval` is the first one — the plate and the
+   blend in one file, each stepped as its own episode, which is the CAD
+   counterpart of the distinct-object configs the YCB benchmarks use.
+
+   What it measures so far, on this Mac on 2026-11-19, world `ex_mujoco`, two
+   episodes of 500 steps at the blend's own 8 mm stand-off: the memory is written
+   (34 018 nodes over the two parts, 467 s of teaching, which is most of the
+   twelve minutes one Make click now takes), and both episodes narrow to _one_
+   possible object and never conclude — the one they name is `plate`, including
+   the episode whose target is the blend. Two parts in one file therefore do not
+   yet separate: the memory is fine-grained enough for either to match, and what
+   decides between them is not in it. That is the next measurement, and it is a
+   percept question of the same kind as the feature wall above, not a plumbing
+   one — one part per memory still concludes, three times over.
+
+   The stand-off is the set's cost driver: memory sampling follows the patch, so
+   a two-part memory at 8 mm is nine times the nodes of the same parts at the
+   surface policy's 25 mm. If a set can be read from 16 mm, its teaching drops
+   with the square of that number, and that is the cheap experiment to try before
+   reaching for a parent module.
+
 3. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
    `_compositional` / `_monolithic` pair, which differ only in whether the labels
    name features or the part. The pair is the measurement: composition against one

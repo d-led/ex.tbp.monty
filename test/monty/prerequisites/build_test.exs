@@ -7,12 +7,22 @@ defmodule Monty.Prerequisites.BuildTest do
   there a memory and an object set at the path the configs already name? The
   geometry is `ex_monty_cad`'s, from Hex, so a checkout with `mix deps.get` can
   answer it.
+
+  Two of the memories a CAD click writes are taught at a patch's own scale, which
+  is minutes of geometry: the blend is 163 s and the set of two parts 467 s on a
+  ten-core Mac on 2026-11-19, against a case budget of 300 s. So the click's loop
+  is driven with the teaching named (`:plans` and `:prepare`, the seam
+  `Monty.Prerequisites.Saga` already uses), the agreement between the configs and
+  what the manifest promises is asserted without geometry, and three plans are
+  taught for real — one part, one set at the surface policy's own stand-off, and
+  one part as features.
   """
 
   use ExUnit.Case, async: false
 
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Build
+  alias Monty.Studio.Cad.Preparation
   alias Monty.Test.PrerequisiteRoots
 
   setup do
@@ -35,42 +45,110 @@ defmodule Monty.Prerequisites.BuildTest do
   end
 
   describe "the CAD parts" do
+    # The click's own loop, with the teaching named rather than done: one line
+    # per memory, and a refusal that names the part it is about. The teaching
+    # itself is the next describe, because a memory at a patch's own scale takes
+    # minutes — the set of two parts took 467 s on a ten-core Mac on 2026-11-19 —
+    # and a case that runs all five would spend CI's whole budget proving that
+    # four of them are the same code path.
+    test "is one line per memory, and a refusal says which part it was" do
+      plans = [
+        %{part: "plate", memory: "/libraries/plate_part.jsonl.gz"},
+        %{part: "blend", memory: "/libraries/blend_part.jsonl.gz"}
+      ]
+
+      steps = self()
+
+      taught = fn %{part: part} ->
+        send(steps, {:taught, part})
+        {:ok, %{written: 1, nodes: 7}}
+      end
+
+      assert {:ok, said} =
+               Build.run("cad_part_memories", &send(steps, {:step, &1}),
+                 plans: plans,
+                 prepare: taught
+               )
+
+      assert length(said) == length(plans)
+      assert_received {:taught, "plate"}
+      assert_received {:taught, "blend"}
+      assert_received_step(:first)
+    end
+
+    test "stops at the part it could not teach" do
+      plans = [
+        %{part: "plate", memory: "/libraries/plate_part.jsonl.gz"},
+        %{part: "blend", memory: "/libraries/blend_part.jsonl.gz"}
+      ]
+
+      taught = fn
+        %{part: "plate"} -> {:ok, %{written: 1, nodes: 7}}
+        %{part: "blend"} -> {:error, "the blend's STEP file is not here"}
+      end
+
+      assert {:error, message} =
+               Build.run("cad_part_memories", fn _ -> :ok end, plans: plans, prepare: taught)
+
+      assert message =~ "blend"
+    end
+
+    test "every memory the CAD configs load is one this build promises" do
+      promised =
+        "cad_part_memories"
+        |> Prerequisites.get()
+        |> Prerequisites.promised_memories()
+        |> Enum.map(&Path.basename(&1, ".jsonl.gz"))
+
+      planned = Enum.map(Build.plans(), &memory_name/1)
+
+      assert Enum.sort(planned) == Enum.sort(promised)
+    end
+  end
+
+  describe "a memory taught for real" do
     @describetag timeout: 300_000
 
-    test "are taught and meshed, one memory and one object set per recognition run", %{
-      root: root
-    } do
+    test "is one memory and one mesh per object the experiment steps", %{root: root} do
       PrerequisiteRoots.with_roots(root, fn ->
-        steps = self()
+        {plan, setup} = experiment("plate_part_eval")
 
-        assert {:ok, said} = Build.run("cad_part_memories", &send(steps, {:step, &1}))
+        assert {:ok, written} = Preparation.prepare(plan)
+        assert written.written == 1
 
-        # One line per memory, not per config: two runs may ask about the same
-        # memory from different sensors — `cad/plate_features_2patch_eval` is
-        # `plate_features` read through a second patch — and the build writes
-        # what a run loads rather than one file per config.
-        assert length(said) == length(memories())
-        assert_received_step(:first)
+        assert File.exists?(plan.memory)
+        assert_meshed(setup)
+      end)
+    end
 
-        libraries = Prerequisites.root_path("MONTY_LIBRARIES")
-        objects = Path.join(Prerequisites.root_path("MONTY_DATA"), "cad_objects")
+    test "is one file holding every part of a set, and a mesh for each", %{root: root} do
+      PrerequisiteRoots.with_roots(root, fn ->
+        {plan, setup} = experiment("parts_set_eval")
 
-        for experiment <- experiments() do
-          {plan, setup} = plan_of(experiment)
+        # At the surface policy's own 25 mm stand-off rather than the set's 8 mm:
+        # the same code path through `Preparation.prepare/1`, four minutes
+        # cheaper. What a config's optics do — the patch it is read through, and
+        # the spacing that follows from it — is `preparation_test`'s, pinned
+        # there without geometry.
+        plan = %{plan | optics: %{plan.optics | distance: 25.0}}
 
-          assert File.exists?(plan.memory),
-                 "#{experiment} loads #{plan.memory}, which the build did not write"
+        assert {:ok, written} = Preparation.prepare(plan)
 
-          # Every object the run steps, not only the first: a memory of a part's
-          # features answers four names, and a run is only able to ask about the
-          # ones that were written as directories.
-          for object <- Monty.Studio.Setup.objects(setup) do
-            assert File.dir?(Path.join(objects, object)),
-                   "#{experiment} steps #{object}, which the build did not write"
-          end
-        end
+        assert written.written == length(Monty.Studio.Setup.objects(setup))
+        assert File.exists?(plan.memory)
+        assert_meshed(setup)
+      end)
+    end
 
-        assert File.dir?(libraries)
+    test "as features is one object per feature, not one per part", %{root: root} do
+      PrerequisiteRoots.with_roots(root, fn ->
+        {plan, setup} = experiment("plate_features_eval")
+
+        assert {:ok, written} = Preparation.prepare(plan)
+
+        assert written.written > length(Monty.Studio.Setup.objects(setup))
+        assert File.exists?(plan.memory)
+        assert_meshed(setup)
       end)
     end
   end
@@ -117,33 +195,26 @@ defmodule Monty.Prerequisites.BuildTest do
 
   # The CAD set's own experiment configs, which is what a build reads: a name is
   # a config file, and the part it steps is in its env interface.
-  defp experiments do
-    Path.wildcard(
-      Path.join([
-        :code.priv_dir(:ex_tbp_monty),
-        "monty_experiments/sets/cad/conf/experiment/cad/*.yaml"
-      ])
-    )
-    |> Enum.map(&"cad/#{Path.basename(&1, ".yaml")}")
-    |> Enum.sort()
-  end
-
-  defp plan_of(experiment) do
-    {:ok, opened} = Monty.Studio.open(experiment, conf_dir: Monty.Config.Source.conf_dirs())
-    {:ok, plan} = Monty.Studio.Cad.Preparation.plan(opened.setup)
+  defp experiment(name) do
+    {:ok, opened} = Monty.Studio.open("cad/#{name}", conf_dir: Monty.Config.Source.conf_dirs())
+    {:ok, plan} = Preparation.plan(opened.setup)
     {plan, opened.setup}
   end
 
-  # The memories the CAD set asks for, one per distinct file: what the build
-  # promises a run is the file it loads, and two runs that load the same file
-  # are one job for the teacher.
-  defp memories do
-    experiments()
-    |> Enum.map(fn experiment ->
-      {plan, _setup} = plan_of(experiment)
-      plan.memory
-    end)
-    |> Enum.uniq()
+  # A plan names the file a run loads and the config names a memory; the promise
+  # in `priv/prerequisites.yaml` is the bare name, in a release folder.
+  defp memory_name(plan), do: Path.basename(plan.memory, ".jsonl.gz")
+
+  # Every object the run steps, not only the first: a memory of a part's features
+  # answers several names, and a run is only able to ask about the ones that were
+  # written as directories.
+  defp assert_meshed(setup) do
+    objects = Path.join(Prerequisites.root_path("MONTY_DATA"), "cad_objects")
+
+    for object <- Monty.Studio.Setup.objects(setup) do
+      assert File.dir?(Path.join(objects, object)),
+             "the run steps #{object}, which the build did not write a mesh for"
+    end
   end
 
   defp manifest_uids do

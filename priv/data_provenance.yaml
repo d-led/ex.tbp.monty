@@ -110,7 +110,12 @@ data:
     # blend is 40×30×20 mm and the surface policy's 25 mm / 4 mm step reads the
     # far plane on most steps, so the part is taught and stepped from 8 mm with a
     # 2 mm/2° gait. The reasons are in that config and in `docs/cad.md`.
-    hash: d88dcf64d3229850643fb355294898e3fe6d99c085029c618ca843d74b98cee9
+    #
+    # `cad/parts_set_eval` with `env_interface/cad_parts_set_eval` is the same
+    # day's second change: one memory of several parts, taught from the parts the
+    # experiment names, so a run can ask whether it recognises the part it is
+    # shown rather than its own single object.
+    hash: 600e8f94680b64739f3af3edae8ffc78151062a41e3d797d60fcd72340dcce20
 
   - path: priv/cad_experiments/conf
     kind: written

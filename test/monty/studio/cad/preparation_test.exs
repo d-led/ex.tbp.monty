@@ -117,6 +117,40 @@ defmodule Monty.Studio.Cad.PreparationTest do
       assert options[:limit] == 20_000
     end
 
+    # A memory of several parts is one file taught from every part the experiment
+    # names — that is what makes it a set rather than several memories, and it is
+    # the question a benchmark asks: does one memory still recognise the part it is
+    # shown? The name says what the file holds (`parts_set`, the way `_features`
+    # says which of the two a memory of one part holds), and `object_names` says
+    # which parts.
+    test "a memory of several parts is one file, taught from every part it names",
+         %{objects: objects} do
+      setup = %{
+        setup_struct(objects, "plate")
+        | model_name_or_path: "/somewhere/cad_parts_v1/parts_set",
+          object_names: ["plate", "blend"]
+      }
+
+      assert {:ok, plan} = Preparation.plan(setup)
+      assert plan.labels == :set
+      assert Enum.map(plan.parts, &elem(&1, 0)) == ["plate", "blend"]
+
+      assert {:ok, report} =
+               Preparation.prepare(plan,
+                 trainer: __MODULE__.Recorder,
+                 exporter: __MODULE__.Exporter
+               )
+
+      # One file, both parts in it, and one object directory each — the names the
+      # memory answers with are the parts' own, which is what the experiment lists.
+      assert recorded_parts(plan.memory) == ["plate", "blend"]
+      assert report.written == 2
+
+      for part <- ~w(plate blend) do
+        assert File.regular?(Path.join([objects, part, "textured.obj"]))
+      end
+    end
+
     # A run that names neither is taught with one answer rather than the CAD
     # package's silent 66°: the tutorial's `zoom: 10` on a square patch, and the
     # eight millimetres a feature experiment stands off by.
@@ -212,6 +246,13 @@ defmodule Monty.Studio.Cad.PreparationTest do
     |> :erlang.binary_to_term()
   end
 
+  defp recorded_parts(memory) do
+    memory
+    |> Kernel.<>(".parts")
+    |> File.read!()
+    |> :erlang.binary_to_term()
+  end
+
   # The two writers, as the CAD package answers them: a memory file, and one
   # mesh of the whole part. Kept here so the cases above test the module's
   # decisions rather than a Rust build.
@@ -224,13 +265,17 @@ defmodule Monty.Studio.Cad.PreparationTest do
   end
 
   # A trainer that writes what it was asked for and keeps the options it was
-  # given, so a case can say what a memory is taught through.
+  # given, so a case can say what a memory is taught through — and the parts it
+  # was given, so a case can say which parts one file holds.
   defmodule Recorder do
-    def write_library([{part, _step}], path, options) do
+    def write_library(parts, path, options) do
       File.mkdir_p!(Path.dirname(path))
-      File.write!(path, "#{part} taught")
+      File.write!(path <> ".parts", :erlang.term_to_binary(Enum.map(parts, &elem(&1, 0))))
+      File.write!(path, Enum.map_join(parts, " + ", &elem(&1, 0)) <> " taught")
       File.write!(path <> ".options", :erlang.term_to_binary(options))
-      {:ok, %{path: path, nodes: 3, objects: [%{object_id: part, nodes: 3}]}}
+
+      objects = for {part, _step} <- parts, do: %{object_id: part, nodes: 3}
+      {:ok, %{path: path, nodes: 3 * length(objects), objects: objects}}
     end
   end
 

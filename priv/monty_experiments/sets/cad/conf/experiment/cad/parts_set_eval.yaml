@@ -1,0 +1,53 @@
+# @package _global_
+# Two CAD parts in one memory, recognised part by part.
+#
+# The single-part experiments answer "can this port recognise a part it was taught
+# on its own". This one asks the question a benchmark asks: does a memory of
+# several parts still recognise the one it is shown, without being told which. It
+# is the CAD counterpart of the distinct-object configurations the YCB benchmarks
+# use, and the config differs from `cad/plate_part_eval` in two places only — the
+# memory it loads (`parts_set`, holding both parts) and the objects it steps.
+#
+# The optics are the *smallest* part's. A set is taught through one sensor, so the
+# stand-off and the lens belong to the part that needs the closest look: the blend
+# is 20 mm tall and reads nothing at the surface policy's own 25 mm
+# (`cad/blend_part_eval` has that measurement), and the plate is large enough that
+# eight millimetres still traces it. The gait follows the stand-off for the same
+# reason.
+defaults:
+  - /monty: evidencegraph_exp1000_emin_t3
+  - /monty/motor_system_config: surface_curvature_informed_goal1
+  - /monty/learning_module: evidence_tutorial_surf_agent_2obj
+  - /monty/sensor_module: camera_tutorial_surf_agent_2obj
+  - /monty/connectivity: 1lm_1sm
+  - /environment: cad_plate_objects
+  - /env_interface: cad_parts_set_eval
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
+  - /termination: any1_objectrecognition_t1000_e500_tot5000
+  - /logging: basic_info_monty_runs
+  - /telemetry: info
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    monty_config:
+      motor_system_config:
+        policy_selector:
+          policy:
+            desired_object_distance: 0.008
+            action_sampler:
+              rotation_degrees: 2.0
+              translation_distance: 0.002
+    show_sensor_output: true
+    n_train_epochs: 3
+    # Where the memory of the set lives. The tail after the libraries root is what
+    # must match: `<libraries>/cad_parts_v1/parts_set.jsonl.gz`.
+    model_name_or_path: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}/cad_parts_v1/parts_set
+    n_eval_epochs: 3
+    seed: 42
+    supervised_lm_ids: []
+    python_log_level: DEBUG
+    logging:
+      output_dir: ${path.expanduser:${oc.env:MONTY_LIBRARIES}}
+      run_name: cad_parts_set_eval
+      wandb_group: gm_eval_runs

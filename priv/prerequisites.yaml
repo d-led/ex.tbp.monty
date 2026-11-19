@@ -247,6 +247,9 @@ prerequisites:
       - plate_features
       - blend_part
       - blend-big_part
+      # `cad/parts_set_eval` — one memory holding two parts, taught from the
+      # objects that experiment names.
+      - parts_set
     # The other half of what one Make writes: the meshes each memory was taught
     # on, beside the world's objects. A run reads the memory *and* the meshes,
     # so a machine missing either is missing this build — and the objects folder

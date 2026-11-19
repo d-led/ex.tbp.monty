@@ -36,8 +36,11 @@ defmodule Monty.Studio.Cad.Preparation do
   @typedoc """
   What preparing a part would write, and from what.
 
-    * `part` — the object name the experiment steps (`object_names: [plate]`)
-    * `step` — the file the geometry comes from
+    * `part` and `step` — the first part's name and the file its geometry comes
+      from
+    * `parts` — every part the plan teaches, as `{object name, STEP file}`: one for
+      a memory of one part, and one per object the experiment names for a memory of
+      several (`parts_set`)
     * `name` and `release` — the memory's address, as the config names it
     * `labels` — what the memory holds: the part as one object, or one object
       per feature it is made of, which is what a `_features` memory promises
@@ -69,13 +72,13 @@ defmodule Monty.Studio.Cad.Preparation do
   @spec plan(Setup.t()) :: {:ok, plan()} | {:error, String.t()}
   def plan(%Setup{} = setup) do
     with {:ok, name, release} <- memory_of(setup),
-         {:ok, part} <- part_of(setup, name),
-         {:ok, step} <- step_of(part),
+         {:ok, parts} <- parts_of(setup, name),
          {:ok, objects} <- objects_of(setup) do
       {:ok,
        %{
-         part: part,
-         step: step,
+         part: elem(hd(parts), 0),
+         step: elem(hd(parts), 1),
+         parts: parts,
          name: name,
          release: release,
          labels: labels_of(name),
@@ -136,13 +139,52 @@ defmodule Monty.Studio.Cad.Preparation do
     end
   end
 
+  # The parts a plan teaches, each with the file it comes from.
+  #
+  # One for a memory of one part. For a memory of several — `parts_set`, which is
+  # a name ending in `_set`, the same way `_features` says what it holds — one per
+  # object the experiment names, because that list *is* the set. The CAD package
+  # takes them in one call and writes one file, which is what makes it a memory of
+  # several parts rather than several memories.
+  defp parts_of(setup, name) do
+    if labels_of(name) == :set,
+      do: every_part(setup),
+      else: one_part(setup, name)
+  end
+
+  defp one_part(setup, name) do
+    with {:ok, part} <- part_of(setup, name),
+         {:ok, step} <- step_of(part),
+         do: {:ok, [{part, step}]}
+  end
+
+  defp every_part(setup) do
+    setup
+    |> Setup.objects()
+    |> Enum.reduce_while({:ok, []}, fn object, {:ok, parts} ->
+      case step_of(object) do
+        {:ok, step} -> {:cont, {:ok, [{object, step} | parts]}}
+        {:error, _sentence} = refused -> {:halt, refused}
+      end
+    end)
+    |> case do
+      {:ok, []} -> {:error, "this experiment names no object to prepare"}
+      {:ok, parts} -> {:ok, Enum.reverse(parts)}
+      {:error, _sentence} = refused -> refused
+    end
+  end
+
   # A memory's name says what it holds, because nothing else can: `plate_part`
   # is the plate as one object, `plate_features` is the plate as the features it
-  # is made of. Monty's config has no key for this — what a memory holds is what
-  # its producer wrote — so the name is the statement, and this is the one place
-  # that reads it.
+  # is made of, and `parts_set` is several parts as themselves. Monty's config has
+  # no key for this — what a memory holds is what its producer wrote — so the name
+  # is the statement, and this is the one place that reads it.
   defp labels_of(name) do
-    if String.ends_with?(name, "_features"), do: :features, else: :part
+    cond do
+      String.ends_with?(name, "_features") -> :features
+      String.ends_with?(name, "_set") -> :set
+      true -> :part
+    end
   end
 
   @doc """
@@ -177,7 +219,7 @@ defmodule Monty.Studio.Cad.Preparation do
   end
 
   defp taught(plan, trainer) do
-    case trainer.write_library([{plan.part, plan.step}], plan.memory, memory_options(plan)) do
+    case trainer.write_library(plan.parts, plan.memory, memory_options(plan)) do
       {:ok, written} ->
         {:ok, written}
 
@@ -220,10 +262,15 @@ defmodule Monty.Studio.Cad.Preparation do
     |> Keyword.merge(optics_options(plan))
   end
 
-  defp memory_options(%{labels: :part, optics: optics} = plan) do
+  defp memory_options(%{labels: labels} = plan) when labels in [:part, :set] do
     [
+      # The CAD package names objects after what it teaches and knows two
+      # answers: the part as itself, or the features it is made of. A set is the
+      # first, applied to every part it was handed — the memory then holds
+      # `plate` and `blend` as their own objects, which is what the experiment's
+      # `object_names` list.
       labels: :part,
-      spacing: patch_width(optics) / @nodes_across_a_patch,
+      spacing: patch_width(plan.optics) / @nodes_across_a_patch,
       limit: @part_visits
     ]
     |> Keyword.merge(optics_options(plan))
@@ -251,7 +298,8 @@ defmodule Monty.Studio.Cad.Preparation do
   #
   # The records written are the ones the teaching answered with: this is the
   # same file, with the one field a directory cannot carry renamed.
-  defp names_it_answers_to(%{labels: :part}, written), do: {:ok, written.nodes}
+  defp names_it_answers_to(%{labels: labels}, written) when labels in [:part, :set],
+    do: {:ok, written.nodes}
 
   defp names_it_answers_to(%{memory: path}, written) do
     records =
@@ -268,14 +316,37 @@ defmodule Monty.Studio.Cad.Preparation do
   # The object set is the same part as triangles, written where the config's
   # `data_path` looks — one directory per object the memory holds.
   defp write_objects(plan, exporter) do
-    if Code.ensure_loaded?(exporter) do
-      if plan.labels == :features,
-        do: feature_objects(plan, exporter),
-        else: part_object(plan, exporter)
-    else
-      {:error,
-       "#{inspect(exporter)} is not on this node: add `ex_monty_cad` to write a part's meshes."}
+    cond do
+      not Code.ensure_loaded?(exporter) ->
+        {:error,
+         "#{inspect(exporter)} is not on this node: add `ex_monty_cad` to write a part's meshes."}
+
+      plan.labels == :features ->
+        feature_objects(plan, exporter)
+
+      plan.labels == :set ->
+        set_objects(plan, exporter)
+
+      true ->
+        part_object(plan, exporter)
     end
+  end
+
+  # One directory per part, each under the name the memory answers with — which
+  # for a set is the part's own name, because that is what the experiment lists in
+  # `object_names` and what the memory's records already say.
+  defp set_objects(plan, exporter) do
+    plan.parts
+    |> Enum.reduce_while({:ok, 0}, fn {part, step}, {:ok, written} ->
+      case exporter.part_mesh(step, name: part) do
+        {:ok, mesh} ->
+          _written = Objects.write_mesh(mesh, plan.objects)
+          {:cont, {:ok, written + 1}}
+
+        {:error, _reason} = refused ->
+          {:halt, refused}
+      end
+    end)
   end
 
   defp part_object(plan, exporter) do

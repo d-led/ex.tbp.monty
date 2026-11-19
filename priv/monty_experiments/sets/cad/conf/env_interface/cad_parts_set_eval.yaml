@@ -1,0 +1,24 @@
+# @package experiment.config
+# Two parts, one memory: the plate and the blend, each stepped as its own episode.
+#
+# This is the set the CAD pipeline has been missing — one file that holds several
+# parts, so a run can ask whether the memory still recognises the part it is
+# shown rather than whether it can tell its own single object from nothing. The
+# name the memory is loaded by says what it holds (`parts_set`, the way
+# `_features` says a memory holds features), and this list is what it is taught
+# from: `Monty.Studio.Cad.Preparation` reads `object_names` for a memory of
+# several parts.
+#
+# `blend-big` is left out on purpose. It is 270 mm long — an order of magnitude
+# larger than the other two — and a set is taught through one sensor at one
+# spacing, so including it would set the spacing for everything and put the
+# smaller parts' sampling out of reach of the visit cap.
+do_eval: true
+eval_env_interface_args:
+  object_names:
+    - plate
+    - blend
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    rotations: ${constants.rotations_3}
+eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}
