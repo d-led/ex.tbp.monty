@@ -1350,11 +1350,25 @@ defmodule Monty.Studio.Jobs.Run do
   end
 
   # What the run starts from: the memory its record points at — an evaluation
-  # wave's merged one — or the library its config names.
+  # wave's merged one — or, for a run that reads the library its config names,
+  # nothing in hand. Nothing is not an empty memory: the spec is then built with
+  # `lazy_state` and each module loads the library in the process that will hold it
+  # (`Setup.model_spec/3`), which is what keeps a two-hundred-megabyte library out
+  # of this worker and out of every copy of the spec — the same rule the command
+  # line follows (`mix monty.run`). Passing `%{}` would read as "this run has no
+  # memory" and the module would be built over nothing.
   defp memories_of(%{inputs: %{"part" => %{"memory" => %{} = pointer}}}, opened),
     do: Memories.load(opened, pointer)
 
-  defp memories_of(_record, opened), do: Setup.memories(opened.setup)
+  defp memories_of(_record, _opened), do: %{}
+
+  # What an episode starts from: the memory the last training episode wrote, and
+  # what its graphs were built from — left out when there is nothing in hand, so
+  # the module reads its library instead.
+  defp knowledge(%{memories: memories}) when memories == %{}, do: []
+
+  defp knowledge(%{memories: memories, targets: targets}),
+    do: [memory: memories, memory_targets: targets]
 
   # Monty's `pre_episode`, interface half: an episode starts where it was told to
   # — the world for this episode's object, the agent positioned, the sensors
@@ -1391,14 +1405,12 @@ defmodule Monty.Studio.Jobs.Run do
         episode: index,
         epoch: Map.get(callbacks, :epoch, 0),
         mode: state.mode,
-        memory: state.memories,
-        memory_targets: state.targets,
         first_seen: state.first_seen,
         has_detailed_logger: Logging.detailed?(state.logging),
         scheduling: scheduling_of(state.record),
         settle_steps: settle_of(state.record),
         sensors_step: sensors_step_of(state.record)
-      ]
+      ] ++ knowledge(state)
 
     options =
       if state.mode == :eval, do: [{:model_id, phase_model_id(run_id)} | options], else: options
