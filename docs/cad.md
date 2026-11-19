@@ -162,12 +162,28 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
 1. **The feature wall, which is now the question rather than the plumbing.** The
    evaluation on meshes exists and runs (`cad/plate_features_eval` steps the object
    set the Make wrote, from the memory the Make wrote), and it answers a sibling:
-   asked about `plate_bosses_0` it names `plate_risers_0`. The plate's body and its
-   risers are the same surface in the reported features — flat, nine millimetres of
-   curvature, hue zero — and the boss's own top face is flat too, so a memory of
-   four objects cannot tell them apart until the teaching carries something that
-   does (a second scale, the depth of the feature, or the arrangement of two
-   patches). That is the compositional question the set exists to ask.
+   asked about `plate_bosses_0` it names `plate_risers_0`.
+
+   Read off the memory itself, the four objects are not equally separable. The body
+   and the risers are the same surface: `principal_curvatures_log` has mean 0.04 and
+   spread 0.68 over the body's nodes against 0.00 and 0.70 over the risers', with
+   the same range of about ±7. The boss (mean +2.4) and the hole (mean −2.8) differ
+   by curvature _sign_, so those two are separable; the boss's own top face is flat,
+   which is why a patch on it reads like the body. Colour separates nothing: every
+   node's saturation is zero, and the CAD configs still report `hsv` — a channel that
+   cannot change. Dropping it is a decision rather than a tidy-up: the memory holds
+   it, so the teaching and the sensor change together.
+
+   The episode follows from that: on this Mac, one `cad/plate_features_eval` episode
+   at 500 steps is fed on 97 of them, and its evidence plateaus at 43.9 with four
+   objects still possible. What is missing is not steps but a percept that covers an
+   _edge_ for long enough to be named — which is what a parent module is for. That
+   is the compositional question the set exists to ask, and it is blocked on a
+   memory: `MontyCad.Training` writes one record per object and input channel, so a
+   parent that holds an arrangement of its children has nothing to be taught from
+   yet. The monolithic arm of the pair does exist — `cad/plate_part_eval`, one lump,
+   one memory, three episodes concluded.
+
 2. **A set of parts.** Three parts are taught and recognised (plate, blend,
    blend-big), one per experiment. A _pretraining_ set — several parts learned in
    one run, which is what Monty's pretraining configs are — is still missing.
