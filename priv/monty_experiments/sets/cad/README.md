@@ -72,9 +72,9 @@ the server needs that no config can name.
    it writes one memory per CAD experiment and the mesh of every object the
    configs name, saying which part it is on as it goes (`1/1 plate: memory and
 meshes`). The row stops saying `not built` when it is done.
-2. **Sidebar → Experiments**, then pick the run. `cad/plate_part_eval` is the one
-   that recognises; `cad/plate_features_eval` is the one that does not, for the
-   reason the sections below measure.
+2. **Sidebar → Experiments**, then pick the run. `cad/plate_part_eval` recognises
+   the plate as one object; `cad/plate_features_eval` asks about its features, and
+   `cad/plate_features_2patch_eval` asks the same question with a second patch.
 3. **Press `Run it`.** Under the button are the three numbers a run takes —
    `episodes` out of the config's own count, `steps each, at most`, and `settle`,
    beside a `scheduling` choice — and for a reproduction they are left at the
@@ -89,9 +89,9 @@ meshes`). The row stops saying `not built` when it is done.
    where the run's own `eval_stats.csv` lives.
 
 For the feature run the steps are the same with `cad/plate_features_eval` picked
-in step 2. It ends **without** a conclusion: four objects still possible. Slice it
-to `episodes` 4 — one per feature — and `steps each` 500 to watch the same wall at
-the config's own budget rather than at a long cap.
+in step 2. Its twelve episodes are the longest run in this set — the module is
+fed on a tenth of the steps, because a patch a sixteenth of the part's width
+spends most of an episode walking back to the feature.
 
 ### The same thing without a browser
 
@@ -141,10 +141,10 @@ four of the config's twelve episodes as a slice:
 
     MIX_ENV=desktop mix monty.run cad/plate_features_eval --episodes 4 --steps 500 --no-record
 
-`--episodes` and `--steps` are the page's two fields under `Run it`. This one does
-not match, and the sections below say why: it ends with four objects still
-possible, and the read of its `eval_stats.csv` is what named the pair the sensor
-cannot tell apart.
+`--episodes` and `--steps` are the page's two fields under `Run it`. Eight of the
+twelve episodes conclude and four time out, and the four are the ones asked about
+the bore: what one patch reports cannot separate the plate's body from its
+risers, so those two stay possible together and the sections below measure why.
 
 `desktop` is the environment that carries the MuJoCo interpreter a CAD run steps;
 under `dev` the same command wants `MONTY_PYTHON`, as `scripts/run-dev.sh` says.
@@ -158,13 +158,42 @@ boot fails on a missing table.
 Two settings, both Monty's own, and both because a feature is a centimetre across
 where a plate is six:
 
-- the motor system is `surface_curvature_informed_5_goal0` — 5 mm steps and 5°
-  turns, so the patch stays on the object instead of stepping over it;
-- `desired_object_distance` is 8 mm rather than 25, so the patch is mostly
-  surface rather than mostly background. The observation processor passes a patch
-  to a learning module only when enough of it is on the object, and at 25 mm one
-  run stepped 2023 times with the learning module fed on two of them and evidence
-  frozen at 1.69.
+- the motor system is `surface_curvature_informed_goal1`, pointed at the small
+  object, and this set names its own action sampler: 1 mm a step and 1° a turn.
+  The policy's own sampler steps 4 mm and turns 5°, which is a quarter of a
+  centimetre feature — a crossing is two or three steps and the rest of an episode
+  is the policy walking back, measured as the module being fed on 56 to 625 of
+  5000 steps. One millimetre and one degree keep the same arc per turn, 0.8 mm a
+  degree, at a tenth of the distance, and one sampler serves every feature the
+  part is made of;
+- `desired_object_distance` is 8 mm rather than 25, because the patch is twice the
+  stand-off wide. At 25 mm it reads 5 mm of surface — five times the smallest
+  feature, and mostly background on anything a centimetre across — and one run
+  stepped 2023 times with the module fed on two of them and evidence frozen at
+  1.69. At 8 mm the patch reads 1.6 mm and is mostly surface.
+
+The other end of that rule is a bore, and it is where 8 mm is a compromise rather
+than a fit. The plate's bore is ten millimetres deep, so a patch read from 8 mm
+straddles its near lip and its far opening at once and the surface fit answers a
+thin arc. Visits whose curvature fit succeeds, of the 96 the geometry offers:
+
+| stand-off | 4 mm | 8 mm  | 12 mm | 16 mm | 20 mm | 25 mm |
+| --------- | ---- | ----- | ----- | ----- | ----- | ----- |
+| the bore  | 0/96 | 21/96 | 0/96  | 96/96 | 96/96 | 81/96 |
+
+The body and the bosses need nothing from the stand-off: 3 349 and 205 visits fit
+at 8 mm and at 16 mm alike. Twice the distance reads the bore and reads a 3.2 mm
+patch, which no longer fits inside a boss — twelve episodes each, through the
+page, on this Mac:
+
+| stand-off | one patch | two patches |
+| --------- | --------- | ----------- |
+| 8 mm      | 8 match   | 11 match    |
+| 16 mm     | 7 match   | 3 match     |
+
+So the feature sets read from 8 mm: a bore whose curvature is a thin arc costs
+what the bore alone would separate, and a patch too wide to sit on a boss costs
+all four objects.
 
 ## How a feature memory is sampled
 
@@ -174,230 +203,105 @@ one: at the package's defaults the plate's boss kept 56 nodes and its hole 16,
 and at a finer spacing with the same cap the two disappeared from the memory
 altogether, because the plate's body and risers alone spend the budget. A wall
 sampled at 16 nodes is a wall reproduced as a few quadrilaterals, and a patch
-that straddles it has nothing to match; the sampling below is about that.
+that straddles it has nothing to match.
 
 So a memory of features is taught at 1 mm with a cap of 20 000 visits
-(`Monty.Studio.Cad.Preparation`), which keeps every feature the geometry names
-and converges below the cap: a part's feature memory costs a minute, and
-`mix monty.data.check` still says what the tree is.
+(`Monty.Studio.Cad.Preparation`), through the lens and from the distance the run
+itself uses. That is a comparison, not a style: the environment's patch sensor
+reads 11.42° (`zoom: 10` on a 90° base), where a `Camera.patch/3` default is 66°,
+and a memory taught through a six-times-wider patch is a memory of a different
+surface. Taught the run's way, the plate's four features are 5 760 nodes and cost
+a minute.
 
-## What a feature run hits first, in the order it hits it
+## What a node is
 
-Three things stop `cad/plate_features_eval` before the recognition itself can be
-judged, and each was found by measuring rather than reading.
+A node is one percept a learning module was handed, so a visit whose surface fit
+the sensor refused is not stored: `MontyCad.Training` asks
+`process_features_in_lm` and skips the visit. A patch straddling an opening has no
+curvature to compute, and the node it would otherwise leave behind is one no
+matcher can score — `principal_curvatures` of length zero where every other node
+carries two numbers in the log.
 
-**The agent starts out of sight.** The tutorial's surface agent stands ten
-centimetres above the ground; a part's boss is thirteen millimetres tall, so the
-patch begins eighty-seven millimetres from any surface — beyond the fifty
-millimetres a surface agent's depth is clipped at — and reads a flat grey image
-for as long as it takes to search. Measured on a failed run: `percepts patch`,
-`inputs learning_module_0=0` on every step, and a patch picture of one colour.
-The set's environment now places the agent three centimetres up, where the patch
-sees the object on its first step.
+One such node silences a whole memory, and that is a property of the matcher
+rather than of the data: this port's missing value is numpy's NaN, `np.max` over a
+column holding one is NaN, and `Hypotheses.indices_within/3` therefore answers
+nothing for any hypothesis. The possible set empties at every step, no pose is
+ever named, symmetry never counts, and the episode cannot conclude however long
+the cap. The plate's part memory holds 2 111 nodes, against the 2 113 visits its
+geometry offers.
 
-**The memory and the run use different optics — fixed, and not the wall.** The
-environment's patch sensor is declared with `zoom: 10`; Monty's MuJoCo agent
-builds `fovy = 2·atan2(ratio·tan(45°), zoom)` from a 90° base, so a square patch
-at that zoom reads 11.42°, while `Camera.patch/3`'s own default is 66° and
-`MontyCad.Training` passed a stand-off and nothing else. Measured on the boss's
-wall at the same stand-off: the teacher's patch read `0.137, -0.063` with 80 %
-coverage and the run's `0.125, 0.000` with all of it — the same sign and nearly
-the same size, but the node the memory stored was measured through a patch six
-times wider than the one the run makes. `MontyCad.Training.nodes/2` now takes
-`:fov_x`, and `Monty.Studio.Cad.Preparation` teaches a feature memory through the
-run's 11.42°, so the two lenses agree.
+## What the sets answer
 
-It is a defect worth removing and it is not the wall. Taught through the run's
-own patch the plate's feature memory grows from 5372 nodes to 5835 — the narrower
-patch straddles a face's edge less often, so more visits are kept — and four
-episodes at the five-hundred-step budget come out where they were:
+The page drives all nine, `Run it` with the config's own episodes, world
+`ex_mujoco`, seed 42, on this Mac:
 
-    memory through 66°:  402 of 2000 steps fed, evidence 44.9, 4108 hypotheses
-    memory through 11.4°: 399 of 2000 steps fed, evidence 43.9, 4370 hypotheses
+| set                              | memory                | episodes | answer               | steps  |
+| -------------------------------- | --------------------- | -------- | -------------------- | ------ |
+| `cad/plate_pretrain`             | writes one            | 1        | learned 20 nodes     | 1 070  |
+| `cad/plate_learned_eval`         | `trained/` from it    | 3        | 2 match, 1 no_match  | 422    |
+| `cad/plate_part_eval`            | `plate_part`          | 3        | 3 match              | 532    |
+| `cad/plate_pair_eval`            | `plate_pair_assembly` | 3        | 3 match              | 547    |
+| `cad/parts_set_eval`             | `parts_set`           | 6        | 6 match              | 1 142  |
+| `cad/blend_part_eval`            | `blend_part`          | 3        | 2 match, 1 no_match  | 444    |
+| `cad/blend-big_part_eval`        | `blend-big_part`      | 3        | 3 match              | 310    |
+| `cad/plate_features_eval`        | `plate_features`      | 12       | 8 match, 4 time_out  | 22 633 |
+| `cad/plate_features_2patch_eval` | `plate_features`      | 12       | 11 match, 1 no_match | 4 134  |
 
-Four objects possible at the end either way, no conclusion either way. Two flat
-surfaces stay two flat surfaces however wide the lens that measured them.
+A part is recognised from its mesh in every epoch it is asked, at four
+millimetres a step and 25 mm of stand-off: that is the pipeline this set is here
+to show, and `plate_pair_eval` shows the same for an assembly whose two parts are
+memories of their own. The feature runs are the harder question, and the sizes
+above are what buys them.
 
-**The memory stores a boolean where the format stores a number.** In the file,
-`plate_features.jsonl.gz` holds `"pose_fully_defined": [[false], [false], …]`;
-Monty's own `pretrained_ycb_v14` holds `[[1.0], [1.0], …]`. The matcher keeps its
-columns as floats, so the first percept that reaches the learning module dies:
+## What one patch cannot tell apart
 
-    ** (ArithmeticError) bad argument in arithmetic expression
-        (ex_tbp_monty_core 0.1.4) …/evidence_matching/hypotheses.ex:406: Hypotheses.values_bytes/1
+The four feature objects differ in one number each, and one of them is shared.
+Asked of the memory a run loads — every node, by the features the sensor reports:
 
-That is the writer's to fix — `MontyCad.Percept.node_features/1` should write
-`1.0`/`0.0` as Monty's format does — and it is the blocker: until it is fixed no
-feature episode gets past its first percept, whatever the memory holds.
+| object                   | hue (hsv) | `principal_curvatures_log` | `mean_depth` |
+| ------------------------ | --------- | -------------------------- | ------------ |
+| `plate_body` (3 349)     | 0.000     | median 0.00, sd 0.67       | 0.008        |
+| `plate_risers_0` (2 185) | 0.000     | median 0.00, sd 0.70       | 0.008        |
+| `plate_bosses_0` (205)   | 0.000     | median 1.04, sd 2.43       | 0.008        |
+| `plate_holes_0` (21)     | 0.000     | median −2.77, sd 2.77      | 0.008        |
 
-## Where it stands now
-
-The matcher runs: a feature episode builds its hypotheses, scores them, culls
-them and climbs. Measured over four episodes of one run — 5000 steps each, the
-ceiling the termination config gives — the module's most likely hypothesis went
-`0.38 → 51.6` in the first and `0.48 → 239.65` in the fourth, both on a memory of
-four feature objects, and no step raised. What the run does not do is conclude,
-and the reason is upstream of the matcher:
-
-    episode 0: 5000 steps, the module was fed 190 of them
-    episode 1: 5000 steps, fed 56
-    episode 2: 5000 steps, fed 177
-    episode 3: 5000 steps, fed 625
-
-A step feeds the learning module only when enough of the patch is on the object,
-so a duty cycle of four per cent is the patch spending the rest of the episode
-looking at background. With whole faces unread the module cannot separate the
-part's body from its risers — it named `plate_risers_0` through the first two
-episodes and `plate_body` through the next two, and the possible set stayed at
-four — so the episode ends at the step ceiling rather than at a recognition.
-That is a motor and geometry question (where the agent starts, how far it steps,
-how far it stands off), not another matcher defect: with the patch on a feature a
-percept is scored, and the evidence moves.
-
-Two defects behind that were in the memory's own two readers, and both are fixed
-where the fault was rather than at the caller. A feature whose values are all
-empty is not mapped into the graph at all — the bore had no curvature to store
-and the mapping claimed a column nothing filled, which left every row of that
-graph narrower than the order it was read with, so all 96 of its nodes scored
-nothing; and a grid model now answers `has_feature?` from the graph it fills
-instead of `false` for every name, which had made every grid memory lose every
-feature. The scoring had two of the same shape: a hypothesis with no evidence is
-this port's NaN, and Elixir's `>` orders atoms after numbers, so a NaN
-displaced a real evidence and the most likely object had no number to read —
-`80 %` of it then raised in `evidence_update_threshold/3`, nine steps in. The
-comparison asks `is_number` now, and a threshold that is not a number clears no
-hypothesis, which is what `evidence >= NaN` answers for every element.
-
-The answer to the duty cycle is the gait, and it is a scale argument of the same
-shape as the stand-off's. The set stepped a feature a centimetre across with
-`surface_curvature_informed_5_goal0`, whose action sampler is `constant_surf_5` —
-`rotation_degrees: 5.0` and `ConstantSampler`'s own `translation_distance:
-0.004`, i.e. four millimetres a step. A crossing of a centimetre feature is
-therefore two and a half steps, and the rest of the episode is the policy walking
-back to it.
-
-So the experiment now names its own sampler: one millimetre a step and one degree
-a turn, the same arc per degree (0.8 mm) at a tenth of the distance, one sampler
-for every feature the part is made of — the same kind of choice as the stand-off
-and the zoom, not a treatment of any one shape.
-`Monty.Studio.Cad.ExperimentConfigTest` pins both numbers, because the body that
-carries them is written at a package path and a body at the wrong package
-composes to a value nobody reads.
-
-Measured, and it buys what the arithmetic said it would. Twelve episodes at a
-cap of eight hundred steps each (this box's, not the config's five thousand), the
-same four features, the same memory:
-
-    four millimetres a step:  the module was fed on 56 to 625 of 5000 steps, 4 %
-    one millimetre a step:    47, 28, 200, 207, 104, 161, 158, 1, 168, 188,
-                              199, 208 of 800 — 17 % of the run
-
-and the module gained evidence in all but one of the twelve, `plate_risers_0` and
-`plate_body` trading the lead between episodes as they did before. So the policy
-was the whole of the duty cycle — the same memory, sensor and stand-off with a
-smaller step is four times as much feeding.
-
-The sensor's own reporting resolution is the next thing that looks like the same
-kind of size, and it is not. `delta_thresholds.distance` is a centimetre, so the
-module is fed on 19.3 % of steps; asking for a millimetre — the gait — feeds it
-on 19.3 % of steps. Four episodes, first three hundred steps each, both ways:
-
-    distance 0.01:   47, 28, 79, 77 fed, evidence 20.8, 5.2, 33.2, 36.4
-    distance 0.001:  231 of 1200 fed — the same 19.3 % — 23.1, 5.2, 38.9, 44.0
-
-The hypothesis counts are the same numbers at the same step either way (4108,
-16432, 24136), which is the tell that the threshold was never the constraint: the
-noise the sensor overlay adds to hue and pose already carries the patch past it
-every few steps. The millimetre was measured and reverted, not kept for its tenth
-of evidence.
-
-The motor policy is the one size that did move the evidence, and it does not move
-the answer. Monty's own surface agent walks towards what the module believes
-(`use_goal_driven_actions: true`); this set had been built on the variant that
-turns it off. Four episodes at the config's own five-hundred-step eval budget,
-one per feature:
-
-    goal-driven off: 333 of 2000 steps fed, evidence 20.4, four objects possible
-    goal-driven on:  402 of 2000 steps fed, evidence 44.9, four objects possible
-
-The set now names the goal-driven policy: twenty per cent more feeding, twice the
-evidence, and the same four objects still possible at the end of every episode.
-Two independent moves past the same wall is the strongest evidence this memory
-has that the wall is the memory, not the policy.
-
-A second patch does not move it either, and that one is worth having measured
-rather than argued. `cad/plate_features_2patch_eval` is the same run with a
-second camera four millimetres along the agent's own x — a quarter of the patch's
-width, so the pair spans a rail's edge where one patch sees only its face. The
-port carries it: both patches reach the module (`percepts patch,patch_side`) and
-one learning module reads both, with its own tolerances and weights for each id.
-Same four episodes, same five-hundred-step budget:
-
-    one patch:  402 of 2000 steps fed, evidence 44.9, 4108 hypotheses, four possible
-    two patches: 376 of 2000 steps fed, evidence 34.2, 4108 hypotheses, four possible
-
-The hypothesis count is the same number to the unit, which is the finding: the
-second patch's points fall on nodes the first patch has already matched, so it
-adds no candidate and no evidence that separates anything. A patch here is wider
-than a feature, so a second one sees the same surface twice rather than more of
-the object. Widening the one patch instead (`zoom: 5`, twice the surface at half
-the resolution) fed more steps and lower evidence — 584 of 2000 for 5.7 — and left
-the four objects possible as well; it also moves the run away from the field of
-view the memory was taught through, which is the defect named further up.
-
-Five learning modules would not help either: Monty pairs them with five sensors
-and votes between them, and every multi-patch environment this port carries is a
-distant agent — the surface agent is single-patch by design. Voting two modules
-that read the same patch would agree with themselves.
-
-What is left is not the matcher, and the memory says so. Asked of the file the
-run loads — every node of every object, by the features the sensor reports:
-
-| object                    | hue (hsv) | `principal_curvatures_log` | `mean_depth` |
-| ------------------------- | --------- | -------------------------- | ------------ |
-| `plate_body` (3017 nodes) | 0.000     | median 0.00, sd 1.56       | 0.009        |
-| `plate_risers_0` (2054)   | 0.000     | median 0.00, sd 1.77       | 0.009        |
-| `plate_bosses_0` (205)    | 0.000     | median 4.56, sd 4.49       | 0.010        |
-| `plate_holes_0` (96)      | 0.000     | median −2.89, sd 3.14      | 0.000        |
-
-The part is one colour, so hue carries nothing. Depth separates the bore (an
-opening, nought) and barely separates the rest. Curvature separates a boss
+The part is one colour, so hue carries nothing. Curvature separates a boss
 (convex) and a bore (concave) from flat surface — and leaves the body and the
-risers **both flat, both nine millimetres deep, both the same colour**: two of the
-four objects are indistinguishable in the features this sensor reports, at the
-scale it reports them. That is what the run showed, episode after episode: the
-most likely object alternated between exactly those two and the possible set
-never fell below the pair.
+risers **both flat, both the same depth, both the same colour**. Those two are
+the pair every unconcluded episode ends on: the most likely object alternates
+between them and the possible set never falls below both.
 
-So the next question is what the set asks, not what the matcher does. And the
-sibling experiment answers it: `cad/plate_part_eval`, the same part as one memory
-object rather than four, recognises all three of its episodes —
+The bore is the other half of the same story. Eight millimetres keeps 21 of its
+96 visits, so what the memory holds of it is a fifth of the surface the geometry
+offers — enough to recognise when the patch lands on the lip, and not enough to
+beat a pair that never separates.
 
-    episode 0: 101 steps, `plate`, evidence 24.9, possible ["plate"], match
-    episode 1: 184 steps, `plate`, evidence 11.0, possible ["plate"], match
-    episode 2: 351 steps, `plate`, evidence 19.7, possible ["plate"], match
-
-— at the tutorial's own four-millimetre gait, on the same sensor, the same
+What is left is what the set asks, not what the matcher does, and
+`cad/plate_part_eval` answers it: the same part as one memory object rather than
+four recognises all three of its episodes — 5, 20 and 25 steps at this Mac's own
+counts — at the tutorial's own four-millimetre gait, on the same sensor, the same
 stand-off and the same world. A part-level CAD memory is recognised from a mesh
-world, which is the pipeline this set exists to show. The page is not what makes
-it work: `mix monty.run cad/plate_part_eval --no-record` — the same set, the same
-seed, the same three episodes — reports `match 3 of 3` in 483 steps. The two
-front-ends do not agree on how long the episodes take (101, 184 and 351 steps from
-the page against 99, 204 and 151 headless), and that difference is untraced.
+world, which is the pipeline this set exists to show.
 
-What the feature-level run leaves is in its own `eval_stats.csv`, and it is more
-precise than "no verdict": eleven of the twelve episodes end with no verdict at
-all, because the possible set never falls to one object, and the twelfth is a
-`patch_off_object` of nought steps. Of the six asked about the body or a riser,
-four do end on the object they were asked about — `plate_body` at evidence 61.2
-and 162.6, `plate_risers_0` at 112.4 and 246.0 — and still earn no verdict,
-because the pair is still possible, which is what an inseparable pair looks like
-from inside the module; one ends on `plate_body` when it was asked about a riser,
-at 144.0. Of the six asked about the boss or the bore, every one ends on
-`plate_risers_0`, so those two are never recognised at all. Symmetry evidence is
-nought in every episode, so the pair is not being reported as a symmetry either.
+The feature runs leave two questions: an object set whose features differ in more
+than one number — two curvatures, two depths, one colour — and the pairs that a
+second patch reads differently from one. `plate_features_2patch_eval` is the
+second of those already, and it is the one feature run that concludes in every
+epoch.
 
-So what this set needs next is an object set whose features differ in the taught
-features — two curvatures, two depths, one colour, the way the tutorial's objects
-differ by shape _and_ colour — or the unavoidably ambiguous pairs settled before
-object identity is asked about at all.
+The second patch helps, and by the pair rather than by the evidence:`cad/plate_features_2patch_eval` is the same run with a second camera four
+millimetres along the agent's own x — a quarter of a patch's width, so the pair
+spans a rail's edge where one patch sees only its face. Both patches reach the
+module (`percepts patch,patch_side`) and one learning module reads both, with its
+own tolerances and weights for each id. Eleven of its twelve episodes conclude
+against eight with one patch, and its twelve take fewer steps than that eight
+does: the second reading separates the pair rather than feeding more.
+
+The set names the goal-driven motor policy (`use_goal_driven_actions: true`,
+Monty's own surface agent walking towards what the module believes) rather than
+the variant that turns it off: twenty per cent more steps fed and twice the
+evidence at the same budget. Five learning modules would buy nothing — Monty
+pairs them with five sensors and votes between them, and the surface agent is
+single-patch by design.
+
+What is left is not the matcher, and the memory says so.

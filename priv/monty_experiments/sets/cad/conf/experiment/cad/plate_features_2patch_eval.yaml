@@ -33,6 +33,8 @@ experiment:
       motor_system_config:
         policy_selector:
           policy:
+            # The same stand-off as `plate_features_eval`, for the reason the
+            # comment there measures.
             desired_object_distance: 0.008
             action_sampler:
               rotation_degrees: 1.0

@@ -108,5 +108,9 @@ else
 fi
 
 # The globs are prettier's, not the shell's: it expands `**` itself and skips a
-# pattern that matches nothing.
-"${prettier[@]}" "$mode" "*.md" "docs/**/*.md" "assets/js/**/*.js"
+# pattern that matches nothing. The experiment sets are here because a set's
+# README is what its page links to and what ships inside the desktop build, and
+# its tables are the reason prettier is in this script at all. `priv/monty/`,
+# which is Monty's own tree, matches none of these.
+"${prettier[@]}" "$mode" "*.md" "docs/**/*.md" "priv/monty_experiments/**/*.md" \
+  "assets/js/**/*.js"

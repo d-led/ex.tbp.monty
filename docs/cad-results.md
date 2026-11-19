@@ -4,6 +4,33 @@ What was run, on this machine (macOS, one node, `MIX_ENV=dev`), and what the
 pages said. Every number below is one run's, and each section names the command
 that prints it again.
 
+## The nine sets, as they stand
+
+`priv/monty_experiments/sets/cad/README.md` is the set's own report — the sizes,
+the memory behind each run, and why each number is what it is. Through the page's
+`Run it`, world `ex_mujoco`, seed 42, the config's own episodes on this Mac:
+
+| set                              | episodes | answer               |
+| -------------------------------- | -------- | -------------------- |
+| `cad/plate_pretrain`             | 1        | learned 20 nodes     |
+| `cad/plate_learned_eval`         | 3        | 2 match, 1 no_match  |
+| `cad/plate_part_eval`            | 3        | 3 match              |
+| `cad/plate_pair_eval`            | 3        | 3 match              |
+| `cad/parts_set_eval`             | 6        | 6 match              |
+| `cad/blend_part_eval`            | 3        | 2 match, 1 no_match  |
+| `cad/blend-big_part_eval`        | 3        | 3 match              |
+| `cad/plate_features_eval`        | 12       | 8 match, 4 time_out  |
+| `cad/plate_features_2patch_eval` | 12       | 11 match, 1 no_match |
+
+A part is recognised in every epoch it is asked. The feature runs are the harder
+question: what a patch reports cannot separate the plate's body from its risers,
+so the four episodes asked about the bore end at the step cap with both still
+possible.
+
+The sections below are the first measurements, kept as they were taken: three
+stages for one part, in the exact world and in a mesh world, with the control
+that a memory of another part does not conclude.
+
 ## 1. Training, in the CAD world, on the geometry's own labels
 
 ```sh

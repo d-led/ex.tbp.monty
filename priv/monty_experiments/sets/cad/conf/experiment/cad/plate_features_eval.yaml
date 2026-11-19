@@ -35,18 +35,20 @@ experiment:
   config:
     show_sensor_output: true
     n_train_epochs: 3
-    # The patch has to be *on* the feature for the observation processor to pass
-    # it to a learning module, and a policy that stands 25 mm off a surface sees
-    # mostly background once the surface is a centimetre across. The stand-off is
-    # also the patch's size — it covers twice its stand-off — so a feature one
-    # patch wide cannot be explored and is lost once the patch is off it: at 8 mm
-    # the boss's wall was under two patches and an episode read nothing from step
-    # ten on. Standing closer does not help: the compiled scene draws nothing
-    # inside its five-millimetre near plane, and at six millimetres an episode
-    # reads an empty patch on every step. Eight is the closest that renders. The
-    # memory is taught from the same stand-off (`Monty.Studio.Cad.Preparation`),
-    # because a memory photographed from a different distance is a memory of a
-    # different surface.
+    # The patch is twice the stand-off wide, so the distance fixes two sizes at
+    # once: too near and the patch reads background rather than a centimetre
+    # feature, too far and it spans more than the feature does. 8 mm reads
+    # 1.6 mm of surface. Twice that reads a bore properly — the plate's bore is
+    # ten millimetres deep, and at 8 mm its far opening makes the surface fit
+    # answer a thin arc, so 21 of the bore's 96 visits keep a curvature against
+    # 96 of 96 at 16 mm — and it costs every episode: twelve episodes score 7
+    # match here and 3 in `plate_features_2patch_eval` at 16 mm against 8 and
+    # 11 at 8 mm. A faithful bore is worth less than a patch that fits inside a
+    # boss.
+    #
+    # The memory is taught from the same distance as the run
+    # (`Monty.Studio.Cad.Preparation`), because a memory photographed from a
+    # different distance is a memory of a different surface.
     monty_config:
       motor_system_config:
         policy_selector:
