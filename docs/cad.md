@@ -261,14 +261,41 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
 
    That is the same sentence for both module pairings tried (the evaluation configs'
    `evidence_tutorial_surf_agent_2obj` + `camera_tutorial_surf_agent_2obj`, and the
-   dog corpus's `graph_1lm` + `camera_surf_rgba` which trains there), so the
-   blocker is not the config: a training episode of this port still asks its
-   learning module to narrow, and a bare `GraphLM` cannot. The next step is on the
-   training path — either the module a training episode builds must be one with a
-   matching scheme, or the step must not narrow while the phase is training — and
-   the referee is a one-episode run of a part that ends with a library at
-   `<libraries>/cad_parts_v1/plate_learned`. Neither config is shipped while it
-   crashes: a page offering a run that dies is worse than a page with no run.
+   dog corpus's `graph_1lm` + `camera_surf_rgba` which trains there). The answer is
+   the first of the two candidates, and it is Monty's own order rather than a defect
+   of the port: **a training episode begins by matching.** Monty's model starts in
+   its matching step whatever the phase, and a training episode's termination check
+   answers `no_match` at once — which is what names the thing being learned
+   (`GraphLM.set_detected_object` turns `no_match` into `new_object<n>`), after which
+   the episode turns to exploring, buffers what the sensor saw, and writes it at the
+   end (`update_ltm_from_stm`, gated on the buffer and on that name). A module
+   without a matching scheme therefore cannot be a training target _at all_, which is
+   why the port raises instead of pretending to narrow: the module the CAD training
+   config names must be one with a matching scheme. `test/monty/studio/run_test.exs`
+   ("a training episode writes what it saw") is that whole sequence, held at the
+   level a config cannot fake. The referee is a one-episode run of a part that ends
+   with a library at `<libraries>/cad_parts_v1/plate_learned`. Neither config is
+   shipped while it crashes: a page offering a run that dies is worse than a page
+   with no run.
+
+   This was checked the other way round too, and the check is worth keeping: making a
+   training run start in its exploring step reads like the obvious repair, and it
+   does silence the raise — but three behaviours go with it. A training episode then
+   never concludes, so it never names the object it walked, so `update_ltm` writes
+   nothing: `Run.update_ltm` on the ten-object config leaves an empty memory where it
+   used to write `new_object0`. Exploratory steps do not narrow, so nothing replaces
+   the name. The rule that a training run starts matching is load-bearing, not an
+   accident of the step machine.
+
+   What that leaves is narrower than it was, and one thing in it is unexplained. The
+   evaluation pairing the CAD configs already use (`plate_part_eval.yaml` names
+   `/monty/learning_module: evidence_tutorial_surf_agent_2obj`, an evidence-matching
+   module, and its runs conclude) ought to train for the same reason — so a pretrain
+   config built from it should not raise. It did, in the run recorded above. The
+   first thing to print for any candidate is therefore the module the config
+   _resolved to_, not the one it names: `Monty.Studio.open/1`'s setup carries each
+   learning module's class, and a `defaults:` merge that keeps `/monty`'s graph
+   module would explain the same sentence with a config that reads correct.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD
