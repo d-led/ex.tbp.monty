@@ -1,0 +1,29 @@
+# @package experiment.config.monty_config
+# Two columns, no parent: each module reads its own patch, and the only path
+# between them is the vote.
+#
+# Monty's own two-module fixture (`test/hierarchy/.../2lm_2sm`) sends LM1's
+# messages to LM0 and calls that a hierarchy — a fixed dividing line. This
+# matrix sends nothing (`lm_to_lm_matrix: null`, so no module is another's
+# input) and lets both vote, which is the flattest arrangement the current code
+# can express, and the same arrangement `5lm_5sm` gives Monty's own tutorial at
+# five modules. A schedule that swapped which module is "parent" would be the
+# next step, and there is no config key for it.
+#
+# All six sensors are mapped because the sensor group mounts six; patches 2–4
+# and the view finder are wired to no module, so they are read and dropped, as
+# the view finder is in every one-module config.
+sm_to_agent_dict:
+  patch_0: agent_id_0
+  patch_1: agent_id_0
+  patch_2: agent_id_0
+  patch_3: agent_id_0
+  patch_4: agent_id_0
+  view_finder: agent_id_0
+sm_to_lm_matrix:
+  - - 0
+  - - 1
+lm_to_lm_matrix: null
+lm_to_lm_vote_matrix:
+  - - 1
+  - - 0

@@ -1,0 +1,17 @@
+# @package experiment.config.monty_config.learning_modules
+# Two of Monty's displacement modules, side by side.
+#
+# The settings are `displacement_1lm`'s, copied — `k: 5` and
+# `match_attribute: displacement` are what the tutorial's distant agent learns
+# with, and the point of this set is to stay on ground Monty has measured. What
+# is ours is that there are two of them, each fed by its own patch and connected
+# to the other only by a vote (`2lm_2sm_dist`).
+learning_module_0:
+  _target_: tbp.monty.frameworks.models.displacement_matching.DisplacementGraphLM
+  k: 5
+  match_attribute: displacement
+
+learning_module_1:
+  _target_: tbp.monty.frameworks.models.displacement_matching.DisplacementGraphLM
+  k: 5
+  match_attribute: displacement
