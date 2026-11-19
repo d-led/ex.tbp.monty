@@ -136,6 +136,18 @@ defmodule Monty.Prerequisites.BuildTest do
 
       assert Enum.sort(planned) == Enum.sort(promised)
     end
+
+    # `cad/plate_learned_eval` loads the library `cad/plate_pretrain` wrote. That
+    # memory is a run's output, not an input: teaching it here would put a
+    # library under the learned name that says `plate` because a teacher said so,
+    # and every later question about what the part taught itself would be
+    # answering about the teacher.
+    test "does not teach the memory a training run writes" do
+      planned = Enum.map(Build.plans(), &memory_name/1)
+
+      assert "cad_plate_pretrain" not in planned
+      assert "plate_part" in planned
+    end
   end
 
   describe "a memory taught for real" do

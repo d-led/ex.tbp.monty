@@ -138,7 +138,7 @@ defmodule ExTbpMonty.MixProject do
       # A git ref and not a release because `MontyCad.Export` — the meshes this
       # checkout's evaluation writes — is not in 0.6.3; the ref moves to a
       # version requirement once the next one is tagged.
-      {:ex_monty_cad, github: "d-led/ex.monty.cad", ref: "2384314"},
+      {:ex_monty_cad, github: "d-led/ex.monty.cad", ref: "f3c8fd7"},
       {:phoenix, "~> 1.8.16"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

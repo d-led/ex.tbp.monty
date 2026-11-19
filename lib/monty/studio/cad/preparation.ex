@@ -92,6 +92,22 @@ defmodule Monty.Studio.Cad.Preparation do
     end
   end
 
+  # The release a training run leaves its library in, as `cad/plate_pretrain`'s
+  # config names it. Named here because `trained?/1` is the one place that has to
+  # tell a memory a teacher wrote from one a run learned.
+  @trained_release "trained"
+
+  @doc """
+  Whether this plan's memory is one a *run* writes, not one this build teaches.
+
+  The release a memory sits in says who writes it. `cad_parts_v1` holds what the
+  build teaches from a STEP file; `trained` holds what a training run learned from
+  its own percepts (`cad/plate_pretrain`), and teaching that here would fake a
+  run's output — a library that says `plate` because a teacher said so, under the
+  name a learned memory is loaded by.
+  """
+  @spec trained?(plan()) :: boolean()
+  def trained?(%{release: release}), do: release == @trained_release
   # What the run's patch reads through, and from how far: the two numbers a
   # memory is a record of. Both are the experiment's, not this module's — a run
   # taught through a different lens, or from a different distance, matches a

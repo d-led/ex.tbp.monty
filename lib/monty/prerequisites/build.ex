@@ -159,7 +159,8 @@ defmodule Monty.Prerequisites.Build do
     |> Enum.map(&"cad/#{Path.basename(&1, ".yaml")}")
     |> Enum.flat_map(fn experiment ->
       with {:ok, opened} <- Studio.open(experiment, conf_dir: Source.conf_dirs()),
-           {:ok, plan} <- Preparation.plan(opened.setup) do
+           {:ok, plan} <- Preparation.plan(opened.setup),
+           false <- Preparation.trained?(plan) do
         [plan]
       else
         _nothing_to_teach -> []
