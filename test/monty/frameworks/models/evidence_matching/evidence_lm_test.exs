@@ -581,6 +581,28 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
     %{lm | buffer: %{lm.buffer | stats: Map.put(lm.buffer.stats, key, value)}}
   end
 
+  # A port-only guard, not one of Monty's cases: the runtime clears a training
+  # module's hypotheses before it writes, so a module that concluded a guess on
+  # its own does not store the guess. An evidence module holds no base
+  # `GraphLM`, so it needs its own clause — without one the write crashes on the
+  # episode boundary, which is how the CAD pretraining run found this.
+  describe "a training write after the module concluded on its own" do
+    test "stores nothing, because the guess is not a thing the episode saw" do
+      learned = learned_line(@line_locations)
+      remembered = EvidenceGraphLM.get_all_known_object_ids(learned)
+
+      cleared = EvidenceGraphLM.clear_hypotheses(learned)
+
+      assert cleared.detected_object == nil
+      assert cleared.possible_matches == []
+      assert cleared.hypotheses == %{}
+
+      assert EvidenceGraphLM.get_all_known_object_ids(
+               EvidenceGraphLM.update_ltm_from_stm(cleared)
+             ) == remembered
+    end
+  end
+
   # An experiment names its objects by name, and the datasets it names overlap:
   # a cows child is called "cow_1_4_2" next to a mug and a bowl. An id derived
   # from the name is what a module above matches on, so two names may not share

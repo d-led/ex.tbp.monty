@@ -503,6 +503,38 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def clear_conclusion(%__MODULE__{} = lm), do: set_individual_ts(lm, nil)
 
   @doc """
+  Forgets the hypotheses as well as the answer: the guard a training write needs.
+
+  A module that matched on its own during a training episode concluded a guess,
+  and a guess written into memory is worse than nothing learned — so the runtime
+  asks this before `update_ltm_from_stm/1`, and `detected_object` being nil is
+  what stops the write. The hypotheses go with it so the episode's statistics do
+  not claim a match nobody made; the buffer keeps a line saying so.
+  """
+  @spec clear_hypotheses(t()) :: t()
+  def clear_hypotheses(%__MODULE__{} = lm) do
+    cleared = %{
+      "detected_location_on_model" => nil,
+      "detected_location_rel_body" => nil,
+      "detected_rotation" => nil,
+      "detected_scale" => nil
+    }
+
+    %{
+      lm
+      | hypotheses: %{},
+        possible_matches: [],
+        symmetry_evidence: 0,
+        current_mlh: nil,
+        previous_mlh: nil,
+        detected_object: nil,
+        detected_pose: List.duplicate(nil, @detected_pose_width),
+        detected_rotation_r: nil,
+        buffer: FeatureAtLocationBuffer.add_overall_stats(lm.buffer, cleared)
+    }
+  end
+
+  @doc """
   Names this episode's object without emptying `stepwise_targets_list`.
 
   The stepwise list is the record of what the sensor was on at every step, and a

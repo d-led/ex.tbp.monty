@@ -296,6 +296,25 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    _resolved to_, not the one it names: `Monty.Studio.open/1`'s setup carries each
    learning module's class, and a `defaults:` merge that keeps `/monty`'s graph
    module would explain the same sentence with a config that reads correct.
+   That was it. A config built on `/monty: evidencegraph_exp1000_emin_t3` and
+   `/monty/learning_module: evidence_tutorial_surf_agent_2obj` resolves to
+   `EvidenceGraphLM` and steps: the earlier trial had taken `/monty:
+graph_exp500_e3_t3`, whose `learning_module_configs` are the bare graph pairing,
+   so the group it named was never the module it built. Two walls stood behind the
+   first, and both are now measured rather than guessed. The episode-end write
+   crashed, because the runtime clears a training module's hypotheses before it
+   writes and an evidence module held no clause for it
+   (`EvidenceGraphLM.clear_hypotheses/1` — a port-only guard, so it is not one of
+   Monty's cases; the case lives beside the evidence module's own tests). With that
+   clause the episode runs all four hundred steps and ends cleanly, and reports the
+   next wall in numbers a reader can see in one line: `the memory now holds 0
+objects and 0 nodes`, with every step logging `inputs learning_module_0=0` and
+   `goals 0`. The sensor produces a patch and the module processes nothing, and no
+   goal is ever asked for, so nothing moves, no displacement accumulates, the
+   buffer stays empty and the write has nothing to write. A training episode in
+   this port therefore needs a motor policy that walks the object without a goal
+   the module has to emit — Monty's pretraining pairings are of that kind — which
+   is a config choice to make and measure, not a defect in the step machine.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD
