@@ -150,9 +150,9 @@ defmodule ExTbpMonty.Desktop.Plugins do
     Enum.all?(@examples, fn example -> File.dir?(Path.join([root(), example, "bin"])) end)
   end
 
-  # The node both examples are told to dial. `sname` gives this window a host, and
-  # a window started with `MONTY_STUDIO_CLUSTER=0` has none — the one refusal that
-  # is not a failure.
+  # The node both examples are told to dial. The window's own address gives it a
+  # host (the loopback, in a desktop start), and a window started with
+  # `MONTY_STUDIO_CLUSTER=0` has none — the one refusal that is not a failure.
   defp join_target do
     case ExTbpMonty.Node.address(node()) do
       nil ->
