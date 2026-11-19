@@ -246,3 +246,12 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    name features or the part. The pair is the measurement: composition against one
    lump, everything else held. Today a feature-labelled run uses an evaluation
    config written for whole objects.
+
+4. **The page cannot yet say a memory was taught from other inputs.** Since a
+   memory now records the part file's bytes, the optics and the sampling it came
+   from, the experiment's Checks could say "this memory was taught at 25 mm and
+   this config reads at 8 mm — press Make" instead of "ready". That is the shape
+   of the defect that cost an afternoon earlier (`cad/blend_part_eval` taught
+   through one stand-off and stepped through another), and the answer is now
+   computable rather than a person's memory of what they last clicked. Nothing
+   does that yet; the record is written and only the build reads it.
