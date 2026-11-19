@@ -10,5 +10,19 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 rustler = "0.38"
-rusty_h264 = "0.17"
+# No default features, and neither the reason nor a size optimisation:
+#
+#   * `global-alloc` pulls a thread-caching allocator (`rusty_alloc`) into the
+#     crate, and a NIF is loaded into a process that already has one;
+#   * `std` gives the codec a `thread_local!` scratch of 1 856 bytes, and a
+#     `dlopen`ed module that wants more than glibc's 1 664-byte static TLS
+#     surplus cannot be placed at all — measured on the Linux runner as
+#     `Failed to load NIF library: cannot allocate memory in static TLS block`,
+#     a file that exists and a NIF that is not there. Without `std` the same
+#     scratch is built on the stack of each call.
+#
+# `libm` is the arithmetic `no_std` has to be given. `asm` (portable Rust SIMD)
+# can be turned on here, with a load check: `scripts/build-nifs.sh` asks every
+# native module whether it loads, so the day it does not fit is the day it says so.
+rusty_h264 = { version = "0.17", default-features = false, features = ["libm"] }
 muxide = { version = "0.5", default-features = false }

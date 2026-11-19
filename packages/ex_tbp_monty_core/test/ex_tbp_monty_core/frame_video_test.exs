@@ -18,10 +18,19 @@ defmodule ExTbpMonty.Core.FrameVideoTest do
     {:ok, path: Path.join(dir, "patch-depth.mp4")}
   end
 
+  # A library that exists is not a library that loads. The Linux runner taught
+  # this one the hard way: a `.so` whose thread-local block outgrew the loader's
+  # static surplus was built, copied, and then refused by `dlopen`, so the file
+  # was there and every caller saw a NIF that was not — twelve tests failed with
+  # `{:error, :not_built}` before anything said why.
+  test "the native writer is built and loads" do
+    assert FrameVideo.loaded?(),
+           "the frame video library did not load — scripts/build-nifs.sh builds and asks it"
+  end
+
   test "writes a stream a player can open, with the index it needs before the media", %{
     path: path
-  } do
-    video = open_video(path)
+  } do    video = open_video(path)
 
     for step <- 1..3 do
       :ok = FrameVideo.push(video, grey(step), step == 1)
