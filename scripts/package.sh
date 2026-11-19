@@ -15,10 +15,11 @@
 #   .dmg   the by-hand form: drag the three apps across
 #
 # The `.zip` is what a commit needs; everything else is what a tag publishes. So
-# `--no-installers` builds and writes the archives alone: nothing on a commit
-# reads a `.pkg`, a `.dmg`, a `.deb` or an AppImage, and making them there is
-# minutes of `pkgbuild`/`hdiutil`/`appimagetool` and gigabytes of disk that no
-# upload picks up.
+# `--no-installers` builds the archives alone: nothing on a commit reads a
+# `.pkg`, a `.dmg`, a `.deb` or an AppImage, and making them there is minutes of
+# `pkgbuild`/`hdiutil`/`appimagetool`/NSIS and gigabytes of disk that no upload
+# picks up. On Linux the installer formats are the bundler's, so the flag is
+# passed down to `scripts/start-desktop.sh`, which builds without them.
 #
 # All of them carry the same bundle — the window, the Elixir release, the BEAM,
 # the embedded Python, and the two sample plugin nodes `Settings → Cluster`
@@ -61,8 +62,13 @@ make_zip=true
 make_pkg=true
 # The Linux shapes a distribution installs, copied out of the bundler's own
 # output. Off with the other installers, and off is the answer to "what does a
-# commit actually upload": the tarball and its two companion tarballs.
+# commit actually upload": the one archive that carries the window and its two
+# companions.
 make_bundles=true
+# Whether this run makes anything a person installs with, whichever platform's
+# form that is. `--no-installers` is the one flag for it; the three above are the
+# per-shape detail.
+make_installers=true
 rids=()
 
 host_rid() {
@@ -81,6 +87,7 @@ for argument in "$@"; do
     --no-zip) make_zip=false ;;
     --no-pkg) make_pkg=false ;;
     --no-installers)
+      make_installers=false
       make_dmg=false
       make_pkg=false
       make_bundles=false
@@ -103,8 +110,8 @@ version=${version:-0.1.0}
 
 echo "$product $version: ${rids[*]}"
 
-if [ "$make_pkg" = false ] && [ "$make_dmg" = false ] && [ "$make_bundles" = false ]; then
-  echo "  the archives only: no installer is published from this run"
+if [ "$make_installers" = false ]; then
+  echo "  the archives only: no installer is built or published from this run"
 fi
 
 mkdir -p "$artifacts"
@@ -152,7 +159,15 @@ clean() {
 # answer: it costs the minutes a re-run would have cost and fails the same way if
 # the CDN is down for good.
 build_app() {
-  local attempt built=false
+  local attempt built=false bundle_flags=()
+
+  # No installer asked for is also no installer *built*: on Linux the `.deb` and
+  # the AppImage are what the bundle step makes, and `start-desktop.sh` skips them
+  # — the release the window carries is `tauri-build`'s copy, not the bundler's,
+  # so the tarball below is the same either way.
+  if [ "$make_installers" = false ]; then
+    bundle_flags=(--no-installers)
+  fi
 
   # A bundle from an earlier run is not this run's answer. Tauri's bundler can
   # fail with the folder from last time still there (a copy over read-only
@@ -166,7 +181,7 @@ build_app() {
   fi
 
   for attempt in 1 2 3; do
-    if ./scripts/start-desktop.sh --bundle; then
+    if ./scripts/start-desktop.sh --bundle ${bundle_flags[@]+"${bundle_flags[@]}"}; then
       built=true
       break
     fi

@@ -502,9 +502,11 @@ because it needs no release to exist before somebody can try the app:
 
    `--no-dmg`, `--no-zip` and `--no-pkg` skip any of them, and
    `--no-installers` skips the last three at once — the `.pkg`, the `.dmg` and,
-   on Linux, the `.deb` and the AppImage — leaving the one archive a commit
-   uploads; `all` means "the platform this machine is", and a platform it is not
-   is refused rather than faked. The build itself is
+   on Linux, the `.deb` and the AppImage — and does not build them either: the
+   flag goes down to `scripts/start-desktop.sh`, which builds the window and its
+   release without the bundler's installer formats. What is left is the one
+   archive a commit uploads; `all` means "the platform this machine is", and a
+   platform it is not is refused rather than faked. The build itself is
    `scripts/start-desktop.sh --bundle` — the packaging script has no second copy
    of those steps.
 
@@ -898,7 +900,12 @@ names.
   it) and Windows x64 (the portable folder, zipped). A `v*` tag also makes the
   shapes a person installs — a `.pkg` and a `.dmg` on macOS, a `.deb` and an
   AppImage on Linux, an NSIS setup on Windows — because those are what the
-  release page offers and no check on a commit opens them. Each job then
+  release page offers and no check on a commit opens them. On a commit the
+  installer formats are not built at all: `tauri build --no-bundle` still runs
+  `tauri-build`, whose resource copy is what puts the release beside the window
+  (measured on osx-arm64: `rel` deleted, the release reassembled, 49s to build,
+  363 MB of release back beside the window and no `bundle/` written), so the
+  portable shapes are the same with or without them. Each job then
   **opens** what it built: `scripts/smoke-window.sh` waits for the page to report
   what it drew to `/__painted`, which only a webview that ran the page can send,
   and the Windows job on a tag also installs its own setup and opens the

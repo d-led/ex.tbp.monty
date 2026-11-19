@@ -12,6 +12,10 @@
         scripts\start-desktop.ps1 -Where         build the release, then print where its data is
         scripts\start-desktop.ps1 -Bundle        build the app bundle, then print its path
         scripts\start-desktop.ps1 -App           build the app bundle, then open the app
+        scripts\start-desktop.ps1 -Bundle -NoInstaller
+                                                 build the window beside its release and
+                                                 skip the NSIS setup, which is what
+                                                 `scripts\package.ps1 -NoInstaller` does
 
     What it opens is the native window: `src-tauri`, which starts the Elixir
     release as its sidecar, reads the address that release prints, and points a
@@ -39,7 +43,8 @@ param(
     [switch]$InBrowser,
     [switch]$Where,
     [switch]$Bundle,
-    [switch]$App
+    [switch]$App,
+    [switch]$NoInstaller
 )
 
 Set-StrictMode -Version Latest
@@ -337,22 +342,38 @@ IO.puts("runs:        #{Paths.artifacts()}")
         Remove-Item -Recurse -Force 'src-tauri/target/release/rel' -ErrorAction SilentlyContinue
         Remove-Item -Recurse -Force 'src-tauri/target/release/bundle' -ErrorAction SilentlyContinue
 
-        Invoke-Step 'building the installer bundle (a minute warm, six cold - the window is rebuilt in release)' {
-            & $tauriCli build --config $bundleConfig
+        # `--no-bundle` is the bundler skipped, not the resource it wraps: the
+        # release beside the window is `tauri-build`'s copy, made whenever the
+        # release it copies has changed, which `mix release` above has just made
+        # true. So the portable folder is the same with or without the NSIS setup.
+        $tauriArgs = @('build', '--config', $bundleConfig)
+        if ($NoInstaller) { $tauriArgs += '--no-bundle' }
+
+        $what = if ($NoInstaller) { 'building the window and its release (no installer asked for)' }
+                else { 'building the installer bundle (a minute warm, six cold - the window is rebuilt in release)' }
+
+        Invoke-Step $what {
+            & $tauriCli @tauriArgs
         }
 
-        $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-
-        if ($null -eq $installer) {
-            Write-Host "the build said it finished and there is no installer in $bundleDir"
-            exit 1
+        if ($NoInstaller) {
+            Write-Host ''
+            Write-Host "the window without an installer: $PWD\src-tauri\target\release\ex-tbp-monty-desktop.exe (next to rel\)"
         }
+        else {
+            $installer = Get-ChildItem -Path $bundleDir -Filter '*-setup.exe' -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 1
 
-        Write-Host ''
-        Write-Host $installer.FullName
-        Write-Host "the window without an installer: $PWD\src-tauri\target\release\ex-tbp-monty-desktop.exe (next to rel\)"
+            if ($null -eq $installer) {
+                Write-Host "the build said it finished and there is no installer in $bundleDir"
+                exit 1
+            }
+
+            Write-Host ''
+            Write-Host $installer.FullName
+            Write-Host "the window without an installer: $PWD\src-tauri\target\release\ex-tbp-monty-desktop.exe (next to rel\)"
+        }
 
         if ($App) {
             Write-Host ''

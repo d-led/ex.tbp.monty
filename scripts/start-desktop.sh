@@ -61,15 +61,22 @@ case "$(uname -s)" in
 esac
 
 mode=open
+# Whether the bundle step also makes the formats a person installs with. Only
+# Linux has any: macOS's `targets` is `app`, which is the window itself, and
+# Windows bundles on its own script. `--no-installers` is what the packaging
+# passes for a commit — nothing uploads or opens a `.deb` or an AppImage there —
+# and on macOS it is already true and changes nothing.
+make_installers=true
 
 usage() {
-  echo "scripts/start-desktop.sh [--in-browser | --where | --bundle | --app]"
+  echo "scripts/start-desktop.sh [--in-browser | --where | --bundle | --app] [--no-installers]"
   echo
   echo "  (no flags)     build the release and the window, then open the window"
   echo "  --in-browser   build the release, then serve it in this terminal"
   echo "  --where        build the release, then print where its data is"
   echo "  --bundle       build the .app bundle, then print where it is"
   echo "  --app          build the .app bundle, then open it"
+  echo "  --no-installers  with --bundle: skip the formats a person installs with"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -78,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --where) mode=where; shift ;;
     --bundle) mode=bundle; shift ;;
     --app) mode=app; shift ;;
+    --no-installers) make_installers=false; shift ;;
     -h | --help) usage; exit 0 ;;
     *)
       echo "unknown option: $1"
@@ -379,15 +387,32 @@ fi
 
   # `${arr[@]+"${arr[@]}"}`, because macOS ships bash 3.2, where an empty array
   # under `set -u` is an unbound variable rather than nothing to pass.
+  #
+  # `--no-bundle` skips the installer formats the bundle config names, and the
+  # release is not one of them: `tauri-build` copies it beside the binary (into
+  # `target/release/rel` here, into `Contents/Resources/rel` inside a `.app`), and
+  # it does so whenever the release it copies has changed — which `mix release`
+  # above has just made true. Measured on osx-arm64: with `rel` deleted and the
+  # release reassembled, `tauri build --no-bundle` rebuilt in 49s and put 363 MB
+  # of release back beside the window, with no `bundle/` written at all.
+  bundle_flags=()
+  if [[ "$make_installers" == false && "$(uname -s)" == Linux ]]; then
+    bundle_flags=(--no-bundle)
+  fi
+
   run "building the app bundle (a minute warm, six cold — the window is rebuilt in release)" \
-    env ${bundle_env[@]+"${bundle_env[@]}"} "${tauri[@]}" build --config "$bundle_config"
+    env ${bundle_env[@]+"${bundle_env[@]}"} "${tauri[@]}" build --config "$bundle_config" ${bundle_flags[@]+"${bundle_flags[@]}"}
 
   if [[ "$mode" == bundle ]]; then
     echo
     # macOS has one product to name; Linux has a directory, and naming it is
-    # better than naming a file whose name carries the version.
+    # better than naming a file whose name carries the version. With
+    # `--no-installers` on Linux there is no such directory: the window and its
+    # release are the answer, and they are named.
     if [[ -d "$bundle" ]]; then
       echo "$bundle"
+    elif [[ "$make_installers" == false ]]; then
+      echo "$PWD/src-tauri/target/release/ex-tbp-monty-desktop (with rel/ beside it)"
     else
       echo "$PWD/src-tauri/target/release/bundle"
     fi

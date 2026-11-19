@@ -116,8 +116,15 @@ try {
     function Build-App {
         $built = $false
 
+        # No installer asked for is also no installer *built*: the setup is the
+        # NSIS target `tauri.bundle.windows.json` names, and the release beside
+        # the window is `tauri-build`'s copy, so the portable folder is the same
+        # without it.
+        $buildArgs = @{ Bundle = $true }
+        if ($NoInstaller) { $buildArgs.NoInstaller = $true }
+
         foreach ($attempt in 1..3) {
-            & (Join-Path $PSScriptRoot 'start-desktop.ps1') -Bundle
+            & (Join-Path $PSScriptRoot 'start-desktop.ps1') @buildArgs
 
             if ($LASTEXITCODE -eq 0) {
                 $built = $true
