@@ -17,6 +17,12 @@ defmodule Monty.Studio.RunStream.Pictures do
   A picture the filesystem refuses is a warning rather than an exception: the
   record already names it, and a run that cannot write a picture is still a run
   whose numbers are right.
+
+  Measured 2026-11-19, so that nobody optimises this path again for the wrong
+  reason: the same CAD workload twice, 1 500 steps, with the pictures written
+  (500 frames, 7.8 MB) and with `--no-record`, came out 30.99 s and 31.14 s of
+  wall clock — 0.1 ms a step, and the recorded arm was the faster one. The
+  pictures are not where a run's unexplained time goes.
   """
 
   use GenServer

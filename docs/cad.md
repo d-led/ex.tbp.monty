@@ -247,11 +247,14 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    lump, everything else held. Today a feature-labelled run uses an evaluation
    config written for whole objects.
 
-4. **The page cannot yet say a memory was taught from other inputs.** Since a
-   memory now records the part file's bytes, the optics and the sampling it came
-   from, the experiment's Checks could say "this memory was taught at 25 mm and
-   this config reads at 8 mm — press Make" instead of "ready". That is the shape
-   of the defect that cost an afternoon earlier (`cad/blend_part_eval` taught
-   through one stand-off and stepped through another), and the answer is now
-   computable rather than a person's memory of what they last clicked. Nothing
-   does that yet; the record is written and only the build reads it.
+4. **The page says a memory was taught from other inputs, but not which input.**
+   A CAD memory records the part file's bytes, the optics and the sampling it came
+   from, and `Monty.Studio.Setup.memory_findings/1` now warns when the note and the
+   config disagree — "taught from a different part file or a different patch on
+   <day>", with a link to `/prerequisites`. What it cannot say yet is _which_ of
+   the two moved: the note keeps a fingerprint, not the numbers behind it, so
+   "taught at 25 mm and this config reads at 8 mm" is one field away from being
+   readable rather than one investigation away. That is the shape of the defect
+   that cost an afternoon earlier (`cad/blend_part_eval` taught through one
+   stand-off and stepped through another); the warning now catches it, and naming
+   the difference is what turns the warning into an instruction.
