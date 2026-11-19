@@ -134,22 +134,37 @@ its own. Only the wrapping differs, because only macOS has a bundle to wrap them
 in:
 
 ```text
-macOS    Ex.tbp.monty.plugin.example.app/Contents/MacOS/<name>        the launcher
+macOS    Ex.tbp.monty.plugin.example.app/Contents/MacOS/<name>        the window
          …/Contents/Resources/node                                    the line
          …/Contents/Resources/<node>/                                 the release
-Linux    <name>/<name>                                                the launcher
+Linux    <name>/<name>                                                the window
          <name>/node                                                  the line
          <name>/<node>/                                               the release
-Windows  <name>\<name>.cmd  runs  <name>\companion-windows.ps1        the launcher
+Windows  <name>\<name>.exe                                            the window
          <name>\node                                                  the line
          <name>\<node>\                                               the release
 ```
 
-The three launchers (`companion-app.sh`, `companion-linux.sh`,
-`companion-windows.ps1`) are one contract written three times for the three ways a
-person starts a program; each is the same order of events — ask the window who it
-is at `/health`, read the window's own `releases/COOKIE`, refuse politely when
-neither is there, and `exec` the release in the foreground.
+The launcher is **`examples/<name>/app`**: a Tauri binary for macOS, Linux and
+Windows that the example owns, builds with `cargo build --release`, and both
+packagers copy into the companion as `<name>` (`<name>.exe` on Windows). It lives
+in the example because an example is what a person takes away — it may depend on a
+Hex package, never on the project it was written in, so anything it needs to be an
+application has to be inside it. The two copies are the same shell today; neither
+imports the other, and neither imports the project.
+
+It replaced three scripts that lived in `scripts/desktop-plugins/` —
+`companion-app.sh`, `companion-linux.sh`, `companion-windows.ps1` — and the reason
+is the window: macOS treats a foreground
+app as the thing that answers Quit, a shell script never answers it, and the Dock
+offered _Force Quit_ for an app that was running perfectly. The binary does what
+the scripts did — ask the window who it is at `/health`, read its
+`releases/COOKIE`, start the release with `MONTY_SEEDS` and
+`RELEASE_NODE=<node>_app@127.0.0.1`, stop it with `rpc "System.stop()"` — and adds
+the part a script cannot: a 460×300 window that says what this app is, the node
+it runs as, whether it is running, which window it joined, and where its log is,
+with **Open Monty Studio** and **Stop node**. Closing the window stops the node,
+and so does Quit.
 
 The node a companion starts has a name of its own, `<node>_app@127.0.0.1`, and
 both halves are deliberate. `epmd` keys on the bare name, so a checkout that runs
@@ -158,8 +173,8 @@ all with _the name … seems to be in use by another Erlang node_; and the name 
 long on the loopback because a short one is resolved through DNS by whoever dials
 it, which on a machine whose hostname answers with an address its interface no
 longer has is a cluster that silently never forms. A name `epmd` already holds
-that does not answer the launcher's `rpc` is reported in the alert, because the
-release's own refusal would land only in the log.
+that does not answer the launcher's `rpc` shows as _not running_ in the window,
+and the release's own refusal is in the log the window names.
 
 The window needs no plugins and starts none by itself — it is the cluster, not
 their keeper; all it can do is offer to start the two that a checkout keeps beside
@@ -210,19 +225,16 @@ there is no pid file to trust — the node is asked to stop.
 **Each of the two is an application you can click.** The `.pkg` installs all three
 apps into `/Applications`, the `.dmg` holds all three to drag across, and
 `run-desktop.sh` unpacks all three into the same folder — beside each other,
-because that is where a companion looks for its window. Double-clicking one starts
-that node, joins it to the window, and keeps no terminal in between: the app asks
-the window who it is (`/health`), opens the window when nothing answers yet and
-waits for it, reads the window's cookie from
-`Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and `exec`s its own release
-from `Contents/Resources/<node>` — one process, not a wrapper around one. A
-companion that cannot find a window says so in an alert and in
-`${TMPDIR%/}/monty-studio-<node>.log`, and `MONTY_COMPANION_SILENT=1` keeps it
-quiet for a script. `MONTY_STUDIO_APP` points one at a window somewhere else,
-which is how a checkout tries them without installing anything. Pressing it twice
-is not an error: a node that is already up answers, and the launcher says so
-instead of starting a second one and wiping the log of the first. Each app is
-about 19 MB, most of it its own runtime.
+because that is where a companion looks for its window. Double-clicking one opens
+its window and starts that node: the app asks the window who it is (`/health`),
+opens the window when nothing answers yet and waits for it, reads the window's
+cookie from `Contents/Resources/rel/ex_tbp_monty/releases/COOKIE`, and starts its
+own release from `Contents/Resources/<node>`. The node's own output goes to
+`${TMPDIR%/}/monty-studio-<node>.log`, which the window names. `MONTY_STUDIO_APP`
+points one at a window somewhere else, which is how a checkout tries them without
+installing anything. Pressing it twice is not an error: a node that is already up
+answers, and the window says it is running instead of starting a second one. Each
+app is about 19 MB, most of it its own runtime.
 
 **A plugin is told where the window is; it does not discover it.** The two
 example nodes do not use libcluster: each runs a `Join` process that dials the

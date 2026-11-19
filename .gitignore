@@ -331,3 +331,10 @@ fprof.trace
 !/priv/cad_experiments/conf/
 !/priv/cad_experiments/parts/
 !/priv/cad_experiments/parts/*.step
+
+# The window crate each example carries, like this project's own Tauri one: what
+# `cargo` builds, and what `tauri-build` writes on every compile. Each example
+# ignores both for itself too — a copy of one has to stand on its own — so this
+# is the backstop for an example that forgets.
+/examples/*/app/target/
+/examples/*/app/gen/

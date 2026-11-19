@@ -1,0 +1,24 @@
+[package]
+name = "ex-tbp-monty-plugin-window"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# The companion plugin apps' launcher and window, one binary for macOS, Linux and
+# Windows. It replaces the three scripts that used to do this job
+# (`scripts/desktop-plugins/companion-*.sh|ps1`): a script can start a node, but
+# a script is not an application — macOS lists it as a foreground app, asks it to
+# quit through the Apple Event its shell never reads, and offers "Force Quit"
+# where every other app offers "Quit". One binary that owns a window answers that
+# question on all three platforms, and can say what it is and what it joined.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+
+[profile.release]
+lto = true
+codegen-units = 1

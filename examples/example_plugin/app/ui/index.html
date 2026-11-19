@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Monty plugin node</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #17181c;
+        --muted: #5b6270;
+        --line: #d8dbe2;
+        --panel: #f5f6f8;
+        --accent: #2f6f4f;
+        --bad: #9b3a2f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e9ebef;
+          --muted: #9aa1ae;
+          --line: #333842;
+          --panel: #1d2027;
+          --accent: #7fc4a0;
+          --bad: #e08a7f;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px 22px 18px;
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, Cantarell, sans-serif;
+        color: var(--ink);
+        user-select: none;
+      }
+      h1 { font-size: 15px; margin: 0 0 2px; }
+      .kind { color: var(--muted); margin: 0 0 14px; }
+      .row { display: flex; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
+      .row:first-of-type { border-top: 0; }
+      .label { width: 92px; flex: none; color: var(--muted); }
+      .value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+      .state { font-weight: 600; }
+      .state.running { color: var(--accent); }
+      .state.stopped { color: var(--bad); }
+      .hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+      footer { display: flex; gap: 8px; margin-top: 16px; }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border-radius: 7px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--muted); }
+      button:active { transform: translateY(1px); }
+      button.stop { margin-left: auto; }
+    </style>
+    <script src="main.js" defer></script>
+  </head>
+  <body>
+    <h1 id="app-name">A Monty plugin node</h1>
+    <p class="kind">This window is the app. The node runs behind it, one node of a Monty cluster.</p>
+
+    <div class="row"><span class="label">node</span><span class="value" id="node">…</span></div>
+    <div class="row"><span class="label">state</span><span class="value state" id="state">…</span></div>
+    <div class="row"><span class="label">joined to</span><span class="value" id="joined">…</span></div>
+    <div class="row"><span class="label">log</span><span class="value" id="log">…</span></div>
+
+    <p class="hint" id="hint">The studio it joined names this node in Settings → Cluster.</p>
+
+    <footer>
+      <button id="open">Open Monty Studio</button>
+      <button id="stop" class="stop">Stop node</button>
+    </footer>
+  </body>
+</html>

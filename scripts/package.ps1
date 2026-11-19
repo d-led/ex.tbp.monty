@@ -138,7 +138,27 @@ try {
     # it: its launcher, the one line naming its release, and that release. Windows
     # has no app bundle, so those three share a folder, exactly as they do on
     # Linux: one sentence describes both, and the window is the `.exe` above that
-    # folder. `.cmd` is the click: a file manager will not run a `.ps1`.
+    # folder.
+    #
+    # The launcher is the example's own `app/` — the same shape macOS and Linux
+    # build, from the example's own tree: an example may depend on a Hex package
+    # and on nothing else from the project it was written in.
+    function Get-CompanionWindow {
+        param([string]$Node)
+
+        return "examples/$Node/app/target/release/ex-tbp-monty-plugin-window.exe"
+    }
+
+    function New-CompanionWindow {
+        param([string]$Node)
+
+        cargo build --release --manifest-path "examples/$Node/app/Cargo.toml"
+
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Get-CompanionWindow $Node))) {
+            throw "cargo built no $(Get-CompanionWindow $Node)"
+        }
+    }
+
     function New-CompanionFolders {
         param([string]$WindowFolder)
 
@@ -158,8 +178,8 @@ try {
 
             Set-Content -Path (Join-Path $folder 'node') -Value $node
             Copy-Item -Recurse $release (Join-Path $folder $node)
-            Copy-Item 'scripts/desktop-plugins/companion-windows.ps1' $folder
-            Copy-Item 'scripts/desktop-plugins/companion-windows.cmd' (Join-Path $folder "$name.cmd")
+            New-CompanionWindow $node
+            Copy-Item (Get-CompanionWindow $node) (Join-Path $folder "$name.exe")
 
             Write-Host "  $folder"
         }
@@ -176,8 +196,8 @@ try {
             $name = $parts[0]
             $node = $parts[1]
 
-            if (-not (Test-Path (Join-Path $WindowFolder "$name\$name.cmd"))) {
-                throw "the companion $name has no launcher at $name\$name.cmd"
+            if (-not (Test-Path (Join-Path $WindowFolder "$name\$name.exe"))) {
+                throw "the companion $name has no launcher at $name\$name.exe"
             }
 
             if (-not (Test-Path (Join-Path $WindowFolder "$name\$node\bin\$node.bat"))) {

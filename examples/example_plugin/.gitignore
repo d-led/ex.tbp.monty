@@ -7,3 +7,10 @@
 /doc/
 *.tar
 erl_crash.dump
+
+# The window's crate is an application, so its lock is source rather than output —
+# and what the crate builds is neither: `target/` is the toolchain's, and
+# `gen/` is what `tauri-build` writes on every compile.
+!/app/Cargo.lock
+/app/target/
+/app/gen/

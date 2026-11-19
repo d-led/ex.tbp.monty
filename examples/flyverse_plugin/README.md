@@ -436,6 +436,34 @@ http://localhost:4001/experiments/flyverse_plugin.10simobj_surf_agent
 | `MONTY_SEEDS`           | the nodes to reach, comma-separated                                |
 | `PLUGIN_DISCOVERY=none` | takes part in no cluster at all                                    |
 
+## The app it ships as
+
+`app/` is this example's own window: a small Tauri program, built with
+`cargo build --release`, that makes the node an application a person
+double-clicks instead of a command to remember. It asks a studio's `/health` for
+the node to join, reads that studio's cookie, starts the release with a node name
+of its own (`flyverse_plugin_app`), shows what this example is, which node it
+runs as, where its log is and which studio it joined, and stops the node when the
+window closes or Quit is chosen.
+
+It lives here rather than in the studio's repository because this folder is what
+a person takes away. Apart from `ex_monty_plugin` and `ex_tbp_monty_core` from
+Hex, nothing outside it is needed.
+
+```
+cd examples/flyverse_plugin
+mix deps.get
+mix flyverse_plugin.pack /tmp/flyverse-pack            # the connectome it steps
+MIX_ENV=prod mix release                             # the node: _build/prod/rel/flyverse_plugin
+cargo build --release --manifest-path app/Cargo.toml
+```
+
+`app/target/release/ex-tbp-monty-plugin-window` is then the executable, and
+`_build/prod/rel/flyverse_plugin` the node it starts. The node inherits the
+environment the window was opened with, so `FLYVERSE_PACK` set before the app is
+what its policy steps. A packaged download is the two of them inside one
+application bundle, which is the same arrangement a checkout produces.
+
 ## The pack, and the plan beside it
 
 A pack is flyverse's own four NPY arrays plus two files this example reads:

@@ -181,6 +181,28 @@ readonly plugin_nodes="example_plugin flyverse_plugin"
 # own app.
 readonly built_plugins="_build/desktop/plugins"
 
+# The companion apps' launcher and window: each example carries its own
+# (`examples/<node>/app`), because an example is what a person takes away and may
+# depend on nothing but a Hex package — so the shell sits in the example, not in
+# this project. It is built with `cargo build`, not `tauri build`, because the app
+# it runs inside is the one this script assembles.
+companion_window() {
+  printf '%s' "examples/$1/app/target/release/ex-tbp-monty-plugin-window"
+}
+
+# A script is not an application: macOS listed the old shell launchers as
+# foreground apps, asked them to quit through an Apple Event a shell never reads,
+# and offered "Force Quit" for them. One binary with a window answers that, says
+# what it is and what it joined, and stops the node when it is closed.
+build_companion_window() {
+  cargo build --release --manifest-path "examples/$1/app/Cargo.toml" || return 1
+
+  [ -x "$(companion_window "$1")" ] || {
+    echo "cargo built no $(companion_window "$1")" >&2
+    return 1
+  }
+}
+
 # The window carries no plugin, asked rather than assumed: a window that quietly
 # contains a second and third node is the opposite of the thing being
 # demonstrated, and nothing else on the way would say so.
@@ -209,8 +231,10 @@ readonly companions
 # What it needs from the window is only what a peer needs: the node name to dial
 # (`/health`) and the cookie to dial it with (`releases/COOKIE`).
 #
-# `scripts/desktop-plugins/companion-app.sh` is the launcher, the same file in both
-# apps; `Contents/Resources/node` is the one line that tells them apart, and
+# The launcher and the window are the example's own `examples/<node>/app`: each
+# example ships the shell a person double-clicks, because an example may depend
+# on a Hex package and on nothing else from the project it was written in.
+# `Contents/Resources/node` is the one line that tells the two apart, and
 # `Contents/Resources/<node>` is the release itself. The executable is named after
 # the app, because that is the name Activity Monitor, Console and `ps` show.
 companion_apps() {
@@ -232,7 +256,8 @@ companion_apps() {
     clean "$app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
-    cp scripts/desktop-plugins/companion-app.sh "$app/Contents/MacOS/$name"
+    build_companion_window "$node" || return 1
+    cp "$(companion_window "$node")" "$app/Contents/MacOS/$name"
     chmod +x "$app/Contents/MacOS/$name"
     printf '%s\n' "$node" >"$app/Contents/Resources/node"
     cp -R "$release" "$app/Contents/Resources/$node"
@@ -345,9 +370,10 @@ companion_folders() {
     printf '%s\n' "$node" >"$folder/node"
     cp -R "$release" "$folder/$node"
 
-    # The macOS launcher is a bundle's `Contents/MacOS/<name>`; these two are the
-    # same contract in a folder (`companion-linux.sh`, `companion-windows.ps1`).
-    cp scripts/desktop-plugins/companion-linux.sh "$folder/$name"
+    # The macOS app's `Contents/MacOS/<name>` is the same example-owned binary
+    # here, in a folder: the launcher, window and all.
+    build_companion_window "$node" || return 1
+    cp "$(companion_window "$node")" "$folder/$name"
     chmod +x "$folder/$name"
 
     # The click. `Exec` runs through `sh` so the launcher is found beside the

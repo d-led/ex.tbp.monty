@@ -65,3 +65,9 @@ Cargo.lock
 # `function FlyversePlugin.Native.open/1 is undefined` and offers nothing.
 /priv/native/
 
+
+# The window's crate, for the reasons the crate above is here: its lock is
+# source, and what it builds is not.
+!/app/Cargo.lock
+/app/target/
+/app/gen/
