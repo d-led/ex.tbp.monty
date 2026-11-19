@@ -74,13 +74,22 @@ environment, not code:
 | `--name example_plugin@127.0.0.1`           | what this node is called; a VM cannot be renamed after it starts              |
 | `MONTY_CLUSTER_SECRET`                      | the cookie, the same string on every node that should join                    |
 | `MONTY_SEEDS`                               | the nodes to reach, in the spelling a peer's Settings page shows              |
+| `MONTY_CLUSTER=1`                           | join by gossip with no seed — the studio's own switch, read the same way      |
 | `PLUGIN_SCOPE`                              | the `:pg` scope, `monty_plugins` unless a deployment says otherwise           |
 | `PLUGIN_DISCOVERY=none`                     | takes part in no cluster at all                                               |
 | `EVIDENCE_THRESHOLD`, `X_PERCENT_THRESHOLD` | the learning module's setting, defaulting to `"x_percent_threshold"` and `20` |
 
-Seeds are retried every five seconds, so the order `process-compose` starts the
-processes in does not matter — the studio nodes take far longer to boot than this
-one.
+Joining is [libcluster](https://hex.pm/packages/libcluster), so a seed that is not
+up yet is retried and nothing here polls: with seeds the node dials them, and it
+gossips beside them (`ExamplePlugin.Cluster`). The gossip is what survives a
+restarted studio: a window names itself `monty-studio-<id>@127.0.0.1` with a fresh
+id on every start, so the name this node was handed stops existing, and a node
+that listens for the window's announcements reconnects to the new one.
+
+The app shell watches the same thing from the other side: every 30 seconds it asks
+the studio's `/health` who it is (`app/src/main.rs`), and when the answer changed
+it restarts this node with the new name — a VM cannot be renamed, and that is the
+one thing libcluster cannot know on its own.
 
 ## The app it ships as
 

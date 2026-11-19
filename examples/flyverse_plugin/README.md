@@ -434,7 +434,18 @@ http://localhost:4001/experiments/flyverse_plugin.10simobj_surf_agent
 | `--name …`              | what this VM is called; a VM cannot be renamed after it starts     |
 | `MONTY_CLUSTER_SECRET`  | the cookie, the same string on every node that should join         |
 | `MONTY_SEEDS`           | the nodes to reach, comma-separated                                |
+| `MONTY_CLUSTER=1`       | join by gossip with no seed — the studio's own switch              |
 | `PLUGIN_DISCOVERY=none` | takes part in no cluster at all                                    |
+
+Joining is [libcluster](https://hex.pm/packages/libcluster), so a seed that is not
+up yet is retried and nothing here polls: with seeds the node dials them, and it
+gossips beside them (`FlyversePlugin.Cluster`). The gossip is what survives a
+restarted studio: a window names itself `monty-studio-<id>@127.0.0.1` with a fresh
+id on every start, so the name this node was handed stops existing, and a node
+that listens for the window's announcements reconnects to the new one. The app
+shell watches the same thing from the other side — every 30 seconds it asks
+`/health` who the window is, and restarts this node when the answer changed
+(`app/src/main.rs`), because a VM cannot be renamed.
 
 ## The app it ships as
 

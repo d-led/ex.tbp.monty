@@ -100,8 +100,8 @@ per name whether it connected, whether it is this node, or whether nobody
 answered (with the three reasons that look identical: not running, host
 unreachable, cookie differs). A dialled node is _not_ remembered; a peer list that
 survives a restart is `MONTY_SEEDS`. The two sample plugin nodes are the third
-case: neither gossip nor dialled by hand — they are told the window's name when
-they start. See the section below.
+case: they are told the window's name when they start, and they keep asking. See
+the section below.
 
 The data folder does **not** follow the name. The window is the one start that
 keeps the folder a node that runs alone uses, because an instance id is per

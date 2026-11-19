@@ -1,10 +1,10 @@
 defmodule ExamplePlugin.JoinTest do
   @moduledoc """
-  Where the node joins, read from the environment — the one 12-factor decision
-  this example makes that a test can hold without a second VM.
+  What the node says about the cluster it is in.
 
-  Not `async`: the cases read a variable the whole VM shares, and one of them
-  unsets it.
+  libcluster does the connecting, so there is nothing here to drive: the case
+  that matters is the sentence a person reads, at boot and when a peer arrives
+  or leaves.
   """
 
   use ExUnit.Case, async: false
@@ -13,42 +13,22 @@ defmodule ExamplePlugin.JoinTest do
 
   alias ExamplePlugin.Join
 
-  setup do
-    before = System.get_env("MONTY_SEEDS")
-    on_exit(fn -> restore(before) end)
-  end
-
-  test "seeds are the node names the deployment wrote, in the spelling OTP uses" do
-    System.put_env("MONTY_SEEDS", "node1@127.0.0.1, node2@127.0.0.1")
-
-    assert Join.seeds() == [:"node1@127.0.0.1", :"node2@127.0.0.1"]
-  end
-
-  test "a node with no seeds is a node that runs alone, not a mistake" do
-    System.delete_env("MONTY_SEEDS")
-
-    assert Join.seeds() == []
-  end
-
-  test "the process stays up with nothing to reach, and says so once" do
-    System.delete_env("MONTY_SEEDS")
-
+  test "a node in no cluster says so, once, when it starts" do
     # A node that is in no cluster is the failure nobody can see: it runs, it
-    # answers `rpc`, and every page says one node. The first attempt says which
-    # variable it looked in, so "it never joined" has a line to find.
+    # answers `rpc`, and every page says one node. The line names what it looked
+    # for, so "it never joined" has something to find.
     log =
       capture_log(fn ->
-        join = start_supervised!({Join, name: :join_without_seeds})
-        # The first attempt is a message the process sends itself, so this is how
-        # the test waits for it rather than sleeping: the state is what the
-        # attempt left.
-        assert %{reached: [], seeds: []} = :sys.get_state(join)
-        refute_received {:EXIT, ^join, _reason}
+        join = start_supervised!({Join, name: :join_without_peers})
+        assert :sys.get_state(join) == []
       end)
 
-    assert log =~ "not in a cluster (no seed answered from MONTY_SEEDS)"
+    assert log =~ "not in a cluster"
+    assert log =~ "MONTY_SEEDS"
   end
 
-  defp restore(nil), do: System.delete_env("MONTY_SEEDS")
-  defp restore(value), do: System.put_env("MONTY_SEEDS", value)
+  test "the sentence names the peers it is in a cluster with" do
+    assert Join.describe([:"node1@127.0.0.1", :"node2@127.0.0.1"]) ==
+             "in a cluster with node1@127.0.0.1, node2@127.0.0.1"
+  end
 end

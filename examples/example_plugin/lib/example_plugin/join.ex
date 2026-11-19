@@ -1,43 +1,23 @@
 defmodule ExamplePlugin.Join do
   @moduledoc """
-  The node, joining the cluster the studio is in — from the environment.
+  What this node is in a cluster *with*, said out loud.
 
-  Two variables, and they are the ones a studio node reads, because one secret
-  written in two spellings is a cluster that stays silently separate:
+  libcluster connects (`ExamplePlugin.Cluster`); this process is the line a
+  person reads afterwards. It is not a poller: `:net_kernel` already knows when a
+  peer arrives or leaves, so this process is told rather than asking.
 
-    * `MONTY_CLUSTER_SECRET` — the cookie. Set before the first connection is
-      attempted, since a connection is made with whatever cookie the node holds
-      at the time.
-    * `MONTY_SEEDS` — the nodes to reach, comma-separated, in the spelling a
-      person copies out of a peer's Settings page (`node1@10.0.0.7`).
-
-  The node's **own** name is not here: a VM is named with `--name` before any of
-  this code runs, and it cannot be renamed afterwards. So `--name` says what this
-  node is called and the environment says what it joins — see
-  `process-compose.yaml`.
-
-  ## Why it retries
-
-  The processes of a `process-compose` project start in the order the file lists
-  them and a studio node takes a good deal longer to boot than this one: the
-  first attempt happens while the node it wants is still compiling. So a seed
-  that is not reached is tried again, and what is logged is a *change* in what
-  has been reached rather than one line per attempt — a plugin that shouted every
-  five seconds about a node that was still booting would make the interesting
-  lines unfindable. The **first** attempt is logged whatever it found, because a
-  node that is in no cluster is the failure nobody can see: it runs, it answers,
-  and nothing says it never joined.
-
-  A node that runs alone is untouched: with no seeds this process has nothing to
-  try, and the plugins are registered on this node exactly as they would be in a
-  cluster of one.
+  The state is logged once at boot and then only on a change, because a studio
+  node takes longer to boot than this one and a plugin that shouted about a node
+  that was still compiling would make the interesting lines unfindable. The
+  first line is logged whatever it found: a node that is in no cluster is the
+  failure nobody can see — it runs, it answers `rpc`, and every page says one
+  node.
   """
 
   use GenServer
 
   require Logger
 
-  @retry_ms 5_000
   @variable "MONTY_SEEDS"
 
   @doc false
@@ -46,81 +26,39 @@ defmodule ExamplePlugin.Join do
 
   @impl true
   def init(_options) do
-    # `nil`, not `[]`: the first attempt always logs, even when it reached
-    # nothing. A node that is in no cluster is the one thing nobody can see —
-    # it runs, it answers `rpc`, and every page says one node — so the sentence
-    # that names the seeds it could not reach is worth one line at boot.
-    state = %{seeds: seeds(), reached: nil}
-    send(self(), :join)
-    {:ok, state}
+    # `node_type: :all` so a peer that hides itself (`-hidden`) is still reported:
+    # this process exists to say who is here, not who is visible. An unnamed VM
+    # has no distribution to monitor, and a node that never joined one is the
+    # case this sentence is for rather than an error.
+    if Node.alive?(), do: :net_kernel.monitor_nodes(true, node_type: :all)
+
+    reached = reached()
+    Logger.info("example plugin: #{describe(reached)}")
+
+    {:ok, reached}
   end
 
   @impl true
-  def handle_info(:join, state) do
-    set_cookie()
+  def handle_info({kind, _node, _info}, reached) when kind in [:nodeup, :nodedown] do
+    now = reached()
 
-    reached = reach(state.seeds)
+    if now != reached, do: Logger.info("example plugin: #{describe(now)}")
 
-    if reached != state.reached do
-      Logger.info("example plugin: #{describe(reached)}")
-    end
-
-    schedule()
-
-    {:noreply, %{state | reached: reached}}
+    {:noreply, now}
   end
-
-  defp schedule, do: Process.send_after(self(), :join, @retry_ms)
 
   @doc """
-  The nodes named in `MONTY_SEEDS`, as the atoms OTP uses.
+  The nodes this one is connected to, in the words the log uses.
 
-  Empty when the variable is unset or blank, which is a node that runs alone
-  rather than a mistake: the same code is started in a test with no cluster at
-  all.
+  A cluster of one is a node that answers and has joined nothing, which is what
+  the empty list has to say: `nil` would read as "not known yet".
   """
-  @spec seeds() :: [node()]
-  def seeds do
-    @variable
-    |> System.get_env("")
-    |> String.split(",", trim: true)
-    # One atom per node name, made when this process starts from a value a
-    # deployment wrote: the table grows by the size of the cluster, not by the
-    # size of anybody's traffic.
-    |> Enum.map(&(&1 |> String.trim() |> atom()))
-  end
+  @spec describe([node()]) :: String.t()
+  def describe([]),
+    do: "not in a cluster (no seed answered #{@variable}, and no window announced itself)"
 
-  # The cookie is read on every attempt rather than cached: `MONTY_CLUSTER_SECRET`
-  # is what a deployment hands over, and a process that cached the first answer
-  # would ignore a change that a restart was meant to apply.
-  #
-  # `Node.set_cookie/1` raises on a VM that was never named, and a node without a
-  # name joins nothing, so there is nothing to set. It answers `true` when it has
-  # set one, which is not a value worth matching on: the cookie is set for its
-  # effect.
-  defp set_cookie do
-    with true <- Node.alive?(),
-         secret when secret not in [nil, ""] <- System.get_env("MONTY_CLUSTER_SECRET") do
-      Node.set_cookie(atom(secret))
-      :ok
-    else
-      _unnamed_or_no_secret -> :ok
-    end
-  end
-
-  # `:erlang.binary_to_atom/2` rather than `String.to_atom/1`: these are node
-  # names and a cookie, written by whoever deployed this, and the explicit call
-  # says the atom is deliberate.
-  defp atom(text), do: :erlang.binary_to_atom(text, :utf8)
-
-  defp reach(seeds) do
-    seeds
-    |> Enum.filter(fn seed -> seed in Node.list() or Node.connect(seed) end)
-    |> Enum.sort()
-  end
-
-  defp describe([]), do: "not in a cluster (no seed answered from #{@variable})"
-
-  defp describe(reached),
+  def describe(reached),
     do: "in a cluster with #{Enum.map_join(reached, ", ", &to_string/1)}"
+
+  defp reached, do: Node.list() |> Enum.sort()
 end

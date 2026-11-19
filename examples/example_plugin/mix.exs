@@ -24,7 +24,10 @@ defmodule ExamplePlugin.MixProject do
   defp deps do
     [
       {:ex_monty_plugin, "~> 0.1.2"},
-      {:ex_tbp_monty_core, "~> 0.1"}
+      {:ex_tbp_monty_core, "~> 0.1"},
+      # Reaching the studio. A seed list is dialled; gossip is how the window is
+      # found again after it restarts under a new node name (`ExamplePlugin.Cluster`).
+      {:libcluster, "~> 3.5"}
     ]
   end
 end
