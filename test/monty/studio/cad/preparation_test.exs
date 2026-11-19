@@ -161,6 +161,65 @@ defmodule Monty.Studio.Cad.PreparationTest do
       assert_in_delta plan.optics.fov_x * 180 / :math.pi(), 11.42, 0.01
       assert plan.optics.distance == 8.0
     end
+
+    # A memory of an arrangement is one object taught from every instance the
+    # world places — the arrangement lives in the environment's `assembly` list,
+    # so which parts and where are data, not code. `plate_pair_assembly` says
+    # what the file holds, the way `_set` and `_features` do.
+    test "a memory of an arrangement is one object taught from the world's instances",
+         %{objects: objects} do
+      identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]]
+      moved = [[1, 0, 0, 60], [0, 1, 0, 0], [0, 0, 1, 0]]
+
+      setup = %{
+        setup_struct(objects)
+        | model_name_or_path: "/somewhere/cad_parts_v1/plate_pair_assembly",
+          object_names: ["plate_pair_assembly"],
+          environment: %{
+            data_path: objects,
+            module: %{class: "MuJoCoSimulator"},
+            assembly: [
+              %{"object" => "plate", "placement" => identity},
+              %{"object" => "plate", "placement" => moved}
+            ]
+          }
+      }
+
+      assert {:ok, plan} = Preparation.plan(setup)
+      assert plan.labels == :assembly
+
+      assert Enum.map(plan.instances, fn {name, _step, _placement} -> name end) == [
+               "plate",
+               "plate"
+             ]
+
+      # One file, and the same part twice is one part taught twice: the
+      # fingerprint must not think the arrangement changed when two of its
+      # instances name the same file.
+      assert Enum.map(plan.parts, &elem(&1, 0)) == ["plate"]
+
+      assert {:ok, report} =
+               Preparation.prepare(plan,
+                 trainer: __MODULE__.Recorder,
+                 exporter: __MODULE__.Exporter
+               )
+
+      assert report.written == 1
+      assert File.regular?(Path.join([objects, "plate_pair_assembly", "textured.obj"]))
+      refute File.regular?(Path.join([objects, "plate", "textured.obj"]))
+    end
+
+    test "an arrangement with no instances says so rather than teaching one part",
+         %{objects: objects} do
+      setup = %{
+        setup_struct(objects)
+        | model_name_or_path: "/somewhere/cad_parts_v1/plate_pair_assembly",
+          object_names: ["plate_pair_assembly"]
+      }
+
+      assert {:error, sentence} = Preparation.plan(setup)
+      assert sentence =~ "assembly"
+    end
   end
 
   describe "writing a plan" do
@@ -428,6 +487,18 @@ defmodule Monty.Studio.Cad.PreparationTest do
 
       objects = for {part, _step} <- parts, do: %{object_id: part, nodes: 3}
       {:ok, %{path: path, nodes: 3 * length(objects), objects: objects}}
+    end
+
+    # The assembly writer answers what it was handed, so a case can say what the
+    # plan asked for without any geometry.
+    def write_assembly(instances, object_id, path, options) do
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path <> ".instances", :erlang.term_to_binary(instances))
+      File.write!(path <> ".options", :erlang.term_to_binary(options))
+      File.write!(path, "#{object_id} taught from #{length(instances)} instance(s)")
+
+      {:ok,
+       %{path: path, object_id: object_id, nodes: 3 * length(instances), instances: instances}}
     end
   end
 

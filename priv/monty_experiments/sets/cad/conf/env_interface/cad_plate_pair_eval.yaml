@@ -1,0 +1,14 @@
+# @package experiment.config
+# The assembly, recognised: one object, three rotations.
+#
+# `object_names` names the directory the arrangement was meshed into — the object
+# the memory of it answers to — and the world is `cad_plate_pair_objects`, whose
+# `assembly` list is what both the memory and that mesh are composed from.
+do_eval: true
+eval_env_interface_args:
+  object_names:
+    - plate_pair_assembly
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    rotations: ${constants.rotations_3}
+eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}

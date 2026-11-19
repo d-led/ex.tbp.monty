@@ -1938,7 +1938,8 @@ defmodule Monty.Studio.Setup do
           module: describe_target(Map.get(environment, "env_init_func")),
           interface: describe_target(interface_class(config)),
           data_path: Map.get(args, "data_path"),
-          objects: scene_objects(args)
+          objects: scene_objects(args),
+          assembly: Map.get(args, "assembly")
         }
 
       _absent ->

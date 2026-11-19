@@ -240,6 +240,17 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    (`MontyCad.Scene.new/2` then `render/3` at each placement), and a config has to
    name that one object.
 
+   Both halves are wired now, and the arm runs. `cad/plate_pair_eval` names one
+   object, `plate_pair_assembly`, and its world (`environment/
+cad_plate_pair_objects`) carries an `assembly` list — which parts, where each
+   sits — that `Monty.Studio.Cad.Preparation` teaches the memory from and meshes
+   into the object the run steps (`MontyCad.Assembly.meshes/2`, with the merged
+   mesh named after the object rather than the first instance). One episode over
+   MuJoCo spends its 400 steps and 34 goals without concluding: the arrangement is
+   recognised by nothing yet. That is a budget-or-size question now, not a missing
+   piece — the same pair of plates is 4 226 nodes against the single part's 2 113,
+   and the patch reads a 60 mm arrangement in the same steps it read one part.
+
 2. **A set of parts, taught and loaded but not yet told apart.** One memory can
    now hold several parts: a memory whose name ends in `_set` is taught from the
    objects its experiment names (`Monty.Studio.Cad.Preparation` reads

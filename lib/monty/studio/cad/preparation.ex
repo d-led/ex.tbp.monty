@@ -56,9 +56,10 @@ defmodule Monty.Studio.Cad.Preparation do
           part: String.t(),
           step: Path.t(),
           parts: [{String.t(), Path.t()}],
+          instances: [{String.t(), Path.t(), [[number()]]}] | nil,
           name: String.t(),
           release: String.t(),
-          labels: :part | :features | :set,
+          labels: :part | :features | :set | :assembly,
           optics: %{fov_x: float(), distance: float()},
           memory: Path.t(),
           objects: Path.t()
@@ -76,12 +77,14 @@ defmodule Monty.Studio.Cad.Preparation do
   def plan(%Setup{} = setup) do
     with {:ok, name, release} <- memory_of(setup),
          {:ok, parts} <- parts_of(setup, name),
+         {:ok, instances} <- instances_of(setup, name),
          {:ok, objects} <- objects_of(setup) do
       {:ok,
        %{
          part: elem(hd(parts), 0),
          step: elem(hd(parts), 1),
          parts: parts,
+         instances: instances,
          name: name,
          release: release,
          labels: labels_of(name),
@@ -90,6 +93,41 @@ defmodule Monty.Studio.Cad.Preparation do
          objects: objects
        }}
     end
+  end
+
+  # The parts an assembly is made of, as `{name, STEP file, placement}`. The
+  # arrangement is the environment's, not this module's: a config that steps an
+  # assembly says which parts it holds and where each sits, and everything else
+  # here follows from that list.
+  defp instances_of(setup, name) do
+    if labels_of(name) == :assembly,
+      do: assembly_instances(setup),
+      else: {:ok, nil}
+  end
+
+  defp assembly_instances(%Setup{environment: %{assembly: [_ | _] = instances}}) do
+    instances
+    |> Enum.reduce_while({:ok, []}, fn instance, {:ok, placed} ->
+      object = Map.fetch!(instance, "object")
+
+      case step_of(object) do
+        {:ok, step} ->
+          {:cont, {:ok, placed ++ [{object, step, Map.fetch!(instance, "placement")}]}}
+
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  defp assembly_instances(%Setup{environment: %{assembly: nil}}) do
+    {:error,
+     "this experiment's memory is of an assembly, and its environment names no " <>
+       "`assembly` list to teach it from"}
+  end
+
+  defp assembly_instances(_setup) do
+    {:error, "this experiment names no environment, so its assembly has nowhere to be placed"}
   end
 
   # The release a training run leaves its library in, as `cad/plate_pretrain`'s
@@ -166,9 +204,21 @@ defmodule Monty.Studio.Cad.Preparation do
   # takes them in one call and writes one file, which is what makes it a memory of
   # several parts rather than several memories.
   defp parts_of(setup, name) do
-    if labels_of(name) == :set,
-      do: every_part(setup),
-      else: one_part(setup, name)
+    case labels_of(name) do
+      :set -> every_part(setup)
+      :assembly -> assembly_parts(setup, name)
+      _one_object -> one_part(setup, name)
+    end
+  end
+
+  # What an assembly is taught from is its instances' parts, named once each:
+  # the same file placed twice is one part taught twice, and a fingerprint that
+  # counted it twice would move when the arrangement did not.
+  defp assembly_parts(setup, _name) do
+    with {:ok, instances} <- assembly_instances(setup) do
+      {:ok,
+       instances |> Enum.map(fn {object, step, _placement} -> {object, step} end) |> Enum.uniq()}
+    end
   end
 
   defp one_part(setup, name) do
@@ -202,6 +252,7 @@ defmodule Monty.Studio.Cad.Preparation do
     cond do
       String.ends_with?(name, "_features") -> :features
       String.ends_with?(name, "_set") -> :set
+      String.ends_with?(name, "_assembly") -> :assembly
       true -> :part
     end
   end
@@ -370,7 +421,16 @@ defmodule Monty.Studio.Cad.Preparation do
   end
 
   defp taught(plan, trainer) do
-    case trainer.write_library(plan.parts, plan.memory, memory_options(plan)) do
+    taught =
+      case plan.labels do
+        :assembly ->
+          trainer.write_assembly(plan.instances, plan.name, plan.memory, memory_options(plan))
+
+        _one_record_an_object ->
+          trainer.write_library(plan.parts, plan.memory, memory_options(plan))
+      end
+
+    case taught do
       {:ok, written} ->
         {:ok, written}
 
@@ -413,7 +473,7 @@ defmodule Monty.Studio.Cad.Preparation do
     |> Keyword.merge(optics_options(plan))
   end
 
-  defp memory_options(%{labels: labels} = plan) when labels in [:part, :set] do
+  defp memory_options(%{labels: labels} = plan) when labels in [:part, :set, :assembly] do
     [
       # The CAD package names objects after what it teaches and knows two
       # answers: the part as itself, or the features it is made of. A set is the
@@ -449,7 +509,7 @@ defmodule Monty.Studio.Cad.Preparation do
   #
   # The records written are the ones the teaching answered with: this is the
   # same file, with the one field a directory cannot carry renamed.
-  defp names_it_answers_to(%{labels: labels}, written) when labels in [:part, :set],
+  defp names_it_answers_to(%{labels: labels}, written) when labels in [:part, :set, :assembly],
     do: {:ok, written.nodes}
 
   defp names_it_answers_to(%{memory: path}, written) do
@@ -478,6 +538,9 @@ defmodule Monty.Studio.Cad.Preparation do
       plan.labels == :set ->
         set_objects(plan, exporter)
 
+      plan.labels == :assembly ->
+        assembly_object(plan, exporter)
+
       true ->
         part_object(plan, exporter)
     end
@@ -498,6 +561,35 @@ defmodule Monty.Studio.Cad.Preparation do
           {:halt, refused}
       end
     end)
+  end
+
+  # An assembly is one object in the world too: every instance's mesh, moved to
+  # where its placement puts it, written as the object the run steps. The memory
+  # and the mesh are composed from the same list, so a part cannot be taught in
+  # one place and drawn in another.
+  defp assembly_object(plan, exporter) do
+    placed =
+      Enum.reduce_while(plan.instances, {:ok, []}, fn {name, step, placement}, {:ok, placed} ->
+        case exporter.part_mesh(step, name: name) do
+          {:ok, mesh} -> {:cont, {:ok, [{mesh, placement} | placed]}}
+          {:error, _reason} = refused -> {:halt, refused}
+        end
+      end)
+
+    with {:ok, placed} <- placed do
+      # The assembled mesh is the *object's*, not the first instance's: the world
+      # finds an object by its directory, so a mesh still called `plate` would
+      # write the arrangement over the part — which is what happened before this
+      # line existed, and the build then found no `plate_pair_assembly` at all.
+      merged =
+        placed
+        |> Enum.reverse()
+        |> MontyCad.Assembly.meshes()
+        |> Map.merge(%{name: plan.name, family: plan.name})
+
+      _written = Objects.write_mesh(merged, plan.objects)
+      {:ok, 1}
+    end
   end
 
   defp part_object(plan, exporter) do

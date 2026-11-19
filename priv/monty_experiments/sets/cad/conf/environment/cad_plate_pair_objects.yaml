@@ -1,0 +1,54 @@
+# @package experiment.config.environment
+# One object that is two plates: the arrangement, as data.
+#
+# This is `cad_plate_objects` with one key added — `assembly` — so the world,
+# the agent and the patch are the part run's, unchanged, and a difference in the
+# numbers is the arrangement and nothing else. The list is quiddity's own 3x4
+# rows in millimetres: which parts the object is made of and where each sits.
+# `Monty.Studio.Cad.Preparation` teaches the memory from that list and meshes the
+# same list into the object the run steps, so a part cannot be taught in one
+# place and drawn in another. Two instances of one part are the smallest
+# arrangement that is not one part.
+env_init_args:
+  data_path: ${path.expanduser:${oc.env:MONTY_DATA}/cad_objects}
+  assembly:
+    - object: plate
+      placement: [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]]
+    - object: plate
+      placement: [[1, 0, 0, 60], [0, 1, 0, 0], [0, 0, 1, 0]]
+  agents:
+    - _target_: tbp.monty.simulators.mujoco.agents.SurfaceAgent
+      _partial_: true
+      agent_id: agent_id_0
+      sensor_configs:
+        patch:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.0
+          resolution:
+            width: 64
+            height: 64
+          zoom: 10.0
+        view_finder:
+          _target_: tbp.monty.frameworks.sensors.SensorConfig
+          position:
+            - 0.0
+            - 0.0
+            - 0.03
+          resolution:
+            width: 64
+            height: 64
+          zoom: 1.0
+      # A hand's width above the object's own top, not ten centimetres above the
+      # ground: a part's feature is a centimetre or two tall and a surface
+      # agent's patch sees five, so at the tutorial's height the patch reads
+      # nothing but the clip and never arrives — measured, an episode whose
+      # patch image is a single flat grey for every one of its steps.
+      position:
+        - 0.0
+        - 1.5
+        - 0.03
+  raise_actuate_missing: false
+env_init_func: ${monty.class:tbp.monty.simulators.mujoco.MuJoCoSimulator}

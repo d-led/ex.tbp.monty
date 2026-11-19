@@ -250,6 +250,9 @@ prerequisites:
       # `cad/parts_set_eval` — one memory holding two parts, taught from the
       # objects that experiment names.
       - parts_set
+      # `cad/plate_pair_eval` — one object that is an arrangement: the plate
+      # twice, placed as that experiment's world says.
+      - plate_pair_assembly
     # The other half of what one Make writes: the meshes each memory was taught
     # on, beside the world's objects. A run reads the memory *and* the meshes,
     # so a machine missing either is missing this build — and the objects folder

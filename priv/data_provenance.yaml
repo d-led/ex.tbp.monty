@@ -129,7 +129,13 @@ data:
     # instead of the teacher's under `cad_parts_v1/`. One episode matched in 80
     # steps with 10 goals, which is a run recognising a part from percepts it
     # taught itself.
-    hash: b285490cbf55ceca357267807da7941fe7e06663d8001f7d347c78acf80cef81
+        #
+    # `cad/plate_pair_eval` is the arrangement arm: one object made of two
+    # instances of the plate, 60 mm apart, with the world's `assembly` list as the
+    # single source for both the memory and the mesh. It runs end to end — 400
+    # steps, 34 goals, no conclusion — so what it needs next is a bigger budget or
+    # a smaller arrangement, not more code.
+    hash: 6ea94db3971708ee5efb84e78dc8082a1f5bf05be840547c9079176ad9840554
 
   - path: priv/cad_experiments/conf
     kind: written
