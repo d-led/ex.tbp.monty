@@ -25,6 +25,27 @@ defaults:
 experiment:
   _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
   config:
+    # The stand-off and the gait are sizes, not constants, and this part is
+    # small: forty by thirty by twenty millimetres, against the surface policy's
+    # own twenty-five millimetres off and four-millimetre step.
+    #
+    # Measured on this Mac in the compiled scene, one episode: at the policy's
+    # own numbers the patch's depth is the far value on most steps, the module is
+    # fed background, its evidence falls from 8.5 to nought through mismatch and
+    # the episode concludes "no match". At eight millimetres off — the closest the
+    # compiled scene renders (`plate_features_eval.yaml` has that measurement) —
+    # and a two-millimetre step the episode concludes in 178 steps with `blend`
+    # correct at evidence 22.9. Both halves read one surface, because
+    # `Monty.Studio.Cad.Preparation` teaches the memory from this same stand-off.
+    monty_config:
+      motor_system_config:
+        policy_selector:
+          policy:
+            desired_object_distance: 0.008
+            action_sampler:
+              rotation_degrees: 2.0
+              translation_distance: 0.002
+    show_sensor_output: true
     show_sensor_output: true
     n_train_epochs: 3
     # Where the memory of the part lives. The tail after the libraries root is

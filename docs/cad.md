@@ -112,10 +112,13 @@ that set's own README is the same walk-through written down.
 Measured on this Mac (2026-11-19), those two clicks and nothing else: the plate's
 three evaluation episodes concluded in 97, 184 and 351 steps, and each answered
 `plate` where the target was `plate` — `correct` in all three, at the highest
-evidence of 26.49, 11.02 and 19.72; `cad/blend-big_part_eval` concluded its episode
-in 90 steps, `blend-big` correct at 8.59. The run keeps its log, its sensor
-pictures and `eval_stats.csv` in its own directory under the application's data
-folder.
+evidence of 26.49, 11.02 and 19.72; `cad/blend_part_eval` concluded in 178 steps,
+`blend` correct at 22.93; `cad/blend-big_part_eval` concluded in 90 steps,
+`blend-big` correct at 8.59. `cad/plate_features_eval` is the one that answers a
+sibling: asked about `plate_bosses_0` it names `plate_risers_0`, which is the wall
+recorded below — the two features report the same surface. The run keeps its log,
+its sensor pictures and `eval_stats.csv` in its own directory under the
+application's data folder.
 
 Both halves read the same experiment, which is what makes the memory and the run
 comparable: the memory is taught through **the run's own patch** — the field of
