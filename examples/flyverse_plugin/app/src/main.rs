@@ -24,7 +24,7 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::Mutex,
     time::Duration,
 };
 
@@ -35,13 +35,7 @@ use tauri::Manager;
 /// with an embedded Python and two NIFs takes tens of seconds on a cold start.
 const WINDOW_PATIENCE: Duration = Duration::from_secs(120);
 
-/// How often the window is asked who it is. One GET on the loopback, and the
-/// longest a person waits for this node to reappear in Settings after the window
-/// they were looking at was restarted.
-const WINDOW_WATCH: Duration = Duration::from_secs(30);
-
 /// What this app found around itself, once.
-#[derive(Clone)]
 struct Setup {
     /// The app's own name — the executable's file name, which packaging sets from
     /// the app, so Activity Monitor, the Dock and this window agree.
@@ -64,11 +58,7 @@ struct Setup {
 struct AppState {
     setup: Setup,
     cookie: String,
-    child: Arc<Mutex<Option<Child>>>,
-    /// The window's node name the child was started with: what the watcher
-    /// compares against, so a window that came back under a new name is noticed
-    /// once rather than every half minute.
-    seed: Arc<Mutex<Option<String>>>,
+    child: Mutex<Option<Child>>,
     /// A node that was already running when this window opened: not ours to
     /// follow, but ours to report and to stop.
     preexisting: bool,
@@ -145,13 +135,10 @@ fn main() {
 
     let cookie = cookie(&setup).unwrap_or_default();
     let seed = wait_for_window(&setup);
-    let child = Arc::new(Mutex::new(None));
-    let joined = Arc::new(Mutex::new(None));
 
     let mut state = AppState {
         preexisting: false,
-        child: Arc::clone(&child),
-        seed: Arc::clone(&joined),
+        child: Mutex::new(None),
         setup,
         cookie,
     };
@@ -160,21 +147,10 @@ fn main() {
         state.preexisting = rpc(&state.setup, &state.cookie, "true");
 
         if !state.preexisting {
-            if let Ok(started) = start_node(&state.setup, &state.cookie, seed) {
-                if let Ok(mut slot) = child.lock() {
-                    *slot = Some(started);
+            if let Ok(child) = start_node(&state.setup, &state.cookie, seed) {
+                if let Ok(mut slot) = state.child.lock() {
+                    *slot = Some(child);
                 }
-
-                if let Ok(mut known) = joined.lock() {
-                    *known = Some(seed.clone());
-                }
-
-                watch_window(
-                    state.setup.clone(),
-                    state.cookie.clone(),
-                    Arc::clone(&child),
-                    Arc::clone(&joined),
-                );
             }
         }
     }
@@ -458,60 +434,6 @@ fn start_node(setup: &Setup, cookie: &str, seed: &str) -> std::io::Result<Child>
         .stderr(Stdio::from(log))
         .env("MONTY_SEEDS", seed)
         .spawn()
-}
-
-/// Keeps this node in the cluster of the window that is up *now*.
-///
-/// A studio window names itself `monty-studio-<id>@127.0.0.1` with a fresh six
-/// hex digits on every start, and a running VM cannot be renamed — so when the
-/// window is restarted, the seed this node was started with is a name that will
-/// never answer again. libcluster does the connecting, the retrying and the
-/// teardown (`ExamplePlugin.Cluster`); the one thing it cannot know is the new
-/// name, and this thread asks the only thing that does: the window's own
-/// `/health`, once every `WINDOW_WATCH`.
-///
-/// A new seed means a new node, so the old one stops and the new one starts
-/// already able to see the window. The log is appended rather than truncated, so
-/// the first node's reason for stopping is still there to read.
-fn watch_window(
-    setup: Setup,
-    cookie: String,
-    child: Arc<Mutex<Option<Child>>>,
-    seed: Arc<Mutex<Option<String>>>,
-) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(WINDOW_WATCH);
-
-        // A window that is closed, booting or gone answers nothing: that is not
-        // a reason to restart anything, only a reason to look again.
-        let Some(now) = node_of_window(&setup) else {
-            continue;
-        };
-
-        let known = seed.lock().ok().and_then(|known| known.clone());
-
-        if known.as_deref() == Some(now.as_str()) {
-            continue;
-        }
-
-        let Ok(mut slot) = child.lock() else { continue };
-
-        if let Some(mut old) = slot.take() {
-            let _ = rpc(&setup, &cookie, "System.stop()");
-            let _ = old.kill();
-            let _ = old.wait();
-        }
-
-        if let Ok(started) = start_node(&setup, &cookie, &now) {
-            *slot = Some(started);
-        }
-
-        drop(slot);
-
-        if let Ok(mut known) = seed.lock() {
-            *known = Some(now);
-        }
-    });
 }
 
 fn log_path(setup: &Setup) -> PathBuf {

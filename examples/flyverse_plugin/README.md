@@ -442,10 +442,7 @@ up yet is retried and nothing here polls: with seeds the node dials them, and it
 gossips beside them (`FlyversePlugin.Cluster`). The gossip is what survives a
 restarted studio: a window names itself `monty-studio-<id>@127.0.0.1` with a fresh
 id on every start, so the name this node was handed stops existing, and a node
-that listens for the window's announcements reconnects to the new one. The app
-shell watches the same thing from the other side — every 30 seconds it asks
-`/health` who the window is, and restarts this node when the answer changed
-(`app/src/main.rs`), because a VM cannot be renamed.
+that listens for the window's announcements reconnects to the new one.
 
 ## The app it ships as
 

@@ -86,11 +86,6 @@ restarted studio: a window names itself `monty-studio-<id>@127.0.0.1` with a fre
 id on every start, so the name this node was handed stops existing, and a node
 that listens for the window's announcements reconnects to the new one.
 
-The app shell watches the same thing from the other side: every 30 seconds it asks
-the studio's `/health` who it is (`app/src/main.rs`), and when the answer changed
-it restarts this node with the new name — a VM cannot be renamed, and that is the
-one thing libcluster cannot know on its own.
-
 ## The app it ships as
 
 `app/` is this example's own window: a small Tauri program, built with
