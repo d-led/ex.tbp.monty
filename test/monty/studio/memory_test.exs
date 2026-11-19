@@ -169,7 +169,7 @@ defmodule Monty.Studio.MemoryTest do
                  code: :memory_taught_from_other_inputs,
                  level: :warning,
                  message: message,
-                 link: %{label: "Prerequisites", href: "/prerequisites"}
+                 action: %{label: "Teach it again", event: "prepare_cad_part"}
                }
              ] = Setup.memory_findings(opened.setup)
 

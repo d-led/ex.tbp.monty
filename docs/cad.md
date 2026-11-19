@@ -252,10 +252,12 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    packages' versions, and `Monty.Studio.Setup.memory_findings/1` warns when the
    note and the config disagree — with the day, the input that moved when the note
    kept the numbers ("a patch this config reads from 8.0 mm through 11.4°, where
-   the memory was taught from 25.0 mm through 11.4°"), and a link to
-   `/prerequisites`. That is the shape of the defect that cost an afternoon
-   earlier (`cad/blend_part_eval` taught through one stand-off and stepped through
-   another): the warning catches it, and the numbers turn the warning into an
-   instruction. A note written before the inputs were kept still says only _that_
-   one moved — one Make click upgrades it, because the same click re-teaches
-   anything whose fingerprint cannot be reproduced.
+   the memory was taught from 25.0 mm through 11.4°"), and a **Teach it again**
+   button on that page: the prerequisites row cannot help here, because it says
+   "present" — the memory is there, what is wrong is what it was taught from. That
+   is the shape of the defect that cost an afternoon earlier
+   (`cad/blend_part_eval` taught through one stand-off and stepped through
+   another): the warning catches it, the numbers turn it into an instruction, and
+   the click is where the instruction is. A note written before the inputs were
+   kept still says only _that_ one moved — one Make click upgrades it, because the
+   same click re-teaches anything whose fingerprint cannot be reproduced.

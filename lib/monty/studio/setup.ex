@@ -2700,11 +2700,12 @@ defmodule Monty.Studio.Setup do
           Finding.new(
             :warning,
             :memory_taught_from_other_inputs,
-            "The memory this run loads #{what_moved(answer)}#{on_day(at)}. Make it again on " <>
-              "/prerequisites, or point the config at the memory it was taught.",
+            "The memory this run loads #{what_moved(answer)}#{on_day(at)}. Teach it again — " <>
+              "that writes only what changed — or point the config at the memory it was " <>
+              "taught.",
             "model_name_or_path"
           )
-          |> Finding.with_link("Prerequisites", "/prerequisites")
+          |> Finding.with_action("Teach it again", "prepare_cad_part")
         ]
 
       _no_memory_to_ask_about ->
