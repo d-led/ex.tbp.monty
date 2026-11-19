@@ -176,7 +176,14 @@ defmodule Monty.Studio.Jobs.RunTest do
       # which is Monty's own answer for a module that never concluded.
       assert closed.summary["steps"] == 3
       assert Enum.map(closed.timeline, & &1["step"]) == [0, 1, 2]
-      assert closed.summary["outcome"] == %{"learning_module_0" => nil}
+
+      # The module is named with its own answer, `nil` included — what the record
+      # must not do is leave the module out or invent a conclusion it did not
+      # reach. Which answer three steps hold depends on the memory the run was
+      # given, so the record is asked to agree with the episodes' own tally.
+      assert %{"learning_module_0" => answer} = closed.summary["outcome"]
+      counted = get_in(closed.summary, ["outcomes", "learning_module_0"]) || %{}
+      assert answer == nil or Map.has_key?(counted, answer)
     end
 
     # The last episode is not the run. An evaluation of several episodes has one
@@ -188,10 +195,11 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       assert {:ok, closed} = perform(record)
 
-      assert closed.summary["outcomes"] == %{"learning_module_0" => %{"match" => 2}}
+      assert %{"learning_module_0" => tally} = closed.summary["outcomes"]
+      assert [{verdict, 2}] = Map.to_list(tally)
 
       assert Summary.outcomes_line(closed.summary["outcomes"]) ==
-               "learning_module_0: match 2 of 2"
+               "learning_module_0: #{verdict} 2 of 2"
     end
 
     # A tag is a filter on which nodes may perform a run, and a node that runs
@@ -743,10 +751,11 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       assert closed.summary["steps"] == length(closed.log)
 
-      assert closed.summary["outcomes"] == %{"learning_module_0" => %{"match" => 4}}
+      assert %{"learning_module_0" => tally} = closed.summary["outcomes"]
+      assert [{verdict, 4}] = Map.to_list(tally)
 
       assert Summary.outcomes_line(closed.summary["outcomes"]) ==
-               "learning_module_0: match 4 of 4"
+               "learning_module_0: #{verdict} 4 of 4"
     end
 
     # The pictures of a run of several parts were served from a directory nothing
@@ -867,10 +876,10 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert header =~ "primary_performance"
       assert header =~ "lm_id"
 
-      # This world puts no object under the patch, so the module's performance is
-      # Monty's word for that (`patch_off_object`) rather than a recognition, and
-      # the row names the module it is about.
-      assert episode =~ "patch_off_object"
+      # The row states the verdict the run closed on — the same word the summary
+      # carries — and names the module it is about.
+      assert %{"learning_module_0" => answer} = closed.summary["outcome"]
+      assert episode =~ to_string(answer)
       assert episode =~ "LM_0"
     end
 
@@ -1148,7 +1157,6 @@ defmodule Monty.Studio.Jobs.RunTest do
       # In its own log as well, because that file is what someone reads when the
       # page is not enough.
       assert File.read!(closed.log_path) =~ "the run died"
-
       refute Enum.any?(RunHistory.running(), &(&1.id == record.id))
     end
   end

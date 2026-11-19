@@ -146,45 +146,23 @@ defmodule Monty.Test.Tmp do
   end
 
   @doc """
-  Links what this machine has exported into the suite's own library folder.
+  A library tree a test may write into, answering what the application reads.
 
-  Called once by `test/test_helper.exs`: `config/test.exs` points the suite at a
-  temporary folder, so no test can write into a person's libraries, and a test
-  that asks a config for its memory needs the files to be there. What this
-  machine exported is linked in, into a folder the suite owns.
+  A run under test reads the memories this machine has — a config that names a
+  pretrained model needs one, and an empty tree is a run that cannot recognise
+  anything — but a test must not write into the folder a person's runs read: a
+  trained memory left there is one the next config to name that model trusts.
 
-  A machine with no export links nothing, and the tests that need a memory fail
-  naming the file that is missing — that is a prerequisite to fetch
-  (`/prerequisites`), not a fixture to carry in the checkout.
-  """
-  @spec mirror_libraries!() :: :ok
-  def mirror_libraries! do
-    mirror_into!(Monty.Studio.Memory.libraries_dir())
-  end
-
-  @doc """
-  A library tree a test may write into, answering what the installed one answers.
-
-  A run that trains files its memory in the library tree, and a test that trained
-  into a person's libraries would leave memories the next config to name one of
-  those models would trust. Pointing the suite at an empty tree instead is the
-  opposite mistake: a config whose model this machine exported would then be
-  asked to recognise objects from no memory at all.
-
-  So every release the machine exported is a directory of symlinks to the same
-  files — 185 MB is not copied — and `trained/` is a real, empty directory: that
-  is the one release a run writes (`Monty.Studio.Learned` files every memory it
-  keeps under it), so a test's memory lands in the temporary tree and a memory
-  the machine exported is never written through a link.
+  So the releases under `Monty.Paths.libraries/0` (the data folder, next to the
+  models) are linked into a tree this test owns — 185 MB is not copied — and
+  `trained/` is a real, empty directory: that is the one release a run writes, so
+  a test's memory lands in the temporary tree and a memory the machine exported
+  is never written through a link.
   """
   @spec libraries(String.t()) :: Path.t()
   def libraries(prefix \\ "libraries") do
-    env_dir(prefix, :monty_libraries_dir) |> mirror_into!()
-  end
+    dir = env_dir(prefix, :monty_libraries_dir)
 
-  # The releases under the data folder are the only ones a memory is ever written
-  # to or read from (`Monty.Paths.libraries/0`).
-  defp mirror_into!(dir) do
     File.mkdir_p!(Path.join(dir, "trained"))
 
     for release <- Path.wildcard(Path.join(Monty.Paths.libraries(), "*")),
@@ -195,11 +173,7 @@ defmodule Monty.Test.Tmp do
 
       File.mkdir_p!(Path.dirname(link))
 
-      if File.exists?(link) do
-        :ok
-      else
-        File.ln_s!(Path.expand(file), link)
-      end
+      if File.exists?(link), do: :ok, else: File.ln_s!(Path.expand(file), link)
     end
 
     dir

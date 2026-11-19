@@ -258,7 +258,7 @@ defmodule Monty.Studio.Jobs.Run do
           give_up(run_id, reason, not_prepared(prerequisite))
 
         {:error, reason} ->
-          give_up(run_id, reason)
+          give_up(run_id, reason, start_failure(reason))
       end
     rescue
       exception ->
@@ -1922,11 +1922,18 @@ defmodule Monty.Studio.Jobs.Run do
     broadcast(run_id, {:failed, %{reason: what}})
   end
 
-  defp give_up(
-         run_id,
-         reason,
-         sentence \\ "The run could not start: its experiment would not open."
-       ) do
+  # A check that refused the run already has the sentence for it: the world it
+  # names is not one this build carries, the loop it names is not one this port
+  # has. `runnable/1` answers with that sentence, so a record that says only
+  # "its experiment would not open" sends a reader to the log to learn what the
+  # page could have said.
+  defp start_failure(message) when is_binary(message),
+    do: "The run could not start: " <> message
+
+  defp start_failure(_reason), do: nil
+
+  defp give_up(run_id, reason, sentence \\ nil) do
+    sentence = sentence || "The run could not start: its experiment would not open."
     Logger.error("studio run #{run_id} did not happen: #{inspect(reason)}")
 
     recorded =
