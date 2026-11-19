@@ -162,10 +162,7 @@ defmodule Monty.Studio.MemoryTest do
       assert Setup.memory_findings(opened.setup) == []
 
       :ok =
-        Monty.Studio.Cad.Taught.remember(plan.memory, %{
-          fingerprint: "something else entirely",
-          nodes: 3
-        })
+        Monty.Studio.Cad.Taught.remember(plan.memory, "something else entirely", 3)
 
       assert [
                %{
@@ -178,6 +175,41 @@ defmodule Monty.Studio.MemoryTest do
 
       assert message =~ "taught from a different part file"
       assert message =~ "on #{Date.utc_today()}"
+    end
+
+    # A note written since the inputs themselves are kept can say which one moved,
+    # with the numbers: that is the difference between a warning a reader acts on
+    # and one they have to investigate.
+    test "names the stand-off that moved when the note kept the inputs" do
+      data = Tmp.dir("memory-staleness-inputs")
+      Tmp.system_env("MONTY_DATA", data)
+      libraries = Path.join(data, "libraries")
+      Tmp.app_env(:monty_libraries_dir, libraries)
+
+      {:ok, opened} = Monty.Studio.open("cad/plate_part_eval", world_simulator: :mujoco)
+      {:ok, plan} = Monty.Studio.Cad.Preparation.plan(opened.setup)
+
+      File.mkdir_p!(Path.dirname(plan.memory))
+      File.write!(plan.memory, "not really a memory")
+
+      :ok =
+        Monty.Studio.Cad.Taught.remember(
+          plan.memory,
+          "taught from twelve millimetres",
+          3,
+          %{
+            "optics" => %{"distance" => 12.0, "fov_x" => plan.optics.fov_x},
+            "parts" => [%{"object" => "plate", "digest" => "elsewhere"}],
+            "versions" => %{}
+          }
+        )
+
+      assert [%{code: :memory_taught_from_other_inputs, message: message}] =
+               Setup.memory_findings(opened.setup)
+
+      assert message =~ "25.0 mm"
+      assert message =~ "12.0 mm"
+      assert message =~ "a different part file"
     end
 
     # The stand-in is the one thing that works on a fresh volume: it loads a

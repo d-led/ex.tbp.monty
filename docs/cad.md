@@ -247,14 +247,15 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    lump, everything else held. Today a feature-labelled run uses an evaluation
    config written for whole objects.
 
-4. **The page says a memory was taught from other inputs, but not which input.**
-   A CAD memory records the part file's bytes, the optics and the sampling it came
-   from, and `Monty.Studio.Setup.memory_findings/1` now warns when the note and the
-   config disagree — "taught from a different part file or a different patch on
-   <day>", with a link to `/prerequisites`. What it cannot say yet is _which_ of
-   the two moved: the note keeps a fingerprint, not the numbers behind it, so
-   "taught at 25 mm and this config reads at 8 mm" is one field away from being
-   readable rather than one investigation away. That is the shape of the defect
-   that cost an afternoon earlier (`cad/blend_part_eval` taught through one
-   stand-off and stepped through another); the warning now catches it, and naming
-   the difference is what turns the warning into an instruction.
+4. **A memory taught from other inputs is named, but only from now on.** A CAD
+   memory records the part file's bytes, the optics, the sampling and the CAD
+   packages' versions, and `Monty.Studio.Setup.memory_findings/1` warns when the
+   note and the config disagree — with the day, the input that moved when the note
+   kept the numbers ("a patch this config reads from 8.0 mm through 11.4°, where
+   the memory was taught from 25.0 mm through 11.4°"), and a link to
+   `/prerequisites`. That is the shape of the defect that cost an afternoon
+   earlier (`cad/blend_part_eval` taught through one stand-off and stepped through
+   another): the warning catches it, and the numbers turn the warning into an
+   instruction. A note written before the inputs were kept still says only _that_
+   one moved — one Make click upgrades it, because the same click re-teaches
+   anything whose fingerprint cannot be reproduced.

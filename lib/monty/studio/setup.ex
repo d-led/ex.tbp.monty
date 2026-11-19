@@ -2695,15 +2695,13 @@ defmodule Monty.Studio.Setup do
   # this from claiming anything about a downloaded archive.
   defp stale_memory_findings(setup) do
     case taught_from(setup) do
-      {:other_inputs, at} ->
+      {:other_inputs, %{at: at} = answer} ->
         [
           Finding.new(
             :warning,
             :memory_taught_from_other_inputs,
-            "The memory this run loads was taught from a different part file or a " <>
-              "different patch#{on_day(at)}, and this config reads through its own. " <>
-              "Make it again on /prerequisites, or point the config at the memory it " <>
-              "was taught.",
+            "The memory this run loads #{what_moved(answer)}#{on_day(at)}. Make it again on " <>
+              "/prerequisites, or point the config at the memory it was taught.",
             "model_name_or_path"
           )
           |> Finding.with_link("Prerequisites", "/prerequisites")
@@ -2713,6 +2711,43 @@ defmodule Monty.Studio.Setup do
         []
     end
   end
+
+  # Which input moved, when the note kept them. A note written before the inputs
+  # were recorded says only that one of them did, which is still the answer a
+  # reader acts on.
+  defp what_moved(%{was: nil}), do: "was taught from a different part file or a different patch"
+
+  defp what_moved(%{was: was, now: now}) do
+    moved =
+      [
+        was["parts"] != now["parts"] && "a different part file",
+        was["optics"] != now["optics"] && optics_moved(was["optics"], now["optics"]),
+        was["versions"] != now["versions"] && "a newer CAD package"
+      ]
+      |> Enum.reject(&(&1 == false or is_nil(&1)))
+
+    case moved do
+      [] -> "was taught from inputs that no longer match this config"
+      [one] -> "was taught from #{one}"
+      several -> "was taught from #{Enum.join(several, " and ")}"
+    end
+  end
+
+  defp optics_moved(was, now) when is_map(was) and is_map(now) do
+    "a patch this config reads from #{millimetres(now["distance"])} through " <>
+      "#{degrees(now["fov_x"])}, where the memory was taught from " <>
+      "#{millimetres(was["distance"])} through #{degrees(was["fov_x"])}"
+  end
+
+  defp optics_moved(_was, _now), do: "a different patch"
+
+  defp millimetres(distance) when is_number(distance), do: "#{Float.round(distance * 1.0, 1)} mm"
+  defp millimetres(_absent), do: "an unknown stand-off"
+
+  defp degrees(fov_x) when is_number(fov_x),
+    do: "#{Float.round(fov_x * 180 / :math.pi() * 1.0, 1)}°"
+
+  defp degrees(_absent), do: "an unknown lens"
 
   defp taught_from(setup) do
     case Monty.Studio.Cad.Preparation.plan(setup) do

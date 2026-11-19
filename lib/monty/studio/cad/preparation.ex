@@ -241,10 +241,36 @@ defmodule Monty.Studio.Cad.Preparation do
 
       _taught_from_something_else ->
         with {:ok, nodes} <- write_memory(plan, trainer),
-             :ok <- Taught.remember(plan.memory, %{fingerprint: fingerprint, nodes: nodes}) do
+             :ok <- Taught.remember(plan.memory, fingerprint, nodes, recorded_inputs(plan)) do
           {:ok, nodes, :now}
         end
     end
+  end
+
+  # What the note keeps beside the fingerprint, in a shape JSON gives back
+  # unchanged — so a reader can say that the stand-off moved from 25.0 to 8.0 mm
+  # rather than only that something did. String keys, because that is what comes
+  # back off the disk: a comparison needs both sides spelled the same way.
+  defp recorded_inputs(plan) do
+    %{
+      "optics" => %{"distance" => plan.optics.distance, "fov_x" => plan.optics.fov_x},
+      "parts" =>
+        Enum.map(plan.parts, fn {object, step} ->
+          %{"object" => object, "digest" => hex_digest(step)}
+        end),
+      "versions" => versions()
+    }
+  end
+
+  defp hex_digest(step) do
+    case digest(step) do
+      :absent -> "absent"
+      hash -> Base.encode16(hash, case: :lower)
+    end
+  end
+
+  defp versions do
+    Map.new(packages(), fn {app, vsn} -> {to_string(app), to_string(vsn)} end)
   end
 
   # What the memory is a function of, as one string: the bytes of every part file
@@ -265,20 +291,25 @@ defmodule Monty.Studio.Cad.Preparation do
 
   `:none` when there is no memory or no note beside it — absence is
   `Monty.Studio.Setup.memory_findings/1`'s to report — `:current` when the note
-  names the fingerprint this plan would write now, and `{:other_inputs, at}` when
-  it was written from something else. That last answer is the one a page can act
-  on: a config whose stand-off or lens changed after the memory was taught reads
-  a surface the memory was never taught, which is a defect no reading of the
-  files shows and a comparison does.
+  names the fingerprint this plan would write now, and `{:other_inputs, %{at:
+  written_at, was: recorded_inputs, now: current_inputs}}` when it was written
+  from something else. That last answer is the one a page can act on: it carries
+  the numbers behind both fingerprints, so a reader can be told that the stand-off
+  moved from 25.0 to 8.0 mm instead of being sent to look. `was` is `nil` for a
+  note written before the inputs were kept.
   """
-  @spec staleness(plan(), module()) :: :none | :current | {:other_inputs, String.t()}
+  @spec staleness(plan(), module()) :: :none | :current | {:other_inputs, map()}
   def staleness(%{} = plan, trainer \\ @trainer) do
     case Taught.read(plan.memory) do
       :none ->
         :none
 
-      {:ok, %{fingerprint: recorded, at: at}} ->
-        if recorded == fingerprint(plan, trainer), do: :current, else: {:other_inputs, at}
+      {:ok, %{fingerprint: recorded, at: at, inputs: was}} ->
+        now = recorded_inputs(plan)
+
+        if recorded == fingerprint(plan, trainer),
+          do: :current,
+          else: {:other_inputs, %{at: at, was: was, now: now}}
     end
   end
 

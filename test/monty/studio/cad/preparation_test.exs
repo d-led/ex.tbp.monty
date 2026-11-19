@@ -302,6 +302,30 @@ defmodule Monty.Studio.Cad.PreparationTest do
       assert {:other_inputs, _written_at} =
                Preparation.staleness(closer, __MODULE__.CountingTrainer)
     end
+
+    # The note keeps the inputs as well as the fingerprint, so a page can say which
+    # one moved: "this config reads from 12.0 mm where the memory was taught from
+    # 25.0", rather than sending a reader to look.
+    test "answers with the numbers behind a disagreement, not only that there is one",
+         %{objects: objects} do
+      {:ok, plan} = Preparation.plan(with_optics(setup_struct(objects)))
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+
+      closer = %{plan | optics: %{plan.optics | distance: 12.0}}
+
+      assert {:other_inputs, %{was: was, now: now, at: written_at}} =
+               Preparation.staleness(closer, __MODULE__.CountingTrainer)
+
+      assert was["optics"]["distance"] == 25.0
+      assert now["optics"]["distance"] == 12.0
+      assert was["parts"] == now["parts"]
+      assert was["versions"] == now["versions"]
+
+      assert [%{"object" => "plate", "digest" => digest}] = now["parts"]
+      assert byte_size(digest) == 64
+      assert is_binary(written_at)
+    end
   end
 
   defp teaching, do: [trainer: __MODULE__.CountingTrainer, exporter: __MODULE__.Exporter]

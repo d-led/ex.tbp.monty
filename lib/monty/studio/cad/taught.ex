@@ -22,12 +22,24 @@ defmodule Monty.Studio.Cad.Taught do
 
   @typedoc """
   A memory's provenance: the fingerprint of what produced it, how many nodes it
-  holds, and when it was written.
+  holds, when it was written, and — for a note written since 2026-11-19 — the
+  inputs themselves, so a disagreement can say *which* one moved rather than only
+  that one did: `%{"optics" => …, "parts" => …, "versions" => …}`.
+
+  `provenance` is `nil` for a note written before those three were kept. Nothing
+  is inferred then: an old note still answers "this is not what the config would
+  teach", which is what it is for.
   """
+  # A JSON object, as `JSON.decode/1` gives it back: string keys, values that are
+  # maps, lists or scalars. A typespec's map cannot spell a string key, so this
+  # says the shape it is.
+  @type inputs :: %{optional(String.t()) => term()}
+
   @type provenance :: %{
           fingerprint: String.t(),
           nodes: non_neg_integer(),
-          at: String.t()
+          at: String.t(),
+          inputs: inputs() | nil
         }
 
   @doc """
@@ -55,14 +67,25 @@ defmodule Monty.Studio.Cad.Taught do
          {:ok, document} <- JSON.decode(text),
          %{"fingerprint" => fingerprint, "nodes" => nodes, "at" => at} <- document,
          true <- is_binary(fingerprint) and is_integer(nodes) and is_binary(at) do
-      {:ok, %{fingerprint: fingerprint, nodes: nodes, at: at}}
+      {:ok, %{fingerprint: fingerprint, nodes: nodes, at: at, inputs: inputs_of(document)}}
     else
       _not_a_record -> :none
     end
   end
 
+  defp inputs_of(%{"optics" => _optics, "parts" => _parts, "versions" => _versions} = document),
+    do: Map.take(document, ["optics", "parts", "versions"])
+
+  defp inputs_of(_without_them), do: nil
+
   @doc """
-  Writes `record` beside `memory`, which has just been taught.
+  Writes the note beside `memory`, which has just been taught.
+
+  `inputs` is what the fingerprint was made from, in the JSON shape the note is
+  read back in — the optics, the part files' digests and the packages' versions —
+  so a reader can say which of them moved rather than only that one did. An
+  empty map is a note that knows only its fingerprint, which is what the first
+  version of this wrote.
 
   Answers a sentence rather than a bare reason: a build that cannot record what
   it taught is a build that will teach it again, and a person reading the row
@@ -71,14 +94,17 @@ defmodule Monty.Studio.Cad.Taught do
   # sobelow_skip ["Traversal.FileModule"]
   # Beside the memory it describes, under the same libraries root: the path comes
   # from the config, not from a request.
-  @spec remember(Path.t(), %{fingerprint: String.t(), nodes: non_neg_integer()}) ::
-          :ok | {:error, String.t()}
-  def remember(memory, %{fingerprint: fingerprint, nodes: nodes}) do
-    record = %{
-      "fingerprint" => fingerprint,
-      "nodes" => nodes,
-      "at" => DateTime.utc_now() |> DateTime.to_iso8601()
-    }
+  @spec remember(Path.t(), String.t(), non_neg_integer(), map()) :: :ok | {:error, String.t()}
+  def remember(memory, fingerprint, nodes, inputs \\ %{}) do
+    record =
+      Map.merge(
+        %{
+          "fingerprint" => fingerprint,
+          "nodes" => nodes,
+          "at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        },
+        Map.take(inputs, ["optics", "parts", "versions"])
+      )
 
     case File.write(path(memory), JSON.encode!(record)) do
       :ok ->
