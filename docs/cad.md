@@ -205,6 +205,19 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    yet. The monolithic arm of the pair does exist — `cad/plate_part_eval`, one lump,
    one memory, three episodes concluded.
 
+   What a parent needs is smaller than it sounds, and Monty says so: its own
+   compositional experiment (`base_infer_cows_large_compositional_random_locs` in
+   the upstream snapshots) runs `MontyForEvidenceGraphMatching` — the class every
+   run here already uses. The composition is in the data and the memory: scenes
+   whose objects are made of parts, and a pretrained memory of those compositions.
+   So nothing needs porting for this arm, and two of its three arms are already on
+   the page: one lump (`plate_part_eval`) and one object per feature
+   (`plate_features_eval`, with `parts_set_eval` as the set). What is missing is a
+   memory taught on an _assembly_ — the plate with its boss and risers placed as
+   the STEP file places them — sampled in the assembly's frame rather than one
+   part at a time. That is `MontyCad.Training`'s sampling and the CAD world's
+   placement, not a config.
+
 2. **A set of parts, taught and loaded but not yet told apart.** One memory can
    now hold several parts: a memory whose name ends in `_set` is taught from the
    objects its experiment names (`Monty.Studio.Cad.Preparation` reads
