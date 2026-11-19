@@ -218,6 +218,18 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    part at a time. That is `MontyCad.Training`'s sampling and the CAD world's
    placement, not a config.
 
+   One detail decides how that sampler is written, and it is worth stating before
+   somebody starts: a graph node is not a point. It is a location _and_ a feature
+   map whose `pose_vectors` hold the surface's normal and tangents in the frame
+   the sensor reported them in. Composing parts therefore transforms a node's
+   location **and** rotates the vectors inside its features — and both halves must
+   agree, or the parent's graph says a face looks one way while sitting another.
+   The parts also have to be taught through the same optics the parent is taught
+   through, since the parent's nodes are those parts' nodes, moved. A placement
+   that is only a translation is the cheap first case: the normals survive it,
+   which is why an assembly of parts laid side by side is a smaller change than
+   an assembly of parts turned.
+
 2. **A set of parts, taught and loaded but not yet told apart.** One memory can
    now hold several parts: a memory whose name ends in `_set` is taught from the
    objects its experiment names (`Monty.Studio.Cad.Preparation` reads
