@@ -209,6 +209,17 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    of the same kind as the feature wall above: one part per memory still
    concludes, three times over.
 
+   Run the same way from the experiment page — two episodes, 500 steps each, one
+   node, `ex_mujoco` — and the run's own `eval_stats.csv` adds one fact: of the
+   500 steps each episode took, the sensor fed a percept on 110 of the plate's and
+   72 of the blend's (`num_steps`, the column the page labels "sensor steps"), and
+   the row carries `patch_off_object`. That is not by itself what fails: the
+   single-part run that works, `cad/blend_part_eval` started from the same page,
+   feeds 25 of its 178 steps and still concludes `blend`, correct. Sparse feeding
+   is how this optics behaves; what the set lacks is the conclusion, and the
+   belief standing when the patch last saw the part is reported 500 steps later —
+   `plate` in both episodes.
+
    The stand-off is the set's cost driver: memory sampling follows the patch, so
    a two-part memory at 8 mm is four times the nodes of the same parts at 16 mm
    — 34 018 against 8 535, 467 s against 74 s of teaching, both measured on this
