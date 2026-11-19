@@ -657,6 +657,18 @@ was building the desktop bundle on the same machine, which holds several gigabyt
 by itself. A 77-object run therefore has two ceilings to fit, not one, and the
 measurement wants a machine with nothing else on it.
 
+**Resolved 2026-11-19.** The hand-over count this section asked for was never
+taken; what replaced it was removing the hand-overs. A module's state is now built
+in the module's own process from the library's identity rather than from the
+library (`Setup.model_spec/3` with `lazy_state: true` — a ten-object spec measures
+241.3 MB eager and 8.9 KB lazy), and the command line stopped loading the library
+into its own process to pass it on, which had put the 213 MB back into every copy
+of the spec the model and its modules were handed. On this Mac,
+`base_77obj_dist_agent --episodes 1 --steps 40 --no-record` steps and concludes: 26
+steps, evidence 21.22 with one object possible, 43 181 goals, 8.1 s of model time
+and 0.2 s of world. What is left there is the cost of a step on a library this size
+(`docs/roadmap.md`, phase 3).
+
 For contrast, the ten-object experiment does run: `base_config_10distinctobj_dist_agent`
 completes its 140 episodes on both sides (the section above). Its library is an
 order of magnitude smaller.
