@@ -99,6 +99,7 @@ defmodule Monty.Prerequisites.Saga do
           prerequisite: Prerequisites.prerequisite(),
           fetcher: module(),
           builder: module(),
+          force: boolean(),
           path: Path.t(),
           part: Path.t(),
           bytes: non_neg_integer(),
@@ -128,6 +129,15 @@ defmodule Monty.Prerequisites.Saga do
   to one `.part` file is a corruption, not a speed-up. A machine that has
   finished is history, so the next request starts a fresh one — which is how a
   click after a failure retries, and how a deleted library is fetched again.
+
+  `:force` asks for the work rather than for the presence check. A build's
+  directory holding something is "present" to `Monty.Prerequisites.present?/1`,
+  and a memory in that directory taught from other inputs is still a memory a
+  run cannot use — so a person pressing the button such a finding puts on a page
+  would otherwise be answered by a machine that looked at the folder and
+  finished. The builder itself leaves a memory alone when its own fingerprints
+  say it is current, so forcing a build costs a walk of the notes rather than
+  the geometry.
   """
   @spec start(Prerequisites.prerequisite(), keyword()) ::
           {:ok, pid()} | {:ok, pid(), term()} | :ignore | {:error, term()}
@@ -231,8 +241,9 @@ defmodule Monty.Prerequisites.Saga do
     with :ok <- make_directory(path) do
       data = %{
         prerequisite: prerequisite,
-        fetcher: Keyword.get(opts, :fetcher, fetcher()),
-        builder: Keyword.get(opts, :builder, Monty.Prerequisites.Build),
+        fetcher: Keyword.get(opts, :fetcher) || fetcher(),
+        builder: Keyword.get(opts, :builder) || builder(),
+        force: Keyword.get(opts, :force, false),
         path: path,
         part: path <> ".part",
         bytes: 0,
@@ -549,6 +560,14 @@ defmodule Monty.Prerequisites.Saga do
   # Where the machine is now, asked of the filesystem rather than remembered:
   # this is the answer a restarted process gives, and the answer a first one
   # gives too.
+  #
+  # A build asked for is a build done: the folder holds something, so `phase/3`
+  # would answer `:done`, and what is out of date inside it is the builder's own
+  # question (`Monty.Studio.Cad.Preparation` compares each memory's fingerprints
+  # and teaches only what changed).
+  defp where(%{force: true, prerequisite: %{build: build}} = data) when is_binary(build),
+    do: {:next_state, :building, data}
+
   defp where(data), do: {:next_state, phase(data.prerequisite, data.path, data.record), data}
 
   @doc """
@@ -711,6 +730,12 @@ defmodule Monty.Prerequisites.Saga do
 
   defp fetcher do
     Application.get_env(:ex_tbp_monty, :prerequisite_fetcher, Monty.Prerequisites.HttpFetcher)
+  end
+
+  # Named for the same reason the fetcher is: a test drives a build's phases
+  # without the geometry.
+  defp builder do
+    Application.get_env(:ex_tbp_monty, :prerequisite_builder, Monty.Prerequisites.Build)
   end
 
   defp broadcast(data) do

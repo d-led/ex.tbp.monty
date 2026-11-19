@@ -126,6 +126,45 @@ defmodule Monty.Prerequisites.SagaTest do
       assert Record.read(prerequisite)["error"] == "could not build: a_part refused at refuse"
       assert Saga.status(pid).status == :failed
     end
+
+    test "a build whose folder already holds something has nothing to do" do
+      prerequisite = already_built()
+      Application.put_env(:ex_tbp_monty, :fake_build_steps, ["first"])
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :fake_build_steps) end)
+
+      assert {:ok, pid} = Saga.start(prerequisite, builder: Monty.Test.FakeBuilder)
+
+      assert_receive {:download, %{id: "made_here", status: :done}}, 2_000
+      refute_received {:download, %{id: "made_here", status: :building}}
+      assert Saga.status(pid).status == :done
+    end
+
+    test "a build a click asks for is built even where it is already there" do
+      prerequisite = already_built()
+      Application.put_env(:ex_tbp_monty, :fake_build_steps, ["first"])
+      on_exit(fn -> Application.delete_env(:ex_tbp_monty, :fake_build_steps) end)
+
+      assert {:ok, _pid} =
+               Saga.start(prerequisite, builder: Monty.Test.FakeBuilder, force: true)
+
+      assert_receive {:download, %{id: "made_here", status: :building, built: %{what: "first"}}},
+                     2_000
+
+      assert_receive {:download, %{id: "made_here", status: :done}}, 2_000
+    end
+
+    test "asking for a download does not skip the fetch a file already answers" do
+      prerequisite = Prerequisites.get("tiny")
+      path = Prerequisites.target_path(prerequisite)
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, "hello world")
+
+      assert {:ok, pid} = Saga.start(prerequisite, force: true)
+
+      assert_receive {:download, %{id: "tiny", status: :done}}, 2_000
+      assert Saga.status(pid).status == :done
+      assert File.read!(path) == "hello world"
+    end
   end
 
   describe "a prerequisite that arrives as an archive" do
@@ -419,6 +458,19 @@ defmodule Monty.Prerequisites.SagaTest do
 
       assert_receive {:download, %{id: "tiny", total: 11}}, 2_000
     end
+  end
+
+  # A folder this build already filled. `present?/1` asks that it holds
+  # something — an empty directory is the `mkdir` on the way to some, not data.
+  defp already_built do
+    prerequisite = Prerequisites.get("made_here")
+    folder = Prerequisites.target_path(prerequisite)
+
+    File.mkdir_p!(folder)
+    File.write!(Path.join(folder, "kept"), "")
+
+    assert Prerequisites.present?(prerequisite), "a build that is already there"
+    prerequisite
   end
 
   # A tiny tgz carrying one pickle, offered to the fake fetcher as the bytes of

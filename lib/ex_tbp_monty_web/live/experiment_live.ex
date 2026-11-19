@@ -1306,6 +1306,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # holds. The click starts the same build `/prerequisites` runs, and the page
   # re-reads its findings when that build finishes — the moment the finding stops
   # being true.
+  #
+  # It is asked for rather than looked up: the finding this click answers is that
+  # the memory on disk was taught from other inputs, and the directory holding
+  # that memory is present — so a machine that asked the filesystem first would
+  # answer "nothing to do" and the click would do nothing at all.
   def handle_event("prepare_cad_part", _params, socket) do
     {:noreply, prepare_cad_part(socket)}
   end
@@ -1456,7 +1461,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         put_flash(socket, :error, "No #{@cad_build} prerequisite in this build's manifest.")
 
       prerequisite ->
-        case Saga.start(prerequisite) do
+        case Saga.start(prerequisite, force: true) do
           {:error, reason} ->
             put_flash(socket, :error, "Could not start: #{Failure.sentence(reason)}")
 
