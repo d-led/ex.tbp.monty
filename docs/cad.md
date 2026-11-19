@@ -183,6 +183,18 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    cannot change. Dropping it is a decision rather than a tidy-up: the memory holds
    it, so the teaching and the sensor change together.
 
+   That pair is not optional, and a run says so. Dropping the channel from the
+   _reader_ alone — a module whose tolerances name only
+   `principal_curvatures_log`, against the memory as it is — dies on its first
+   hypothesis, in the evidence calculator: `key "hsv" not found`. The list of
+   features a module uses is derived from its tolerances
+   (`features_to_use`, taken from `matched_features(tolerances)`), so a module
+   without an `hsv` tolerance still reads a memory whose rows carry an `hsv`
+   column, and the column it does not name is a key it cannot find. A
+   curvature-only arm therefore needs a memory taught without the channel, which
+   is `MontyCad.Training`'s feature list and not a config: the pair changes
+   together, or neither changes.
+
    The episode follows from that: on this Mac, one `cad/plate_features_eval` episode
    at 500 steps is fed on 97 of them, and its evidence plateaus at 43.9 with four
    objects still possible. What is missing is not steps but a percept that covers an
