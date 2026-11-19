@@ -388,18 +388,27 @@ defmodule Monty.Studio.SetupTest do
     end
   end
 
-  describe "an attention system this port does not step" do
+  describe "the attention system" do
     # The cows experiments name `monty/attention_system: default`. Monty pools
-    # and filters the goals in it, so a run that ignored it would be a
-    # different experiment wearing the same config's name.
-    test "refuses the config, rather than passing every goal through" do
+    # the goals into 5 mm voxels and filters them, so a run that ignored it would
+    # be a different experiment wearing the same config's name.
+    test "a config that names the default system gets Monty's voxel grid" do
       setup = setup_from(Map.put(@base, "monty/attention_system", "default"))
 
-      assert :attention_not_applied in errors(setup)
+      assert {Monty.Attention.AttentionSystem.DefaultAttentionSystem, system} =
+               Setup.model_spec(setup, "model").attention
+
+      assert system.voxel_size == 0.005
     end
 
-    test "a config that names no attention system is not refused for one" do
-      refute :attention_not_applied in errors(setup_from(@base))
+    test "a config that names no attention system gets Monty's no-op, and every goal passes" do
+      assert {Monty.Attention.AttentionSystem.NoopAttentionSystem, system} =
+               Setup.model_spec(setup_from(@base), "model").attention
+
+      goals = [%Monty.Cmp.Goal{sender_id: "lm_0", sender_type: :gsg}]
+
+      assert {_system, ^goals} =
+               Monty.Attention.AttentionSystem.NoopAttentionSystem.step(system, goals, [])
     end
   end
 

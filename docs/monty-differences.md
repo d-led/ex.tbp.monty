@@ -1986,22 +1986,59 @@ they were slower. A window of five steps was enough for them to deliver.
 the choice only in the form it was started with; the collected `still_believing`
 is in the step's status but not yet in the page's verdict line.
 
-## 2.32 An attention system is ported but not stepped
+## 2.32 An attention system is stepped, and its grid is not in a memento
 
-Monty builds the attention system its config names and steps it once a step's
-goals and regions are proposed (`MontyBase._pass_goals`), so a
-`DefaultAttentionSystem` pools the goals into 5 mm voxels and what the motor
-system sees is the pooled, filtered list. This port steps Monty's no-op system on
-every run: `State.all_goals/2` — every goal passes — is the default and the only
-implementation.
+Monty builds the attention system its config names (`MontyExperiment` pops
+`attention_system` out of the monty config and instantiates it, and `MontyBase`
+falls back to `NoopAttentionSystem` when a config names none), steps it once a
+step's goals and regions are proposed (`_pass_goals`) and resets it per episode
+(`MontyBase.reset`). This port does the same: `Setup.model_spec/3` builds the
+class the config names, `Monty.Runtime.Step.State` carries the system and steps it
+in `step_attention/3`, and `reset_episode_state/1` resets it in the same places
+Monty does — which includes _not_ resetting it in
+`NoResetEvidenceGraphMatching`'s later resets, since Monty's override does not.
 
-The classes are here. `Monty.Attention.*` ports all seven files of
-`src/tbp/monty/attention/` with their tests; what is missing is the threading. An
-attention system carries state (a voxel grid and its telemetry), Monty's model
-holds it and resets it per episode, and the step state here carries a
-two-argument function instead.
+The system is a struct threaded through the step's state rather than an object
+mutated in place, which is how every other piece of model state travels here
+(`docs/monty-differences.md` §2.1): what a step did to attention is in its return
+value, and two runs of one episode cannot share a grid by accident.
 
-Until that is wired, `Setup` refuses a config that names a non-noop attention
-system (`:attention_not_applied`, an error) rather than running it with every goal
-passed through. The cows experiments are the configs that name one, and the
-refusal says so instead of reporting numbers from an experiment nobody ran.
+Two smaller differences:
+
+- **The grid is not carried in a memento.** Monty's `snapshot()` includes
+  `attention_system_dict` — the grid and its telemetry. Nothing in Monty reads it
+  (no logger in `fw/loggers/` or `fw/utils/logging_utils.py` mentions attention),
+  so this port does not build one.
+- **Only `voxel_size` is read from the config.** `DefaultAttentionSystem`'s
+  other arguments — `weight_pooler`, `decay`, `merge`, `goal_filter`, `telemetry`
+  — are Monty's defaults here and the port's `new/1` states them. No config in
+  `conf/` sets any of them; a config that did is refused with
+  `:attention_argument_not_read` rather than run with the argument dropped, which
+  would be a different experiment wearing the same config's name.
+
+## 2.33 A pickle's NaN is `nil`
+
+The v11 compositional models carry a NaN in the pandas frame that a training run's
+attention bookkeeping left in the saved state — Monty's voxel grid is a pandas
+`DataFrame` (`attention/voxel_grid.py`), and a weight for a voxel nothing occupied
+is NaN there. Python writes NaN as the ordinary value it is; it propagates through
+arithmetic and compares unequal to everything, itself included.
+
+BEAM has neither NaN nor infinity: `<<value::float-64>>` does not match those bit
+patterns, so a pickle carrying one stops the reader at that byte.
+`Monty.Studio.Pretrained.Pickle` therefore walks the pickle opcode by opcode
+before the dependency reads it and writes every non-finite `BINFLOAT` — and a text
+`FLOAT` of `nan` or `inf` — as `NONE`, that is `nil`, which is this port's NaN, as
+it is everywhere else a value is absent (`docs/validation.md`).
+
+The walk is by opcode, not by byte search, because a NaN's byte pattern also
+occurs inside tensor storages, which are the numbers the read exists for: a
+search-and-replace would corrupt them. An opcode the walk's table does not know
+is an error, never a guess, and a pickle with no non-finite number in it comes
+back byte for byte — which is every model this port read before v11.
+
+An export reads the object models' graph memory, not that bookkeeping, so the
+translated value is read past and no record carries it (a record holding `nil`
+where a number belongs would be a broken feature, and none does). Where a NaN
+would reach a step, `nil` is what it becomes: the port's answer for a value that
+is absent.

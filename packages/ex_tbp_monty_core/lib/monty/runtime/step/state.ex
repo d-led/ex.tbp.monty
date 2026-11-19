@@ -19,11 +19,16 @@ defmodule Monty.Runtime.Step.State do
   are written in terms of.
   """
 
+  alias Monty.Attention.AttentionSystem.NoopAttentionSystem
   alias Monty.Experiment.MatchCriteria
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.GraphMatching.MontyForGraphMatching
 
   @default_timeout 5_000
+
+  # Monty's own answer for a model whose config names no attention system
+  # (`MontyBase.__init__`), and every goal passes through it untouched.
+  @default_attention {NoopAttentionSystem, %NoopAttentionSystem{}}
 
   @enforce_keys [:model_id]
   defstruct model_id: nil,
@@ -43,7 +48,7 @@ defmodule Monty.Runtime.Step.State do
             motor_state: nil,
             motor_only?: false,
             combine_votes: &__MODULE__.combine_votes/2,
-            attention: &__MODULE__.all_goals/2,
+            attention: @default_attention,
             experiment_mode: nil,
             step_type: :matching,
             min_eval_steps: 0,
@@ -83,8 +88,7 @@ defmodule Monty.Runtime.Step.State do
           motor_state: term(),
           motor_only?: boolean(),
           combine_votes: (map(), t() -> map()),
-          attention: ([Monty.Cmp.Goal.t()], [Monty.Cmp.AttentionRegion.t()] ->
-                        [Monty.Cmp.Goal.t()]),
+          attention: {module(), term()},
           experiment_mode: Monty.Frameworks.Models.AbstractMontyClasses.LearningModule.mode(),
           step_type: step_type(),
           min_eval_steps: non_neg_integer(),
@@ -179,7 +183,7 @@ defmodule Monty.Runtime.Step.State do
       motor_state: options |> Map.get(:motor) |> motor_state(),
       motor_only?: options |> Map.get(:motor) |> motor_only?(),
       combine_votes: Map.get(options, :combine_votes, &__MODULE__.combine_votes/2),
-      attention: Map.get(options, :attention, &__MODULE__.all_goals/2),
+      attention: Map.get(options, :attention, @default_attention),
       experiment_mode: Map.get(options, :experiment_mode),
       min_eval_steps: Map.get(options, :min_eval_steps, 0),
       min_train_steps: Map.get(options, :min_train_steps, 0),
@@ -239,9 +243,26 @@ defmodule Monty.Runtime.Step.State do
     answers != [] and Enum.all?(answers, &is_struct(&1, MapSet))
   end
 
-  @doc "Monty's `NoopAttentionSystem`: every proposed goal passes."
-  @spec all_goals([Monty.Cmp.Goal.t()], [Monty.Cmp.AttentionRegion.t()]) :: [Monty.Cmp.Goal.t()]
-  def all_goals(goals, _regions), do: goals
+  @doc """
+  Monty's `_pass_goals` tail: the attention system judges the goals against the
+  grid it has learned, and what it answers is what the motors are given.
+
+  Answers the state with the system as this step left it — a system that keeps a
+  grid has to be put back, or every step would start from an empty one — and the
+  goals worth pursuing.
+  """
+  @spec step_attention(t(), [Monty.Cmp.Goal.t()], [Monty.Cmp.AttentionRegion.t()]) ::
+          {t(), [Monty.Cmp.Goal.t()]}
+  def step_attention(%__MODULE__{attention: {module, system}} = state, goals, regions) do
+    {system, goals} = module.step(system, goals, regions)
+    {%{state | attention: {module, system}}, goals}
+  end
+
+  @doc "Monty's `MontyBase.reset` does this too: an episode starts with attention empty."
+  @spec reset_attention(t()) :: t()
+  def reset_attention(%__MODULE__{attention: {module, system}} = state) do
+    %{state | attention: {module, module.reset(system)}}
+  end
 
   defp motor_state(nil), do: nil
   defp motor_state({_module, state}), do: state

@@ -62,6 +62,9 @@ defmodule Monty.Studio.Setup do
             remote_policy: nil,
             transforms: [],
             attention_system: nil,
+            # The attention system's own config node, as Monty instantiates it:
+            # voxel size and the rest are values, not a class name.
+            attention_system_config: %{},
             monty_args: %{},
             sensors: [],
             learning_modules: [],
@@ -214,6 +217,7 @@ defmodule Monty.Studio.Setup do
       match_criterion: configured_match_criterion(config),
       model_name_or_path: Map.get(config, "model_name_or_path"),
       attention_system: describe_target(get_in(monty_config, ["attention_system", "_target_"])),
+      attention_system_config: Map.get(monty_config, "attention_system", %{}),
       monty_args: Map.get(monty_config, "monty_args", %{}),
       sensors: sensors,
       learning_modules: learning_modules,
@@ -536,6 +540,7 @@ defmodule Monty.Studio.Setup do
         lm_to_lm: inputs_by_learning_module(setup, :hierarchy),
         lm_to_lm_vote: vote_wiring(setup),
         motor: motor_spec(setup),
+        attention: attention_system(setup),
         # A step waits for its modules for as long as they take. Monty's round
         # is synchronous, and the vote round — which does have a deadline, on
         # purpose — is a separate number (`vote_timeout`). A deadline on the
@@ -645,6 +650,34 @@ defmodule Monty.Studio.Setup do
 
   defp motor_spec(%__MODULE__{}),
     do: {Monty.Simulators.Synthetic.Motor, Monty.Simulators.Synthetic.Motor.new()}
+
+  # Monty's `attention_system_config` is instantiated with Hydra, so what the
+  # config names is a class plus its arguments — and the arguments are the only
+  # thing that decides how attention behaves. `MontyBase` builds the no-op one
+  # when a config names none.
+  defp attention_system(%__MODULE__{attention_system_config: config}) when is_map(config) do
+    case Map.get(config, "_target_") do
+      "tbp.monty.attention.attention_system.DefaultAttentionSystem" ->
+        {Monty.Attention.AttentionSystem.DefaultAttentionSystem,
+         Monty.Attention.AttentionSystem.DefaultAttentionSystem.new(attention_options(config))}
+
+      _named_elsewhere ->
+        {Monty.Attention.AttentionSystem.NoopAttentionSystem,
+         %Monty.Attention.AttentionSystem.NoopAttentionSystem{}}
+    end
+  end
+
+  defp attention_system(%__MODULE__{}),
+    do:
+      {Monty.Attention.AttentionSystem.NoopAttentionSystem,
+       %Monty.Attention.AttentionSystem.NoopAttentionSystem{}}
+
+  # `DefaultAttentionSystem`'s own defaults are Monty's, so only an argument the
+  # config states travels: a config that names nothing gets the 5 mm grid.
+  @attention_options %{"voxel_size" => :voxel_size}
+  defp attention_options(config) do
+    for {key, field} <- @attention_options, Map.has_key?(config, key), do: {field, config[key]}
+  end
 
   @doc """
   The world this setup is run against.
@@ -2547,24 +2580,24 @@ defmodule Monty.Studio.Setup do
 
   defp supervision_findings(%__MODULE__{}), do: []
 
-  # Monty builds the attention system its config names and steps it with the
-  # goals every sensor proposed; this port steps Monty's no-op one, so every goal
-  # passes untouched. A config that names another would run as an experiment it
-  # is not, so it is refused rather than reported as one that had attention
-  # (`docs/monty-differences.md` §2.32).
-  defp attention_findings(%__MODULE__{attention_system: %{class: class} = described})
-       when is_binary(class) and class != "NoopAttentionSystem" do
-    [
+  # Monty instantiates the attention config with Hydra, so any argument it states
+  # is part of the experiment. This port reads `voxel_size` and the class; an
+  # argument it does not read is refused rather than dropped, because a run that
+  # ignored a stated pooling or decay would be a different experiment wearing the
+  # same config's name (`docs/monty-differences.md` §2.32).
+  defp attention_findings(%__MODULE__{attention_system_config: config}) when is_map(config) do
+    unread = Map.keys(config) -- ["_target_" | Map.keys(@attention_options)]
+    read = Enum.map_join(Map.keys(@attention_options), " and ", &"`#{&1}`")
+
+    for key <- unread do
       Finding.new(
         :error,
-        :attention_not_applied,
-        "This config asks for #{class}, and this port steps Monty's no-op attention " <>
-          "system instead, so every proposed goal would pass through untouched. Wiring " <>
-          "the configured system into the step is the work, and until it is done this " <>
-          "run would be a different experiment.",
-        described.python
+        :attention_argument_not_read,
+        "This config states `#{key}` for its attention system, and this port reads " <>
+          "only #{read} and the class. Dropping it would run a different experiment.",
+        "monty_config.attention_system.#{key}"
       )
-    ]
+    end
   end
 
   defp attention_findings(%__MODULE__{}), do: []

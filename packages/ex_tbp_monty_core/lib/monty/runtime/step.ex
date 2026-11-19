@@ -425,7 +425,7 @@ defmodule Monty.Runtime.Step do
   # is not reading while it is inside a `handle_call`. The seam is here so that the
   # deferred reply is a second caller of the same tail, not a second tail.
   defp finish_step(%State{} = state, pending) do
-    {vote_info, goals} = round_and_goals(state, pending)
+    {state, vote_info, goals} = round_and_goals(state, pending)
 
     {actions, state} =
       step_motor_system(
@@ -643,7 +643,8 @@ defmodule Monty.Runtime.Step do
     goals = Enum.concat(learning_goals ++ sensor_goals(state))
     regions = sensor_regions(state) ++ learning_regions
 
-    {vote_info, state.attention.(goals, regions)}
+    {state, goals} = State.step_attention(state, goals, regions)
+    {state, vote_info, goals}
   end
 
   defp round_and_goals(%State{} = state, _pending), do: vote_and_pass_goals(state)
@@ -656,7 +657,8 @@ defmodule Monty.Runtime.Step do
   # default `:infinity` reproduces Monty's synchronous round.
   defp vote_and_pass_goals(%State{lm_to_lm_vote: nil} = state) do
     zero = %{sent: 0, used: 0, deadline_hit?: false, timed_out: []}
-    {zero, state.attention.(propose_goals(state), propose_regions(state))}
+    {state, goals} = State.step_attention(state, propose_goals(state), propose_regions(state))
+    {state, zero, goals}
   end
 
   defp vote_and_pass_goals(%State{model_id: model_id, lm_to_lm_vote: vote_matrix} = state) do
@@ -680,7 +682,9 @@ defmodule Monty.Runtime.Step do
     }
 
     deliver_votes(state, state.combine_votes.(votes, state))
-    {vote_info, state.attention.(propose_goals(state), propose_regions(state))}
+
+    {state, goals} = State.step_attention(state, propose_goals(state), propose_regions(state))
+    {state, vote_info, goals}
   end
 
   # Nothing precedes epoch 0, so the step that begins an episode integrates
@@ -1009,7 +1013,10 @@ defmodule Monty.Runtime.Step do
 
       state
       |> put_in([Access.key(:terminal_states), lm_id], :time_out)
-      |> put_in([Access.key(:still_believing), lm_id], Map.get(bets, lm_id, believed(state, lm_id)))
+      |> put_in(
+        [Access.key(:still_believing), lm_id],
+        Map.get(bets, lm_id, believed(state, lm_id))
+      )
     end)
   end
 
@@ -1059,8 +1066,8 @@ defmodule Monty.Runtime.Step do
 
   @doc """
   Monty's `MontyBase.reset`: the modules forget the episode they just had, the
-  motor system forgets where it was in its policy, and the counters and the
-  terminal states start again.
+  motor system forgets where it was in its policy, attention forgets the grid it
+  built, and the counters and the terminal states start again.
 
   Long-term memory is untouched, which is why an episode can end mid-object and
   the next one still knows what a mug looks like.
@@ -1072,6 +1079,7 @@ defmodule Monty.Runtime.Step do
     |> exec_sensor_modules(&SensorModuleServer.reset/1)
     |> restart_counters()
     |> reset_motor()
+    |> State.reset_attention()
   end
 
   @doc """

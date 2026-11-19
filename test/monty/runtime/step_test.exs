@@ -57,6 +57,13 @@ defmodule Monty.Runtime.StepTest do
     Model.step(model_id, observations, proprioceptive_state, Context.new(1))
   end
 
+  # What the coordinator holds attention as, read the way a recording run reads
+  # it (`state_dict/1`) rather than out of the struct.
+  defp attention_state(model_id) do
+    {module, system} = Step.state(Registry.via({:step, model_id})).attention
+    module.state_dict(system)
+  end
+
   defp observations do
     %{@agent => %{patch: %{"location" => [0.0, 0.0, 0.0]}}}
   end
@@ -434,19 +441,13 @@ defmodule Monty.Runtime.StepTest do
 
   describe "goals and the motor system" do
     # Monty's `monty_base_test.py::test_pass_goals_collects_all_goals_from_learning_and_sensor_modules_and_filters_them_through_the_attention_system`,
-    # the whole of `MontyBasePrivateTest`. Monty calls `_pass_goals` directly and
-    # holds a `MagicMock` attention system; here the attention system is the
-    # function the step state carries, so the case reads what it was handed and
-    # what the motor system then received.
+    # the whole of `MontyBasePrivateTest`. Monty holds a `MagicMock` attention
+    # system; here it is `Monty.Test.RecordingAttention`, which reads what it was
+    # handed and answers one goal, so the case asserts both what attention saw
+    # and what the motor system then received.
     test "the goals are the learning modules' then the sensors', the regions the sensors' then the modules'" do
-      parent = self()
       goals = fn id, n -> List.duplicate(goal_from(id), n) end
       region = fn id -> %Cmp.AttentionRegion{locations: [[0.0, 0.0, 0.0]], weights: [id]} end
-
-      attention = fn given_goals, given_regions ->
-        send(parent, {:attention, given_goals, given_regions})
-        [Enum.at(given_goals, 0)]
-      end
 
       model_id =
         start_model(
@@ -460,7 +461,7 @@ defmodule Monty.Runtime.StepTest do
             learning_module(:lm_2, goals: goals.(:lm_2, 2), region: region.(4))
           ],
           sm_to_lm: %{lm_0: [:patch], lm_1: [:patch], lm_2: [:view]},
-          attention: attention
+          attention: {Monty.Test.RecordingAttention, Monty.Test.RecordingAttention.new()}
         )
 
       assert {:ok, [_action], _info} = step(model_id)
@@ -476,6 +477,39 @@ defmodule Monty.Runtime.StepTest do
       # What attention answered is what the motors were given.
       assert_receive {:motor, _percept, [received_goal]}
       assert received_goal.sender_id == "lm_1"
+    end
+
+    test "the attention system is the same one next step, so a grid it built is there" do
+      # A system stepped and thrown away would answer `steps: 1` on every step of
+      # the episode; Monty's model holds the system and steps it in place.
+      model_id =
+        start_model(
+          learning_modules: [learning_module(:lm_0, goals: [goal_from(:lm_0)])],
+          attention: {Monty.Test.RecordingAttention, Monty.Test.RecordingAttention.new()}
+        )
+
+      assert {:ok, _, _} = step(model_id)
+      assert {:ok, _, _} = step(model_id)
+      assert {:ok, _, _} = step(model_id)
+
+      assert %{steps: 3} = attention_state(model_id)
+    end
+
+    test "an episode starts with attention forgetting its grid" do
+      # Monty's `MontyBase.reset` resets the attention system with the modules.
+      model_id =
+        start_model(
+          learning_modules: [learning_module(:lm_0, goals: [goal_from(:lm_0)])],
+          attention: {Monty.Test.RecordingAttention, Monty.Test.RecordingAttention.new()}
+        )
+
+      assert {:ok, _, _} = step(model_id)
+      assert %{steps: 1} = attention_state(model_id)
+
+      :ok = Model.reset_episode(model_id)
+
+      assert_receive :attention_reset
+      assert %{steps: 0} = attention_state(model_id)
     end
 
     test "the motor system receives the first sensor percept and the proposed goals" do
