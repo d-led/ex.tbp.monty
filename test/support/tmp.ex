@@ -26,15 +26,34 @@ defmodule Monty.Test.Tmp do
   database closed while in WAL mode finalises its journal once its memory is
   collected, which is later still. Either one writes back into a directory that
   has just been removed, and the removal fails with "file already exists".
+
+  The application writes a run's pictures in a process of its own, on purpose: a
+  boundary hands the steps over and steps on, and the writer catches up behind
+  it. A test that stopped a run has therefore not necessarily stopped its writes,
+  and the removal raced them — one run in three of
+  `Monty.Studio.Jobs.RunTest`'s part cases failed in this teardown and no test
+  was wrong. `settle/0` is that writer's own question, "has everything handed
+  over been written?", and it is asked before the directory goes.
   """
   @spec dir(String.t()) :: Path.t()
   def dir(prefix) do
     path = Path.join(System.tmp_dir!(), "#{prefix}-#{System.unique_integer([:positive])}")
     File.mkdir_p!(path)
 
-    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(path) end)
+    ExUnit.Callbacks.on_exit(fn ->
+      settle_writers()
+      File.rm_rf!(path)
+    end)
 
     path
+  end
+
+  # A writer the test never started is not running, and there is nothing to wait
+  # for: the modules are the application's, and a suite that does not start it
+  # has no writer to ask.
+  defp settle_writers do
+    if Process.whereis(Monty.Studio.RunStream.Pictures),
+      do: Monty.Studio.RunStream.Pictures.settle()
   end
 
   @doc """
