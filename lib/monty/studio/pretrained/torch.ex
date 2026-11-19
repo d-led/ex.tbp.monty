@@ -16,7 +16,7 @@ defmodule Monty.Studio.Pretrained.Torch do
   computes with them.
   """
 
-  alias Monty.Studio.Pretrained.{Numpy, Tensor}
+  alias Monty.Studio.Pretrained.{Numpy, Pickle, Tensor}
   alias Unpickler.Object
 
   # torch's storage classes, and the numbers inside them. A class that is not
@@ -41,7 +41,10 @@ defmodule Monty.Studio.Pretrained.Torch do
     check_byteorder!(members, prefix)
 
     {term, ""} =
-      Unpickler.load!(Map.fetch!(members, prefix <> "data.pkl"),
+      Unpickler.load!(
+        members
+        |> Map.fetch!(prefix <> "data.pkl")
+        |> Pickle.non_finite_as_nil(),
         persistent_id_resolver: &storage(&1, members, prefix),
         object_resolver: &object/1
       )
