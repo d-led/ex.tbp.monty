@@ -1003,7 +1003,11 @@ jobs:
 
           root = "artifacts/${{ matrix.rid }}"
           target = os.path.join("smoke", "${{ matrix.asset }}.zip")
-          uploaded = ("*.zip", "*.pkg", "*.exe", "*.deb", "*.AppImage", "*.tar.gz")
+          # The same two patterns the upload step takes for a commit: an archive
+          # a smoke can open, not an installer. A wrapper that carried the
+          # `.pkg`, the `.deb` and the AppImage as well was this step doing the
+          # work four times to prove one download.
+          uploaded = ("*.zip", "*.tar.gz")
           files = [full for pattern in uploaded for full in sorted(glob.glob(os.path.join(root, pattern)))]
 
           if not files:
@@ -1096,15 +1100,29 @@ jobs:
           name: ${{ matrix.asset }}
           path: |
             artifacts/${{ matrix.rid }}/*.zip
-            artifacts/${{ matrix.rid }}/*.pkg
-            artifacts/${{ matrix.rid }}/*.exe
-            artifacts/${{ matrix.rid }}/*.deb
-            artifacts/${{ matrix.rid }}/*.AppImage
             artifacts/${{ matrix.rid }}/*.tar.gz
           # The one-line installer and the release both read these; a week is not
           # long enough for a download people are told to use.
           retention-days: 90
           if-no-files-found: error
+
+      # What a person *installs* is not what this job has to check. Every smoke
+      # above opens the file the packaging wrote on this runner, and the tag job
+      # is the only thing that attaches a `.pkg`, a `.deb`, an AppImage or an
+      # NSIS setup. Uploading them per commit made one release travel four times
+      # in a single artefact — 1072 MB of Linux for archives a person downloads
+      # one of — so they travel only where they are used.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: ${{ matrix.asset }}-installers
+          path: |
+            artifacts/${{ matrix.rid }}/*.pkg
+            artifacts/${{ matrix.rid }}/*.exe
+            artifacts/${{ matrix.rid }}/*.deb
+            artifacts/${{ matrix.rid }}/*.AppImage
+          retention-days: 90
+          if-no-files-found: ignore
 
       # The download first, and the checks that *open* it after it — the sibling
       # project's lesson, learned by a Windows job that sat on its last step for
