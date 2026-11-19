@@ -106,7 +106,11 @@ data:
     kind: written
     title: this port's own experiments, as Hydra sets
     licence: MPL-2.0
-    hash: e059e04775b11c93e4541e5d9d1db18e1b6c7b7bc0ec7f282663f1c958da0626
+    # `cad/blend_part_eval` names its own stand-off and gait (2026-11-19): the
+    # blend is 40×30×20 mm and the surface policy's 25 mm / 4 mm step reads the
+    # far plane on most steps, so the part is taught and stepped from 8 mm with a
+    # 2 mm/2° gait. The reasons are in that config and in `docs/cad.md`.
+    hash: d88dcf64d3229850643fb355294898e3fe6d99c085029c618ca843d74b98cee9
 
   - path: priv/cad_experiments/conf
     kind: written
