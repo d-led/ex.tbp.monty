@@ -603,6 +603,41 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
     end
   end
 
+  # Monty's `_pass_target_info_to_model`, supervised branch. A pretraining
+  # episode has nothing to match against, so the module cannot name what it
+  # walked; the experiment can, and that name is what the memory is filed under.
+  describe "a supervised training episode" do
+    test "stores the object under the name the target gave, not one the module guessed" do
+      target = %{
+        "object_name" => "plate",
+        "position" => [0.0, 0.0, 0.0],
+        "euler_rotation" => [0.0, 0.0, 0.0],
+        "quat_rotation" => [1.0, 0.0, 0.0, 0.0],
+        "scale" => [1.0, 1.0, 1.0]
+      }
+
+      learned =
+        learning_module()
+        |> EvidenceGraphLM.set_experiment_mode(:train)
+        |> sensed(@line_locations)
+        |> EvidenceGraphLM.supervise(target, [0.0, 1.5, 0.0])
+        |> EvidenceGraphLM.update_ltm_from_stm()
+
+      assert EvidenceGraphLM.get_all_known_object_ids(learned) == ["plate"]
+    end
+  end
+
+  # The episode's own steps: what the sensor saw, in the order it saw it, with no
+  # conclusion of the module's — which is a pretraining episode exactly.
+  defp sensed(lm, locations) do
+    Enum.reduce(locations, lm, fn location, lm ->
+      {:ok, lm} =
+        EvidenceGraphLM.exploratory_step([fixture_percept(location)], Context.new(0), lm)
+
+      lm
+    end)
+  end
+
   # An experiment names its objects by name, and the datasets it names overlap:
   # a cows child is called "cow_1_4_2" next to a mug and a bowl. An id derived
   # from the name is what a module above matches on, so two names may not share

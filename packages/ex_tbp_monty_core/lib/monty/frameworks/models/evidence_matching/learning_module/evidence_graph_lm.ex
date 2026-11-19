@@ -492,6 +492,47 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def clear_buffers(%__MODULE__{} = lm), do: %{lm | buffer: FeatureAtLocationBuffer.new()}
 
   @doc """
+  Tells the module what the episode was about, as a supervised experiment knows it.
+
+  Monty's `_pass_target_info_to_model` supervised branch: the object's name, the
+  pose the ground truth reported, and the place on the model the first epoch
+  found it. A pretraining episode writes whatever `detected_object` names, so
+  without this a supervised phase stores nothing — the module's own matching has
+  an empty memory to work from, and its answer would be `new_object0` rather than
+  the name the experiment knows.
+  """
+  @spec supervise(t(), map(), list()) :: t()
+  def supervise(%__MODULE__{} = lm, target, location_on_model) do
+    {:ok, rotation} = Rotation.from_quaternion(quaternion(target))
+
+    stats = %{
+      "possible_matches" => [target["object_name"]],
+      "detected_location_on_model" => location_on_model,
+      "detected_location_rel_body" => target["position"],
+      "detected_rotation" => target["euler_rotation"],
+      "detected_scale" => target["scale"]
+    }
+
+    %{
+      lm
+      | detected_object: target["object_name"],
+        detected_rotation_r: Rotation.invert(rotation),
+        buffer: FeatureAtLocationBuffer.add_overall_stats(lm.buffer, stats)
+    }
+  end
+
+  # A target carries the object's turn under two names; `quat_rotation` is the
+  # `wxyz` one a rotation is built from. A target without it cannot supervise
+  # anything, and failing here says which object it was.
+  defp quaternion(%{"quat_rotation" => [w, x, y, z]}), do: {w, x, y, z}
+
+  defp quaternion(target) do
+    raise ArgumentError,
+          "a supervised episode needs the target's quat_rotation, and " <>
+            "#{inspect(target["object_name"])} has none"
+  end
+
+  @doc """
   Forgets the episode's answer and keeps the hypothesis space.
 
   Monty's `set_individual_ts(None)`: the conclusion, the object it named and the

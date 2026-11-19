@@ -308,17 +308,26 @@ graph_exp500_e3_t3`, whose `learning_module_configs` are the bare graph pairing,
    Monty's cases; the case lives beside the evidence module's own tests). With that
    clause the episode runs all four hundred steps and ends cleanly, and reports the
    next wall in numbers a reader can see in one line: `the memory now holds 0
-objects and 0 nodes`, with every step logging `inputs learning_module_0=0` and
-   `goals 0`. The sensor produces a patch and the module processes nothing, and no
-   goal is ever asked for, so nothing moves, no displacement accumulates, the
-   buffer stays empty and the write has nothing to write. A training episode in
-   this port therefore needs a motor policy that walks the object without a goal
-   the module has to emit — Monty's pretraining pairings are of that kind. The
-   dog corpus carries one of exactly that shape (`naive_scan_3`, a sweep that asks
-   the module for nothing), so the next attempt is the same config with that
-   policy named instead of the goal-driven surface policy, and the referee is
-   again the one-episode run: it should end with a non-zero node count and a
-   library on disk rather than `<libraries>/cad_parts_v1/plate_learned` absent.
+objects and 0 nodes`, with every step logging `goals 0`. The motor policy the
+   evaluation config names asks the module for a goal, and a module with nothing
+   to match against has none to give, so the sensor stood still and the buffer
+   stayed empty. Monty's naive scan is the policy of the other kind —
+   `use_goal_driven_actions: false`, a sweep of the view sphere that asks for
+   nothing — and with it every step logs `inputs learning_module_0=1`.
+
+   The last piece is the one a reader is most likely to copy wrong, because an
+   evaluation config has it empty and looks complete: `supervised_lm_ids`. Monty's
+   `_pass_target_info_to_model` gives a named module the target's object name,
+   pose and place on the model, and **wipes the hypotheses of every module it does
+   not name**; a training run whose list is empty therefore teaches nothing,
+   silently, and reports a clean episode. Naming the module is also what makes the
+   write a supervised one: the memory is filed under `plate`, the name the
+   experiment knows, rather than under the `new_object0` a module with an empty
+   memory would have guessed. With those three things right —
+   `EvidenceGraphLM`, `naive_scan_5`, `supervised_lm_ids: [learning_module_0]` —
+   `cad/plate_pretrain` runs one episode over MuJoCo and ends with `the memory now
+holds 1 object and 14 nodes` and a library written under
+   `cad_plate_pretrain`. The arm is a config, and every part of it was measured.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD

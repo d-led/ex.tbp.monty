@@ -1,0 +1,13 @@
+# @package experiment.config
+# The same part, taught rather than recognised: one supervised episode per
+# rotation, the sensor walking the mesh with nothing to match against. The world
+# and the part are the evaluation interface's, so a taught memory and an
+# evaluated one are of the same object seen the same way.
+do_train: true
+train_env_interface_args:
+  object_names:
+    - plate
+  object_init_sampler:
+    _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
+    rotations: ${constants.rotations_3}
+train_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}

@@ -115,7 +115,15 @@ data:
     # day's second change: one memory of several parts, taught from the parts the
     # experiment names, so a run can ask whether it recognises the part it is
     # shown rather than its own single object.
-    hash: 600e8f94680b64739f3af3edae8ffc78151062a41e3d797d60fcd72340dcce20
+    #
+    # `cad/plate_pretrain` is the learning arm: the same part, the same world and
+    # a memory with nothing in it, one supervised episode per rotation. Three
+    # things in it were each measured — the evidence module rather than a bare
+    # graph module, Monty's naive scan rather than the goal-driven surface policy
+    # (which stood still), and `supervised_lm_ids` naming the module (an empty
+    # list trains nothing, because the experiment wipes every unnamed module's
+    # hypotheses before the write). `docs/cad.md` carries the measurements.
+    hash: c30afee512e5a8ad816b7fb06b16a3dc47dada79d741efeb2225322e915f2cb8
 
   - path: priv/cad_experiments/conf
     kind: written
