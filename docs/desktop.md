@@ -100,8 +100,8 @@ per name whether it connected, whether it is this node, or whether nobody
 answered (with the three reasons that look identical: not running, host
 unreachable, cookie differs). A dialled node is _not_ remembered; a peer list that
 survives a restart is `MONTY_SEEDS`. The two sample plugin nodes are the third
-case: they start alone, and they are joined from this page. See the section
-below.
+case: they are told the window's name when they start, and they dial it. See the
+section below.
 
 The data folder does **not** follow the name. The window is the one start that
 keeps the folder a node that runs alone uses, because an instance id is per
@@ -116,12 +116,17 @@ policy) and `ex.tbp.monty.plugin.flyverse.app` (the same contract, different
 answers). A plugin app is not a folder inside the window: `scripts/package.sh`
 builds `examples/<name>` as a release of its own and wraps it in an application
 named after the plugin id, which is why the names are dotted and not pretty. They
-are there so the plugin story can be watched rather than read — start them, then
-**Connect to a node** with `example_plugin_app@127.0.0.1` and Settings → Cluster
-lists three nodes. Neither side looks for the other: a companion dials only the
-nodes it was told about in `MONTY_SEEDS` and never announces itself, so the
-window's gossip — which is how two _windows_ find each other — has nothing of
-theirs to find. The two clusters stay apart until somebody joins them.
+are there so the plugin story can be watched rather than read — start them and
+Settings → Cluster lists three nodes: each companion asks the window beside it
+who it is (`/health`) and starts its node pointed at that name.
+
+What a companion does **not** do is discover: it dials the nodes it was told
+about in `MONTY_SEEDS` and nothing else, and it never announces itself — no
+gossip topology — so the window's own gossip (which is how two _windows_ find
+each other) has nothing of a companion's to find, and a node nobody started
+towards a studio stays in its own cluster. Joining one in the other direction is
+a person's: **Settings → Cluster → Connect to a node**, which is a
+`Node.connect/1`.
 
 ```text
 macOS    three apps in one folder: Monty on the BEAM.app,

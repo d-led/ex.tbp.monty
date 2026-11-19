@@ -85,10 +85,13 @@ somebody joins them, and a node that announced itself would let a studio that
 happens to be open on the same machine join itself to this one without anyone
 asking.
 
-The packaged app starts the node with no seeds at all, so a double-click does not
-put it into any cluster. A person joins the two from the studio:
-**Settings → Cluster → Connect to a node**, `example_plugin_app@127.0.0.1` — a
-`Node.connect/1` made by a person, which is the whole of the joining story.
+The packaged app joins the studio it was started beside: it asks that window
+`/health` who it is and starts the node pointed at that name, so a double-click
+puts the two in one cluster. What it never does is discover — it dials the nodes
+it was told about and no others, and it does not announce itself, so a studio
+that this node was not started towards cannot attach itself to it. That
+direction is a person's, from the studio: **Settings → Cluster → Connect to a
+node**, which is a `Node.connect/1`.
 
 ## The app it ships as
 
