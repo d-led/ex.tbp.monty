@@ -251,9 +251,14 @@ defmodule Monty.Studio.Cad.Preparation do
   # it is taught from, the sampler's own answers (spacing, visit cap, lens,
   # stand-off, what is labelled), the writer, and the packages whose code turns
   # those into a file. `@taught_format` is this module's own share of it — a
-  # change to *how* a memory is written has to be able to say so, and no input
-  # above would move.
-  @taught_format 1
+  # change to *how* a memory is written, or to what is hashed here, has to be able
+  # to say so, and no input above would move.
+  #
+  # The files' *paths* are not in it: `_build/dev` and `_build/test` hold the same
+  # bytes under different paths, so a path would make a memory taught by a test
+  # read as stale to the page — which is how this was found, on the page, with the
+  # note that build had just written.
+  @taught_format 2
 
   @doc """
   Whether the memory on disk was taught from what this plan would teach from now.
@@ -278,7 +283,7 @@ defmodule Monty.Studio.Cad.Preparation do
   end
 
   defp fingerprint(plan, trainer) do
-    inputs = {plan.parts, memory_options(plan), trainer, @taught_format, packages()}
+    inputs = {memory_options(plan), trainer, @taught_format, packages()}
     parts = {Enum.map(plan.parts, fn {object, step} -> {object, digest(step)} end), inputs}
 
     parts
