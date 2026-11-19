@@ -198,9 +198,16 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    possible object and never conclude — the one they name is `plate`, including
    the episode whose target is the blend. Two parts in one file therefore do not
    yet separate: the memory is fine-grained enough for either to match, and what
-   decides between them is not in it. That is the next measurement, and it is a
-   percept question of the same kind as the feature wall above, not a plumbing
-   one — one part per memory still concludes, three times over.
+   decides between them is not in it.
+
+   The teaching itself is not what fails, and that is worth knowing before
+   touching it: the blend's record inside `parts_set` holds exactly the same
+   `positions` and `features` as the `blend_part` memory that recognises the
+   blend on its own (compared record by record, 2026-11-19). The only difference
+   between the memory that works and the memory that does not is the plate's
+   record beside it. So the question is competition, and it is a percept question
+   of the same kind as the feature wall above: one part per memory still
+   concludes, three times over.
 
    The stand-off is the set's cost driver: memory sampling follows the patch, so
    a two-part memory at 8 mm is four times the nodes of the same parts at 16 mm
