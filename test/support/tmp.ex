@@ -146,49 +146,64 @@ defmodule Monty.Test.Tmp do
   end
 
   @doc """
+  Links what this machine has exported into the suite's own library folder.
+
+  Called once by `test/test_helper.exs`: `config/test.exs` points the suite at a
+  temporary folder, so no test can write into a person's libraries, and a test
+  that asks a config for its memory needs the files to be there. What this
+  machine exported is linked in, into a folder the suite owns.
+
+  A machine with no export links nothing, and the tests that need a memory fail
+  naming the file that is missing — that is a prerequisite to fetch
+  (`/prerequisites`), not a fixture to carry in the checkout.
+  """
+  @spec mirror_libraries!() :: :ok
+  def mirror_libraries! do
+    mirror_into!(Monty.Studio.Memory.libraries_dir())
+  end
+
+  @doc """
   A library tree a test may write into, answering what the installed one answers.
 
   A run that trains files its memory in the library tree, and a test that trained
-  into the checkout's tree would leave libraries the next config to name one of
+  into a person's libraries would leave memories the next config to name one of
   those models would trust. Pointing the suite at an empty tree instead is the
-  opposite mistake: a config whose model this application ships would then be
+  opposite mistake: a config whose model this machine exported would then be
   asked to recognise objects from no memory at all.
 
-  So every release the checkout carries is a directory of symlinks to the same
+  So every release the machine exported is a directory of symlinks to the same
   files — 185 MB is not copied — and `trained/` is a real, empty directory: that
   is the one release a run writes (`Monty.Studio.Learned` files every memory it
   keeps under it), so a test's memory lands in the temporary tree and a memory
-  the application ships is never written through a link.
+  the machine exported is never written through a link.
   """
   @spec libraries(String.t()) :: Path.t()
   def libraries(prefix \\ "libraries") do
-    # Before the setting moves: what the checkout carries is what is mirrored.
-    carried = carried_libraries()
-    dir = env_dir(prefix, :monty_libraries_dir)
-    trained = Path.join(dir, "trained")
+    env_dir(prefix, :monty_libraries_dir) |> mirror_into!()
+  end
 
-    File.mkdir_p!(trained)
+  # The releases under the data folder are the only ones a memory is ever written
+  # to or read from (`Monty.Paths.libraries/0`).
+  defp mirror_into!(dir) do
+    File.mkdir_p!(Path.join(dir, "trained"))
 
-    for release_dir <- Path.wildcard(Path.join(carried, "*")),
-        File.dir?(release_dir),
-        release = Path.basename(release_dir),
-        release != "trained",
-        file <- Path.wildcard(Path.join(release_dir, "*")) do
-      link = Path.join([dir, release, Path.basename(file)])
+    for release <- Path.wildcard(Path.join(Monty.Paths.libraries(), "*")),
+        File.dir?(release),
+        Path.basename(release) != "trained",
+        file <- Path.wildcard(Path.join(release, "*")) do
+      link = Path.join([dir, Path.basename(release), Path.basename(file)])
 
       File.mkdir_p!(Path.dirname(link))
-      File.ln_s(Path.expand(file), link)
+
+      if File.exists?(link) do
+        :ok
+      else
+        File.ln_s!(Path.expand(file), link)
+      end
     end
 
     dir
   end
-
-  # What the checkout carries is what the application reads: the folder pinned at
-  # boot from `MONTY_LIBRARIES`, or the copy `priv/` carries when a machine named
-  # none. A mirror built from a path the exporter does not write to is a run with
-  # no memory at all — which is what a test that named `priv/` by hand got in CI,
-  # where the export lands in the `_build` copy of it.
-  defp carried_libraries, do: Monty.Studio.Memory.libraries_dir()
 
   defp restore_app_env(app, key, {:ok, value}), do: Application.put_env(app, key, value)
   defp restore_app_env(app, key, :error), do: Application.delete_env(app, key)

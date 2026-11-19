@@ -193,11 +193,11 @@ site that cannot be reached is reported in words rather than failing a call.
 
 The image carries the software and Monty's own config tree — every config it
 ships, the snapshots they are held to, the worlds and the Python that steps
-them. What it does not carry is the memory those configs read:
-`/app/priv/monty/libraries` is derived data, exported from the pretrained model
-bundle, so an image built from a checkout has the directory and nothing in it,
-and the first `/prerequisites` download fills it (that fetch ends by exporting
-the libraries, and a later visit exports nothing). The datasets and the model
+them. What it does not carry is the memory those configs read: it is derived
+data, exported from the pretrained model bundle, so it lives on the data volume
+(`MONTY_LIBRARIES`, `<data>/libraries`) and the image built from a checkout has
+none of it until the first `/prerequisites` download writes it (that fetch ends
+by exporting the libraries, and a later visit exports nothing). The datasets and the model
 bundles themselves are not in it either: they are big, they change on their own
 schedule, and a pull that shipped them would be a pull nobody wants.
 `/prerequisites` lists what an experiment needs, the path each file goes to, and

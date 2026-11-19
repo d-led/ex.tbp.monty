@@ -12,8 +12,9 @@ defmodule Monty.DataProvenance do
   a failure, and so is an entry whose hash no longer matches: the record is
   either updated with the data or the data is re-generated from what the record
   names. That is also why no model is checked in at all: a pretrained memory is
-  produced by a release and arrives through `/prerequisites`, so
-  `priv/monty/libraries/` is gitignored and named here as a download instead.
+  produced by a release, arrives through `/prerequisites`, and is exported from
+  that archive under the data folder at run time — no directory of `.gz` files
+  belongs to the source tree, and none is excluded here to make one fit.
 
   A hash is the file's sha256. For a directory it is the **tree hash**: the
   sha256 of the sorted lines `<relative path> <sha256 of that file>`, which

@@ -183,7 +183,7 @@ does not.
 
 ## 7. What a memory has to be, before an inference can be judged by it
 
-Measured 2026-11-17, on this box, with `priv/monty/libraries` read by
+Measured 2026-11-17, on this box, with the data folder's `libraries/` read by
 `MIX_ENV=test mix run --no-start /tmp/library_nodes.exs <dir>` — one record a
 graph, so a library's node count is what a percept can be matched against.
 
@@ -564,7 +564,7 @@ MIX_ENV=dev MONTY_DB=sqlite mix monty.run dogs/surf_supervised_4rot \
   --world ex_mujoco --record
 
 # what the memory holds, per object
-MIX_ENV=test mix run --no-start scripts/library_nodes.exs priv/monty/libraries/trained
+MIX_ENV=test mix run --no-start scripts/library_nodes.exs "$MONTY_LIBRARIES/trained"
 
 # recognise, printing each episode's verdict *and* the dog it named
 MIX_ENV=test mix run --no-start scripts/probe_recognitions.exs \

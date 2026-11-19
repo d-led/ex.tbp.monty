@@ -40,12 +40,6 @@ roots:
   - test/fixtures
 
 exclude:
-  # A pattern is relative to each root above, so this one names the memories
-  # under `priv/monty` and nothing else in the project. A pretrained memory is
-  # exported from the archive `/prerequisites` downloads;
-  # `priv/monty/libraries/README.md` stays in git and says how the layout works,
-  # and the memories beside it do not — their record is the archive's checksum.
-  - libraries/**/*
   # The file a fetch streams into before its checksum matches and it is renamed.
   - "**/*.part"
 

@@ -28,6 +28,15 @@ ExUnit.start()
 # once, before any test writes into it.
 File.rm_rf!(Application.fetch_env!(:ex_tbp_monty, :studio_artifacts_dir))
 
+# The memory a config reads is the same kind of thing: `config/test.exs` points
+# the suite at a temporary folder, so no test can write into the libraries a
+# person exported — but a test that asks a config for its memory needs one to
+# find. What this machine has exported is mirrored in as links (185 MB is not
+# copied) and `trained/` stays a real, empty folder, because that is the release
+# a run writes. A machine with no export runs the suite with an empty tree, which
+# fails the tests that need a memory instead of pretending they had one.
+Monty.Test.Tmp.mirror_libraries!()
+
 # The suite owns this database, and owning it means a run recorded in it is not
 # one of the suite's. `MIX_ENV=test mix monty.run --record` writes rows here — the
 # dogs were trained and recognised that way — and a case that asks what this

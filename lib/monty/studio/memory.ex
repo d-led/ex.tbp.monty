@@ -46,15 +46,18 @@ defmodule Monty.Studio.Memory do
   which is where `MONTY_LIBRARIES` is read — so the exporter, a run's reader and
   a test all name the same folder. A test that wants its own sets
   `:monty_libraries_dir` (`Monty.Test.Tmp` and `Monty.Test.PrerequisiteRoots`
-  do), and a node without the setting falls back to the copy `priv/` carries.
+  do).
+
+  A node without the setting reads the data folder, which is where the export
+  writes: a library is this application's own output, written on the fly from
+  the pickles `MONTY_MODELS` holds. There is no copy inside `priv/` — a
+  directory in the source tree is one the exporter writes into the checkout, and
+  a `.part` left there by a build that could not finish is a `.gz` nobody meant
+  to keep.
   """
   @spec libraries_dir() :: Path.t()
   def libraries_dir do
-    Application.get_env(
-      :ex_tbp_monty,
-      :monty_libraries_dir,
-      Path.join(:code.priv_dir(:ex_tbp_monty), "monty/libraries")
-    )
+    Application.get_env(:ex_tbp_monty, :monty_libraries_dir, Monty.Paths.libraries())
   end
 
   @doc """

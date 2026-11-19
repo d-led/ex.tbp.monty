@@ -1268,8 +1268,9 @@ it has just built (`initialize_model` in `monty_experiment.py`).
 
 **What this port does.** `Monty.Studio.Pretrained.Torch`
 reads that pickle in
-Monty's own environment and writes the graphs out as JSONL —
-`priv/monty/libraries/<model>.jsonl.gz`, one object per line, positions and the
+Monty's own environment and writes the graphs out as JSONL under the data
+folder — `<data>/libraries/<release>/<model>.jsonl.gz`, one object per line,
+positions and the
 four matched features per node, every number at full precision (these files were
 once rounded to six decimals, and [`validation.md`](validation.md) records what
 that cost).

@@ -93,6 +93,20 @@ config :ex_tbp_monty, precompute: false
 config :ex_tbp_monty,
   studio_artifacts_dir: Path.join(System.tmp_dir!(), "ex_tbp_monty_test_artifacts")
 
+# The same for the memory: a library is this application's output, exported on
+# the fly from the pickles `MONTY_MODELS` holds, and the folder a node with no
+# setting reads is under the data directory. A suite that took the default would
+# write into the developer's own libraries, and one that fell back into `priv/`
+# wrote `.part` files into the checkout — which is how two zero-byte archives
+# ended up beside the source. The suite gets its own, per partition, and
+# `test/test_helper.exs` clears it before it starts.
+config :ex_tbp_monty,
+  monty_libraries_dir:
+    Path.join(
+      System.tmp_dir!(),
+      "ex_tbp_monty_test_libraries#{System.get_env("MIX_TEST_PARTITION")}"
+    )
+
 # Nor a download behind the suite's back: the boot fetch is on by default, and a
 # suite that started one would spend a gigabyte and write outside its temporary
 # directories. A test that fetches starts the machine itself.

@@ -154,10 +154,10 @@ and the studio builds the policy its config names, falling back to `MontyIsDone`
 where a config names none, which is Monty's fallback too.
 
 A run also starts with Monty's own pretrained memory when its config names a
-model this machine has exported: `priv/monty/libraries/<model>.jsonl.gz`, loaded
-by `Monty.Studio.Memory` into the learning module the config describes
-([`priv/monty/libraries/README.md`](../priv/monty/libraries/README.md) records where the library came from and the
-command that produced it). A config that names a model with no library is not an
+model this machine has exported: `<data>/libraries/<release>/<model>.jsonl.gz`
+(`MONTY_LIBRARIES`), loaded by `Monty.Studio.Memory` into the learning module the
+config describes. The export is `mix monty.prerequisites.fetch`'s, from the
+archive `priv/prerequisites.yaml` names with its sha256. A config that names a model with no library is not an
 error: the run starts empty and says so as a warning before it takes a step,
 because a run with nothing to recognise with cannot recognise anything, however
 long it runs. Loading is six seconds of gunzip and graph building, so the decoded
@@ -204,7 +204,7 @@ Saying this plainly matters more than the table above:
   ([`test/fixtures/monty_dist_agent_10episodes.jsonl`](../test/fixtures/monty_dist_agent_10episodes.jsonl): 43, 27, 28, 27, 36, 28, 40,
   43, 35 and 31 steps, all `match`, on the ten YCB objects), and two probes
   replay them through the port's own composition — the config's learning module
-  with the library in [`priv/monty/libraries/`](../priv/monty/libraries), the config's recognition policy,
+  with the library the data folder's `libraries/` holds, the config's recognition policy,
   the real step coordinator — with the recording standing in for the world.
 
   What they measure, so far: the learning module the config builds reproduces
