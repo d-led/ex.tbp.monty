@@ -203,10 +203,16 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    one — one part per memory still concludes, three times over.
 
    The stand-off is the set's cost driver: memory sampling follows the patch, so
-   a two-part memory at 8 mm is nine times the nodes of the same parts at the
-   surface policy's 25 mm. If a set can be read from 16 mm, its teaching drops
-   with the square of that number, and that is the cheap experiment to try before
-   reaching for a parent module.
+   a two-part memory at 8 mm is four times the nodes of the same parts at 16 mm
+   — 34 018 against 8 535, 467 s against 74 s of teaching, both measured on this
+   Mac on 2026-11-19. It is not the lever for separation. A one-off config at
+   16 mm with a 2 mm/2° gait, stepped over the same two episodes, answers the
+   same way: `plate`, one possible object, no conclusion. So the cost cannot be
+   bought back that way, and what decides between the two parts is not the
+   patch's size but which patch the policy collects: a flat face is a flat face,
+   and the plate has 2.3 times the blend's nodes of it. That is the same percept
+   question as the feature wall above — an edge has to be held long enough to be
+   named — and it is why a set is not a config change away.
 
 3. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
    `_compositional` / `_monolithic` pair, which differ only in whether the labels
