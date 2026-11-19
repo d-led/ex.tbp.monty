@@ -1,50 +1,38 @@
 defmodule FlyversePlugin.Cluster do
   @moduledoc """
-  How this node reaches the studio: libcluster, configured from the environment.
+  How this node reaches a studio: libcluster, configured from the environment.
 
   Two variables, and they are the ones a studio node reads, because one secret
   written in two spellings is a cluster that stays silently separate:
 
-    * `MONTY_CLUSTER_SECRET` — the cookie. Set before the first connection is
+    * `MONTY_CLUSTER_SECRET` — the cookie. Set before any connection is
       attempted, since a connection is made with whatever cookie the node holds
       at the time.
     * `MONTY_SEEDS` — the nodes to reach, comma-separated, in the spelling a
       person copies out of a peer's Settings page (`node1@10.0.0.7`).
 
-  `MONTY_CLUSTER=1` is the third, for a node that was told to join and not told
-  whom: it gossips and lets the peers announce themselves.
+  ## Seeds, and nothing else
 
-  ## Two topologies when there are seeds, and why both
+  A seed is dialled; nothing is discovered. There is no gossip here on purpose:
+  this node and a studio are separate clusters until somebody connects them, and
+  a node that announced itself would let a studio that happens to be open on the
+  same machine join itself to this one without anyone asking. Whoever wants the
+  two together dials the other side — the studio from **Settings → Cluster →
+  Connect to a node**, which is a `Node.connect/1` and leaves the choice with a
+  person.
 
-  `Epmd` is the seed list: the studio that started this node, by the name it had
-  when it was asked. `Gossip` is how that studio is found **again** after it
-  restarts, and it is not a nicety: a desktop window names itself
-  `monty-studio-<id>@127.0.0.1` with a fresh id on every start, so the seed this
-  node was handed is a name that will never answer again. The window gossips (it
-  is started with `MONTY_CLUSTER=1` and no seeds, which is libcluster's gossip
-  topology), and a node that listens for it reconnects to the new name on its
-  own — no poll of ours, no restart of this node, and nothing to configure.
-
-  It is the studio's own rule (`ExTbpMonty.Cluster`) one choice wider: the studio
-  takes either its seeds or gossip, because a deployment that names its peers
-  knows all of them; a companion is told one name and can lose it.
-
-  ## What is not here
-
-  Gossip is not authenticated: libcluster's `secret` option would have to be set
-  here *and* in the studio, and it is not. It announces and connects on the local
-  network, which is the trust boundary this pair already shares a cookie across.
+  A node with no seeds is therefore a cluster of one, which is the arrangement a
+  test and a hand-started `mix run --no-halt` both get.
   """
   use Supervisor
 
-  # libcluster's strategies, spelled from the top level: `Cluster` inside this
-  # application means this module, so a bare `Cluster.Strategy.Gossip` would name
+  # libcluster's strategy, spelled from the top level: `Cluster` inside this
+  # application means this module, so a bare `Cluster.Strategy.Epmd` would name
   # a module that does not exist.
-  alias Elixir.Cluster.Strategy.{Epmd, Gossip}
+  alias Elixir.Cluster.Strategy.Epmd
 
   @seeds "MONTY_SEEDS"
   @secret "MONTY_CLUSTER_SECRET"
-  @cluster "MONTY_CLUSTER"
 
   @doc false
   def start_link(options \\ []),
@@ -62,17 +50,18 @@ defmodule FlyversePlugin.Cluster do
   end
 
   @doc """
-  The libcluster topologies: the seeds, and gossip beside them.
+  The libcluster topologies: the seeds, and nothing beside them.
 
-  Empty is a normal answer — a node nobody asked to cluster — and it starts no
-  supervisor and opens no socket, which is also what keeps a test run from
-  joining whichever window happens to be open on the machine.
+  Empty is a normal answer — a node that was told to join nothing — and it
+  starts no supervisor and opens no socket, which is what keeps this node a
+  cluster of one, and keeps a test run from joining whichever window happens to
+  be open on the machine.
   """
   @spec topologies() :: keyword()
   def topologies do
     case seeds() do
-      [] -> if cluster?(), do: [gossip: [strategy: Gossip]], else: []
-      hosts -> [seeds: [strategy: Epmd, config: [hosts: hosts]], gossip: [strategy: Gossip]]
+      [] -> []
+      hosts -> [seeds: [strategy: Epmd, config: [hosts: hosts]]]
     end
   end
 
@@ -113,9 +102,6 @@ defmodule FlyversePlugin.Cluster do
       _unnamed_or_no_secret -> :ok
     end
   end
-
-  # The studio's own switch, read the same way: a word, not a truthy string.
-  defp cluster?, do: System.get_env(@cluster) in ["1", "true", "yes", "on"]
 
   # `:erlang.binary_to_atom/2` rather than `String.to_atom/1`: these are node
   # names and a cookie, written by whoever deployed this, and the explicit call

@@ -69,22 +69,26 @@ Alone, without the compose project, `mix run --no-halt` is enough: the plugins a
 registered on this node and visible to itself. The cluster machinery is
 environment, not code:
 
-| Variable                                    | What it does                                                                  |
-| ------------------------------------------- | ----------------------------------------------------------------------------- |
-| `--name example_plugin@127.0.0.1`           | what this node is called; a VM cannot be renamed after it starts              |
-| `MONTY_CLUSTER_SECRET`                      | the cookie, the same string on every node that should join                    |
-| `MONTY_SEEDS`                               | the nodes to reach, in the spelling a peer's Settings page shows              |
-| `MONTY_CLUSTER=1`                           | join by gossip with no seed — the studio's own switch, read the same way      |
-| `PLUGIN_SCOPE`                              | the `:pg` scope, `monty_plugins` unless a deployment says otherwise           |
-| `PLUGIN_DISCOVERY=none`                     | takes part in no cluster at all                                               |
-| `EVIDENCE_THRESHOLD`, `X_PERCENT_THRESHOLD` | the learning module's setting, defaulting to `"x_percent_threshold"` and `20` |
+| Variable                                    | What it does                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `--name example_plugin@127.0.0.1`           | what this node is called; a VM cannot be renamed after it starts                 |
+| `MONTY_CLUSTER_SECRET`                      | the cookie, the same string on every node that should join                       |
+| `MONTY_SEEDS`                               | the only way in: the nodes to dial, in the spelling a peer's Settings page shows |
+| `PLUGIN_SCOPE`                              | the `:pg` scope, `monty_plugins` unless a deployment says otherwise              |
+| `PLUGIN_DISCOVERY=none`                     | takes part in no cluster at all                                                  |
+| `EVIDENCE_THRESHOLD`, `X_PERCENT_THRESHOLD` | the learning module's setting, defaulting to `"x_percent_threshold"` and `20`    |
 
-Joining is [libcluster](https://hex.pm/packages/libcluster), so a seed that is not
-up yet is retried and nothing here polls: with seeds the node dials them, and it
-gossips beside them (`ExamplePlugin.Cluster`). The gossip is what survives a
-restarted studio: a window names itself `monty-studio-<id>@127.0.0.1` with a fresh
-id on every start, so the name this node was handed stops existing, and a node
-that listens for the window's announcements reconnects to the new one.
+Joining is [libcluster](https://hex.pm/packages/libcluster) and it is **seeds
+only**: a seed is dialled, and nothing is discovered (`ExamplePlugin.Cluster`).
+There is no gossip on purpose — this node and a studio are two clusters until
+somebody joins them, and a node that announced itself would let a studio that
+happens to be open on the same machine join itself to this one without anyone
+asking.
+
+The packaged app starts the node with no seeds at all, so a double-click does not
+put it into any cluster. A person joins the two from the studio:
+**Settings → Cluster → Connect to a node**, `example_plugin_app@127.0.0.1` — a
+`Node.connect/1` made by a person, which is the whole of the joining story.
 
 ## The app it ships as
 

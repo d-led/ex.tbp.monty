@@ -9,12 +9,11 @@ defmodule FlyversePlugin.ClusterTest do
 
   use ExUnit.Case, async: false
 
-  alias Elixir.Cluster.Strategy.{Epmd, Gossip}
+  alias Elixir.Cluster.Strategy.Epmd
   alias FlyversePlugin.Cluster
 
   setup do
-    before = {System.get_env("MONTY_SEEDS"), System.get_env("MONTY_CLUSTER")}
-    System.delete_env("MONTY_CLUSTER")
+    before = System.get_env("MONTY_SEEDS")
     on_exit(fn -> restore(before) end)
     :ok
   end
@@ -32,25 +31,19 @@ defmodule FlyversePlugin.ClusterTest do
     assert Cluster.topologies() == []
   end
 
-  test "one seed is dialled, and gossip answers what dialling it cannot" do
+  test "one seed is dialled, and nothing is discovered beside it" do
     System.put_env("MONTY_SEEDS", "monty-studio-1a2b3c@127.0.0.1")
 
     topologies = Cluster.topologies()
 
-    # The seed is the window as it was named when this node was started.
     assert topologies[:seeds][:strategy] == Epmd
     assert topologies[:seeds][:config][:hosts] == [:"monty-studio-1a2b3c@127.0.0.1"]
 
-    # A window that restarts names itself with a fresh id, so the seed above is
-    # a name that will never answer again; gossip is how the new one is found.
-    assert topologies[:gossip][:strategy] == Gossip
-  end
-
-  test "a node told to cluster but given no seed gossips for a window to announce itself" do
-    System.delete_env("MONTY_SEEDS")
-    System.put_env("MONTY_CLUSTER", "1")
-
-    assert Cluster.topologies() == [gossip: [strategy: Gossip]]
+    # The seed is the whole of it. A gossip topology would let a studio that is
+    # open on this machine join itself to this node without anyone asking, which
+    # is the one thing this example must not do: the two clusters stay separate
+    # until a person connects them.
+    assert Keyword.keys(topologies) == [:seeds]
   end
 
   test "the cookie is set before a topology starts, and an unnamed node sets none" do
@@ -61,11 +54,6 @@ defmodule FlyversePlugin.ClusterTest do
     assert Cluster.set_cookie() == :ok
   end
 
-  defp restore({seeds, cluster}) do
-    put_or_delete("MONTY_SEEDS", seeds)
-    put_or_delete("MONTY_CLUSTER", cluster)
-  end
-
-  defp put_or_delete(name, nil), do: System.delete_env(name)
-  defp put_or_delete(name, value), do: System.put_env(name, value)
+  defp restore(nil), do: System.delete_env("MONTY_SEEDS")
+  defp restore(value), do: System.put_env("MONTY_SEEDS", value)
 end

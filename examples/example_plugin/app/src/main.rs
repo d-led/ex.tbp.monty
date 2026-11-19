@@ -143,11 +143,14 @@ fn main() {
         cookie,
     };
 
-    if let Some(seed) = seed.as_ref() {
+    // A studio answered `/health`, so this node is worth starting: it is a
+    // plugin, and a plugin with no studio to be offered to is a process nobody
+    // asked for. What it is *not* told is that studio's name — see `start_node`.
+    if seed.is_some() {
         state.preexisting = rpc(&state.setup, &state.cookie, "true");
 
         if !state.preexisting {
-            if let Ok(child) = start_node(&state.setup, &state.cookie, seed) {
+            if let Ok(child) = start_node(&state.setup, &state.cookie) {
                 if let Ok(mut slot) = state.child.lock() {
                     *slot = Some(child);
                 }
@@ -418,7 +421,7 @@ fn cookie(setup: &Setup) -> Option<String> {
     (!cookie.is_empty()).then(|| cookie.to_string())
 }
 
-fn start_node(setup: &Setup, cookie: &str, seed: &str) -> std::io::Result<Child> {
+fn start_node(setup: &Setup, cookie: &str) -> std::io::Result<Child> {
     // The node's own log, in the folder the old launchers used, appended and
     // never truncated: a node that refuses to start says why there, and a second
     // click must not delete the log the running node is writing.
@@ -427,12 +430,17 @@ fn start_node(setup: &Setup, cookie: &str, seed: &str) -> std::io::Result<Child>
         .append(true)
         .open(log_path(setup))?;
 
+    // No `MONTY_SEEDS`: this node and the studio beside it are two clusters
+    // until somebody joins them, and they are joined from the studio — Settings
+    // → Cluster → Connect to a node, which is a `Node.connect/1` a person makes.
+    // A companion that seeded itself would put this node in the studio's cluster
+    // the moment its icon was double-clicked, which is the decision being left to
+    // a person here.
     let mut command = release_command(setup, cookie);
     command
         .arg("start")
         .stdout(Stdio::from(log.try_clone()?))
         .stderr(Stdio::from(log))
-        .env("MONTY_SEEDS", seed)
         .spawn()
 }
 

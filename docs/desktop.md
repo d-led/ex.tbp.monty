@@ -100,8 +100,8 @@ per name whether it connected, whether it is this node, or whether nobody
 answered (with the three reasons that look identical: not running, host
 unreachable, cookie differs). A dialled node is _not_ remembered; a peer list that
 survives a restart is `MONTY_SEEDS`. The two sample plugin nodes are the third
-case: they are told the window's name when they start, and they keep asking. See
-the section below.
+case: they start alone, and they are joined from this page. See the section
+below.
 
 The data folder does **not** follow the name. The window is the one start that
 keeps the folder a node that runs alone uses, because an instance id is per
@@ -116,8 +116,12 @@ policy) and `ex.tbp.monty.plugin.flyverse.app` (the same contract, different
 answers). A plugin app is not a folder inside the window: `scripts/package.sh`
 builds `examples/<name>` as a release of its own and wraps it in an application
 named after the plugin id, which is why the names are dotted and not pretty. They
-are there so the plugin story can be watched rather than read — start them and
-Settings → Cluster lists three nodes.
+are there so the plugin story can be watched rather than read — start them, then
+**Connect to a node** with `example_plugin_app@127.0.0.1` and Settings → Cluster
+lists three nodes. Neither side looks for the other: a companion dials only the
+nodes it was told about in `MONTY_SEEDS` and never announces itself, so the
+window's gossip — which is how two _windows_ find each other — has nothing of
+theirs to find. The two clusters stay apart until somebody joins them.
 
 ```text
 macOS    three apps in one folder: Monty on the BEAM.app,
@@ -427,11 +431,11 @@ ecto.*` reads the repository list before `runtime.exs` has run.)
 ### What a bundle does not carry
 
 `priv` is assembled whole, and a checkout's `priv` also holds what that
-checkout's own runs wrote: the pretrained memories under `priv/monty/libraries`
-and the recordings — a log, the step statistics, the frames each sensor drew —
-under `priv/studio_runs`. Neither is a property of the build. A release is told
-where its data goes (`Monty.Paths.artifacts/0`), and on the desktop that is the
-user's application-support folder, so `scripts/start-desktop.sh` deletes both
+checkout's own runs wrote: the recordings — a log, the step statistics, the
+frames each sensor drew — under `priv/studio_runs`. That is not a property of the
+build. A release is told where its data goes (`Monty.Paths.artifacts/0`), and on
+the desktop that is the user's application-support folder, so
+`scripts/start-desktop.sh` deletes both
 from the assembled release. A window that shipped them would carry somebody's
 experiments, and at the size recordings reach, carry little else.
 
