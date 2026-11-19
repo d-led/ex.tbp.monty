@@ -97,7 +97,7 @@ spread = fn lm, object_id ->
       centre = locations |> Enum.zip_with(&Monty.Math.mean/1)
       apart = locations |> Enum.map(fn location -> distance.(location, centre) end) |> Enum.max()
 
-      most_likely = Rotation.to_matrix(EvidenceGraphLM.current_mlh(lm).rotation)
+      most_likely = Rotation.to_matrix(EvidenceGraphLM.get_current_mlh(lm).rotation)
 
       turn =
         ids

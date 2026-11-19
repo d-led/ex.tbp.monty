@@ -10,6 +10,12 @@
 # several, so it reports high evidence and no conclusion however long it looks:
 # the answer is not "unrecognised" but "recognised, and this is how many ways
 # round it could be". This prints which of the two happened.
+#
+# `CAD_WORLD` picks the world the same row is measured in, for the configs whose
+# object is a mesh rather than the STEP file: `CAD_EXPERIMENT=cad/plate_pair_eval
+# CAD_WORLD=ex_mujoco` asks the same question of the arrangement, whose world is
+# its own merged mesh and needs no part named here.
+# `CAD_LIBRARY` defaults to the libraries this machine runs from.
 
 alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
 alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
@@ -36,13 +42,34 @@ end
 # The geometry is `ex_monty_cad`'s, from Hex (`mix.exs`), so a probe is a script
 # run against the same dependency the application has.
 steps = System.argv() |> List.first() |> then(&(&1 && String.to_integer(&1))) || 500
-library = System.get_env("CAD_LIBRARY") || Mix.raise("CAD_LIBRARY names the libraries root")
 
-if System.get_env("MONTY_CAD_PART") in [nil, ""] do
+# An explicit table, not `String.to_atom/1`: the value comes from the shell.
+world =
+  case System.get_env("CAD_WORLD") in [nil, "", "cad"] do
+    true -> :cad
+    false -> System.get_env("CAD_WORLD")
+  end
+
+world =
+  case world do
+    "ex_mujoco" -> :ex_mujoco
+    "mujoco" -> :mujoco
+    "synthetic" -> :synthetic
+    "cad" -> :cad
+    other -> Mix.raise("CAD_WORLD names no world this probe steps: #{inspect(other)}")
+  end
+
+# Only the STEP world needs the part: a config whose world is a mesh names it.
+if world == :cad and System.get_env("MONTY_CAD_PART") in [nil, ""] do
   Mix.raise("MONTY_CAD_PART names the part the world steps")
 end
 
-Application.put_env(:ex_tbp_monty, :monty_libraries_dir, library)
+# The libraries root is this machine's answer unless one is named, so a run of a
+# config whose memory the app already loads needs no variable at all.
+case System.get_env("CAD_LIBRARY") do
+  value when value in [nil, ""] -> :ok
+  library -> Application.put_env(:ex_tbp_monty, :monty_libraries_dir, library)
+end
 
 # The config decides more than the policy: `camera_surf_delta` filters a patch
 # that has not changed enough into a location-only message, and a location-only
@@ -55,7 +82,7 @@ experiment =
   System.get_env("CAD_EXPERIMENT") || "base_config_10distinctobj_surf_agent"
 
 {:ok, opened} =
-  Monty.Studio.open(experiment, world_simulator: :cad)
+  Monty.Studio.open(experiment, world_simulator: world)
 
 # The seed is the exploration the policy draws — the world starts in the pose the
 # *part* decides — so a probe of one seed says what that exploration did, and the
@@ -106,18 +133,22 @@ end
 # by default), so the largest turn among them is the distance from settling — and
 # the number of distinct rotations says how many ways round the part could be.
 poses_of = fn
-  %EvidenceGraphLM{} = module ->
-    case EvidenceGraphLM.current_mlh(module) do
-      nil ->
-        %{}
+  # A module that has seen nothing yet holds no MLH at all, and one that has
+  # only just been handed a percept still names a placeholder as its object.
+  # Neither has hypotheses to measure, and `get_current_mlh/1` needs an MLH to
+  # refresh, so the two come before it rather than a rescue around it.
+  %EvidenceGraphLM{current_mlh: nil} ->
+    %{}
 
+  %EvidenceGraphLM{} = module ->
+    case EvidenceGraphLM.get_current_mlh(module) do
       # Before the first percept the module answers a placeholder MLH rather than
       # nil, and there are no hypotheses to measure (`EvidenceGraphLM` names the
       # same two ids when it decides what to put in a report).
       %{graph_id: graph_id} when graph_id in ["no_observations_yet", "new_object0"] ->
         %{}
 
-      %{graph_id: graph_id, rotation: most_likely} ->
+      %{graph_id: graph_id, rotation: most_likely} = mlh ->
         hypotheses = Map.fetch!(module.hypotheses, graph_id)
         possible = EvidenceGraphLM.get_possible_hypothesis_ids(module, graph_id)
 
@@ -125,10 +156,36 @@ poses_of = fn
           for id <- possible,
               do: turn_degrees.(most_likely, Hypotheses.pose(hypotheses, id))
 
+        # The band `get_possible_hypothesis_ids/2` reads: a plausible set is
+        # empty either because the best evidence is under the floor or because
+        # one hypothesis in the column could not be scored at all (this port's
+        # `nil` is Monty's NaN, and an unrankable column has no best).
+        scores = Hypotheses.evidence(hypotheses)
+        unscored_ids = for {score, index} <- Enum.with_index(scores), is_nil(score), do: index
+
+        unscored_detail =
+          case unscored_ids do
+            [] ->
+              nil
+
+            [id | _] ->
+              %{
+                id: id,
+                possible: Enum.at(hypotheses.possible, id),
+                location: Hypotheses.location(hypotheses, id),
+                pose: Hypotheses.pose(hypotheses, id)
+              }
+          end
+
         %{
           graph_id => %{
             possible: length(possible),
             possible_ids: Enum.sort(possible),
+            hyps: Hypotheses.count(hypotheses),
+            evidence: Float.round(mlh.evidence, 3),
+            unscored: length(unscored_ids),
+            unscored_ids: Enum.take(unscored_ids, 8),
+            unscored_detail: unscored_detail,
             rotations:
               possible |> Enum.map(&Hypotheses.pose(hypotheses, &1)) |> Enum.uniq() |> length(),
             max_turn: turns |> Enum.max(fn -> 0.0 end) |> Float.round(1),
@@ -267,6 +324,9 @@ observe = fn
           step: step,
           possible: possible,
           possible_ids: ids,
+          hyps: pose.hyps,
+          evidence: pose.evidence,
+          unscored: pose.unscored,
           symmetry: symmetry,
           required: required,
           processed: pose.processed,
@@ -377,6 +437,7 @@ if observed != [] do
   for row <- sampled do
     IO.puts(
       "  step #{String.pad_leading(to_string(row.step), 3)}  possible #{String.pad_leading(to_string(row.possible), 2)}" <>
+        "  hyps #{row.hyps}  ev #{row.evidence}  unscored #{row.unscored}" <>
         "  overlap #{Float.round(row.overlap, 2)}  processed #{row.processed}  symmetry #{row.symmetry}"
     )
   end

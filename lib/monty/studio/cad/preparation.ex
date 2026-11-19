@@ -351,7 +351,12 @@ defmodule Monty.Studio.Cad.Preparation do
   # bytes under different paths, so a path would make a memory taught by a test
   # read as stale to the page — which is how this was found, on the page, with the
   # note that build had just written.
-  @taught_format 2
+  #
+  # 3: the teacher now skips a visit whose percept a learning module would refuse
+  # (`ex_monty_cad` e942364), so a memory taught before it holds nodes a matcher
+  # cannot score — the plate kept two, and either one emptied the possible set at
+  # every step of every run that loaded it.
+  @taught_format 3
 
   @doc """
   Whether the memory on disk was taught from what this plan would teach from now.

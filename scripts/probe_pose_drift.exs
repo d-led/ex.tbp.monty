@@ -78,7 +78,10 @@ IO.puts("step | port: pose id, graph | Monty: pose id, graph | rotation apart (r
 for step <- 0..(steps - 1) do
   {:ok, _actions, _info} = Model.step(id, %{}, %{}, %{Monty.Context.new(0) | step: step})
   lm = LearningModuleServer.state(server)
-  ours = EvidenceGraphLM.current_mlh(lm)
+
+  # `get_current_mlh/1` refreshes the location of a live hypothesis, so it needs
+  # one: a module that has seen nothing holds no MLH and the row says "—".
+  ours = if lm.current_mlh, do: EvidenceGraphLM.get_current_mlh(lm)
   theirs = Enum.at(monty, monty_offset + step) || %{id: nil, graph_id: nil, rotation: nil}
 
   apart =
