@@ -217,6 +217,16 @@ run "installing the packages the scripts import" \
 # The screens are the server's, so the bundle has to be the server's too: CSS,
 # the LiveView client, and the colocated hooks each screen carries. A release
 # ships whatever `priv/static` holds and never builds it.
+#
+# `Plug.Static` prefers a `.gz` beside a file whenever the client accepts gzip,
+# and only `mix phx.digest` writes one — a desktop build does not run it. So a
+# compressed copy left by an older digest is what the browser gets, instead of
+# the file beside it: the packaged window served a stylesheet from before the
+# sidebar had a Dashboard entry, and the icon was missing there while
+# `mix phx.server` drew it, because a dev build turns gzip off. A build that
+# ships no compressed copy keeps none.
+find priv/static -name '*.gz' -delete
+
 run "building the stylesheet" \
   env MIX_ENV=desktop mix tailwind ex_tbp_monty --minify
 
