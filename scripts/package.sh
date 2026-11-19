@@ -7,11 +7,18 @@
 #
 # The three are not the same offer:
 #
-#   .zip   what CI uploads and `scripts/run-desktop.sh` downloads — the one
-#          that needs no release to exist first
+#   .zip   the window and its two companion apps in one archive — what CI
+#          uploads for a commit and `scripts/run-desktop.sh` downloads, the
+#          shape that needs no release to exist before a person can try the app
 #   .pkg   double-click, the three apps appear in /Applications, and they arrive
 #          without the quarantine flag (see `installer_package`)
 #   .dmg   the by-hand form: drag the three apps across
+#
+# The `.zip` is what a commit needs; everything else is what a tag publishes. So
+# `--no-installers` builds and writes the archives alone: nothing on a commit
+# reads a `.pkg`, a `.dmg`, a `.deb` or an AppImage, and making them there is
+# minutes of `pkgbuild`/`hdiutil`/`appimagetool` and gigabytes of disk that no
+# upload picks up.
 #
 # All of them carry the same bundle — the window, the Elixir release, the BEAM,
 # the embedded Python, and the two sample plugin nodes `Settings → Cluster`
@@ -25,6 +32,7 @@
 #   scripts/package.sh --no-dmg        # skip the disk image
 #   scripts/package.sh --no-zip        # skip the zip (the app is still built)
 #   scripts/package.sh --no-pkg        # skip the installer package
+#   scripts/package.sh --no-installers # only the archives: what a commit uploads
 #
 # A platform is built on a machine of that platform: the release carries a
 # compiled Python, two Rust NIFs and a webview shell, none of which cross-compile
@@ -51,6 +59,10 @@ readonly bundle="src-tauri/target/release/bundle/macos/$product.app"
 make_dmg=true
 make_zip=true
 make_pkg=true
+# The Linux shapes a distribution installs, copied out of the bundler's own
+# output. Off with the other installers, and off is the answer to "what does a
+# commit actually upload": the tarball and its two companion tarballs.
+make_bundles=true
 rids=()
 
 host_rid() {
@@ -68,10 +80,15 @@ for argument in "$@"; do
     --no-dmg) make_dmg=false ;;
     --no-zip) make_zip=false ;;
     --no-pkg) make_pkg=false ;;
+    --no-installers)
+      make_dmg=false
+      make_pkg=false
+      make_bundles=false
+      ;;
     all) rids+=("$(host_rid)") ;;
     osx-arm64 | osx-x64 | linux-arm64 | linux-x64 | win-x64) rids+=("$argument") ;;
     *)
-      echo "usage: scripts/package.sh [all|osx-arm64|osx-x64|linux-arm64|linux-x64|win-x64] [--no-dmg] [--no-zip] [--no-pkg]" >&2
+      echo "usage: scripts/package.sh [all|osx-arm64|osx-x64|linux-arm64|linux-x64|win-x64] [--no-dmg] [--no-zip] [--no-pkg] [--no-installers]" >&2
       exit 64
       ;;
   esac
@@ -85,6 +102,10 @@ version=$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs | head -1)
 version=${version:-0.1.0}
 
 echo "$product $version: ${rids[*]}"
+
+if [ "$make_pkg" = false ] && [ "$make_dmg" = false ] && [ "$make_bundles" = false ]; then
+  echo "  the archives only: no installer is published from this run"
+fi
 
 mkdir -p "$artifacts"
 
@@ -433,6 +454,13 @@ carries_companion_folders() {
 # runs where nothing is installed at all. `tar`, not `zip`: the release's own
 # launchers are 0555 and a zip that loses that produces an application that
 # cannot start its server.
+#
+# The tarball is the shape a commit uploads; the two installers are what a tag
+# publishes, so `--no-installers` leaves them where the bundler wrote them. That
+# is a copy skipped and not a build: whether Tauri makes a `.deb` and an
+# AppImage is `tauri.bundle.linux.json`'s `targets`, deliberately not repeated in
+# a flag here — a `--bundles` list beside that config once overrode it and the
+# AppImage it named was never built while the job stayed green.
 linux_bundle() {
   local rid=$1 folder="$artifacts/$1/ex-tbp-monty-$1" target="$artifacts/$1/ex-tbp-monty-$1.tar.gz"
 
@@ -458,8 +486,10 @@ linux_bundle() {
   # tracks, and the AppImage that runs where nothing is installed at all. The
   # AppImage is the release squeezed into one executable, so it needs no
   # unpacking step — it is the only artefact a person can download and run.
-  bundle_one src-tauri/target/release/bundle/deb '*.deb' "$1"
-  bundle_one src-tauri/target/release/bundle/appimage '*.AppImage' "$1"
+  if [ "$make_bundles" = true ]; then
+    bundle_one src-tauri/target/release/bundle/deb '*.deb' "$1"
+    bundle_one src-tauri/target/release/bundle/appimage '*.AppImage' "$1"
+  fi
 }
 
 # One archive per companion, beside the window's: three downloads that are three

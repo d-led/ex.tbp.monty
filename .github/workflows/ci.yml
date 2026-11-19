@@ -839,19 +839,27 @@ jobs:
             rid: osx-arm64
             asset: ex-tbp-monty-osx-arm64
             rust: scripts/install-rust.sh
-            package: ./scripts/package.sh
+            # Two shapes per platform, and the difference is what gets uploaded:
+            # a commit takes the one archive that holds the window and its two
+            # companion apps, a tag takes that too and publishes the installers
+            # beside it. Building them on a commit spends `pkgbuild`/`hdiutil`
+            # minutes and two thirds of a gigabyte on a file no upload picks up.
+            package: ./scripts/package.sh --no-installers
+            package_publish: ./scripts/package.sh
           - os: windows-2022
             rid: win-x64
             asset: ex-tbp-monty-win-x64
             # The image ships Rust and the MSVC build tools; saying so fails
             # here, in one line, rather than inside `cargo build`.
             rust: cargo --version
-            package: powershell -ExecutionPolicy Bypass -File scripts\package.ps1 win-x64
+            package: powershell -ExecutionPolicy Bypass -File scripts\package.ps1 win-x64 -NoInstaller
+            package_publish: powershell -ExecutionPolicy Bypass -File scripts\package.ps1 win-x64
           - os: ubuntu-22.04
             rid: linux-x64
             asset: ex-tbp-monty-linux-x64
             rust: scripts/install-rust.sh
-            package: ./scripts/package.sh
+            package: ./scripts/package.sh --no-installers
+            package_publish: ./scripts/package.sh
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -958,8 +966,13 @@ jobs:
           pwsh -NoProfile -File scripts/check-syntax.ps1
           if ($LASTEXITCODE -ne 0) { throw 'a script does not parse in PowerShell 7' }
 
-      - name: Package the application
+      - name: Package the application, the shape a commit uploads
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: ${{ matrix.package }}
+
+      - name: Package the application, the shape a tag publishes
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ${{ matrix.package_publish }}
 
       # What the sibling project learned the hard way, and this one shipped three
       # times over: the release a bundle carries is the thing that can be wrong,
@@ -994,21 +1007,25 @@ jobs:
         run: |
           mkdir -p smoke
           # The wrapper nightly.link serves is the artefact the upload step
-          # declares — the zip, the packages, the tarball — and not the whole of
-          # `artifacts/`, which also holds the unpacked bundles that upload leaves
-          # out. Python's zipfile, because GNU tar cannot write a zip at all and
-          # whether an image ships `zip` is not worth betting a gate on.
+          # declares — the window's one archive — and not the whole of
+          # `artifacts/`, which also holds the unpacked bundles and the
+          # installers that upload leaves out. Python's zipfile, because GNU tar
+          # cannot write a zip at all and whether an image ships `zip` is not
+          # worth betting a gate on.
           python3 - <<'PY'
           import glob, os, sys, zipfile
 
           root = "artifacts/${{ matrix.rid }}"
           target = os.path.join("smoke", "${{ matrix.asset }}.zip")
-          # The same two patterns the upload step takes for a commit: an archive
-          # a smoke can open, not an installer. A wrapper that carried the
-          # `.pkg`, the `.deb` and the AppImage as well was this step doing the
-          # work four times to prove one download.
-          uploaded = ("*.zip", "*.tar.gz")
-          files = [full for pattern in uploaded for full in sorted(glob.glob(os.path.join(root, pattern)))]
+          # The one file the upload step takes for a commit: the archive the
+          # packaging names after the application, holding the window and its two
+          # companion apps. A wrapper that carried the `.pkg`, the `.deb`, the
+          # AppImage and a per-plugin archive each was this step doing the work
+          # four times to prove one download.
+          files = sorted(
+              glob.glob(os.path.join(root, "${{ matrix.asset }}.zip"))
+              + glob.glob(os.path.join(root, "${{ matrix.asset }}.tar.gz"))
+          )
 
           if not files:
               sys.exit(f"nothing in {root} that the upload step would take")
@@ -1058,11 +1075,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force smoke | Out-Null
-          # Files only: the folder beside them is the unpacked bundle the upload
-          # step leaves out, so the wrapper holds what a person downloads.
+          # The one file the upload step declares for a commit — the window's
+          # archive, which carries the two companions. The folder beside it is the
+          # unpacked bundle, and an NSIS setup sits there too when the ref is a
+          # tag: neither is what a person downloads, so neither goes in the
+          # wrapper.
           Push-Location "artifacts/${{ matrix.rid }}"
           tar -a -c -f "$env:GITHUB_WORKSPACE/smoke/${{ matrix.asset }}.zip" `
-            (Get-ChildItem -File | Select-Object -ExpandProperty Name)
+            "${{ matrix.asset }}.zip"
           if ($LASTEXITCODE -ne 0) { throw 'the wrapper zip could not be made' }
           Pop-Location
           $env:EX_TBP_MONTY_BASE_URL = "$env:GITHUB_WORKSPACE/smoke"
@@ -1090,28 +1110,45 @@ jobs:
       # directory entries, and the artefact zip flattens both — the download
       # would open and then fail to start its server.
       #
-      # Three zips on macOS, one per app: the window and the two sample plugin
-      # nodes, each a download a person can double-click. They are small because
-      # the release carries the application only — `scripts/check-release.sh`
-      # refuses one that carries a checkout's run recordings, dialyzer pictures or
-      # an interpreter, which is how a desktop bundle once reached gigabytes.
+      # One archive, holding the window **and** its two companion apps: three
+      # apps, three nodes, one download. That is the whole of what a commit
+      # needs — the one-line download unpacks all three and the checks below open
+      # them — and it is one file, not three: the companions' own archives say
+      # the same thing twice and are what a tag adds for someone who wants a
+      # plugin on its own.
+      #
+      # They are small because the release carries the application only —
+      # `scripts/check-release.sh` refuses one that carries a checkout's run
+      # recordings, dialyzer pictures or an interpreter, which is how a desktop
+      # bundle once reached gigabytes.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.asset }}
           path: |
-            artifacts/${{ matrix.rid }}/*.zip
-            artifacts/${{ matrix.rid }}/*.tar.gz
+            artifacts/${{ matrix.rid }}/${{ matrix.asset }}.zip
+            artifacts/${{ matrix.rid }}/${{ matrix.asset }}.tar.gz
           # The one-line installer and the release both read these; a week is not
           # long enough for a download people are told to use.
           retention-days: 90
           if-no-files-found: error
 
-      # What a person *installs* is not what this job has to check. Every smoke
-      # above opens the file the packaging wrote on this runner, and the tag job
-      # is the only thing that attaches a `.pkg`, a `.deb`, an AppImage or an
-      # NSIS setup. Uploading them per commit made one release travel four times
-      # in a single artefact — 1072 MB of Linux for archives a person downloads
-      # one of — so they travel only where they are used.
+      # What a person *installs*, and the plugins as downloads of their own, is
+      # not what this job has to check. Every smoke above opens the file the
+      # packaging wrote on this runner, and the tag job is the only thing that
+      # attaches a `.pkg`, a `.deb`, an AppImage, an NSIS setup or a per-plugin
+      # archive. Uploading them per commit made one release travel four times in
+      # a single artefact — 1072 MB of Linux for archives a person downloads one
+      # of — so they travel only where they are used.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: ${{ matrix.asset }}-companions
+          path: |
+            artifacts/${{ matrix.rid }}/ex.tbp.monty.plugin.*.zip
+            artifacts/${{ matrix.rid }}/ex.tbp.monty.plugin.*.tar.gz
+          retention-days: 90
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: startsWith(github.ref, 'refs/tags/v')
         with:
@@ -1180,9 +1217,13 @@ jobs:
       # installed copy gets its `rel\` from the bundler's resource copy. A
       # download that installs and then crashes on start is exactly that
       # difference.
+      #
+      # A tag only, because a commit builds no setup to install: what a commit
+      # uploads is the window's one archive, and the NSIS setup is what a tag
+      # publishes. The step is worth having where a setup ships.
       - name: Install the Windows setup and open the installed window
         continue-on-error: true
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
         timeout-minutes: 15
         shell: bash
         run: |

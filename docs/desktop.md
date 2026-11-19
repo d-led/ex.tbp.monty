@@ -500,10 +500,13 @@ because it needs no release to exist before somebody can try the app:
    | `monty-on-the-beam-0.1.0.pkg` | double-click, all three apps appear in `/Applications` (see below)                                                                                               |
    | `monty-on-the-beam-0.1.0.dmg` | the by-hand form: drag the three into `/Applications`                                                                                                            |
 
-   `--no-dmg`, `--no-zip` and `--no-pkg` skip any of them; `all` means "the
-   platform this machine is", and a platform it is not is refused rather than
-   faked. The build itself is `scripts/start-desktop.sh --bundle` — the
-   packaging script has no second copy of those steps.
+   `--no-dmg`, `--no-zip` and `--no-pkg` skip any of them, and
+   `--no-installers` skips the last three at once — the `.pkg`, the `.dmg` and,
+   on Linux, the `.deb` and the AppImage — leaving the one archive a commit
+   uploads; `all` means "the platform this machine is", and a platform it is not
+   is refused rather than faked. The build itself is
+   `scripts/start-desktop.sh --bundle` — the packaging script has no second copy
+   of those steps.
 
    **A second run replaces the first, it does not add to it.** `artifacts/<platform>/`
    is emptied before anything is written into it, together with a zip a crashed
@@ -538,7 +541,15 @@ denied (os error 13)` inside Tauri's build script, which names no path. That
    success, which is how a tree that built nothing looked packaged.
 
 2. CI's `desktop` job runs it on a runner of the architecture it ships to and
-   uploads the zip as `ex-tbp-monty-osx-arm64`, for ninety days.
+   uploads **one** file, `ex-tbp-monty-osx-arm64.zip` — the window and its two
+   companion apps in one archive — for ninety days. That is the whole of what a
+   commit carries: the plugins as downloads of their own, the `.pkg`, the `.dmg`,
+   the `.deb`, the AppImage and the NSIS setup travel under
+   `<asset>-companions` and `<asset>-installers` when the ref is a `v*` tag, for
+   the release page and nothing else. A commit that uploaded them put the same
+   release in one artefact four times — 1072 MB of Linux for archives a person
+   downloads one of — and built a `.pkg`, a `.dmg`, a `.deb` and an AppImage that
+   no step on a commit opened.
 3. `scripts/run-desktop.sh` (`run-desktop.ps1` on Windows) takes the newest build
    of `main` from `nightly.link`, expands it into `./ex-tbp-monty-<platform>/`
    beside the download, and opens it. It copies nothing anywhere and registers
@@ -575,8 +586,9 @@ denied (os error 13)` inside Tauri's build script, which names no path. That
    not shipped any more either: nineteen debug symbols, ~90 MB of the download
    for a binary nobody debugs here.
 
-4. A `v*` tag runs `desktop-release`, which attaches the same zip to a GitHub
-   release — an artefact expires, a release does not.
+4. A `v*` tag runs `desktop-release`, which attaches the same zip, the two
+   per-plugin archives and the installers to a GitHub release — an artefact
+   expires, a release does not.
 
 The app is 370 MB uncompressed on macOS arm64 — measured on this checkout's
 `_build/desktop/rel/ex_tbp_monty` — and that is not a mistake: it carries the
@@ -881,15 +893,18 @@ names.
   `APPLE_SIGNING_IDENTITY`/`APPLE_ID`/`APPLE_TEAM_ID` is the path; neither can be
   done without a paid Apple Developer certificate.
 - **Three platforms, and how far each is proven.** The `desktop` job builds
-  macOS arm64 (the `.app`, its zip, a `.pkg` and a `.dmg`), Linux x64 (a tarball
-  of the window with its release beside it, a `.deb`, and an AppImage) and
-  Windows x64 (an NSIS setup and the same portable folder, zipped). Each job then
+  macOS arm64 (the `.app`, its two companion apps and one zip of the three),
+  Linux x64 (a tarball of the window with its release and its companions beside
+  it) and Windows x64 (the portable folder, zipped). A `v*` tag also makes the
+  shapes a person installs — a `.pkg` and a `.dmg` on macOS, a `.deb` and an
+  AppImage on Linux, an NSIS setup on Windows — because those are what the
+  release page offers and no check on a commit opens them. Each job then
   **opens** what it built: `scripts/smoke-window.sh` waits for the page to report
   what it drew to `/__painted`, which only a webview that ran the page can send,
-  and the Windows job also installs its own setup and opens the installed window,
-  because an installed copy takes its `rel\` from the bundler's resource copy
-  rather than from the packaging script. Those steps are `continue-on-error` on
-  purpose — a download nobody can get is worse than a red step nobody can act on
+  and the Windows job on a tag also installs its own setup and opens the
+  installed window, because an installed copy takes its `rel\` from the bundler's
+  resource copy rather than from the packaging script. Those steps are
+  `continue-on-error` on purpose — a download nobody can get is worse than a red step nobody can act on
   — so what they prove is their own line, not the job's colour. Beyond CI a
   person has built and opened the macOS app from a checkout and started the Linux
   AppImage (see below). The rule holds — nothing is claimed beyond what was

@@ -24,6 +24,11 @@
         scripts\package.ps1 -NoZip           # skip the zip (the folder is still made)
         scripts\package.ps1 -NoInstaller     # skip the installer
 
+    A commit asks for `-NoInstaller`: what it uploads is the folder zipped, and
+    the NSIS setup is what a `v*` tag publishes. The per-companion zips are
+    written either way and uploaded with a tag, where the release page lists
+    three apps as three downloads.
+
     A platform is built on a machine of that platform: the release carries a
     compiled Python, two Rust NIFs and a webview shell, none of which
     cross-compile cheaply. `all` therefore means "the host", and a platform that
