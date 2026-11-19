@@ -43,6 +43,40 @@ defmodule Monty.Studio.Replay.ChartTest do
     |> length()
   end
 
+  describe "a line whose samples are not one step apart" do
+    # A `Replay.Digest` line is bucketed — three points a group, and the groups
+    # halve as a run grows — so its samples are never consecutive steps. Cutting
+    # the line wherever the steps were not adjacent drew every sample as its own
+    # one-point subpath, and a run page's evidence read as a row of dots.
+    test "is one line, not a dot a sample" do
+      points = [
+        %{step: 0, value: 10.0, episode: 0},
+        %{step: 3, value: 11.0, episode: 0},
+        %{step: 7, value: 12.0, episode: 0}
+      ]
+
+      chart = Chart.new(points)
+
+      assert [%{path: path}] = chart.paths
+      assert runs_of(path) == 1
+      assert length(drawn_points(chart)) >= 2
+    end
+
+    test "is still cut where the episode changes" do
+      points = [
+        %{step: 0, value: 10.0, episode: 0},
+        %{step: 3, value: 11.0, episode: 0},
+        %{step: 0, value: 4.0, episode: 1},
+        %{step: 3, value: 5.0, episode: 1}
+      ]
+
+      chart = Chart.new(points)
+
+      assert [%{path: path}] = chart.paths
+      assert runs_of(path) == 2
+    end
+  end
+
   describe "the line the values are measured from" do
     test "is drawn where the axis admits zero" do
       chart = Chart.many([series([0.0, 2.0, -1.0], "mug")])

@@ -520,12 +520,26 @@ defmodule Monty.Studio.Replay.Chart do
   # point starts a stretch wherever the episode changes — evidence restarts at
   # zero there — or a step is missing, which is a theory the module culled and
   # has nothing to report about.
+  # A line is cut where the episode changes, and nowhere else.
+  #
+  # It used to be cut wherever a step was not the one after the last — which is
+  # every sample of a `Replay.Digest` line. The digest buckets its points (three
+  # a group, and the groups halve as a run grows), so its samples are three steps
+  # apart at best and further apart as the run gets longer. Cut on adjacency, a
+  # run's evidence line was a row of isolated one-point subpaths: `M 12,40 M 15,41
+  # M 19,43` draws three dots and no line, and every object's line on the run page
+  # looked patchy for that reason.
+  #
+  # What the adjacency was protecting is a line drawn through an episode boundary,
+  # where evidence restarts at zero — and that is the episode, which is what is
+  # tested here. A gap between two samples of one episode is a sampling interval,
+  # not a hole: a value a module did not re-report is the value it last reported.
   defp stretches(points) do
     points
-    |> Enum.reduce([], fn {episode, step, _xy} = point, stretches ->
+    |> Enum.reduce([], fn {episode, _step, _xy} = point, stretches ->
       case stretches do
-        [[{same, previous, _} | _] = run | earlier] ->
-          if episode == same and step == previous + 1,
+        [[{same, _step, _xy} | _] = run | earlier] ->
+          if episode == same,
             do: [[point | run] | earlier],
             else: [[point], run | earlier]
 
