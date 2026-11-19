@@ -241,11 +241,34 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    question as the feature wall above — an edge has to be held long enough to be
    named — and it is why a set is not a config change away.
 
-3. **The pretraining configs.** `cad_feature_pretrain_*` (children) and the
-   `_compositional` / `_monolithic` pair, which differ only in whether the labels
-   name features or the part. The pair is the measurement: composition against one
-   lump, everything else held. Today a feature-labelled run uses an evaluation
-   config written for whole objects.
+3. **The pretraining configs, and the wall in front of them.** `cad_feature_pretrain_*`
+   (children) and the `_compositional` / `_monolithic` pair, which differ only in
+   whether the labels name features or the part. The pair is the measurement:
+   composition against one lump, everything else held. Today a feature-labelled run
+   uses an evaluation config written for whole objects.
+
+   Every CAD experiment here recognises a memory the _B-rep teacher_ wrote; none
+   learns a part from its own percepts, which is the other half of the question and
+   what Monty's pretraining experiments are for. A config for it composes cleanly —
+   `MontySupervisedObjectPretrainingExperiment`, the CAD world, a supervised episode
+   per rotation of `plate`, no findings from `Monty.Studio.Setup` — and the run
+   dies at its third step:
+
+   ```
+   LM_0 is a bare GraphLM, which has no matching scheme to narrow possible
+   matches with; a subclass supplies one
+   ```
+
+   That is the same sentence for both module pairings tried (the evaluation configs'
+   `evidence_tutorial_surf_agent_2obj` + `camera_tutorial_surf_agent_2obj`, and the
+   dog corpus's `graph_1lm` + `camera_surf_rgba` which trains there), so the
+   blocker is not the config: a training episode of this port still asks its
+   learning module to narrow, and a bare `GraphLM` cannot. The next step is on the
+   training path — either the module a training episode builds must be one with a
+   matching scheme, or the step must not narrow while the phase is training — and
+   the referee is a one-episode run of a part that ends with a library at
+   `<libraries>/cad_parts_v1/plate_learned`. Neither config is shipped while it
+   crashes: a page offering a run that dies is worse than a page with no run.
 
 4. **A memory taught from other inputs is named, but only from now on.** A CAD
    memory records the part file's bytes, the optics, the sampling and the CAD
