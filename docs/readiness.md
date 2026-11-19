@@ -149,17 +149,23 @@ objects were downloaded.
 What is left is not a class, in the order worth doing:
 
 1. **The cows memory, exported** — every cows config names
-   `pretrained_compositional_objects_v10` since #1280 and this machine has the
-   archive, but nothing has turned it into the export a run reads, so a cows run
+   `pretrained_compositional_objects_v11`, which `/prerequisites` fetches, and
+   nothing here has turned it into the export a run reads yet, so a cows run
    steps the v8 graphs and says so (`memory_from_another_release`). That is an
    export through `/prerequisites`, not code.
-2. **`GraphLM`'s own gap** — `tutorial/surf_agent_2obj_train` names the base
+2. **The attention system, wired into the step** — the `Monty.Attention.*`
+   classes are here and nothing steps them: a run uses Monty's no-op system, so
+   every proposed goal passes through. `Setup` refuses a config that names
+   another (`:attention_not_applied`), which is the cows family today; §2.32 of
+   `docs/monty-differences.md` says what the wiring needs. This is the one item
+   here that the classes in the tree do not already answer.
+3. **`GraphLM`'s own gap** — `tutorial/surf_agent_2obj_train` names the base
    `GraphLM`, which refuses matching for a config that leaves the scheme to a
    subclass. That is a capability to build, not a class to write.
-3. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
+4. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
    from Monty's `tests/` tree, which no port can have; they cannot run here and
    should stay so unless the fixtures themselves are ported.
-4. **The refreshed code** — Monty pulled on 2026-11-10 changed the transform in
+5. **The refreshed code** — Monty pulled on 2026-11-10 changed the transform in
    `GraphMemory.update_memory` (#1280), removed Habitat (#1286) and the two step
    counters (#1293, #1294), and renamed the recognition policy to a strategy
    (#1291). The configs, the map and this survey follow the pull; the Python

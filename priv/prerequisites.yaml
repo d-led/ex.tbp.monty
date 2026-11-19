@@ -182,24 +182,25 @@ prerequisites:
       - supervised_pre_training_cows_small_compositional
       - supervised_pre_training_cows_small_monolithic
 
-  # The same seven models, relearned after Monty's #1280: learned points in a
+  # The same seven models, relearned with salience, segmentation and attention
+  # feeding the parent's learning (Monty's #1279): learned points in a
   # compositional model could land in the wrong frame when a channel arrived in
   # a later episode, so every cows config names this release now. Without it a
   # cows run steps the v8 graphs above and says so
   # (`memory_from_another_release`).
-  - id: pretrained_compositional_objects_v10
-    title: Pretrained compositional object models (v10)
+  - id: pretrained_compositional_objects_v11
+    title: Pretrained compositional object models (v11)
     description: >
-      The models Monty's cows configurations name since #1280, unpacked into
-      ~/tbp/results/monty/pretrained_models/pretrained_compositional_objects_v10.
-    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_compositional_objects_v10.tgz
-    sha256: 470c050a6477587f66dc68dd976d768109ca82be3ee27718863f794a4fe7158a
-    upstream: thousandbrainsproject/tbp.monty, release pretrained_compositional_objects_v10
+      The models Monty's cows configurations name, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_compositional_objects_v11.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_compositional_objects_v11.tgz
+    sha256: c2c325c9c12aa36bf5ef2db2f4276db8f41b3086c7c27dba3ff07ff5da7da84b
+    upstream: thousandbrainsproject/tbp.monty, release pretrained_compositional_objects_v11
     licence: MIT, as Monty itself — the models are its training's output
     root: MONTY_MODELS
-    target: pretrained_compositional_objects_v10.tgz
+    target: pretrained_compositional_objects_v11.tgz
     extract: true
-    unpacks_to: pretrained_compositional_objects_v10
+    unpacks_to: pretrained_compositional_objects_v11
     provides:
       - supervised_pre_training_cows_3d_children
       - supervised_pre_training_cows_large_2d_children

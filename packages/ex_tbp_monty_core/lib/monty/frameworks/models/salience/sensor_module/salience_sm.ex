@@ -107,7 +107,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   @target "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM"
-  @vocus2_config "tbp.monty.frameworks.models.salience.strategies.vocus2.vocus2.Vocus2SalienceConfig"
+  @vocus2_config "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2SalienceConfig"
 
   # This port's addition, and not Monty's: his `SalienceSM` says nothing about
   # drawing from the episode's stream, because Python steps the sensors one after

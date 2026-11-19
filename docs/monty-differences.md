@@ -1985,3 +1985,23 @@ they were slower. A window of five steps was enough for them to deliver.
 **Not yet done:** the window is a number a run chooses, and the run page states
 the choice only in the form it was started with; the collected `still_believing`
 is in the step's status but not yet in the page's verdict line.
+
+## 2.32 An attention system is ported but not stepped
+
+Monty builds the attention system its config names and steps it once a step's
+goals and regions are proposed (`MontyBase._pass_goals`), so a
+`DefaultAttentionSystem` pools the goals into 5 mm voxels and what the motor
+system sees is the pooled, filtered list. This port steps Monty's no-op system on
+every run: `State.all_goals/2` — every goal passes — is the default and the only
+implementation.
+
+The classes are here. `Monty.Attention.*` ports all seven files of
+`src/tbp/monty/attention/` with their tests; what is missing is the threading. An
+attention system carries state (a voxel grid and its telemetry), Monty's model
+holds it and resets it per episode, and the step state here carries a
+two-argument function instead.
+
+Until that is wired, `Setup` refuses a config that names a non-noop attention
+system (`:attention_not_applied`, an error) rather than running it with every goal
+passed through. The cows experiments are the configs that name one, and the
+refusal says so instead of reporting numbers from an experiment nobody ran.

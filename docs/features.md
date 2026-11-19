@@ -19,7 +19,7 @@ not recalled — run it after anything lands that can move one.
 - **Monty's Hydra YAML is read unchanged**, with a documented subset of Hydra
   features. ([config-compatibility.md](config-compatibility.md))
 - **Snapshot gate:** composes each experiment Monty commits a snapshot for
-  (63 files at `monty@335c1aa5`) and diffs it path by path — an extra key is a
+  (63 files at `monty@a8b528aa`) and diffs it path by path — an extra key is a
   failure too. ([`snapshot_check.ex`](../lib/monty/config/snapshot_check.ex))
 - **Numbers checked against Monty**, strongest first: replayed (Monty's own code ran
   and its answers are committed fixtures), recorded (whole episodes), counted
@@ -208,7 +208,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 3,549 `test` declarations in the suite.
+- 3,573 `test` declarations in the suite.
 
 ## Not built — do not assume these
 

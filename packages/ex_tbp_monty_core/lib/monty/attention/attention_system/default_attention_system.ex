@@ -35,7 +35,9 @@ defmodule Monty.Attention.AttentionSystem.DefaultAttentionSystem do
   alias Monty.Attention.Telemetry.NoopAttentionSystemTelemetry
   alias Monty.Cmp.{AttentionRegion, Goal}
 
-  @default_voxel_size 0.05
+  # Monty's default: a 5 mm voxel, so an attention point can name a part of an
+  # object rather than a region of a table.
+  @default_voxel_size 0.005
 
   @weight_expiration_tolerance 1.0e-6
 

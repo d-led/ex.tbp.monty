@@ -2517,6 +2517,7 @@ defmodule Monty.Studio.Setup do
     module_findings(setup) ++
       learning_module_findings(setup, unresolved?) ++
       supervision_findings(setup) ++
+      attention_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
       memory_findings(setup) ++
@@ -2545,6 +2546,28 @@ defmodule Monty.Studio.Setup do
   end
 
   defp supervision_findings(%__MODULE__{}), do: []
+
+  # Monty builds the attention system its config names and steps it with the
+  # goals every sensor proposed; this port steps Monty's no-op one, so every goal
+  # passes untouched. A config that names another would run as an experiment it
+  # is not, so it is refused rather than reported as one that had attention
+  # (`docs/monty-differences.md` §2.32).
+  defp attention_findings(%__MODULE__{attention_system: %{class: class} = described})
+       when is_binary(class) and class != "NoopAttentionSystem" do
+    [
+      Finding.new(
+        :error,
+        :attention_not_applied,
+        "This config asks for #{class}, and this port steps Monty's no-op attention " <>
+          "system instead, so every proposed goal would pass through untouched. Wiring " <>
+          "the configured system into the step is the work, and until it is done this " <>
+          "run would be a different experiment.",
+        described.python
+      )
+    ]
+  end
+
+  defp attention_findings(%__MODULE__{}), do: []
 
   # A learning module a config names is either one this port runs or a refusal.
   # There is no third answer: the stand-in exists so that `model_spec/3` can

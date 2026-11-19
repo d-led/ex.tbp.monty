@@ -356,9 +356,7 @@ defmodule Monty.Studio.SetupTest do
     # own default, which is a different notion of recognition.
     test "reaches the model, instead of the default" do
       setup =
-        setup_from(
-          Map.put(@base, "termination", "named_lm2_objectrecognition_t1000_e100_tot6000")
-        )
+        setup_from(Map.put(@base, "termination", "named_lm2_objectrecognition_t1000_e100_tot500"))
 
       named = {NamedLMsMatch, %NamedLMsMatch{ids: MapSet.new(["learning_module_2"])}}
 
@@ -387,6 +385,21 @@ defmodule Monty.Studio.SetupTest do
 
       assert :match_criterion_not_readable in errors(setup)
       assert setup.match_criterion == nil
+    end
+  end
+
+  describe "an attention system this port does not step" do
+    # The cows experiments name `monty/attention_system: default`. Monty pools
+    # and filters the goals in it, so a run that ignored it would be a
+    # different experiment wearing the same config's name.
+    test "refuses the config, rather than passing every goal through" do
+      setup = setup_from(Map.put(@base, "monty/attention_system", "default"))
+
+      assert :attention_not_applied in errors(setup)
+    end
+
+    test "a config that names no attention system is not refused for one" do
+      refute :attention_not_applied in errors(setup_from(@base))
     end
   end
 
@@ -1003,7 +1016,7 @@ defmodule Monty.Studio.SetupTest do
     test "builds the 2-D sensor module of Monty's three-sensor configurations" do
       # This config used to be the example of a sensor class this port had not
       # written, and got the stand-in. The 2-D module is written, so it is built.
-      setup = setup_from(%{@base | "monty/sensor_module" => "3sm_2d3d_dist"})
+      setup = setup_from(%{@base | "monty/sensor_module" => "3sm_2d3d_dist_raw0"})
 
       spec = Setup.model_spec(setup, "model_0")
 

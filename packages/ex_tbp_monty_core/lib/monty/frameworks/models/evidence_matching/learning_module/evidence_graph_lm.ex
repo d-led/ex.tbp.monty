@@ -260,30 +260,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       # earlier.
       memory =
         Keyword.get_lazy(options, :memory, fn ->
-          EvidenceGraphMemory.new(
-            max_nodes_per_graph: Map.get(config, "max_nodes_per_graph", 2000),
-            max_graph_size: Map.get(config, "max_graph_size", 0.3),
-            num_model_voxels_per_dim: Map.get(config, "num_model_voxels_per_dim", 50)
-          )
+          EvidenceGraphMemory.new(memory_options(config))
         end)
 
       with {:ok, lm} <-
-             new(memory,
-               max_match_distance: Map.get(config, "max_match_distance", 0.01),
-               tolerances: Map.get(config, "tolerances", %{}),
-               feature_weights: Map.get(config, "feature_weights", %{}),
-               x_percent_threshold: Map.get(config, "x_percent_threshold", 10),
-               evidence_threshold_config: Map.get(config, "evidence_threshold_config", "all"),
-               learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
-               max_nneighbors:
-                 get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) ||
-                   @default_max_nneighbors,
-               hypotheses_updater: updater,
-               gsg: goal_generator(config),
-               # The experiment's, not the config's: a run that logs detail asks
-               # its modules for it, which is Monty's `lm.has_detailed_logger`
-               # set by `init_monty_data_loggers`.
-               has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
+             new(
+               memory,
+               [
+                 max_match_distance: Map.get(config, "max_match_distance", 0.01),
+                 tolerances: Map.get(config, "tolerances", %{}),
+                 feature_weights: Map.get(config, "feature_weights", %{}),
+                 learning_module_id: Map.get(config, "learning_module_id", "LM_0"),
+                 max_nneighbors:
+                   get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) ||
+                     @default_max_nneighbors,
+                 hypotheses_updater: updater,
+                 gsg: goal_generator(config),
+                 # The experiment's, not the config's: a run that logs detail
+                 # asks its modules for it, which is Monty's
+                 # `lm.has_detailed_logger` set by `init_monty_data_loggers`.
+                 has_detailed_logger: Keyword.get(options, :has_detailed_logger, false)
+               ] ++ module_options(config)
              ) do
         # Monty's pretrained state dict carries which object built each graph, and
         # a library here now does too (`docs/monty-differences.md` §2.27): the run
@@ -332,7 +329,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # inside it. A generator class this port has not written leaves the module
   # without one — and without goals, which is a different experiment, so
   # `Monty.Studio.Setup` reports it rather than this crashing the build.
-  defp goal_generator(%{"gsg" => entry}) do
+  #
+  # `gsg: null` is Monty saying there are no goals here at all: its heterarchy
+  # configs write it for the sensory modules beneath the one that steers.
+  defp goal_generator(%{"gsg" => entry}) when is_map(entry) do
     case GoalGeneration.from_config(entry) do
       {:ok, generator} -> generator
       {:error, _unsupported} -> nil
@@ -356,6 +356,45 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
           :error -> {:error, {:unsupported_hypotheses_updater, class}}
         end
     end
+  end
+
+  # Monty instantiates the module by handing its config to `__init__`, so every
+  # constructor parameter a config names decides what runs. These are the ones
+  # that arrive as a number or a string; a key the config does not name keeps
+  # `new/2`'s default, which is Monty's own.
+  @module_options [
+    {"evidence_threshold_config", :evidence_threshold_config},
+    {"feature_evidence_increment", :feature_evidence_increment},
+    {"vote_evidence_threshold", :vote_evidence_threshold},
+    {"past_weight", :past_weight},
+    {"present_weight", :present_weight},
+    {"vote_weight", :vote_weight},
+    {"object_evidence_threshold", :object_evidence_threshold},
+    {"x_percent_threshold", :x_percent_threshold},
+    {"path_similarity_threshold", :path_similarity_threshold},
+    {"pose_similarity_threshold", :pose_similarity_threshold},
+    {"required_symmetry_evidence", :required_symmetry_evidence}
+  ]
+
+  # The memory's three sizes and its graph threshold, by the same rule.
+  @memory_options [
+    {"graph_delta_thresholds", :graph_delta_thresholds},
+    {"max_nodes_per_graph", :max_nodes_per_graph},
+    {"max_graph_size", :max_graph_size},
+    {"num_model_voxels_per_dim", :num_model_voxels_per_dim}
+  ]
+
+  defp module_options(config), do: present_options(@module_options, config)
+
+  defp memory_options(config), do: present_options(@memory_options, config)
+
+  # A key a config does not name is absent, not `nil`: `nil` written into a
+  # number's place fails a comparison much later, in the middle of a step.
+  defp present_options(pairs, config) do
+    for {key, option} <- pairs,
+        value = Map.get(config, key),
+        not is_nil(value),
+        do: {option, value}
   end
 
   defp threshold_config(options) do
@@ -1879,10 +1918,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   This module's hypothesis, as a message to the module above it.
 
   The pose is the object's orientation, inverted because the message describes
-  how the *object* sits rather than how the sensor sees it, and
-  `pass_message` is only true once the object is recognised — a guess is not
-  something to build on. `object_id` is a stable number derived from the id, so
-  the module above can match on it as a categorical feature.
+  how the *object* sits rather than how the sensor sees it. `object_id` is a
+  stable number derived from the id, so the module above can match on it as a
+  categorical feature.
+
+  `pass_message` is true only while all three of Monty's conditions hold: the
+  object is recognised, the sensor is still on it, and the most likely
+  hypothesis still lies near the stored points of the object it names
+  (`mlh_on_model/2`). A guess is not something to build on, and neither is a
+  conclusion the model has drifted away from.
 
   Monty's returns the `Message` alone; this comes back with the module, like
   every other step in this port (`docs/monty-differences.md` §2.4).
@@ -1897,6 +1941,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     # not a feature anything matches on, so zero is the honest encoding of "the
     # module has not concluded anything here".
     size = FeatureAtLocationBuffer.size(lm.buffer)
+    on_object = FeatureAtLocationBuffer.get_currently_on_object(lm.buffer)
 
     confidence =
       cond do
@@ -1913,13 +1958,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         morphological_features: %{
           "pose_vectors" => object_pose_to_features(Rotation.invert(mlh.rotation)),
           "pose_fully_defined" => not enough_symmetry_evidence_accumulated?(lm),
-          "on_object" => FeatureAtLocationBuffer.get_currently_on_object(lm.buffer)
+          "on_object" => on_object
         },
         non_morphological_features: %{"object_id" => object_id_to_features(mlh.graph_id)},
         confidence: confidence,
-        pass_message:
-          FeatureAtLocationBuffer.get_currently_on_object(lm.buffer) and
-            lm.terminal_state == :match,
+        pass_message: on_object and lm.terminal_state == :match and mlh_on_model(lm, mlh),
         process_features_in_lm: true,
         sender_id: lm.learning_module_id,
         sender_type: :lm
@@ -1935,6 +1978,50 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # gives it the identity), so there is no such module to answer for.
   defp object_pose_to_features(%Rotation{} = pose),
     do: %OrientationMatrix{value: pose |> Rotation.to_matrix() |> Geometry.transpose()}
+
+  @doc """
+  Whether the most likely hypothesis still lies on the object it names.
+
+  A module can conclude `:match` and then travel: the hypothesis keeps the
+  evidence it earned while the sensor moves past the object it matched, so a
+  conclusion on its own says nothing about where the module is now. Monty asks
+  each of the object's graphs for the stored point nearest the hypothesis'
+  location and keeps the nearest of those answers; within
+  `max_match_distance` the model still supports the conclusion.
+
+  An object that is not in memory — and a hypothesis with no location — is not
+  on the model. Monty writes the latter as a `None` location.
+  """
+  @spec mlh_on_model(
+          t(),
+          %{required(:graph_id) => graph_id(), required(:location) => [float()] | nil}
+        ) :: boolean()
+  def mlh_on_model(%__MODULE__{} = lm, %{graph_id: graph_id, location: location}) do
+    if is_nil(location) or graph_id not in get_all_known_object_ids(lm) do
+      false
+    else
+      nearest =
+        lm.graph_memory
+        |> GraphMemory.get_input_channels_in_graph(graph_id)
+        |> Enum.map(&nearest_node_distance(lm, graph_id, &1, location))
+        |> Enum.reject(&is_nil/1)
+        |> Enum.min(fn -> nil end)
+
+      is_number(nearest) and nearest <= lm.max_match_distance
+    end
+  end
+
+  # The distance from the hypothesis to the closest stored point of one
+  # channel's graph, or `nil` when that graph holds no node to be near.
+  defp nearest_node_distance(%__MODULE__{} = lm, graph_id, channel, location) do
+    graph = GraphMemory.get_graph(lm.graph_memory, graph_id, channel)
+    model = lm.graph_memory.object_model
+
+    case model.find_nearest_neighbors(graph, [location], 1, distance: true) do
+      [[{distance, _node_id} | _rest]] -> distance
+      [_no_node] -> nil
+    end
+  end
 
   # A stable number for an object id, so a module above can match on identity
   # without matching on strings: the first 24 bits of its SHA-256, which stay

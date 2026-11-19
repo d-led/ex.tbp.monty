@@ -660,4 +660,131 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
     <<round_trip::float-32>> = <<feature::float-32>>
     round_trip == feature
   end
+
+  # Monty's `GetOutputTest`: what a module tells the module above it. He patches
+  # `_get_current_mlh` and `_mlh_on_model` to isolate the gate; here the module
+  # is a real one holding a real object, so the gate is answered by a memory the
+  # assertions can see.
+  describe "the message a module above hears" do
+    # Monty's `test_returns_message_with_pass_message_true_when_all_gating_conditions_met`.
+    test "a message passes upward when the object is recognised, the sensor is on it, and the hypothesis is on the model" do
+      {message, _lm} =
+        @line_locations
+        |> learned_line("mug")
+        |> a_new_episode()
+        |> looking_at("mug", hd(@line_locations))
+        |> with_on_object(true)
+        |> with_terminal_state(:match)
+        |> EvidenceGraphLM.get_output()
+
+      assert message.pass_message
+    end
+
+    # Monty's `test_returns_message_with_pass_message_false_when_any_gating_condition_fails`.
+    # His property draws from three families; each is a block below, labelled
+    # with the one condition it fails.
+    test "a message is withheld when any of the three conditions fails" do
+      families = [
+        {"the sensor is off the object", false,
+         [nil, :match, :no_match, :time_out, :pose_time_out], hd(@line_locations)},
+        {"the object is not recognised", true, [nil, :no_match, :time_out, :pose_time_out],
+         hd(@line_locations)},
+        {"the hypothesis left the object's stored points", true,
+         [nil, :match, :no_match, :time_out, :pose_time_out], [5.0, 5.0, 5.0]}
+      ]
+
+      for {family, on_object, terminal_states, location} <- families,
+          terminal_state <- terminal_states do
+        {message, _lm} =
+          @line_locations
+          |> learned_line("mug")
+          |> a_new_episode()
+          |> looking_at("mug", location)
+          |> with_on_object(on_object)
+          |> with_terminal_state(terminal_state)
+          |> EvidenceGraphLM.get_output()
+
+        refute message.pass_message,
+               "#{family}, with the terminal state #{inspect(terminal_state)}"
+      end
+    end
+  end
+
+  # Monty's `MlhOnModelTest`: whether the conclusion is still supported by the
+  # model it names.
+  describe "whether a hypothesis is still on the object it names" do
+    # Monty's `test_returns_false_when_mlh_has_no_location`.
+    test "a hypothesis with no location is not on the model" do
+      lm = learned_line(@line_locations, "mug")
+
+      refute EvidenceGraphLM.mlh_on_model(lm, %{graph_id: "mug", location: nil})
+    end
+
+    # Monty's `test_returns_false_when_mlh_object_is_unknown`.
+    test "a hypothesis naming an object memory does not hold is not on the model" do
+      lm = learned_line(@line_locations, "mug")
+
+      refute EvidenceGraphLM.mlh_on_model(lm, %{
+               graph_id: "bicycle",
+               location: hd(@line_locations)
+             })
+    end
+
+    # Monty's `test_queries_each_channel_graph_and_returns_whether_mlh_is_on_model`.
+    # He patches the memory to answer one distance per channel. Here the object
+    # really carries two channels a metre apart, so the answer has to come from
+    # the nearest of them rather than from any one.
+    test "a hypothesis is on the model when any channel's stored points are near it" do
+      lm = learned_line(@line_locations, "mug") |> a_new_episode()
+      farther = learned_line(Enum.map(@line_locations, &add(&1, [1.0, 0.0, 0.0])))
+      here = hd(@line_locations)
+
+      near_points = lm.graph_memory.models_in_memory["mug"]["patch"]
+      far_points = farther.graph_memory.models_in_memory["new_object0"]["patch"]
+
+      both = with_channels(lm, "mug", %{"patch" => near_points, "patch2" => far_points})
+
+      assert EvidenceGraphLM.mlh_on_model(both, %{graph_id: "mug", location: here})
+
+      only_far = with_channels(lm, "mug", %{"patch2" => far_points})
+
+      refute EvidenceGraphLM.mlh_on_model(only_far, %{graph_id: "mug", location: here}),
+             "the far channel alone is a metre off, so the answer above came from the near one"
+
+      refute EvidenceGraphLM.mlh_on_model(both, %{graph_id: "mug", location: [5.0, 5.0, 5.0]}),
+             "a hypothesis far from every channel's points is on no model"
+    end
+
+    # A module that has concluded, looking at one place on one object.
+    defp looking_at(lm, graph_id, location) do
+      %{
+        lm
+        | current_mlh: %{
+            graph_id: graph_id,
+            mlh_id: nil,
+            location: location,
+            rotation: Rotation.identity(),
+            scale: 1,
+            evidence: 1.0
+          }
+      }
+    end
+
+    defp with_on_object(lm, on_object),
+      do: %{lm | buffer: %{lm.buffer | on_object: [on_object]}}
+
+    defp with_terminal_state(lm, terminal_state), do: %{lm | terminal_state: terminal_state}
+
+    defp with_channels(lm, graph_id, channels) do
+      models = lm.graph_memory.models_in_memory
+
+      %{
+        lm
+        | graph_memory: %{
+            lm.graph_memory
+            | models_in_memory: Map.put(models, graph_id, channels)
+          }
+      }
+    end
+  end
 end
