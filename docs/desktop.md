@@ -62,11 +62,21 @@ code.
 
 ## The node name, and the cluster
 
-The window's sidecar is a **named node**, `monty-studio-<instance id>`, and it
-starts the tree that joins a cluster. Two reasons, and the second is the point:
-the window is what the sample plugin nodes are meant to connect to, and a node
-that gossip can find has to have a name that is not the release's own — several
-copies of it run on one machine.
+The window's sidecar is a **named node**, `monty-studio-<instance id>@127.0.0.1`,
+and it starts the tree that joins a cluster. Two reasons, and the second is the
+point: the window is what the sample plugin nodes are meant to connect to, and a
+node that gossip can find has to have a name that is not the release's own —
+several copies of it run on one machine.
+
+The host part is the loopback, and the name is long, because a **short** name is
+resolved through DNS by whoever dials it: `monty-studio-<id>@Mac` asks the
+machine's resolver for `Mac`, and a laptop whose router still answers with an
+address its interface no longer carries cannot be reached at all — `epmd`
+handshakes fail, the companion apps loop forever, and nothing says why. It is
+also the arrangement the sample nodes in `process-compose` already use
+(`node1@127.0.0.1`). The listen address is pinned to the same loopback
+(`-kernel inet_dist_use_interface`), so a long name does not quietly open the
+node to the local network.
 
 The instance id is generated per launch, in `rel/env.sh.eex` (six hex characters
 from the kernel; the pid where there is no `/dev/urandom`). Per launch is
@@ -77,11 +87,10 @@ the opt-out:
 
 - `MONTY_STUDIO_CLUSTER=0` starts one node, undistributed, with no cluster
   children. Everything else about the window is unchanged.
-- `MONTY_STUDIO_INSTANCE_ID=worker-1` names it `monty-studio-worker-1`, which is
-  what a worker that must be dialled by the same name tomorrow needs.
+- `MONTY_STUDIO_INSTANCE_ID=worker-1` names it `monty-studio-worker-1@127.0.0.1`,
+  which is what a worker that must be dialled by the same name tomorrow needs.
 - `NODE_NAME`/`RELEASE_NODE` (with `RELEASE_DISTRIBUTION=name`) still wins over
-  both: a worker reached from another machine says so, because a short name
-  listens on the loopback and a long one on every interface.
+  both: a worker reached from another machine names its own address there.
 
 Peers are found by **gossip** (libcluster's, UDP multicast), so nothing has to be
 configured for two nodes on one machine or one link. A node gossip cannot reach —
