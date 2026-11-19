@@ -1,0 +1,21 @@
+# @package experiment.config.monty_config
+# Two columns, no parent: each module reads its own patch, and the only path
+# between them is the vote.
+#
+# Monty's own two-module fixture (`2lm_2sm`) sends LM1's messages to LM0 and
+# calls that a hierarchy — a fixed dividing line. This matrix sends nothing
+# (`lm_to_lm_matrix: null`, so no module is one another's input) and lets both
+# vote (`lm_to_lm_vote_matrix`), which is the flattest arrangement the current
+# code can express. A schedule that switched which module is "parent" would be
+# the next step, and there is no config key for it yet.
+sm_to_agent_dict:
+  patch: agent_id_0
+  patch_side: agent_id_0
+  view_finder: agent_id_0
+sm_to_lm_matrix:
+  - - 0
+  - - 1
+lm_to_lm_matrix: null
+lm_to_lm_vote_matrix:
+  - - 1
+  - - 0

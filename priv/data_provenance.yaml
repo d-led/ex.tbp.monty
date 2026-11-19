@@ -132,7 +132,16 @@ data:
     # wide, so 16 mm reads the bore properly and reads a patch wider than a boss.
     # `sets/cad/README.md` carries the table and the twelve-episode result either
     # way.
-    hash: a7e6c5a2c78fba8c3986e5c6b567fecb496622696bc666bcd189e4806c56e92d
+    #
+    # `sets/sharing` is the first experiment that is not a CAD arm: two learning
+    # modules on two patches of the same plate, learning in one run with no
+    # parent between them (`sharing/plate_two_columns`). It borrows the cad
+    # set's world, sensors, interface and policy by name and adds only the module
+    # pair and the connectivity. It exists to test, as far as a config can, the
+    # "shared distributed learning" question from the Thousand Brains discussion
+    # of 2026-11-19 — see `sets/sharing/README.md` for what it asks and what
+    # would falsify it.
+    hash: 840978f38530ca67b3afcd7f060695fb6f7c6a03d7c90a4a96b5bd20f17cd37f
 
   - path: priv/cad_experiments/conf
     kind: written
