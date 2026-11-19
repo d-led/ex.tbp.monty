@@ -1930,10 +1930,9 @@ defmodule Monty.Studio.Jobs.Run do
   defp start_failure(message) when is_binary(message),
     do: "The run could not start: " <> message
 
-  defp start_failure(_reason), do: nil
+  defp start_failure(_reason), do: "The run could not start: its experiment would not open."
 
-  defp give_up(run_id, reason, sentence \\ nil) do
-    sentence = sentence || "The run could not start: its experiment would not open."
+  defp give_up(run_id, reason, sentence) do
     Logger.error("studio run #{run_id} did not happen: #{inspect(reason)}")
 
     recorded =
