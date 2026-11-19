@@ -2644,7 +2644,7 @@ defmodule Monty.Studio.Setup do
 
   def memory_findings(%__MODULE__{model_name_or_path: path}) when path in [nil, ""], do: []
 
-  def memory_findings(%__MODULE__{model_name_or_path: path}) do
+  def memory_findings(%__MODULE__{model_name_or_path: path} = setup) do
     name = Memory.name_of(path)
     release = Memory.release_of(path)
 
@@ -2655,7 +2655,7 @@ defmodule Monty.Studio.Setup do
         []
 
       Memory.available?(name, release) ->
-        []
+        stale_memory_findings(setup)
 
       Memory.releases_for(name) != [] ->
         [
@@ -2686,6 +2686,43 @@ defmodule Monty.Studio.Setup do
   # carries is a download; a model this application makes is a build, whose click
   # is on the same page; a model a training run writes is neither, and sending
   # that reader to the prerequisites page is a link to a file that is not there.
+  # The memory is here — but was it taught from what this config reads through?
+  #
+  # A CAD memory keeps the bytes of the part file it was taught from and the
+  # optics it was sampled with (`Monty.Studio.Cad.Taught`), so the question is a
+  # comparison rather than a reader's memory of their last click. A memory this
+  # application did not write has no note and is left alone, which is what keeps
+  # this from claiming anything about a downloaded archive.
+  defp stale_memory_findings(setup) do
+    case taught_from(setup) do
+      {:other_inputs, at} ->
+        [
+          Finding.new(
+            :warning,
+            :memory_taught_from_other_inputs,
+            "The memory this run loads was taught from a different part file or a " <>
+              "different patch#{on_day(at)}, and this config reads through its own. " <>
+              "Make it again on /prerequisites, or point the config at the memory it " <>
+              "was taught.",
+            "model_name_or_path"
+          )
+          |> Finding.with_link("Prerequisites", "/prerequisites")
+        ]
+
+      _no_memory_to_ask_about ->
+        []
+    end
+  end
+
+  defp taught_from(setup) do
+    case Monty.Studio.Cad.Preparation.plan(setup) do
+      {:ok, plan} -> Monty.Studio.Cad.Preparation.staleness(plan)
+      _no_plan -> :none
+    end
+  end
+
+  defp on_day(at), do: " on #{String.slice(at, 0, 10)}"
+
   defp where_memory_comes_from(name, release) do
     case Prerequisites.for_model(name, release) do
       %{build: build} = prerequisite when is_binary(build) ->

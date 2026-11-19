@@ -281,6 +281,27 @@ defmodule Monty.Studio.Cad.PreparationTest do
 
       refute File.exists?(Monty.Studio.Cad.Taught.path(plan.memory))
     end
+
+    # The question a page asks before it steps: is this memory the one this
+    # config would teach? `:none` for a memory nothing here wrote — a downloaded
+    # one is not this module's to have an opinion about.
+    test "answers whether the memory on disk matches the plan, and nothing about
+ one it did not write",
+         %{objects: objects} do
+      {:ok, plan} = Preparation.plan(setup_struct(objects))
+
+      assert Preparation.staleness(plan, __MODULE__.CountingTrainer) == :none
+
+      assert {:ok, %{taught: :now}} = Preparation.prepare(plan, teaching())
+
+      assert Preparation.staleness(plan, __MODULE__.CountingTrainer) == :current
+      assert {:other_inputs, _written_at} = Preparation.staleness(plan, __MODULE__.Trainer)
+
+      closer = %{plan | optics: %{plan.optics | distance: 12.0}}
+
+      assert {:other_inputs, _written_at} =
+               Preparation.staleness(closer, __MODULE__.CountingTrainer)
+    end
   end
 
   defp teaching, do: [trainer: __MODULE__.CountingTrainer, exporter: __MODULE__.Exporter]

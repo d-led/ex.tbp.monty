@@ -140,6 +140,46 @@ defmodule Monty.Studio.MemoryTest do
       assert Setup.memory_findings(%Setup{}) == []
     end
 
+    # A CAD memory keeps what it was taught from, so "the file is here" is not the
+    # whole answer: a config whose stand-off was edited after the memory was
+    # taught reads a surface the memory was never taught. Nothing in the files
+    # shows that — only the note beside the memory does — and a run of it looks
+    # like a run that simply cannot match.
+    test "warns when a CAD memory on disk was taught from other inputs" do
+      data = Tmp.dir("memory-staleness")
+      Tmp.system_env("MONTY_DATA", data)
+      libraries = Path.join(data, "libraries")
+      Tmp.app_env(:monty_libraries_dir, libraries)
+
+      {:ok, opened} = Monty.Studio.open("cad/plate_part_eval", world_simulator: :mujoco)
+      {:ok, plan} = Monty.Studio.Cad.Preparation.plan(opened.setup)
+
+      # A memory the config loads, and a note beside it from a different teacher:
+      # the same file the build would have written, taught from other inputs.
+      File.mkdir_p!(Path.dirname(plan.memory))
+      File.write!(plan.memory, "not really a memory")
+
+      assert Setup.memory_findings(opened.setup) == []
+
+      :ok =
+        Monty.Studio.Cad.Taught.remember(plan.memory, %{
+          fingerprint: "something else entirely",
+          nodes: 3
+        })
+
+      assert [
+               %{
+                 code: :memory_taught_from_other_inputs,
+                 level: :warning,
+                 message: message,
+                 link: %{label: "Prerequisites", href: "/prerequisites"}
+               }
+             ] = Setup.memory_findings(opened.setup)
+
+      assert message =~ "taught from a different part file"
+      assert message =~ "on #{Date.utc_today()}"
+    end
+
     # The stand-in is the one thing that works on a fresh volume: it loads a
     # memory when one is exported and runs on an empty one when none is, so a
     # page that refused it for want of a download would be refusing the way in.

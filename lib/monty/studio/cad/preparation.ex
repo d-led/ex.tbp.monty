@@ -255,6 +255,28 @@ defmodule Monty.Studio.Cad.Preparation do
   # above would move.
   @taught_format 1
 
+  @doc """
+  Whether the memory on disk was taught from what this plan would teach from now.
+
+  `:none` when there is no memory or no note beside it — absence is
+  `Monty.Studio.Setup.memory_findings/1`'s to report — `:current` when the note
+  names the fingerprint this plan would write now, and `{:other_inputs, at}` when
+  it was written from something else. That last answer is the one a page can act
+  on: a config whose stand-off or lens changed after the memory was taught reads
+  a surface the memory was never taught, which is a defect no reading of the
+  files shows and a comparison does.
+  """
+  @spec staleness(plan(), module()) :: :none | :current | {:other_inputs, String.t()}
+  def staleness(%{} = plan, trainer \\ @trainer) do
+    case Taught.read(plan.memory) do
+      :none ->
+        :none
+
+      {:ok, %{fingerprint: recorded, at: at}} ->
+        if recorded == fingerprint(plan, trainer), do: :current, else: {:other_inputs, at}
+    end
+  end
+
   defp fingerprint(plan, trainer) do
     inputs = {plan.parts, memory_options(plan), trainer, @taught_format, packages()}
     parts = {Enum.map(plan.parts, fn {object, step} -> {object, digest(step)} end), inputs}
