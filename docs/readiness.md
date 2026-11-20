@@ -140,13 +140,13 @@ What is left is not a class, in the order worth doing:
    camera window over a photograph instead of a simulator, so nothing about it is
    a stand-in once it is written. Two of its parts are done: the class
    (`SaccadeOnImageEnvironment`, which reads a capture and saccades over it,
-   `docs/monty-differences.md` §2.38) and the PNG decoder its colour needs
-   (§2.37). Three are not, and all three are needed before a run happens:
-   `SaccadeOnImageInterface`, which walks the config's (scene, version) pairs and
-   names the target; a world kind in the studio beside `:mujoco`, `:ex_mujoco`,
-   `:synthetic` and `:cad`; and the `worldimages` prerequisite that produces the
-   captures under the data directory. Until then readiness keeps calling the
-   family `not_planned`.
+   `docs/monty-differences.md` §2.38), the PNG decoder its colour needs
+   (§2.37), and the interface that walks the config's (scene, version) pairs.
+   Two are not, and both are needed before a run happens: a world kind in the
+   studio beside `:mujoco`, `:ex_mujoco`, `:synthetic` and `:cad`, which has to
+   read a config's `env_init_args.data_path`; and the `worldimages` prerequisite
+   that produces the captures under the data directory. Until then readiness keeps
+   calling the family `not_planned`.
 2. **The cows family's speed, not its correctness** — the fourteen configurations
    run, and one step of `base_infer_cows_small_compositional` in MuJoCo, whose
    view is 256×256, costs about 5 s where Monty's costs milliseconds: `SlicMerge`

@@ -2262,10 +2262,19 @@ segment cannot even match one. And anything past 40 cm is dropped in
 `process_depth_data`, the number Monty hard-codes with a comment saying nobody has
 tuned it.
 
-**What is still missing, and why the family cannot run.** Three things, none of
-them in this class: `SaccadeOnImageInterface` (the experiment's interface, which
-walks a capture's scenes), a world kind in the studio beside `:mujoco`,
-`:ex_mujoco`, `:synthetic` and `:cad`, and the `worldimages` prerequisite that
+**The interface is written too.** `Monty.Experiment.Environment.SaccadeOnImageInterface`
+is Monty's cycle and its name: a config's `scenes` and `versions` say one capture
+per episode, the counter wraps at the end, and the episode's target is the scene
+directory without the index Monty sorts by (`0_numenta_mug` is `numenta_mug`) at a
+fixed pose in the origin. An index the config does not have is refused in Monty's
+own words. Two things are this port's rather than Monty's: the world is threaded
+through and answered back — an interface here is a value — and the target is the
+map the port's other interface uses, not a dataclass.
+
+**What is still missing, and why the family cannot run.** Two things, none of them
+in these classes: a world kind in the studio beside `:mujoco`, `:ex_mujoco`,
+`:synthetic` and `:cad` (which has to read a config's `env_init_args.data_path`
+and its interface's `scenes`/`versions`), and the `worldimages` prerequisite that
 produces `${MONTY_DATA}/worldimages/bright_scenes/`. Until those land, readiness
 keeps classifying the family `not_planned` and the studio keeps naming the classes
 it has not written — which is the truth, and the opposite of standing a stand-in

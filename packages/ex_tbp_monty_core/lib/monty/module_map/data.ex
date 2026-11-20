@@ -280,7 +280,8 @@ defmodule Monty.ModuleMap.Data do
           python: "OmniglotInterface"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/experiment/environment/saccade_on_image_interface.ex",
           elixir: "Monty.Experiment.Environment.SaccadeOnImageInterface",
           python: "SaccadeOnImageInterface"
         },
