@@ -2374,10 +2374,16 @@ builds it from the config). Comparing episode 5 step by step:
   `[18.3207, 0.0223, 36.4687]` and this library's are
   `[18.32067, 0.02225, 36.46874]`, float32 against float64.
 
-So the difference is inside the evidence update, not in what it is given: on the
-same features and the same graph his evidence rises by exactly 1.5 a step (1.0,
-2.5, 4.0 … 14.5) with `Anglo-Saxon_Futhorc_2` leading throughout, and this port's
-goes 1.0 → 2.351 → 1.529 (and the leader changes) → 0.727 → −0.273. Three
+So the difference is inside the evidence update, not in what it is given — and
+the first step of it is where it starts. Step 0 agrees to the digit: six
+hypotheses possible in both, `Anglo-Saxon_Futhorc_2` at 1.0, `_1` at 0.988, `_3`
+at 0.966. One update later his field has three hypotheses possible and stands at
+2.5, 2.409, 2.254 — every one of them gained 1.3 to 1.5 — while this port's has
+one possible and reads 2.351, 1.667, 1.19: the leader gained less than his and
+the others gained almost nothing (+0.22 for `_3` here against +1.29 there). From
+then on his evidence rises by exactly 1.5 a step (1.0, 2.5, 4.0 … 14.5) with one
+object leading throughout, and this port's goes 1.0 → 2.351 → 1.529 (and the
+leader changes) → 0.727 → −0.273. Three
 instruments, in order: a unit case for `EvidenceGraphLM`'s evidence update for one
 matching object and one hypothesis; `evidence_omniglot_tutorial`'s knobs against
 his (`evidence_update_threshold`, tolerances); and the per-step `evidences` map
