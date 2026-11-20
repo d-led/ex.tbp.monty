@@ -43,6 +43,19 @@ defmodule Monty.Studio.RunStream.Pictures do
   A picture the filesystem refuses is a warning rather than an exception: the
   record already names it, and a run that cannot write a picture is still a run
   whose numbers are right.
+
+  ## What the writer never keeps
+
+  A step's observations are the camera's picture as lists of numbers — tens of a
+  megabyte for four planes of two sensors — and this process draws one step at a
+  time. A run hands over ten steps while one is drawn, so a queue that accepts
+  every step is a queue that grows until the machine gives up: a page-started run
+  queued 373 steps of about 37 MB each and held eighteen gigabytes in one
+  process (`docs/monty-differences.md` §2.42). Past `@backlog` a step therefore
+  travels **without its observations** (`carried/2`) and draws nothing — neither
+  a frame of the video nor a picture for the page. The video's places keep their
+  step numbers (`append/4` fills the places a skipped step left), and the page
+  keeps the pictures it has.
   """
 
   use GenServer
@@ -58,11 +71,18 @@ defmodule Monty.Studio.RunStream.Pictures do
   # took longest.
   @idle_after Application.compile_env(:ex_tbp_monty, :studio_idle_hibernate_after, 5_000)
 
-  # How far behind the steps the writer may get before it stops drawing the
-  # pictures a page draws: about a second of a stepping run, which is the point
-  # after which its pictures are of steps nobody is watching. The video is
-  # written either way — that is the invariant above, not a preference.
-  @backlog 20
+  # How far behind the steps the writer may get before it stops taking their
+  # pixels: about a second of a stepping run, which is the point after which its
+  # pictures are of steps nobody is watching. A step past this is handed over
+  # without its observations (§ `carried/2`) and writes no frame of its own; the
+  # next step fills its place, so the video stays one frame a step.
+  #
+  # The number is also the writer's memory: kept pixels are about forty megabytes
+  # a step where a camera answers at full size — four planes of two sensors as
+  # lists of numbers — so six steps is a quarter of a gigabyte at worst, against
+  # the eighteen the same six minutes took with an open queue
+  # (`docs/monty-differences.md` §2.42).
+  @backlog 6
 
   # How long after the last frame the writer writes what it holds. A keyframe
   # writes its own fragment; the frames between two of them are in this process
@@ -97,7 +117,48 @@ defmodule Monty.Studio.RunStream.Pictures do
   @spec drawn(map(), binary(), String.t(), keyword()) :: :ok
   def drawn(step, pictures_in, frame, options \\ []) do
     announce? = Keyword.get(options, :announce, true)
-    GenServer.cast(__MODULE__, {:drawn, step, pictures_in, frame, announce?})
+    GenServer.cast(__MODULE__, {:drawn, carried(step, queued()), pictures_in, frame, announce?})
+  end
+
+  @doc """
+  The step as it is handed over: with its pixels only while the writer can use
+  them.
+
+  A step's observations are tens of megabytes — a camera's picture as lists of
+  numbers, four planes a sensor — and the writer draws one step at a time. A run
+  at its fastest hands over ten steps while one is drawn, so an unbounded queue
+  of them is what took a workstation to 35 GB: a page Started run of
+  `bright_world_image_on_scanned_model` queued 373 steps of about 37 MB each,
+  more than ten gigabytes, in a process that then held them while it drew.
+
+  Past `@backlog` the step travels **without its observations**: the writer takes
+  that as "write no frame for this place", which costs the video a repeated
+  picture rather than its alignment (see `append/4`), and costs the queue a name
+  rather than a picture.
+  """
+  @spec carried(map(), non_neg_integer()) :: map()
+  def carried(step, queued) when queued > @backlog, do: Map.put(step, :observations, %{})
+  def carried(step, _queued), do: step
+
+  @doc """
+  Whether the writer is further behind than the page can use.
+
+  Asked before a step is drawn for a page: the newest picture is the one worth
+  drawing, and drawing the ones nobody is looking at is what keeps the writer
+  behind.
+  """
+  @spec behind?() :: boolean()
+  def behind?, do: queued() > @backlog
+
+  # A process that is not running has nothing queued; a step is still handed to
+  # the supervisor's next start rather than dropped.
+  defp queued do
+    with pid when is_pid(pid) <- Process.whereis(__MODULE__),
+         {:message_queue_len, queued} <- Process.info(pid, :message_queue_len) do
+      queued
+    else
+      _ -> 0
+    end
   end
 
   @doc """
@@ -117,10 +178,11 @@ defmodule Monty.Studio.RunStream.Pictures do
   end
 
   @doc """
-  How many steps the writer may fall behind before it stops drawing every one.
+  How many steps the writer may fall behind before it stops taking their pixels.
 
   A run of twenty thousand steps is eighty thousand pictures; a page can only
-  show one step at a time, and the picture that matters is the newest one.
+  show one step at a time, the picture that matters is the newest one, and the
+  pixels of the ones between are tens of a megabyte each.
   """
   @spec backlog() :: non_neg_integer()
   def backlog, do: @backlog
@@ -150,8 +212,7 @@ defmodule Monty.Studio.RunStream.Pictures do
     # are the same drawing a live page would get, and a step pays for two PNGs a
     # sensor rather than four because the step already encoded its pixels.
     if announce? do
-      images = if behind?(), do: %{}, else: images_of(step)
-      broadcast(pictures_in, {:step, announcement(step, frames_of(step, images))})
+      broadcast(pictures_in, {:step, announcement(step, page_frames(step))})
     end
 
     state
@@ -164,7 +225,9 @@ defmodule Monty.Studio.RunStream.Pictures do
   # Said once a run, not once a step: a camera that answers the same way every
   # step would otherwise write the same warning twenty thousand times. The streams
   # already open are stopped with it, because a picture missing is better than one
-  # step's picture under another's number.
+  # step's picture under another's number — but only the streams of the run whose
+  # picture failed: one writer serves every run on the node, and a run whose camera
+  # answered badly is no reason to stop another's archive.
   defp stop_pictures(step, pictures_in, state, why) do
     if MapSet.member?(state.refused, pictures_in) do
       state
@@ -174,9 +237,15 @@ defmodule Monty.Studio.RunStream.Pictures do
           "step #{Map.get(step, :number, "?")}: #{why}"
       )
 
-      stalled = Enum.reduce(Map.keys(state.videos), state.stalled, &MapSet.put(&2, &1))
+      stalled = Enum.reduce(streams_of(pictures_in, state), state.stalled, &MapSet.put(&2, &1))
       %{state | refused: MapSet.put(state.refused, pictures_in), stalled: stalled}
     end
+  end
+
+  defp streams_of(run, state) do
+    state.videos
+    |> Map.keys()
+    |> Enum.filter(fn {held, _part, _sensor, _named} -> held == run end)
   end
 
   @impl true
@@ -207,11 +276,12 @@ defmodule Monty.Studio.RunStream.Pictures do
     end
   end
 
-  defp behind? do
-    case Process.info(self(), :message_queue_len) do
-      {:message_queue_len, queued} -> queued > @backlog
-      _unknown -> false
-    end
+  # A page shows the newest step's pictures, and a writer this far behind is
+  # drawing steps nobody looks at. Answering with no frames leaves the page's
+  # pictures where they are, where drawing them would keep the writer behind for
+  # good: every step of the archive would be late by the backlog's length.
+  defp page_frames(step) do
+    if behind?(), do: [], else: frames_of(step, images_of(step))
   end
 
   # One picture a step a sensor a kind, in the order the steps were taken.
@@ -299,15 +369,25 @@ defmodule Monty.Studio.RunStream.Pictures do
     end)
   end
 
+  # A step handed over without its pixels (§ `carried/2`) writes no frame of its
+  # own, so the places before this one are filled with this step's picture: frame
+  # n is still step n, and the video is a step behind in content rather than out
+  # of step — which is what a saved video is read for.
   defp append(state, key, pixels, place) do
     video = Map.fetch!(state.videos, key)
 
-    case FrameVideo.push(video, pixels, keyframe?(state, place)) do
-      :ok ->
-        %{state | episodes: Map.put(state.episodes, stream_of(place), place.episode)}
+    with :ok <- pad_to(video, pixels, place.position),
+         :ok <- FrameVideo.push(video, pixels, keyframe?(state, place)) do
+      %{state | episodes: Map.put(state.episodes, stream_of(place), place.episode)}
+    else
+      {:error, reason} -> refuse(state, key, key, reason)
+    end
+  end
 
-      {:error, reason} ->
-        refuse(state, key, key, reason)
+  defp pad_to(video, pixels, position) do
+    case position - FrameVideo.frames(video) do
+      missing when missing > 0 -> push_many(video, pixels, missing)
+      _written -> :ok
     end
   end
 

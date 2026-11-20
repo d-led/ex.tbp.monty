@@ -172,6 +172,13 @@ defmodule Monty.Studio.RunStreamTest do
     )
   end
 
+  # The same step once the stream has made the record's entry and the log's line
+  # of it: what `Pictures` is handed, and what it reads the step's own number from.
+  defp step(options) do
+    report = seeing(options)
+    Map.merge(report, %{number: report.info.step, line: "step #{report.info.step}", entry: %{}})
+  end
+
   describe "a step's pictures" do
     # Drawing them is 1.2–1.7 ms of PNG and 0.8–1.0 ms of writing, per sensor per
     # step, and a boundary asks this process for everything it has been handed. So
@@ -247,6 +254,69 @@ defmodule Monty.Studio.RunStreamTest do
 
       assert Process.alive?(Process.whereis(Pictures))
       assert Artifacts.videos(run_id) == []
+    end
+
+    # A step's observations are tens of megabytes of pixel lists and a run hands
+    # over several while one step is drawn, so a writer that took every step would
+    # queue the run's whole transcript of pixels: a page-started run of
+    # `bright_world_image_on_scanned_model` queued 373 steps and held eighteen
+    # gigabytes in the writer, and the machine went down with it.
+    test "are not carried by a step handed to a writer that is behind" do
+      step = seeing(depth: [[0.05, 0.07], [0.05, 0.07]])
+
+      assert Pictures.carried(step, Pictures.backlog()) == step
+      assert %{observations: %{}} = Pictures.carried(step, Pictures.backlog() + 1)
+    end
+
+    test "keep their place when a step arrives without its pixels", %{run_id: run_id} do
+      # The skipped step writes no frame of its own, and the next step's picture
+      # fills its place: frame n is still step n, so a video read back shows its
+      # pictures a step behind rather than every picture under the wrong step.
+      Pictures.drawn(step(depth: [[0.05, 0.07], [0.05, 0.07]]), run_id, "0", announce: false)
+      :ok = Pictures.settle()
+
+      skipped =
+        step(step: 2, depth: [[0.9, 0.9], [0.9, 0.9]])
+        |> Pictures.carried(Pictures.backlog() + 1)
+
+      Pictures.drawn(skipped, run_id, "1", announce: false)
+
+      Pictures.drawn(step(step: 3, depth: [[0.05, 0.05], [0.05, 0.05]]), run_id, "2",
+        announce: false
+      )
+
+      :ok = Pictures.settle()
+
+      assert {:ok, first} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
+      assert {:ok, filled} = Artifacts.frame_bytes(run_id, "1/patch-depth.png")
+      assert {:ok, own} = Artifacts.frame_bytes(run_id, "2/patch-depth.png")
+      assert filled == own
+      refute filled == first
+    end
+
+    test "stop for the run whose picture failed, not for another's", %{run_id: run_id} do
+      # One writer holds every run on the node, and a step it cannot draw used to
+      # stop the streams already open — of every run — so one bad camera left the
+      # other runs' videos short of the step that failed.
+      other = Ecto.UUID.generate()
+      :ok = Artifacts.start(other)
+      on_exit(fn -> Artifacts.forget(other) end)
+
+      Pictures.drawn(step(depth: [[0.05, 0.07], [0.05, 0.07]]), other, "0", announce: false)
+
+      Pictures.drawn(step(depth: [[0.05, 0.07], [0.05, 0.07]]), run_id, "not-a-place",
+        announce: false
+      )
+
+      :ok = Pictures.settle()
+
+      Pictures.drawn(step(step: 2, depth: [[0.05, 0.05], [0.05, 0.05]]), other, "1",
+        announce: false
+      )
+
+      :ok = Pictures.settle()
+
+      assert {:ok, _png} = Artifacts.frame_bytes(other, "1/patch-depth.png")
     end
   end
 

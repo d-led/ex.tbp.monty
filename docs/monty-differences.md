@@ -2462,3 +2462,71 @@ identical between steps 10, 20 and 40 (mean difference 0.00 levels), while the
 patch's differ by 3.4 and then 11.5 levels — a still photograph and a patch
 walking over it. What grows is not movement but the frames kept per step, which
 is what the two ceilings and §2.40's encoding are about.
+
+**Correction (§2.42).** The pid the alarm named was not the queue's worker but
+`Monty.Studio.RunStream.Pictures`, the pictures writer — a process started at
+boot, which `bound/1` does not reach either. Bounding the performing process is
+still right, and the memory was not taken by a worker's heap at all: it was a
+queue of steps the writer could not draw.
+
+## 2.42 The pictures writer kept every step it was handed
+
+§2.41 found a ceiling that did not cover the process performing a run, and left
+the memory that took the machine down unexplained. Opening the run's page again
+named it: the process over the line was not the run's worker but
+`Monty.Studio.RunStream.Pictures`, the writer that draws and archives a run's
+pictures. It is supervised at boot, so its pid `#PID<0.605.0>` — the pid in the
+35 GB run's `{:process_memory_high_watermark, #PID<0.605.0>}` — is the same in
+every VM this node starts.
+
+A step's observations are **5 MB serialised** in this world: 401 kB from the
+patch sensor and 4.8 MB from the view finder, the rest of the step is kilobytes.
+In the writer's heap, where four planes of two sensors are nested lists of
+numbers, one queued step costs about 37 MB — measured by queue length against
+the writer's own `:memory` (`1` queued → 120 MB, `34` → 1 257 MB).
+
+The writer draws one step at a time and takes about a second for it. The run
+steps at about seven a second (240 steps in 41 s of the same run, 29.3 s of it
+in the model). `drawn/4` was a `cast` of the whole step, so every step the writer
+could not reach queued its pixels behind the last: `373` queued steps of the
+`4 × 60` run above held **12.1–19.3 GB** in that one process, and the queue kept
+growing while the run stepped. At 35 GB the OOM killer was the only thing that
+could end it, and a `max_heap_size` of 4 GB did not: the alarm fired on that
+process and the flag's `kill: true` did not.
+
+Three things were wrong, and all three are in the writer:
+
+- **the queue took everything.** `carried/2` now hands a step over **without its
+  observations** once the writer is more than `@backlog` behind: the writer writes
+  no frame for it and draws nothing for a page. Kept pixels are therefore bounded
+  by the backlog, not by the run's length.
+- **a writer that was behind drew the page's pictures anyway.** `images_of/1` was
+  skipped past the backlog as intended, and `frames_of/2` then drew the PNGs from
+  the observation instead of from those images — the expensive half ran either
+  way. `page_frames/1` answers with no frames while the writer is behind, which
+  is also what lets it catch up.
+- **a skipped step shifted every frame after it.** `append/4` pushes one frame a
+  step, so a step that wrote none left the video one frame short and every later
+  picture under the step before it. It now fills the places before its own first,
+  so frame _n_ is still step _n_ — the video is a step behind in content rather
+  than out of step with its record.
+
+**Measured on this box, this world, a page-started `4 × 60` run**: the writer
+held 18.3 GB in one process before, and peaks at **350 MB** after (§`@backlog` is
+6 steps), with the queue between 0 and 7 and the node's resident size back to
+401 MB when the run ends. Both of the run's videos carry **240 frames for 240
+steps**. The two new tests are in `test/monty/studio/run_stream_test.exs`: a step
+handed to a writer that is behind travels without its observations, and a step
+that arrived without its pixels keeps its place in the video.
+
+Two things this does not fix, and they are the next ones worth doing:
+
+- the writer still costs about a second a step, because it converts a step's
+  float lists to bytes and PNGs them in Elixir. A step that carries the _planes_
+  — the same size as the picture, ~1 MB — would make the queue cheap enough to
+  keep every picture, and drop the backlog out of the design.
+- the heap ceiling alarms without killing. `kill: true` is in the flag
+  `heap_flag/1` builds, `{:process_memory_high_watermark, pid}` was set on the
+  process as it passed 4 GB, and the process went on to 19 GB. What `system_flag`
+  inherits into a process that existed before the call is not documented as a
+  promise, so this is a gap in the guard rather than a proven bug.
