@@ -59,13 +59,67 @@ defmodule Monty.Studio.StorageTest do
     end
   end
 
-  # Windows has no `df`: what `disksup` is asked there is the drive root, and a
-  # unix `df` resolves the volume from the path itself. Which of the two a path
-  # turns into is the one decision this module makes on its own.
-  describe "the path the operating system is asked about" do
-    test "is the drive root, for a path that names a drive" do
-      assert Storage.probe("C:\\Users\\someone\\data") == "C:\\"
-      assert Storage.probe("d:/data/runs") == "D:\\"
+  # The table is the operating system's, and which row answers for a path is the
+  # one decision this module makes on its own — the half a unix box cannot
+  # exercise for Windows, and a Windows box cannot for unix.
+  describe "the row the operating system answers with" do
+    test "is the longest mount that holds the path" do
+      table = [
+        {~c"/", 1_000_000, 400_000, 60},
+        {~c"/Volumes/Backup", 2_000_000, 1_900_000, 5}
+      ]
+
+      assert Storage.volume_for(table, "/Users/someone/data") ==
+               {~c"/", 1_000_000, 400_000, 60}
+
+      assert Storage.volume_for(table, "/Volumes/Backup/runs") ==
+               {~c"/Volumes/Backup", 2_000_000, 1_900_000, 5}
+    end
+
+    test "is the container the boot volume shares, for a path firmlinked into it" do
+      # macOS names the data volume `/System/Volumes/Data` and reaches it from
+      # `/Users` through a firmlink, so the path is not under that name. It is
+      # the container and not the mount that holds the room, and `/` reports the
+      # container's: the same free space as the volume the writes land on.
+      table = [
+        {~c"/", 1_000_000, 10_000, 97},
+        {~c"/System/Volumes/Data", 1_000_000, 10_000, 97}
+      ]
+
+      assert Storage.volume_for(table, "/Users/someone/data") ==
+               {~c"/", 1_000_000, 10_000, 97}
+    end
+
+    test "is a mount only for a path on the mount itself, never for its namesake" do
+      table = [
+        {~c"/", 1_000_000, 400_000, 60},
+        {~c"/System/Volumes/Data2", 3_000_000, 3_000_000, 0}
+      ]
+
+      assert Storage.volume_for(table, "/System/Volumes/Data2/x") ==
+               {~c"/System/Volumes/Data2", 3_000_000, 3_000_000, 0}
+    end
+
+    test "is the drive a Windows path names, whatever the separator or case" do
+      table = [
+        {~c"C:\\", 500_000, 100_000, 80},
+        {~c"D:\\", 2_000_000, 1_500_000, 25}
+      ]
+
+      assert Storage.volume_for(table, "C:\\Users\\someone\\data") ==
+               {~c"C:\\", 500_000, 100_000, 80}
+
+      assert Storage.volume_for(table, "d:/data/runs") == {~c"D:\\", 2_000_000, 1_500_000, 25}
+    end
+
+    test "is nothing at all when the table holds no volume that could hold the path" do
+      # A share that is not a fixed disk is not in the table, and a unix path is
+      # not on a drive: the page says nothing rather than someone else's disk.
+      assert Storage.volume_for([{~c"C:\\", 500_000, 100_000, 80}], "/Users/someone") == nil
+      assert Storage.volume_for([], "/Users/someone") == nil
+
+      assert Storage.volume_for([{~c"C:\\", 500_000, 100_000, 80}], "\\\\server\\share\\runs") ==
+               nil
     end
   end
 end
