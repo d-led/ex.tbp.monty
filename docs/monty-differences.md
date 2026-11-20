@@ -2361,7 +2361,24 @@ takes, not in what the config asks for. Reproduce:
       experiment=tutorial/omniglot_training
     ... experiment=tutorial/omniglot_inference   # then eval_stats.csv
 
-The next instrument is the per-step feature vector (`pose_vectors`,
-`principal_curvatures_log`, `on_object`) his `detailed_run_stats.json` records
-against the same features here — that is a parity harness of its own, not a
-line to change in the dark.
+**What the harness already settles.** Both runs write the same
+`detailed_run_stats.json` (his handler is ported, and a studio run's logging plan
+builds it from the config). Comparing episode 5 step by step:
+
+- the features are identical to the last digit — `pose_vectors`,
+  `principal_curvatures_log`, `on_object` at steps 0 and 1 are the same
+  numbers, so the observation path and the transform are at parity;
+- the sensed locations are identical for all five steps this port took,
+  `[32.551, 0.022, 21.887] → [32.551, 0.022, 32.887] → …`;
+- the trained graphs are the same geometry: his first nodes are
+  `[18.3207, 0.0223, 36.4687]` and this library's are
+  `[18.32067, 0.02225, 36.46874]`, float32 against float64.
+
+So the difference is inside the evidence update, not in what it is given: on the
+same features and the same graph his evidence rises by exactly 1.5 a step (1.0,
+2.5, 4.0 … 14.5) with `Anglo-Saxon_Futhorc_2` leading throughout, and this port's
+goes 1.0 → 2.351 → 1.529 (and the leader changes) → 0.727 → −0.273. Three
+instruments, in order: a unit case for `EvidenceGraphLM`'s evidence update for one
+matching object and one hypothesis; `evidence_omniglot_tutorial`'s knobs against
+his (`evidence_update_threshold`, tolerances); and the per-step `evidences` map
+both files carry, which is what this comparison read.
