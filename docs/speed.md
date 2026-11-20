@@ -128,6 +128,17 @@ with its k-d index. Each keeps a runnable Elixir reference and a parity test,
 because a kernel performs the reference's arithmetic in the reference's order.
 `config :ex_tbp_monty, native_kernels?: false` gives the reference path.
 
+## The 77-object memory, measured
+
+The largest memory the releases carry is what the lazy spec was for, so it is
+also the cheapest thing to check it against. `mix monty.run
+base_77obj_dist_agent --episodes 1 --steps 8` on this Mac, the stand-in scene:
+eight steps, **4.3 s of model time** against 0.09 s of world — about 0.5 s a
+step, with 1 200 … 5 900 hypotheses alive and 4 … 28 objects still possible.
+Against the stand-in the _results_ are not the experiment's, which is what the
+run says in its own header; the number worth having is that the run starts and
+steps at all, and what a matching step costs on seventy-seven objects.
+
 ## A page watching a run
 
 Measured 2026-11-17 on the dev cluster (node1, `dogs/surf_unsupervised`, 7 800
@@ -217,6 +228,24 @@ the code.
   when it can be measured on its own.
 - **A per-episode copy of the model's state**, kept only as long as it is the
   thing being measured; a training phase would pay it per epoch.
+- **A per-object pass over a memory's graphs**, measured rather than argued
+  (`scripts/probe_lm_graph_split.exs`, this Mac, the ten-object
+  `pretrained_ycb_v10/surf_agent_1lm_10distinctobj` memory, the first percept of
+  `test/fixtures/monty_pretrained_episode.jsonl`). Two reasons it is not a
+  scheduler change:
+  - a task receives the term its closure captured, so ten tasks copied the
+    24.7 MB memory each: serial 18 ms against **690 ms** for `async_stream`
+    (0.03×). Naming the memory in a task that reads it from `:persistent_term`
+    instead captures **3 words** and turns the same ten calls into 9 ms serial
+    against **6 ms** parallel — **1.5×**, on ten objects costing 4 001 … 73 493
+    reductions. The per-object share of `compute_possible_matches` on this
+    percept is 98.2 %, so that ratio is what a pass divides, not more.
+  - `update_evidence/4` threads **one** updater through the graphs, and the
+    burst sampler's updater keeps the single slope tracker that spans every
+    hypothesis. A pass is only equivalent if each task hands back its tracker
+    slice and the parent concatenates them in graph order — so the work is a
+    slice-and-merge refactor of the tracker, with the evidence ladder as its
+    referee, and it is worth starting only from the held-library case above.
 
 ## The budget, as rules
 
