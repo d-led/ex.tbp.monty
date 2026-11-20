@@ -35,34 +35,49 @@ not start — but it carries the download: the message says the run is waiting a
 the link goes straight to `/prerequisites?fetch=<archive>`, which starts it.
 
 Monty removed Habitat in #1286 (2026-11-09), and the 88 configurations that named
-it went with the change: this build carries one world, MuJoCo, and what is
-postponed now is the two-D image datasets, whose classes are written here but
-whose world is images another program rendered.
+it went with the change.
 
-This build carries exactly one world, MuJoCo. A config that names any other —
-a class like `SaccadeOnImageEnvironment` that is neither — is
-postponed, and that is a fact about the config rather than about the deployment,
-so the postponed count reads the same under `--world synthetic`.
+## A world is what steps the scene; an environment is the config's own
 
-## Where it stands (2026-11-20, this checkout)
+Three questions were being asked as one, and the third is nobody's to ask:
 
-`MIX_ENV=test mix monty.readiness --world mujoco` prints this table's first
-column and `--world synthetic` the second.
+- **the world** is what steps a scene: MuJoCo through the interpreter this
+  application carries, MuJoCo through the compiled binding `ex_mujoco`, or
+  Monty's own stand-in. A MuJoCo config steps on this deployment's engine.
+- **the environment** is the config's, read out of its own tree — a captured
+  scene (`SaccadeOnImageEnvironment`), a drawing (`OmniglotEnvironment`), a MuJoCo
+  scene. A captured scene is its own world, because no simulator steps it, so
+  offering such a config MuJoCo was offering a choice it does not have and then
+  refusing it — which read as "cannot run here" about experiments that run.
+- **the input** is the data a config names: the captures under
+  `worldimages/bright_scenes`, the Omniglot dataset, a CAD part. Not a choice — a
+  different set is a different experiment — so the page shows it instead of
+  offering it.
 
-|                           | MuJoCo (the default) | stand-in scene |
-| ------------------------- | -------------------: | -------------: |
-| experiments Monty ships   |                  157 |            157 |
-| run here                  |                  137 |            112 |
-| waiting for prerequisites |                    0 |              0 |
-| cannot run here           |                    8 |             33 |
-| not planned               |                   12 |             12 |
-| do not compose at all     |                    0 |              0 |
+`--world` is therefore an override, and the usual answer is nothing: each config
+steps the world it names, and `Setup.world_for/1` is the one place that decides
+it. The page states the world for a config that has nothing to choose, and the
+panel states the input beside the modules (`Setup.input_name/1`).
+
+## Where it stands (this box, 2026-11-20)
+
+`mix monty.readiness` with no world argument prints the first column — each
+config stepping its own world — and `--world synthetic` the second.
+
+|                           | each config steps its own | `--world synthetic` |
+| ------------------------- | ------------------------: | ------------------: |
+| experiments Monty ships   |                       157 |                 157 |
+| run here                  |                       145 |                 119 |
+| waiting for prerequisites |                         0 |                   0 |
+| cannot run here           |                         8 |                  34 |
+| not planned               |                         4 |                   4 |
+| do not compose at all     |                         0 |                   0 |
 
 The counts move with Monty's tree and with what is exported on the machine, and
 the second column refuses _more_ rather than fewer: a supervised experiment
 cannot state an object a sphere never showed (`no_target_to_supervise`), so it is
 refused there and runs against MuJoCo. That is why the stand-in column is not
-evidence about the MuJoCo one.
+evidence about the first one.
 
 The cows objects, the numenta lab scene and both compositional releases are on
 the machine, so the waiting column is empty. An experiment can carry more than
@@ -77,14 +92,20 @@ disagree.
 
 ## Why the 8 cannot run here
 
-| reason                        | cannot run | postponed | what it is                                                             |
-| ----------------------------- | ---------: | --------: | ---------------------------------------------------------------------- |
-| `no_pretrained_memory`        |          8 |         1 | the config's model is not exported on this machine                     |
-| `world_not_carried`           |          0 |         9 | images another program rendered — **postponed**, not a blocker         |
-| `test_fixture_class`          |          0 |         3 | a class the module map cannot place — Monty's own test doubles         |
-| `modules_not_ported`          |          0 |         9 | image-dataset classes, all of them postponed                           |
-| `sensor_module_not_buildable` |          0 |         3 | a sensor's own layers — no experiment of Monty's is stopped by one now |
-| `world_holds_no_object`       |          0 |         1 | the data is there and none of the meshes this config names is in it    |
+| reason                        | cannot run | postponed | what it is                                                          |
+| ----------------------------- | ---------: | --------: | ------------------------------------------------------------------- |
+| `no_pretrained_memory`        |          8 |         0 | the config's model is not exported on this machine                  |
+| `test_fixture_class`          |          0 |         3 | a class the module map cannot place — Monty's own test doubles      |
+| `sensor_module_not_buildable` |          0 |         3 | a sensor's own layers — no experiment of Monty's is stopped by one  |
+| `modules_not_ported`          |          0 |         1 | image-dataset classes, postponed                                    |
+| `world_not_carried`           |          0 |         1 | a world this build does not carry — postponed, not a blocker        |
+| `world_holds_no_object`       |          0 |         1 | the data is there and none of the meshes this config names is in it |
+
+The eight are one family and one file: the `dogs/inference*` configs load
+`trained/dogs_surf_unsupervised`, which `dogs/surf_unsupervised` writes. The
+objects are a prerequisite the app exports (`objaverse_dogs`), so the run that
+writes the memory is what closes them, and readiness says so in the same words
+the page does.
 
 Both counts that used to stand for missing classes read 0 now: no experiment is
 stopped for a _module class_ this port has not written, and none is stopped for a
@@ -117,10 +138,10 @@ only by postponed experiments is not ranked at all.
 
 No row is left. `MontyBase` and the attention package used to be here, and
 both are written (§23, §24); the Saccade-on-image and Omniglot
-environment/interface pairs are gone because every config naming them is an
-image-dataset config, and so is `DefaultAttentionSystem`, which was ranked at 0
-alone and 9 naming until §23. `GraphLM` was the last one — `graph_1lm` names the
-base class itself, and a supervised pretraining run trains with it without
+environment/interface pairs are written too, so every config naming them runs
+against the world it names (§2.37–§2.39), and `DefaultAttentionSystem` was ranked
+at 0 alone and 9 naming until §23. `GraphLM` was the last one — `graph_1lm` names
+the base class itself, and a supervised pretraining run trains with it without
 ever matching, so it is buildable now (§31).
 
 ## The order to work in
@@ -138,9 +159,8 @@ What is left is not a class, in the order worth doing:
 1. **The image world's memory, now that it runs.** The `*_world_image_on_scanned_model`
    family is written: the class, its interface, the PNG decoder its colour needs
    and a world kind that opens a config's captures (`docs/monty-differences.md`
-   §2.37, §2.38). `mix monty.run world_image_on_scanned_model --world image`
-   steps a real capture at 80–150 ms a step, and readiness counts 143 runnable
-   under `--world image` where it counted 137. What a whole episode needs is the
+   §2.37, §2.38). `mix monty.run world_image_on_scanned_model` steps a real
+   capture at 80–150 ms a step. What a whole episode needs is the
    decision §2.35 left open: each step keeps the 480 × 640 view finder as nested
    lists, so a 400-step run was stopped at step 66 by the worker's heap ceiling.
    Frames as binaries (a quarter of the cost) or poses without frames is what
