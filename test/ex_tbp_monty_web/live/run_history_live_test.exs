@@ -1788,13 +1788,17 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       File.write!(
         Path.join(Monty.Studio.Artifacts.dir(run.id), "eval_stats.csv"),
-        "episode,performance\n"
+        :binary.copy("e", 2048)
       )
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
       assert has_element?(view, "#run-file-eval_stats-csv")
       assert has_element?(view, "a[href='/runs/#{run.id}/files/eval_stats.csv']")
+
+      # A size a person reads without dividing by 1024 themselves: 2 KiB of file
+      # is "2.0 KiB", not "2048".
+      assert view |> element("#run-file-eval_stats-csv") |> render() =~ "2.0 KiB"
     end
 
     test "says so when a run wrote nothing", %{conn: conn, run: run} do

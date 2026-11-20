@@ -2863,10 +2863,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
-  # A file's size, in the unit a person reading a list of three files thinks in.
-  defp bytes(size) when size >= 1_048_576, do: "#{Float.round(size / 1_048_576, 1)} MB"
-  defp bytes(size) when size >= 1_024, do: "#{Float.round(size / 1_024, 1)} kB"
-  defp bytes(size), do: "#{size} B"
+  # A file's size, in the unit a person reading a list of three files thinks in
+  # — the units the prerequisites page counts free space in.
+  defp bytes(size), do: Humanizer.bytes(size, system: :binary)
 
   defp stopped_message(:stopping), do: "Stopping: the run ends after its next step."
   defp stopped_message(:settled), do: "Stopped: the run never started."

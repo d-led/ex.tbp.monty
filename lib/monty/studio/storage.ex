@@ -13,18 +13,14 @@ defmodule Monty.Studio.Storage do
   another run": a quota, if one exists, is the deployment's business, and the
   device is the thing that fills.
 
-  Each platform is asked the way that platform can answer:
-
-  * **unix** — `df -kP <path>`, with the path as an *argument* and not as a
-    command line, so a directory called `Application Support` is one argument.
-    `df` is also the only thing that can say which volume a path is on: on macOS
-    everything under `/Users` lives on `/System/Volumes/Data`, reached through a
-    firmlink that reports the same device number as `/`, so comparing mount
-    points or device numbers cannot tell the two apart — `df`'s own resolution
-    of the path can.
-  * **Windows** — there is no `df`. `os_mon`'s `disksup` holds the drive table,
-    `{drive root, total, free, capacity}` per fixed disk, and the path is matched
-    to its drive there.
+  The question is put to `os_mon`'s `disksup`, which asks the operating system
+  the way that system can answer — `df -kP <path>` on unix, the drive's own
+  geometry on Windows — and which therefore resolves a path to a volume the way
+  the operating system does. On macOS that resolution is the only one that works:
+  everything under `/Users` lives on `/System/Volumes/Data`, reached through a
+  firmlink that reports the same device number as `/`, so comparing mount points
+  or device numbers cannot tell the two apart — `df`'s own resolution of the path
+  can.
 
   `device: nil` means the operating system would not say, which is a reason to
   show nothing rather than a zero that reads as a full disk.
@@ -66,87 +62,40 @@ defmodule Monty.Studio.Storage do
   def usage(path) do
     expanded = Path.expand(path)
 
-    %{path: expanded, device: device(nearest_existing(expanded))}
-  end
-
-  # The path is expanded, so a caller's `priv` and the drive root it lands on are
-  # compared as absolute paths.
-  defp device(path) do
-    case :os.type() do
-      {:win32, _} -> windows_volume(path, disks())
-      _ -> unix_volume(path)
-    end
-  end
-
-  # `df -P` is the portable spelling: POSIX output, one line per filesystem, a
-  # path in and the filesystem out, with the mount point last so it may be
-  # joined back together when it holds a space.
-  defp unix_volume(path) do
-    with {out, 0} <- System.cmd("df", ["-kP", path], stderr_to_stdout: true),
-         [_header, line | _] <- String.split(out, "\n", trim: true),
-         [_filesystem, total, _used, free, capacity | mount] <- String.split(line) do
-      %{
-        mount: Enum.join(mount, " "),
-        total_bytes: blocks(total),
-        free_bytes: blocks(free),
-        percent: capacity |> String.trim_trailing("%") |> String.to_integer()
-      }
-    else
-      _would_not_say -> nil
-    end
+    # A path that does not exist yet is still on a disk: the table of mounts
+    # answers for it by name alone.
+    %{path: expanded, device: device(expanded)}
   end
 
   @doc """
-  The drive that holds `path`, out of the drives `disksup` lists.
+  The path `disksup` is asked about, to learn where `path` writes.
 
-  `volumes` is `disksup`'s shape — `{drive root, total KiB, free KiB, percent
-  used}` per fixed disk — which is why this is public: it is the one half of this
-  module that cannot run on a machine without drives.
+  Windows' drive table is keyed by drive root, so `C:\\Users\\…` is asked about as
+  `C:\\`; unix's `df` takes the path itself and resolves the volume from it. A
+  path that is not there yet is asked about as the nearest directory that is:
+  `df` cannot stat a directory that does not exist, and the disk it would go on
+  is the disk of the one above it.
+
+  Public because it is the half of this module the other kind of machine cannot
+  exercise — a unix box has no drives to name, a Windows box has no `df`.
   """
-  @spec windows_volume(Path.t(), [{charlist(), integer(), integer(), integer()}]) ::
-          device() | nil
-  def windows_volume(path, volumes) do
-    case drive_of(path) do
-      nil ->
-        nil
-
-      drive ->
-        volumes
-        |> Enum.find(fn {root, _, _, _} ->
-          root |> to_string() |> String.downcase() |> String.starts_with?(drive)
-        end)
-        |> volume()
+  @spec probe(Path.t()) :: Path.t()
+  def probe(path) do
+    case drive_root(path) do
+      nil -> nearest_existing(path)
+      root -> root
     end
   end
 
-  # `C:\Users\…` is on `C:`, whatever the separator. A UNC path — `\\server\share`
-  # — names no drive, and the drive table does not list one, so there is nothing
-  # to match it against.
-  defp drive_of(<<letter, ?:, _::binary>>) when letter in ?a..?z or letter in ?A..?Z,
-    do: String.downcase(<<letter, ?:>>)
+  # `C:\\Users\\…` is on `C:\\`, whatever the separator or the letter's case. A UNC
+  # path — `\\\\server\\share` — names no drive, and there is no root to name.
+  defp drive_root(<<letter, ?:, _::binary>>) when letter in ?a..?z or letter in ?A..?Z,
+    do: String.upcase(<<letter>>) <> ":\\"
 
-  defp drive_of(_path), do: nil
+  defp drive_root(_path), do: nil
 
-  defp volume({mount, total, free, percent}) when total > 0 do
-    %{
-      mount: to_string(mount),
-      total_bytes: kibibytes(total),
-      free_bytes: kibibytes(free),
-      percent: percent
-    }
-  end
-
-  defp volume(_would_not_say), do: nil
-
-  # `disksup` lists every fixed disk it knows; `[{~c"none", 0, 0, 0}]` when
-  # `os_mon` is not running, which is a reason to answer nothing rather than to
-  # log a warning per call.
-  defp disks do
-    if Process.whereis(:disksup), do: :disksup.get_disk_info(), else: []
-  end
-
-  # `df` wants a path that exists; before the first run there is no artifacts
-  # directory, and the disk is still there one level up.
+  # `df` fails on a directory that does not exist yet. Before the first run there
+  # is no artifacts directory, and the disk is still there one level up.
   defp nearest_existing(path) do
     if File.exists?(path) or Path.dirname(path) == path do
       path
@@ -155,8 +104,47 @@ defmodule Monty.Studio.Storage do
     end
   end
 
-  # `df -k` counts in 1024-byte blocks whatever the filesystem's own block size.
-  defp blocks(kilobytes), do: String.to_integer(kilobytes) * 1024
+  # `disksup` answers `{mount, total KiB, free KiB, percent used}` for the volume
+  # a path is on, read from the operating system when it is called rather than
+  # from a cached table, so a disk that filled a minute ago is reported full.
+  defp device(path) do
+    asked = probe(path)
+
+    :disksup.get_disk_info(asked)
+    |> Enum.find(&answers_for?(&1, drive_root(asked)))
+    |> volume()
+  catch
+    # `os_mon` is not running, or the machine would not say: show nothing rather
+    # than a zero that reads as a full disk.
+    _kind, _reason -> nil
+  end
+
+  # A path is answered for and the volume is taken as named: `df` names it the
+  # way the operating system mounts it, and on macOS `/Users/…` is answered by
+  # `/System/Volumes/Data`, whose name is not a prefix of the path. A drive is
+  # matched by name, because the table of drives can come back whole.
+  defp answers_for?({_mount, total, _free, _percent}, nil), do: total > 0
+
+  defp answers_for?({mount, total, _free, _percent}, drive),
+    do: total > 0 and String.starts_with?(String.upcase(to_string(mount)), drive)
+
+  defp volume({mount, total, free, _percent}) when total > 0 do
+    %{
+      mount: to_string(mount),
+      total_bytes: kibibytes(total),
+      free_bytes: kibibytes(free),
+      # Of the disk, as the operating system computes it: the table's own figure
+      # is the volume's, and the volume is not always the one the path is on.
+      percent: percent_used(total, free)
+    }
+  end
+
+  defp volume(_would_not_say), do: nil
+
+  defp percent_used(total, free) when total > 0 do
+    used = max(total - min(free, total), 0)
+    round(used * 100 / total)
+  end
 
   # `disksup` counts in kibibytes.
   defp kibibytes(kibibytes), do: kibibytes * 1024
