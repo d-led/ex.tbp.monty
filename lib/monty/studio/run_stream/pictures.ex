@@ -80,6 +80,7 @@ defmodule Monty.Studio.RunStream.Pictures do
           videos: %{term() => reference()},
           episodes: %{term() => term()},
           stalled: MapSet.t(),
+          refused: MapSet.t(),
           flushing: reference() | nil
         }
 
@@ -125,10 +126,22 @@ defmodule Monty.Studio.RunStream.Pictures do
   def backlog, do: @backlog
 
   @impl true
-  def init(_opts), do: {:ok, %{videos: %{}, episodes: %{}, stalled: MapSet.new(), flushing: nil}}
+  def init(_opts),
+    do:
+      {:ok,
+       %{videos: %{}, episodes: %{}, stalled: MapSet.new(), refused: MapSet.new(), flushing: nil}}
 
   @impl true
   def handle_cast({:drawn, step, pictures_in, frame, announce?}, state) do
+    {:noreply, draw(step, pictures_in, frame, announce?, state)}
+  end
+
+  # A picture is never worth the run, and never worth the node: a step this
+  # process cannot draw costs that run its pictures and nothing else. Dying here
+  # would be worse than losing a video — the supervisor would restart it into the
+  # same step until it gave up, and the application would go with it, which is how
+  # a MuJoCo run's wrong-sized channel ended a whole node.
+  defp draw(step, pictures_in, frame, announce?, state) do
     state = write(step, pictures_in, frame, state) |> schedule_flush()
 
     # What a page draws a step from: its line, the pictures, and what the learning
@@ -141,7 +154,29 @@ defmodule Monty.Studio.RunStream.Pictures do
       broadcast(pictures_in, {:step, announcement(step, frames_of(step, images))})
     end
 
-    {:noreply, state}
+    state
+  rescue
+    exception -> stop_pictures(step, pictures_in, state, Exception.message(exception))
+  catch
+    kind, reason -> stop_pictures(step, pictures_in, state, "#{kind} #{inspect(reason)}")
+  end
+
+  # Said once a run, not once a step: a camera that answers the same way every
+  # step would otherwise write the same warning twenty thousand times. The streams
+  # already open are stopped with it, because a picture missing is better than one
+  # step's picture under another's number.
+  defp stop_pictures(step, pictures_in, state, why) do
+    if MapSet.member?(state.refused, pictures_in) do
+      state
+    else
+      Logger.warning(
+        "studio run pictures: the pictures of run #{inspect(pictures_in)} stop at " <>
+          "step #{Map.get(step, :number, "?")}: #{why}"
+      )
+
+      stalled = Enum.reduce(Map.keys(state.videos), state.stalled, &MapSet.put(&2, &1))
+      %{state | refused: MapSet.put(state.refused, pictures_in), stalled: stalled}
+    end
   end
 
   @impl true

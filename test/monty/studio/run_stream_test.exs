@@ -233,6 +233,21 @@ defmodule Monty.Studio.RunStreamTest do
       assert {:ok, png} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
       assert png |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
     end
+
+    test "cost a run its pictures when one cannot be drawn, never the process", %{run_id: run_id} do
+      # A camera that answers something no picture can be made of used to end the
+      # writer, and with it the node: the supervisor restarted it into the same
+      # step until it gave up. A frame named by something that is not a place is
+      # the same kind of surprise, and the answer to it is one warning.
+      step = seeing(depth: [[0.05, 0.07], [0.05, 0.07]])
+
+      assert is_pid(Process.whereis(Pictures))
+      Pictures.drawn(step, run_id, "run-patch-not-a-place")
+      :ok = Pictures.settle()
+
+      assert Process.alive?(Process.whereis(Pictures))
+      assert Artifacts.videos(run_id) == []
+    end
   end
 
   # Waits until the steps published so far have their pictures. The drawing

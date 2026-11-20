@@ -276,10 +276,15 @@ defmodule Monty.Simulators.Synthetic.Camera do
   end
 
   defp colour_byte([red, green, blue | _], 255),
-    do: [round(red * 255), round(green * 255), round(blue * 255)]
+    do: [byte(red * 255), byte(green * 255), byte(blue * 255)]
 
   defp colour_byte([red, green, blue | _], nil),
-    do: [round(red), round(green), round(blue)]
+    do: [byte(red), byte(green), byte(blue)]
+
+  # Every number a camera can hand over becomes a byte: a channel outside `0..255`
+  # is clamped rather than packed, because a value that is not a byte is the one
+  # way a picture can take the process that writes it down with it.
+  defp byte(value) when is_number(value), do: value |> round() |> min(255) |> max(0)
 
   defp note(step, observation) do
     case images(observation).range do

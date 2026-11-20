@@ -302,7 +302,12 @@ impl Video {
         // the index: a sample read back is the sample written.
         to_length_prefixed(access_unit, &mut self.sample);
 
-        let muxer = self.muxer.as_mut().expect("started above");
+        // `start_muxer` above either built it or answered with the reason it could
+        // not. A NIF that panicked here would abort the whole VM, which no picture
+        // is worth — so an absent muxer is one more error to hand back.
+        let Some(muxer) = self.muxer.as_mut() else {
+            return Err(Error::Mux("no muxer after the first frame's parameter sets".into()));
+        };
 
         muxer
             .write_video(self.frames, self.frames, &self.sample, keyframe)
@@ -484,11 +489,15 @@ pub fn frame_at(video: &Path, index: u64, kind: Kind) -> Result<Decoded, Error> 
         .ok_or(Error::NoSuchFrame(index))?;
 
     let mut file = File::open(video).map_err(|e| Error::Io(format!("{video:?}: {e}")))?;
+    let length = file
+        .metadata()
+        .map_err(|e| Error::Io(format!("{video:?}: {e}")))?
+        .len();
     let mut decoder = Decoder::new();
     let mut picture: Option<YuvFrame> = None;
 
     for sample in &samples[start..=position] {
-        let annex_b = read_sample(&mut file, sample)?;
+        let annex_b = read_sample(&mut file, sample, length)?;
 
         match decoder.decode(&annex_b) {
             Ok(Some(frame)) => picture = Some(frame),
@@ -515,7 +524,18 @@ fn read_index(video: &Path) -> Result<Vec<Sample>, Error> {
     Ok(bytes.chunks_exact(9).map(Sample::read).collect())
 }
 
-fn read_sample(file: &mut File, sample: &Sample) -> Result<Vec<u8>, Error> {
+fn read_sample(file: &mut File, sample: &Sample, length: u64) -> Result<Vec<u8>, Error> {
+    // The index is a file like any other and can be corrupt: one record must not
+    // be able to ask for four gigabytes, or to read past the video it describes.
+    let end = u64::from(sample.offset).saturating_add(u64::from(sample.size));
+
+    if end > length {
+        return Err(Error::Io(format!(
+            "sample at {} of {} bytes is past the end of a video of {length}",
+            sample.offset, sample.size
+        )));
+    }
+
     let mut raw = vec![0u8; sample.size as usize];
 
     file.seek(SeekFrom::Start(sample.offset as u64))
