@@ -136,10 +136,12 @@ what runs now.
 What is left is not a class, in the order worth doing:
 
 1. **The cows family's speed, not its correctness** — the fourteen configurations
-   run, and a step of 256×256 view costs 5.7 s where Monty's costs milliseconds:
-   `SlicMerge` 2.1 s and `Vocus2` 2.6 s (`docs/monty-differences.md` §2.36). SLIC
-   in a NIF, and the salience map's pyramids, are what would make a whole run of
-   that family practical rather than an evening.
+   run, and a step of 256×256 view costs about 5 s where Monty's costs
+   milliseconds: `SlicMerge` 2.1 s and `Vocus2` 2.6 s
+   (`docs/monty-differences.md` §2.36). SLIC in a NIF, and the salience map's
+   pyramids, are what would make a whole run of that family practical rather
+   than an evening — and the NIF is the way to that speed, because the loop that
+   agrees with `skimage` label for label is not the one that is fastest in Elixir.
 2. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
    from Monty's `tests/` tree, which no port can have; they cannot run here and
    should stay so unless the fixtures themselves are ported.
