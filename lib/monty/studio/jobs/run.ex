@@ -1972,21 +1972,23 @@ defmodule Monty.Studio.Jobs.Run do
   # into the world to step. A value this build does not carry is `nil`, which
   # `Monty.Studio.Setup` reads as "nothing chosen" — never a silent stand-in: a
   # run recorded as MuJoCo must not step a sphere.
-  defp world_of(%{"world" => "mujoco"}), do: :mujoco
-  # The same MuJoCo scene, stepped by the compiled binding. A record that names
-  # it is a run somebody asked for, so the worker steps it — and a node without
-  # an OpenGL context refuses it at open time rather than at the first image.
-  defp world_of(%{"world" => "ex_mujoco"}), do: :ex_mujoco
-  defp world_of(%{"world" => "synthetic"}), do: :synthetic
-  # Captured scenes, which a worker without them refuses by naming the directory
-  # it looked in rather than stepping this node's default world.
-  defp world_of(%{"world" => "image"}), do: :image
-  defp world_of(%{"world" => "omniglot"}), do: :omniglot
-  # A part is the one world this node may not carry. It is still the world the
-  # record names, so the run refuses it — `Setup.world/4` says which application
-  # is missing — rather than stepping this worker's own default and reporting
-  # numbers for a run nobody asked for.
-  defp world_of(%{"world" => "cad"}), do: :cad
+  #
+  # The words are `Setup.worlds/0`'s, one for one: `ex_mujoco` is the same MuJoCo
+  # scene stepped by the compiled binding, a node without an OpenGL context
+  # refusing it at open time rather than at the first image; `image` and
+  # `omniglot` are 2-D datasets a worker without the data refuses by naming the
+  # directory it looked in; and `cad` is the one world a node may not carry,
+  # refused by `Setup.world/4` with the application it is missing named.
+  @worlds %{
+    "mujoco" => :mujoco,
+    "ex_mujoco" => :ex_mujoco,
+    "synthetic" => :synthetic,
+    "image" => :image,
+    "omniglot" => :omniglot,
+    "cad" => :cad
+  }
+
+  defp world_of(%{"world" => world}), do: Map.get(@worlds, world)
   defp world_of(_inputs), do: nil
 
   defp attach_log(record, run_id, :ok) do
