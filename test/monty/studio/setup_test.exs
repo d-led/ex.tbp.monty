@@ -863,7 +863,7 @@ defmodule Monty.Studio.SetupTest do
       assert Setup.world_name(uncarried) ==
                "SaccadeOnImageEnvironment (not carried by this application)"
 
-      assert_raise ArgumentError, ~r/does not carry/, fn -> Setup.world(uncarried) end
+      assert_raise ArgumentError, ~r/cannot stand in for/, fn -> Setup.world(uncarried) end
     end
 
     test "shows the experiment's object to every sensor" do
@@ -896,7 +896,7 @@ defmodule Monty.Studio.SetupTest do
         | environment: %{setup.environment | module: %{class: "HabitatEnvironment"}}
       }
 
-      assert_raise ArgumentError, ~r/does not carry/, fn ->
+      assert_raise ArgumentError, ~r/cannot stand in for/, fn ->
         Setup.world(uncarried, :ex_mujoco)
       end
     end

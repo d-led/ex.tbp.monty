@@ -2923,6 +2923,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       "without one says so instead of running."
   end
 
+  # A captured scene is the experiment's own world, not a stand-in: photographs of
+  # objects with the depth the same lens measured, and every step of a run here is
+  # a step of the experiment Monty ran.
+  defp world_note(%{world: :image} = setup) do
+    "Captured scenes, as the config's `environment` names (#{engine_of(setup)}): " <>
+      "photographs with their depth, opened from the directory the config points at. A " <>
+      "sensor's patch is a window over the capture, and the actions are Monty's four " <>
+      "saccades."
+  end
+
   defp world_note(_setup) do
     "This port's own scene: one sphere, stepped in the BEAM. A run here exercises " <>
       "the port, not the experiment — choose MuJoCo above to step the world the " <>

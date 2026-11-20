@@ -908,9 +908,10 @@ defmodule Monty.Studio.Setup do
   end
 
   defp uncarried_world(%__MODULE__{environment: %{module: %{class: class}}}) do
-    "This experiment's world is #{class}, which this application does not carry: only " <>
-      "MuJoCo, the stand-in scene and a CAD part can be stepped here. Step the stand-in " <>
-      "scene to run a config of its shape, or run one whose world this build has."
+    "This experiment's world is #{class}, which MuJoCo cannot stand in for: this " <>
+      "application steps MuJoCo's world, captured scenes, the stand-in scene and a CAD " <>
+      "part. Choose the world the config was written for in the selector, or run a " <>
+      "config whose world is MuJoCo's."
   end
 
   @doc """
