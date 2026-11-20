@@ -150,3 +150,38 @@ words = :erts_debug.flat_size(memory)
 IO.puts(
   "memory size:        #{words} words, #{Float.round(words * 8 / 1_048_576, 1)} MB, copied once per task"
 )
+
+# The same ten calls with the library **held once**: the tasks name the memory
+# and the object, and each reads both from `:persistent_term` in its own process,
+# so what a task captures is an id and the copy above has nowhere to happen. This
+# is the arm that says whether a per-object pass is worth building at all, and the
+# one a real change has to keep true.
+key = {__MODULE__, :held_memory}
+:persistent_term.put(key, memory)
+
+held = fn id ->
+  memory = :persistent_term.get(key)
+  Probe.step(%{memory | models_in_memory: Map.take(memory.models_in_memory, [id])}, percept)
+end
+
+{held_serial_us, _} = :timer.tc(fn -> Enum.each(graphs, held) end)
+
+{held_parallel_us, _} =
+  :timer.tc(fn ->
+    graphs
+    |> Task.async_stream(held, max_concurrency: concurrency, timeout: :infinity, ordered: false)
+    |> Stream.run()
+  end)
+
+:persistent_term.erase(key)
+
+IO.puts("")
+IO.puts("held once — what a task captures: #{:erts_debug.flat_size(key)} words")
+IO.puts("held, ten calls serial:      #{div(held_serial_us, 1000)} ms")
+
+IO.puts(
+  "held, async_stream (#{concurrency}): #{div(held_parallel_us, 1000)} ms — #{Float.round(held_serial_us / max(held_parallel_us, 1), 2)}x"
+)
+
+words_held = :erts_debug.flat_size(memory)
+IO.puts("held memory size:            #{words_held} words (unchanged: #{words_held == words})")
