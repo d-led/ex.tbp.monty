@@ -876,6 +876,27 @@ defmodule Monty.Studio.SetupTest do
       end
     end
 
+    test "is the world the config was written for, not this node's engine" do
+      # A captured scene is its own world: no simulator steps it, so asking this
+      # node's MuJoCo to stand in for one is a refusal dressed as a choice. A
+      # config that names one starts on it, with no world argument anywhere.
+      Tmp.system_env("MONTY_DATA", bright_scenes())
+
+      setup = setup_for("bright_world_image_on_scanned_model")
+
+      assert setup.world == :image
+      refute Enum.any?(Setup.findings(setup, :error), &(&1.code in [:world_not_carried]))
+      assert %SaccadeOnImageEnvironment{} = Setup.world(setup, :image, 0)
+      assert Setup.input_name(setup) =~ "worldimages/bright_scenes"
+    end
+
+    test "leaves a MuJoCo config on this node's engine" do
+      setup = setup_for("tutorial/first_experiment")
+
+      assert Setup.engine(setup) == :mujoco
+      assert setup.world in [:synthetic, :mujoco, :ex_mujoco]
+    end
+
     test "is Monty's own simulator, ported to this build, when a run takes it" do
       # The world is `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`, the
       # class the config names, ported: the scene it builds comes from
@@ -1245,6 +1266,18 @@ defmodule Monty.Studio.SetupTest do
     )
 
     File.write!(Path.join(scene_path, "depth_#{version}.data"), depth)
+  end
+
+  # A data root holding what `bright_world_image_on_scanned_model` reads:
+  # `worldimages/bright_scenes` with one capture in it.
+  defp bright_scenes do
+    root = Path.join(System.tmp_dir!(), "monty_data_#{System.unique_integer([:positive])}")
+    scene = Path.join([root, "worldimages", "bright_scenes", "0_numenta_mug"])
+    File.mkdir_p!(scene)
+    on_exit(fn -> File.rm_rf(root) end)
+
+    write_capture(scene, 0)
+    root
   end
 
   defp with_captures(%Setup{environment: %{data_path: _} = environment} = setup, path) do

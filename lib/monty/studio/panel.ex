@@ -30,6 +30,7 @@ defmodule Monty.Studio.Panel do
     [
       {"sensors", sensor_ids(setup)},
       {"learning modules", learning_module_ids(setup)},
+      input(setup),
       {"epochs", epochs(setup)},
       {"ported here", ported(setup)},
       {"model", model(setup)},
@@ -38,6 +39,18 @@ defmodule Monty.Studio.Panel do
       {"episodes, as the config runs them", episodes_planned(setup)},
       {"steps, as the config limits them", budget(setup)}
     ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # The data a run of this config steps through. Not a choice — the config names
+  # it — but a reader deciding whether to run it needs to know, and the world's
+  # line is about the world. A config that reads nothing this application can
+  # name has no line rather than an empty one.
+  defp input(setup) do
+    case Setup.input_name(setup) do
+      nil -> nil
+      name -> {"input", name}
+    end
   end
 
   defp sensor_ids(setup), do: Enum.map_join(setup.sensors, ", ", & &1.id)

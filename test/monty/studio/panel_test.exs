@@ -40,4 +40,16 @@ defmodule Monty.Studio.PanelTest do
     assert facts()["model"] != ""
     assert facts()["ported here"] =~ "/"
   end
+
+  test "says which data the run reads" do
+    # The objects are the config's — this one names the YCB set — so the line is
+    # the directory a reader can look in, not a category invented here.
+    assert facts()["input"] =~ "objects/ycb"
+  end
+
+  test "has no input line for a config that names no data" do
+    nameless = put_in(setup().environment.data_path, nil)
+
+    refute Map.has_key?(Panel.facts(nameless) |> Map.new(), "input")
+  end
 end

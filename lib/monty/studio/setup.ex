@@ -199,7 +199,7 @@ defmodule Monty.Studio.Setup do
       experiment_class: describe_target(Map.get(tree["experiment"] || %{}, "_target_")),
       monty_class: describe_target(Map.get(monty_config, "monty_class")),
       environment: environment(config),
-      world: Keyword.get(opts, :world_simulator) || configured_world(),
+      world: Keyword.get(opts, :world_simulator) || world_for(environment(config)),
       cameras: cameras(config),
       scene: scene(config),
       motor_system: motor_system(monty_config),
@@ -321,6 +321,21 @@ defmodule Monty.Studio.Setup do
   # configured", and `Application.get_env/3` would hand that nil on as a world.
   defp configured_world,
     do: Application.get_env(:ex_tbp_monty, :world_simulator) || default_world()
+
+  # The world a config was written for, which is not always an engine.
+  #
+  # A captured scene, a drawing and a stream of recorded frames are environments
+  # that are their own world: no simulator steps them, so this node's MuJoCo is
+  # not a choice they have — offering it and then refusing is the refusal
+  # `world_not_carried`, which read as "cannot run here" for experiments that run
+  # perfectly well. A MuJoCo config, and a class this port has not written, keep
+  # the node's engine: the second is refused by its own class, in its own words.
+  #
+  # The class is the config's, read out of the composed tree; `engine/1` answers
+  # the same mapping for a setup that has been built.
+  defp world_for(%{module: %{class: "SaccadeOnImageEnvironment"}}), do: :image
+  defp world_for(%{module: %{class: "OmniglotEnvironment"}}), do: :omniglot
+  defp world_for(_environment), do: configured_world()
 
   @doc """
   The world a run steps when nobody named one.
@@ -749,22 +764,48 @@ defmodule Monty.Studio.Setup do
 
   def world_name(setup, :mujoco), do: mujoco_world_name(setup)
 
-  # The image world opens captures: photographs of objects with the depth the
-  # same lens measured. Which directory they are in is the config's, so the label
-  # names it rather than claiming the world is the config's own.
-  def world_name(%__MODULE__{environment: %{data_path: path}}, :image) when is_binary(path),
-    do: "image captures (#{Path.basename(path)}) at #{path}"
+  # The worlds that are not an engine: the environment a config names, which no
+  # simulator steps. The label names the class and what it is; *where* its data
+  # lives is the input's line (`input_name/1`), not the world's.
+  def world_name(_setup, :image), do: "a captured scene (SaccadeOnImageEnvironment)"
 
-  def world_name(_setup, :image), do: "image captures (a photographed scene)"
-
-  def world_name(%__MODULE__{environment: %{data_path: path}}, :omniglot) when is_binary(path),
-    do: "Omniglot drawings (#{Path.basename(path)})"
-
-  def world_name(_setup, :omniglot), do: "Omniglot drawings (the dataset's characters)"
+  def world_name(_setup, :omniglot), do: "a drawing (OmniglotEnvironment)"
 
   # An operator can configure a world this build does not carry. Saying so is
   # the whole answer; a page that crashed instead would blame itself.
   def world_name(_setup, other), do: "#{inspect(other)} (not carried by this application)"
+
+  @doc """
+  What this config reads: the data a run of it steps through.
+
+  Not a choice — a config names its objects, its captures or its drawings the way
+  Monty's own does, and a page that offered a different set would be offering a
+  different experiment. This is the line that says which one it is, so the world
+  line can be about the world.
+
+  `nil` for a config that reads nothing this application can name — a stand-in
+  run of a scene it does not have.
+  """
+  @spec input_name(t()) :: String.t() | nil
+
+  # A CAD run is a MuJoCo config whose scene is the part file this deployment
+  # names (`MONTY_CAD_PART`), so the input is that file and not a data path.
+  def input_name(%__MODULE__{world: :cad}) do
+    case cad_part_path() do
+      {:ok, part} -> "the part #{Path.basename(part)}"
+      _no_part -> nil
+    end
+  end
+
+  def input_name(%__MODULE__{environment: %{module: %{class: class}, data_path: path}})
+      when is_binary(path) do
+    case class do
+      "OmniglotEnvironment" -> "the Omniglot dataset at #{path}"
+      _a_scene -> "#{Path.basename(path)} at #{path}"
+    end
+  end
+
+  def input_name(%__MODULE__{}), do: nil
 
   # The class the experiment's `environment` block names, read out of the composed
   # tree rather than guessed from the experiment's name.
@@ -947,6 +988,25 @@ defmodule Monty.Studio.Setup do
   @spec worlds() :: [atom()]
   def worlds do
     [:mujoco, :ex_mujoco, :synthetic, :image, :omniglot] ++ if cad_step?(), do: [:cad], else: []
+  end
+
+  @doc """
+  The worlds a run of **this config** may be stepped in: the engines that can
+  stand in for its environment.
+
+  A config whose environment is its own world — a captured scene, a drawing, a
+  stream of recorded frames — has no engine to choose and answers `[]`. Its world
+  is the config's (`world/1` already says so), and a page that offered it this
+  node's MuJoCo would be offering a refusal: that is the `world_not_carried` error
+  a reader met on a config that runs.
+  """
+  @spec worlds(t()) :: [atom()]
+  def worlds(%__MODULE__{} = setup) do
+    case engine(setup) do
+      :image -> []
+      :omniglot -> []
+      _an_engine -> worlds()
+    end
   end
 
   # Carried, and with a part to open: a scene module and an empty `parts/` is an

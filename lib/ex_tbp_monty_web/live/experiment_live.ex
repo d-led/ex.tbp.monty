@@ -655,10 +655,14 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               aria-label="The seed this run starts from"
             />
           </form>
-          <form id="world-choice" phx-change="world" class="flex items-center gap-1">
+          <form
+            :if={@opened && Setup.worlds(@opened.setup) != []}
+            id="world-choice"
+            phx-change="world"
+            class="flex items-center gap-1"
+          >
             <label for="world-select" class="text-[11px] text-base-content/60">world</label>
             <select
-              :if={@opened}
               id="world-select"
               name="world"
               class="select select-xs w-72"
@@ -669,7 +673,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               port's stand-in sphere, or a CAD part when this node carries the
               application and a part is named. --%>
               <option
-                :for={world <- Setup.worlds()}
+                :for={world <- Setup.worlds(@opened.setup)}
                 value={world}
                 selected={world == @opened.setup.world}
               >
@@ -677,6 +681,16 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               </option>
             </select>
           </form>
+          <%!-- A world with no engine to choose is the config's own — a captured
+          scene, a drawing — and the page says so rather than offering this
+          node's MuJoCo, which that config cannot be stepped in. --%>
+          <span
+            :if={@opened && Setup.worlds(@opened.setup) == []}
+            id="world-fixed"
+            class="text-[11px] text-base-content/60"
+          >
+            world: {Setup.world_name(@opened.setup)} (the config's own)
+          </span>
           <span :if={@run_id} id="run-progress" class="badge badge-ghost">
             episode {(@episode || 0) + 1} · step {elem(@progress, 0)} / {elem(@progress, 1)}
           </span>

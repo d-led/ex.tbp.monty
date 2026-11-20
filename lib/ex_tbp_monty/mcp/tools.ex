@@ -456,13 +456,15 @@ defmodule ExTbpMonty.Mcp.Tools do
             # the sentence that names what it does carry.
             "enum" => Experiments.worlds(),
             "description" =>
-              "`synthetic` steps this port's scene, which is Elixir and needs no " <>
+              "Absent — the usual answer — the config steps the environment it names: " <>
+                "a captured scene or a dataset is its own world, and a MuJoCo config steps " <>
+                "on this deployment's engine. A word here overrides that engine: " <>
+                "`synthetic` steps this port's scene, which is Elixir and needs no " <>
                 "interpreter; `monty` and `mujoco` step Monty's own simulator in the " <>
                 "interpreter this application carries; `ex_mujoco` steps the same scene " <>
                 "through the compiled binding, which needs an OpenGL context for the " <>
                 "images; `cad` steps a CAD part through ex_monty_cad, which the node must " <>
-                "carry, and reads the part named by MONTY_CAD_PART. Default: the " <>
-                "deployment's."
+                "carry, and reads the part named by MONTY_CAD_PART."
           }
         },
         "required" => ["name"]
