@@ -46,15 +46,25 @@ defmodule Monty.Studio.Verdict do
   The verdict of one step's beliefs, or `nil` for a step that reported none.
 
   `beliefs` is the record's own shape: module id to what the module held, with
-  `"terminal_state"`, `"detected_object"` and its graphs.
+  `"terminal_state"`, `"detected_object"` and its graphs. `still_believing` is
+  the step's collected answer — what each module that ran out of steps was voting
+  for when the episode closed — and an object named there is the one printed,
+  because the module said it; the belief it happened to hold is the fallback for a
+  record written before that answer was kept.
   """
-  @spec of(%{optional(String.t()) => map()}) :: t() | nil
-  def of(beliefs) when map_size(beliefs) == 0, do: nil
+  @spec of(%{optional(String.t()) => map()}, %{optional(String.t()) => String.t()}) ::
+          t() | nil
+  def of(beliefs, still_believing \\ %{})
 
-  def of(beliefs) do
+  def of(beliefs, _still_believing) when map_size(beliefs) == 0, do: nil
+
+  def of(beliefs, still_believing) do
     results =
       beliefs
-      |> Enum.map(fn {module_id, belief} -> result(to_string(module_id), belief) end)
+      |> Enum.map(fn {module_id, belief} ->
+        id = to_string(module_id)
+        result(id, belief, Map.get(still_believing, id))
+      end)
       |> Enum.sort_by(& &1.module_id)
 
     {concluded, rest} = Enum.split_with(results, &(&1.state == "match"))
@@ -77,17 +87,18 @@ defmodule Monty.Studio.Verdict do
     }
   end
 
-  defp result(module_id, belief) do
+  defp result(module_id, belief, still_believing) do
     state = belief |> Map.get("terminal_state") |> normalised()
 
-    %{module_id: module_id, state: state, object: named(belief, state)}
+    %{module_id: module_id, state: state, object: named(belief, state, still_believing)}
   end
 
   # A concluded module named the object it matched; one still working names the
-  # object it holds at the moment the episode ended, which is its last belief.
-  defp named(belief, "match"), do: Map.get(belief, "detected_object") || believed(belief)
-  defp named(_belief, "no_match"), do: nil
-  defp named(belief, _undecided), do: believed(belief)
+  # object it was voting for when the episode closed, which is the answer it gave
+  # and the reason `still_believing` is asked for at all.
+  defp named(belief, "match", _vote), do: Map.get(belief, "detected_object") || believed(belief)
+  defp named(_belief, "no_match", _vote), do: nil
+  defp named(belief, _undecided, vote), do: vote || believed(belief)
 
   # The object a module held, from its current hypothesis where the record kept
   # one and from the strongest graph otherwise: a module whose hypothesis was

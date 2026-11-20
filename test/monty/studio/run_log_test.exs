@@ -155,6 +155,26 @@ defmodule Monty.Studio.RunLogTest do
       assert line =~ "lm_0: nothing yet"
     end
 
+    # The settle window asks every module still stepping what it was voting for
+    # when the episode closed. That answer travels with the step so a page prints
+    # what the module said rather than what its last hypothesis looked like.
+    test "what a module was voting for when the episode closed travels with the step" do
+      entry = info() |> Map.put(:still_believing, %{lm_0: :mug, lm_1: nil}) |> RunLog.entry()
+
+      # A module that named nothing is not a vote: the map keeps what was said.
+      assert entry["still_believing"] == %{"lm_0" => "mug"}
+      assert Jason.encode!(entry) |> Jason.decode!() == entry
+    end
+
+    test "and is left out entirely when every module concluded on its own" do
+      refute Map.has_key?(RunLog.entry(info(), %{}, []), "still_believing")
+
+      refute Map.has_key?(
+               info() |> Map.put(:still_believing, %{}) |> RunLog.entry(),
+               "still_believing"
+             )
+    end
+
     test "the line starts with the time the step happened" do
       line = info() |> RunLog.entry() |> RunLog.line()
 

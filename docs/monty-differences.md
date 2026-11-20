@@ -1982,9 +1982,16 @@ evidence (`lm_3` was at 21.9 when the criterion fired, `lm_4` at 70.7); the two
 that ran out of steps were not in disagreement with the three that concluded,
 they were slower. A window of five steps was enough for them to deliver.
 
+**The collected answer is on the page.** A step's record carries
+`still_believing` — what each module that ran out of steps was voting for when the
+episode closed — and `Monty.Studio.Verdict` prints it for that module, falling back
+to the belief the module held only for a record written before the answer was kept.
+The difference is not cosmetic: a belief is the hypothesis a module had computed
+last, and a module stopped mid-thought had computed something other than what it
+said.
+
 **Not yet done:** the window is a number a run chooses, and the run page states
-the choice only in the form it was started with; the collected `still_believing`
-is in the step's status but not yet in the page's verdict line.
+the choice only in the form it was started with.
 
 ## 2.32 An attention system is stepped, and its grid is not in a memento
 

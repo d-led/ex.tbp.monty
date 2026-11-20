@@ -243,14 +243,22 @@ defmodule Monty.Studio.Replay do
 
   @doc """
   What the modules concluded at one step, and whether they agreed
-  (`Monty.Studio.Verdict.of/1`).
+  (`Monty.Studio.Verdict.of/2`).
 
   A step in the middle of an episode has concluded nothing, and answers a verdict
   of "no module has concluded yet" — which is the truth about a step, and the
   reason a finished episode is read at its last step.
   """
   @spec verdict(moment()) :: Verdict.t() | nil
-  def verdict(moment), do: moment |> beliefs_of() |> Verdict.of()
+  def verdict(moment), do: moment |> beliefs_of() |> Verdict.of(still_believing_of(moment))
+
+  # The step's collected late votes: what each module that ran out of steps was
+  # voting for when the episode closed, which is its own answer rather than a
+  # reader's guess from the belief it happened to hold.
+  defp still_believing_of(%{entry: entry}) when is_map(entry),
+    do: Map.get(entry, "still_believing", %{})
+
+  defp still_believing_of(_moment), do: %{}
 
   @doc "One series by id, with whatever points the run has for it."
   @spec chart_series(Run.t(), String.t()) :: series()

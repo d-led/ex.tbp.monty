@@ -58,7 +58,25 @@ defmodule Monty.Studio.RunLog do
       "world_us" => Map.get(info, :world_us, 0)
     }
     |> put_beliefs(beliefs)
+    |> put_still_believing(Map.get(info, :still_believing, %{}))
     |> put_part(Keyword.get(options, :part))
+  end
+
+  # What a module that ran out of steps was **voting for** when the episode
+  # closed, asked of the module in one round at the settle window's close
+  # (`Monty.Runtime.Step`'s `ask_for_bets/2`). It is kept beside the beliefs
+  # because it is the module's own answer: a belief is the hypothesis it happened
+  # to hold, and a page that reads only beliefs is inferring a vote from it.
+  defp put_still_believing(entry, votes) when map_size(votes) == 0, do: entry
+
+  defp put_still_believing(entry, votes) do
+    Map.put(
+      entry,
+      "still_believing",
+      for {id, object} <- votes, object != nil, into: %{} do
+        {to_string(id), to_string(object)}
+      end
+    )
   end
 
   # Which part of a parallel run took a step, when the run has parts. A run of

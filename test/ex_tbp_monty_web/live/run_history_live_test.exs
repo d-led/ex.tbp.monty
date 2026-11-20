@@ -1087,7 +1087,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
   # A finished run whose only step carries what each module concluded: its
   # terminal state and the object it named, as the recorder writes them.
-  defp run_that_concluded(conclusions) do
+  defp run_that_concluded(conclusions, still_believing \\ %{}) do
     {:ok, run} =
       RunHistory.start(%{
         experiment: "tutorial/first_experiment",
@@ -1118,6 +1118,11 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       "duration_us" => 120,
       "beliefs" => beliefs
     }
+
+    entry =
+      if map_size(still_believing) == 0,
+        do: entry,
+        else: Map.put(entry, "still_believing", still_believing)
 
     {:ok, run} = RunHistory.record_step(run, entry, moment(0))
     {:ok, run} = RunHistory.finish(run, %{"steps" => 1})
@@ -2584,6 +2589,29 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert verdict =~ "no agreement"
       assert verdict =~ "learning_module_0 says mug"
       assert verdict =~ "learning_module_1 says bowl"
+    end
+
+    # A module that ran out of steps is asked, at the settle window's close, what
+    # it was voting for. That answer is its own, and it is what the page prints: a
+    # hypothesis is what the module had computed last, not what it said, and the two
+    # differ exactly where a run stops a module mid-thought.
+    test "prints what a module that ran out of steps was voting for", %{conn: conn} do
+      run =
+        run_that_concluded(
+          %{
+            "learning_module_0" => {"match", "mug"},
+            "learning_module_1" => {"time_out", "bowl"}
+          },
+          %{"learning_module_1" => "mug"}
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      verdict = view |> element("#replay-verdict") |> render()
+
+      assert verdict =~ "agreed on mug"
+      assert verdict =~ "learning_module_1 still believing mug"
+      refute verdict =~ "bowl"
     end
   end
 

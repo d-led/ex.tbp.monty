@@ -105,4 +105,40 @@ defmodule Monty.Studio.VerdictTest do
       assert [%{object: "mug"}] = Verdict.of(%{"learning_module_0" => belief}).undecided
     end
   end
+
+  # The settle window asks every module still stepping what it was voting for when
+  # the episode closed. That answer is the module's own, and it is what a reader
+  # wants where the two differ: the hypothesis a module held is what it had
+  # computed last, not what it said.
+  describe "what a module was voting for when the episode closed" do
+    test "the collected answer wins over the hypothesis the module happened to hold" do
+      verdict =
+        Verdict.of(
+          %{"learning_module_0" => matched("mug"), "learning_module_1" => timed_out("bowl")},
+          %{"learning_module_1" => "mug"}
+        )
+
+      assert verdict.agreed?
+
+      assert verdict.undecided |> Enum.map(&{&1.module_id, &1.object}) ==
+               [{"learning_module_1", "mug"}]
+    end
+
+    # A record written before the answer was kept has beliefs and no votes, and a
+    # module whose vote named nothing says nothing.
+    test "a module with no collected answer is read from its belief" do
+      verdict =
+        Verdict.of(%{"learning_module_0" => timed_out("bowl")}, %{"learning_module_0" => nil})
+
+      assert [%{object: "bowl"}] = verdict.undecided
+    end
+
+    # A module that refused the object said so; a vote does not un-refuse it.
+    test "a refusal stays a refusal whatever the vote says" do
+      verdict =
+        Verdict.of(%{"learning_module_0" => refused()}, %{"learning_module_0" => "mug"})
+
+      assert [%{object: nil}] = verdict.dissent
+    end
+  end
 end
