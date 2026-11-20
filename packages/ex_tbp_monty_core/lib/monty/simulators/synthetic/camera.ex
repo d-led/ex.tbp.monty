@@ -92,7 +92,7 @@ defmodule Monty.Simulators.Synthetic.Camera do
     {rows, range} = if depth, do: depth_view(depth), else: {nil, nil}
 
     %{
-      depth: rows && (rows |> Png.greyscale() |> Base.encode64()),
+      depth: rows && rows |> Png.greyscale() |> Base.encode64(),
       colour: rgba && colour_picture(rgba),
       range: range
     }
@@ -132,14 +132,20 @@ defmodule Monty.Simulators.Synthetic.Camera do
     rows = depth || rgba
 
     %{
-      depth: depth && (depth |> depth_view() |> elem(0) |> IO.iodata_to_binary()),
-      colour: rgba && (rgba |> colour_rows() |> IO.iodata_to_binary()),
+      depth: depth && depth |> depth_view() |> elem(0) |> IO.iodata_to_binary(),
+      colour: rgba && rgba |> colour_rows() |> IO.iodata_to_binary(),
       width: rows |> hd() |> length(),
       height: length(rows)
     }
   end
 
-  defp colour_rows(rgba), do: Enum.map(rgba, fn row -> Enum.map(row, &colour_byte/1) end)
+  defp colour_rows(rgba) do
+    # The range is the whole frame's, not each value's: read per value, the black
+    # part of a `0..1` picture would be the only part taken for one.
+    scale = if painted?(rgba), do: 255, else: nil
+    Enum.map(rgba, fn row -> Enum.map(row, &colour_byte(&1, scale)) end)
+  end
+
   defp colour_picture(rgba) do
     rgba
     |> colour_rows()
@@ -198,7 +204,8 @@ defmodule Monty.Simulators.Synthetic.Camera do
   # has no range at all, which is what `nil` says. The walk used to flatten the
   # frame, drop the zeros into a second list and take the minimum and the maximum
   # of it — four passes where one answers.
-  defp range_of(rows), do: Enum.reduce(rows, nil, fn row, acc -> Enum.reduce(row, acc, &widen/2) end)
+  defp range_of(rows),
+    do: Enum.reduce(rows, nil, fn row, acc -> Enum.reduce(row, acc, &widen/2) end)
 
   defp widen(value, acc) when value == 0.0, do: acc
   defp widen(depth, nil), do: {depth, depth}
@@ -257,12 +264,22 @@ defmodule Monty.Simulators.Synthetic.Camera do
   # exactly that), while the stand-in scene paints floats in `0..1`. An integer is
   # already a byte; a float is a fraction of one. Scaling a byte again does not
   # make a wrong colour, it makes a term that is not iodata at all.
-  defp colour_byte([red, green, blue | _alpha])
-       when is_integer(red) and is_integer(green) and is_integer(blue),
-       do: [red, green, blue]
+  # A camera says which range it used by what it hands over: the stand-in scene
+  # paints `0..1` floats, and Monty's observations and a MuJoCo render carry
+  # `0..255` — as integers, or as floats that are no different. Nobody says so in
+  # words, and scaling a `0..255` value a second time is not merely a wrong
+  # colour: it is a term that is not iodata at all.
+  defp painted?(rgba) do
+    Enum.all?(rgba, fn row ->
+      Enum.all?(row, fn [red, green, blue | _] -> red <= 1.0 and green <= 1.0 and blue <= 1.0 end)
+    end)
+  end
 
-  defp colour_byte([red, green, blue | _alpha]),
+  defp colour_byte([red, green, blue | _], 255),
     do: [round(red * 255), round(green * 255), round(blue * 255)]
+
+  defp colour_byte([red, green, blue | _], nil),
+    do: [round(red), round(green), round(blue)]
 
   defp note(step, observation) do
     case images(observation).range do

@@ -103,5 +103,14 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     assert Camera.planes(painted).colour == <<255, 255, 255>>
   end
 
+  test "a camera that hands its colours back as floats in 0..255 is not scaled twice" do
+    # The same range, said with floats instead of integers: a MuJoCo render does
+    # this, and `220.0` scaled a second time is 56 100 — not a byte, and not
+    # iodata, which took the writer that archives a run's pictures down with it.
+    floats = %{"depth" => [[0.5]], "rgba" => [[[220.0, 190.0, 12.0, 1.0]]]}
+
+    assert Camera.planes(floats).colour == <<220, 190, 12>>
+  end
+
   defp markup(frame), do: Phoenix.HTML.safe_to_string(frame.data)
 end
