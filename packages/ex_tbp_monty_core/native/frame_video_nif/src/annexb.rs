@@ -49,18 +49,18 @@ pub fn rgb_frame(pixels: &[u8], width: usize, height: usize) -> YuvFrame {
     // than convert the average, which is the same answer at a lower cost.
     for row in (0..height).step_by(2) {
         for column in (0..width).step_by(2) {
-            let mut cb = 0u32;
-            let mut cr = 0u32;
+            let mut cb = 0i32;
+            let mut cr = 0i32;
 
             for (dr, dc) in [(0usize, 0usize), (0, 1), (1, 0), (1, 1)] {
                 let at = ((row + dr) * width + column + dc) * 3;
-                let (b, r) = (pixels[at + 2] as u32, pixels[at] as u32);
-                cb += chroma_blue(b, r);
-                cr += chroma_red(b, r);
+                let (r, g, b) = (pixels[at], pixels[at + 1], pixels[at + 2]);
+                cb += chroma_blue(r, g, b);
+                cr += chroma_red(r, g, b);
             }
 
-            u.push(((cb + 2) / 4) as u8);
-            v.push(((cr + 2) / 4) as u8);
+            u.push(chroma(128 + (cb + 2) / 4));
+            v.push(chroma(128 + (cr + 2) / 4));
         }
     }
 
@@ -78,12 +78,25 @@ fn luma(r: u8, g: u8, b: u8) -> u8 {
     clamp(((66 * r as u32 + 129 * g as u32 + 25 * b as u32 + 128) >> 8) + 16)
 }
 
-fn chroma_blue(b: u32, r: u32) -> u32 {
-    (((112 * b).saturating_sub(38 * r) + 128) >> 8) + 128
+/// BT.601's two chroma values, signed and scaled by 256, without the offset:
+/// `Cb = -0.148 R - 0.291 G + 0.439 B` and `Cr = 0.439 R - 0.368 G - 0.071 B`.
+///
+/// All three channels are in both, which is the part that is easy to get wrong:
+/// a conversion written in terms of red and blue alone — they are almost the
+/// whole of both sums — leaves **green** at neutral chroma, and a green picture
+/// comes back grey while a white one comes back magenta. The port's first
+/// version of this did exactly that, and what found it was a round trip through
+/// `to_rgb` on a palette.
+fn chroma_blue(r: u8, g: u8, b: u8) -> i32 {
+    (112 * i32::from(b) - 38 * i32::from(r) - 74 * i32::from(g) + 128) >> 8
 }
 
-fn chroma_red(b: u32, r: u32) -> u32 {
-    (((112 * r).saturating_sub(18 * b) + 128) >> 8) + 128
+fn chroma_red(r: u8, g: u8, b: u8) -> i32 {
+    (112 * i32::from(r) - 94 * i32::from(g) - 18 * i32::from(b) + 128) >> 8
+}
+
+fn chroma(value: i32) -> u8 {
+    value.clamp(0, 255) as u8
 }
 
 fn clamp(value: u32) -> u8 {

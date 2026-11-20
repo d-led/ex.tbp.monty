@@ -607,3 +607,89 @@ fn media_payload(segment: &[u8]) -> Option<usize> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What a decoder hands back for a colour picture made of one colour: the
+    /// encoder converts RGB to limited-range YUV, so the round trip is the test
+    /// that the conversion has every term it needs.
+    fn round_trip(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
+        let pixels = [r, g, b].repeat(4);
+        let frame = rgb_frame(&pixels, 2, 2);
+        let rgb = to_rgb(&frame);
+        (rgb[0], rgb[1], rgb[2])
+    }
+
+    fn assert_close(colour: (u8, u8, u8)) {
+        let (r, g, b) = colour;
+        let back = round_trip(r, g, b);
+        let (back_r, back_g, back_b) = back;
+
+        assert!(
+            (i32::from(back_r) - i32::from(r)).abs() <= 4
+                && (i32::from(back_g) - i32::from(g)).abs() <= 4
+                && (i32::from(back_b) - i32::from(b)).abs() <= 4,
+            "a picture of {colour:?} came back as {back:?}"
+        );
+    }
+
+    /// The same question through the codec, and through one frame a colour:
+    /// a 2 × 2 picture is a single chroma sample, so a frame of four different
+    /// colours averages to neutral and would test nothing.
+    #[test]
+    fn a_colour_frame_survives_the_video() {
+        let path = std::env::temp_dir().join("frame_video_colour_roundtrip.mp4");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("mp4.index"));
+
+        let palette = [[255u8, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 255]];
+
+        let mut video =
+            Video::open(&path, 2, 2, Kind::Rgb, Settings::default()).expect("a video opens");
+
+        for (index, colour) in palette.into_iter().enumerate() {
+            let pixels = colour.repeat(4);
+            video.push(&pixels, index == 0).expect("a frame is taken");
+        }
+
+        video.finish().expect("the video closes");
+
+        for (index, drawn) in palette.into_iter().enumerate() {
+            let decoded =
+                frame_at(&path, index as u64, Kind::Rgb).expect("the frame is there");
+
+            for replayed in decoded.pixels.chunks_exact(3) {
+                for (a, b) in drawn.into_iter().zip(replayed.iter().copied()) {
+                    assert!(
+                        i32::from(a).abs_diff(i32::from(b)) <= 6,
+                        "frame {index}: {drawn:?} came back as {replayed:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The palette is the one that catches a missing term in the matrix: a
+    /// colour with no red and no blue — green — is neutral chroma if the green
+    /// coefficient is not there, and white is strongly shifted.
+    #[test]
+    fn a_colour_survives_the_round_trip() {
+        for colour in [
+            (0u8, 0u8, 0u8),
+            (255, 255, 255),
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (0, 255, 255),
+            (255, 0, 255),
+            (128, 128, 128),
+            (200, 110, 60),
+            (60, 130, 90),
+        ] {
+            assert_close(colour);
+        }
+    }
+}

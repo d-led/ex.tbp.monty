@@ -208,6 +208,28 @@ defmodule Monty.Studio.ArtifactsTest do
       assert binary_part(png, 0, 8) == @png_signature
     end
 
+    # The picture a page replays is the picture the run drew: a white patch came
+    # back magenta and a green one came back grey while the video's chroma was
+    # computed from red and blue alone, which no signature check can see. One
+    # colour a frame, because a 2 × 2 picture is a single chroma sample and four
+    # different colours in it would average to neutral whatever the conversion.
+    test "a colour picture replays in its colour" do
+      id = run_id()
+      palette = [solid(255, 255, 255), solid(0, 255, 0), solid(200, 110, 60)]
+      path = write_video(id, "run", "patch", "colour", :rgb, palette)
+
+      for {picture, index} <- Enum.with_index(palette) do
+        assert {:ok, {2, 2, pixels}} = FrameVideo.frame_at(path, index, kind: :rgb)
+
+        [drawn | _rest] = colours(picture)
+
+        for replayed <- colours(pixels) do
+          assert close?(drawn, replayed),
+                 "a #{inspect(drawn)} picture replayed as #{inspect(replayed)}"
+        end
+      end
+    end
+
     test "a frame the video has not reached is no picture, not an error page" do
       id = run_id()
       write_video(id, "run", "patch", "depth", :grey, [<<5, 9, 12, 15>>])
@@ -267,4 +289,16 @@ defmodule Monty.Studio.ArtifactsTest do
 
     path
   end
+
+  # A 2 × 2 picture as four RGB triples.
+  defp colours(pixels), do: for(<<rgb::binary-3 <- pixels>>, do: rgb)
+
+  # A 2 × 2 picture of one colour.
+  defp solid(r, g, b), do: :binary.copy(<<r, g, b>>, 4)
+
+  # The video is lossy by design — 4:2:0 keeps a quarter of the chroma and the
+  # quantiser is low rather than lossless — so a colour is compared at the
+  # accuracy a person looking at the picture would notice, not exactly.
+  defp close?(<<r1, g1, b1>>, <<r2, g2, b2>>),
+    do: Enum.zip([r1, g1, b1], [r2, g2, b2]) |> Enum.all?(fn {a, b} -> abs(a - b) <= 6 end)
 end
