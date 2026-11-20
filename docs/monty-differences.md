@@ -2339,5 +2339,29 @@ an epoch by nothing, which is what the image family hit before `§2.38`. The
 dataset itself is two entries in the prerequisite manifest (the `python/` folder's
 own two zips), so a machine without it is offered the download rather than the
 words "put it somewhere". `tutorial/omniglot_training` is runnable with the
-dataset; `tutorial/omniglot_inference` is waiting for its memory, which the
-training run writes (`no_pretrained_memory`).
+dataset; `tutorial/omniglot_inference` runs once that training run has written its
+memory.
+
+**What does not match yet: the tutorial's answer.** Monty's own two tutorials were
+run here as the oracle (his `run.py`, his venv, his data). Training agrees
+exactly in size — his checkpoint holds 904 nodes over the same six objects, and
+so does the library this port exports. Inference does not: his run recognises
+six of six (`4, 4, 4, 4, 10, 4` steps, evidence at most 14.5), and this port
+recognises four — on `Anglo-Saxon_Futhorc_2` and `_3` its evidence falls from
+2.35 to −0.27 over four steps until no match is possible. The configs are the
+same file for file (his composed snapshot and this port's are byte-identical,
+`min_eval_steps: 3` included), so the difference is inside the step the model
+takes, not in what the config asks for. Reproduce:
+
+    MONTY_DATA=~/tbp/data mix monty.run tutorial/omniglot_training --world omniglot
+    MONTY_DATA=~/tbp/data mix monty.run tutorial/omniglot_inference --world omniglot
+
+    # Monty's side, for the oracle:
+    cd ~/src/monty-orig && MONTY_DATA=~/tbp/data .venv/bin/python run.py \
+      experiment=tutorial/omniglot_training
+    ... experiment=tutorial/omniglot_inference   # then eval_stats.csv
+
+The next instrument is the per-step feature vector (`pose_vectors`,
+`principal_curvatures_log`, `on_object`) his `detailed_run_stats.json` records
+against the same features here — that is a parity harness of its own, not a
+line to change in the dark.
