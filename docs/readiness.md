@@ -156,6 +156,13 @@ steps and resets as Monty does (§2.32); and the view finder's `Snapshot`
 transform, which is ported (§2.34), so `surf_agent_unsupervised_10distinctobj`
 runs as the experiment it describes.
 
+One caveat on that last one, and it is a prerequisite rather than a blocker: the
+config's two sensors keep every observation of an episode, which is Monty's
+behaviour and, in this port's representation, four gigabytes of heap by its 1200th
+step. The run now says so instead of stopping silently (§2.35), and the three ways
+out — a raised ceiling, poses without frames, frames as flat binaries — are
+written down there.
+
 ## Two rules this survey is held to
 
 - **The page and the count cannot disagree.** Both read `Monty.Studio.Readiness`;

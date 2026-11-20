@@ -82,4 +82,62 @@ defmodule Monty.Studio.RunLimitsTest do
       assert RunLimits.allowed_mb() == Settings.get(RunLimits.vm_setting())
     end
   end
+
+  # A heap ceiling is enforced by the emulator: the process it kills is not
+  # raising, so nothing is said by the process itself. A run that stepped in the
+  # reporting process therefore ended with no summary and its log stopping at a
+  # step (§2.35), which is why the work is a child the caller watches.
+  describe "a step whose process ends instead of answering" do
+    test "answers what the step answered" do
+      assert {:ok, :a_step} = RunLimits.watch_step(fn -> :a_step end)
+    end
+
+    # What a heap ceiling does to the process holding the model: the exit reaches
+    # the caller of its call, and an uncaught one ends the VM (§2.35).
+    test "catches the exit a killed worker leaves in its caller" do
+      assert {:error, {:shutdown, {GenServer, :call, [:a_server, :step]}}} =
+               RunLimits.watch_step(fn ->
+                 exit({:shutdown, {GenServer, :call, [:a_server, :step]}})
+               end)
+    end
+
+    test "lets a crash through, because a crash has a stacktrace to read" do
+      assert_raise RuntimeError, "the module had no graph", fn ->
+        RunLimits.watch_step(fn -> raise "the module had no graph" end)
+      end
+    end
+  end
+
+  describe "what is said about a run that stopped" do
+    test "attributes a kill to the ceiling, and names the setting that set it" do
+      sentence = RunLimits.stopped_sentence(:killed)
+
+      assert sentence =~ "heap ceiling"
+      assert sentence =~ RunLimits.heap_setting()
+      assert sentence =~ "nothing it had not already written is kept"
+    end
+
+    test "shows a crash where it was raised" do
+      assert RunLimits.stopped_sentence({%RuntimeError{message: "no graph"}, []}) =~ "no graph"
+    end
+
+    # A step worker killed mid-step takes the caller's `GenServer.call` with it,
+    # and the request is a step's whole observation — the sentence names the
+    # worker and points at the line the worker's own death was logged in.
+    test "does not print the step a worker died carrying" do
+      sentence =
+        RunLimits.stopped_sentence(
+          {:shutdown,
+           {GenServer, :call,
+            [
+              {:via, Registry, {Monty.Runtime.Registry, {:step, "studio-1"}}},
+              {:step, %{"rgba" => :frame}}
+            ]}}
+        )
+
+      assert sentence =~ "stopped mid-call"
+      assert sentence =~ "logged above"
+      refute sentence =~ "rgba"
+    end
+  end
 end

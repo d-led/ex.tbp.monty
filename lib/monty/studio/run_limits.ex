@@ -174,4 +174,44 @@ defmodule Monty.Studio.RunLimits do
   # The stop is the run's own: it asks the worker at its next step boundary, which
   # records an ending instead of dying in the middle of a step.
   defp stop_run(run_id), do: Monty.Studio.Jobs.Run.stop(run_id)
+
+  @doc """
+  Runs a step, and answers why it ended instead of exiting.
+
+  A step is a call to the process that holds the model, and that process can be
+  killed by its heap ceiling. A killed process takes the caller's call with it:
+  the exit is not an exception, so an uncaught one ends the VM — which is how a
+  run's log came to stop at a step, with no summary and nothing said (§2.35).
+  Caught here, the death becomes the sentence below.
+  """
+  @spec watch_step((-> result)) :: {:ok, result} | {:error, term()}
+        when result: term()
+  def watch_step(work) when is_function(work, 0) do
+    {:ok, work.()}
+  catch
+    :exit, reason -> {:error, reason}
+  end
+
+  @doc "What to say when a run's process ended instead of answering."
+  @spec stopped_sentence(term()) :: String.t()
+  def stopped_sentence(:killed) do
+    "its process was killed by the runtime, which is what a heap ceiling does. " <>
+      "`#{@heap_setting}` bounds one process, and a killed process says nothing " <>
+      "itself, so the run stopped here: nothing it had not already written is " <>
+      "kept. Raise that setting, or run fewer steps, and it will run to its end."
+  end
+
+  def stopped_sentence({%_{} = exception, stacktrace} = _crash) when is_list(stacktrace),
+    do: Exception.format(:error, exception, stacktrace)
+
+  # A worker killed mid-step takes its caller's `GenServer.call` with it, and the
+  # request that call carried is a step's whole observation — printing it would
+  # bury the sentence. The worker's death is logged where it happened, by the
+  # runtime that logged it, so the sentence points there instead.
+  def stopped_sentence({:shutdown, {GenServer, :call, [server | _rest]}} = _call) do
+    "the step worker it was waiting for stopped mid-call (#{inspect(server)}), " <>
+      "and what stopped it is the line logged above"
+  end
+
+  def stopped_sentence(reason), do: "its process ended with #{inspect(reason)}"
 end

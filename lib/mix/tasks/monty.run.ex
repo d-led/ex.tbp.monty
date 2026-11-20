@@ -426,18 +426,29 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp step_through(run, history, opts, episode, infos, beat) do
-    {:ok, info, observations, next_run} = Monty.Studio.Run.step(run)
-    beliefs = Monty.Studio.Run.beliefs(run)
-    print_step(info, beliefs, episode, opts)
+    case Monty.Studio.RunLimits.watch_step(fn -> Monty.Studio.Run.step(run) end) do
+      {:ok, {:ok, info, observations, next_run}} ->
+        beliefs = Monty.Studio.Run.beliefs(run)
+        print_step(info, beliefs, episode, opts)
 
-    history = append(history, info, observations, beliefs, episode)
-    beat = Monty.Studio.RunHistory.heartbeat(history, beat)
-    infos = [info | infos]
+        history = append(history, info, observations, beliefs, episode)
+        beat = Monty.Studio.RunHistory.heartbeat(history, beat)
+        infos = [info | infos]
 
-    if Monty.Studio.Run.finished?(next_run) do
-      {infos, history, next_run}
-    else
-      step_through(next_run, history, opts, episode, infos, beat)
+        if Monty.Studio.Run.finished?(next_run) do
+          {infos, history, next_run}
+        else
+          step_through(next_run, history, opts, episode, infos, beat)
+        end
+
+      # A step is a call to the process holding the model, and that process can
+      # be killed by its heap ceiling. A killed process takes the call's exit with
+      # it — no exception, nothing said — and an uncaught one ends the whole VM,
+      # which is how a run's log came to stop at a step with no summary (§2.35).
+      {:error, reason} ->
+        Mix.raise(
+          "the run stopped at a step: " <> Monty.Studio.RunLimits.stopped_sentence(reason)
+        )
     end
   end
 

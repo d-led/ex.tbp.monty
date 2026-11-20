@@ -2087,3 +2087,51 @@ instantiating `Vocus2.__init__` one parameter at a time — as well as the older
 states (`color_space_converter`, `combine`, `normalize`) are refused rather than
 dropped, because a different combination or rescale is a different salience map
 under the same config's name.
+
+## 2.35 A run that is stopped says so
+
+A process that passes its heap ceiling (`run_max_heap_mb`, applied as `+hmax`) is
+killed by the emulator: there is no exception, so the dying process cannot report
+itself, and the log simply stops. `mix monty.run` stepped an experiment in the
+reporting process, so a run killed that way ended with no conclusion, no summary
+and a log whose last line was a step — which is what
+`surf_agent_unsupervised_10distinctobj` did at its 1201st step, once the view
+finder's `Snapshot` transform (§2.34) made it runnable.
+
+What actually died was the process holding the model: a step is a call into it,
+a killed process takes that call's exit with it, and the exit was uncaught — which
+is why the VM went down saying nothing. `mix monty.run` catches it now
+(`Monty.Studio.RunLimits.watch_step/1`) and ends with a sentence and a non-zero
+status:
+
+```
+** (Mix) the run stopped at a step: the step worker it was waiting for stopped
+mid-call ({:via, Registry, {Monty.Runtime.Registry, {:step, "studio-8"}}}), and
+what stopped it is the line logged above
+```
+
+An ordinary crash is not caught: it has a stacktrace, and the task prints it.
+
+A worker killed mid-step takes the caller's `GenServer.call` with it, and the
+request that call carried is a step's whole observation — printing it would bury
+the sentence, so that shape is named rather than dumped.
+
+**Why it ran out of heap, measured:** both this config's sensors keep every
+observation of the episode — the patch through `save_raw_obs: true`
+(`SnapshotTelemetry`), the view finder through `Snapshot` — which is Monty's
+behaviour and costs it almost nothing, because one frame is a numpy array of
+16 kB. Here an observation is nested lists: a 64×64 RGBA frame is ~700 kB and a
+64×64 depth image ~300 kB, so 1200 steps of two sensors pass the 4 GB ceiling
+(the worker's heap reached 237 Mwords young + 522 Mwords block). Monty's own
+numbers are unaffected — nothing reads the pixels back — so this is the port's
+representation, not its model, and a 4000-step episode of this config will not fit
+in any ceiling this machine has. The choices, none of them taken yet:
+
+1. **Keep the pixels as monty does and raise the ceiling** — faithful, and it does
+   not fit: four thousand steps would be thirteen gigabytes.
+2. **Keep the poses and not the frames** — the run's own picture writer has
+   already put every step's frame in the run's video files, so the sensor's copy
+   is a second copy of a recording that exists.
+3. **Keep the frames as flat binaries** — 16 kB a frame instead of 700 kB, which
+   is numpy's cost; a reader that wants pixels decodes one binary, and no reader
+   today exists.
