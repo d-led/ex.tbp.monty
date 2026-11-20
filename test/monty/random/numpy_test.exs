@@ -29,6 +29,18 @@ defmodule Monty.Random.NumpyTest do
 
     # `RandomState(1170100843).normal(0.0, [0.1, 0.2, 0.2], 3)`.
     def scaled_normals, do: [-0.06520223229652793, -0.18499467537921313, -0.3438308435333077]
+
+    # The one action sampler's draw, over four actions, and the same over three
+    # and over seven — ranges that are not powers of two, where numpy masks a word
+    # and redraws while it is past the range.
+    def choices_of_four, do: [3, 2, 1, 3, 1, 3, 1, 1]
+    def choices_of_three, do: [2, 1, 1, 1, 1, 2, 1, 1]
+    def choices_of_seven, do: [2, 5, 1, 1, 5, 2]
+
+    # `randint(10, 20, 8)`, and `choice(4)` four times after one `random_sample`
+    # — which is what says the draws share one stream in numpy's order.
+    def randints_ten_to_twenty, do: [17, 12, 15, 11, 17, 19, 15, 12]
+    def choices_after_a_sample, do: [1, 3, 1, 3]
   end
 
   describe "new/1" do
@@ -72,6 +84,37 @@ defmodule Monty.Random.NumpyTest do
       {draws, _state} = draw(3, &Numpy.uniform(&1, -180.0, 180.0))
 
       assert draws == Fixtures.uniform_degrees()
+    end
+  end
+
+  describe "randint/3 and choice/2" do
+    # The action sampler's draw: `rng.choice(self._method_names)` in Monty's
+    # `action_samplers.py`. A run's walk is what this decides, so these are the
+    # numbers that make a run Monty's run rather than a different walk of the same
+    # world.
+    test "is NumPy's choice, over actions and over a range that is not a power of two" do
+      {of_four, _state} = draw(8, &Numpy.choice(&1, 4))
+      {of_three, _state} = draw(8, &Numpy.choice(&1, 3))
+      {of_seven, _state} = draw(6, &Numpy.choice(&1, 7))
+
+      assert of_four == Fixtures.choices_of_four()
+      assert of_three == Fixtures.choices_of_three()
+      assert of_seven == Fixtures.choices_of_seven()
+    end
+
+    test "is NumPy's randint, offset by the bottom of the range" do
+      {draws, _state} = draw(8, &Numpy.randint(&1, 10, 20))
+
+      assert draws == Fixtures.randints_ten_to_twenty()
+    end
+
+    test "spends one draw of the same stream, in the order it was asked" do
+      {_sample, state} = Numpy.random_sample(Numpy.new(@episode_seed))
+
+      {draws, _state} =
+        Enum.map_reduce(1..4, state, fn _draw, state -> Numpy.choice(state, 4) end)
+
+      assert draws == Fixtures.choices_after_a_sample()
     end
   end
 

@@ -11,15 +11,20 @@ defmodule Monty.Random.Numpy do
 
   Ported: MT19937 seeded as NumPy seeds it (`init_genrand`, which is what
   `RandomState(seed)` does for a seed below 2³²), numpy's `random_sample`
-  (`rk_double`, two 32-bit words per double), and `normal` (`rk_gauss`: Marsaglia's
+  (`rk_double`, two 32-bit words per double), `normal` (`rk_gauss`: Marsaglia's
   polar method keeping NumPy's cached second value, which is part of its state and
   survives between calls — including between calls of odd length, where the spare
-  is what the next call returns).
+  is what the next call returns), and the bounded integer `randint` with the
+  `choice` built on it, which is what an action sampler draws with.
 
-  Not ported: bounded integers and `choice`. Monty uses those on the world side
-  only (`environment.py`), where its own code runs — see
-  `scripts/monty_simulator_peer.py` — so a copy here would be a second answer to
-  a question this side never asks.
+  `choice` is Monty's action draw — `rng.choice(self._method_names)` in
+  `action_samplers.py` — so a stream without it cannot answer which action comes
+  next, and an episode's walk is the wrong walk: measured on
+  `bright_world_image_on_scanned_model` seed 42, `RandomState(42).choice(4)` is
+  `turn_left` and so is Monty's first action, while an Erlang stream's is not.
+
+  Not ported: the world-side draws, which its own code still makes — see
+  `scripts/monty_simulator_peer.py`.
 
   State is a value, so a caller threads it:
 
@@ -83,6 +88,33 @@ defmodule Monty.Random.Numpy do
   end
 
   @doc """
+  An integer in `[low, high)`: numpy's `randint(low, high)`.
+
+  The draw is numpy's `random_interval`: a raw 32-bit word masked down to the
+  smallest all-ones mask that covers the range, redrawn while it is past it. The
+  mask is why the numbers are not `floor(uniform * range)`: for a range that is
+  not a power of two the two disagree, and a walk drawn from the wrong one is a
+  different walk.
+  """
+  @spec randint(t(), integer(), integer()) :: {integer(), t()}
+  def randint(%__MODULE__{} = state, low, high) when is_integer(high) and high > low do
+    {draw, state} = interval(state, high - low - 1)
+
+    {low + draw, state}
+  end
+
+  @doc """
+  One of `count` items, each equally likely: numpy's `choice(sequence)`.
+
+  An index, because that is all `choice` is: numpy takes `randint(0, len)` and
+  indexes with it, so a caller with a list of action names does the same and the
+  stream spends exactly one draw.
+  """
+  @spec choice(t(), pos_integer()) :: {non_neg_integer(), t()}
+  def choice(state, count) when is_integer(count) and count > 0,
+    do: randint(state, 0, count)
+
+  @doc """
   A normal draw: numpy's `normal(loc, scale, size=1)`.
 
   The second value of each polar pair is kept in the state, as NumPy keeps it, so
@@ -128,6 +160,25 @@ defmodule Monty.Random.Numpy do
   end
 
   # -- the Mersenne Twister -------------------------------------------------
+
+  # numpy's `random_interval`: mask the word down to the range, redraw while it
+  # is past it. A range of one item spends no draw at all.
+  defp interval(state, 0), do: {0, state}
+
+  defp interval(state, max) do
+    {word, state} = next_uint32(state)
+    value = word &&& mask_covering(max)
+
+    if value > max, do: interval(state, max), else: {value, state}
+  end
+
+  # The smallest mask of ones that covers `max`: the range's own bits spread
+  # right, which is what numpy's four shifts do.
+  defp mask_covering(0), do: 0
+
+  defp mask_covering(max) do
+    Enum.reduce([1, 2, 4, 8, 16], max, fn shift, mask -> mask ||| mask >>> shift end)
+  end
 
   # `init_genrand`, one word per call: the next word is the previous one scrambled
   # and offset by the index it lands on.
