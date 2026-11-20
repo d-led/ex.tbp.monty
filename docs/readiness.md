@@ -135,7 +135,19 @@ what runs now.
 
 What is left is not a class, in the order worth doing:
 
-1. **The cows family's speed, not its correctness** — the fourteen configurations
+1. **The image world, which is nine configurations and half written.** Monty's
+   `*_world_image_on_scanned_model` family — and its two tutorials — steps a
+   camera window over a photograph instead of a simulator, so nothing about it is
+   a stand-in once it is written. Two of its parts are done: the class
+   (`SaccadeOnImageEnvironment`, which reads a capture and saccades over it,
+   `docs/monty-differences.md` §2.38) and the PNG decoder its colour needs
+   (§2.37). Three are not, and all three are needed before a run happens:
+   `SaccadeOnImageInterface`, which walks the config's (scene, version) pairs and
+   names the target; a world kind in the studio beside `:mujoco`, `:ex_mujoco`,
+   `:synthetic` and `:cad`; and the `worldimages` prerequisite that produces the
+   captures under the data directory. Until then readiness keeps calling the
+   family `not_planned`.
+2. **The cows family's speed, not its correctness** — the fourteen configurations
    run, and one step of `base_infer_cows_small_compositional` in MuJoCo, whose
    view is 256×256, costs about 5 s where Monty's costs milliseconds: `SlicMerge`
    2.1 s and `Vocus2` 2.6 s (`docs/monty-differences.md` §2.36). SLIC in a NIF,
@@ -143,10 +155,10 @@ What is left is not a class, in the order worth doing:
    family practical rather than an evening — and the NIF is the way to that
    speed, because the loop that agrees with `skimage` label for label is not the
    one that is fastest in Elixir.
-2. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
+3. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
    from Monty's `tests/` tree, which no port can have; they cannot run here and
    should stay so unless the fixtures themselves are ported.
-3. **The refreshed code** — Monty pulls regularly change a transform, a counter
+4. **The refreshed code** — Monty pulls regularly change a transform, a counter
    or a name. The configs, the map and this survey follow the pull; the Python
    modules are the reviewer's to translate.
 
