@@ -71,7 +71,7 @@ defmodule Monty.Attention.AttentionSystem.DefaultAttentionSystem do
   @doc """
   A system that has learned nothing yet.
 
-  Defaults are Monty's: 5 cm voxels, `negative_priority_max_pool`, linear decay at
+  Defaults are Monty's: 5 mm voxels, `negative_priority_max_pool`, linear decay at
   Monty's default rate, `Union`, `HardGoalFilter`, and telemetry that records
   nothing.
   """
