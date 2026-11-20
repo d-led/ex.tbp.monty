@@ -200,6 +200,16 @@ it. A run needs no interpreter configured: the world is `priv/monty_py/world.py`
 in the interpreter `pythonx` builds, so MuJoCo is there by construction. The
 page's world selector chooses between that and the stand-in scene.
 
+**A module added to `packages/ex_tbp_monty_core` is not in a running node.** The
+code reloader recompiles this application's own sources; a path dependency's
+build directory was listed when the node booted and `:code` keeps that listing,
+so a module that appeared in it afterwards answers `:non_existing` — and every
+page that reaches for it keeps refusing a config the source accepts. The
+symptom is a studio check that says a class is not ported hours after it was
+written. Restart the node (`process-compose process restart node1` for the
+cluster, or stop and start `scripts/run-dev.sh`); no source is at fault, and no
+amount of editing makes a running node see a file it never listed.
+
 Habitat-Sim is not a world a run can choose: it exists only as a conda package
 for **Python 3.9**, this application's interpreter is newer, and MuJoCo is the
 world its configs are written for. `Monty.Simulators.Habitat.Environment.HabitatEnvironment`
