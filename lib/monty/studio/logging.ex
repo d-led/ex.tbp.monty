@@ -93,17 +93,21 @@ defmodule Monty.Studio.Logging do
   the config: an experiment that logs nothing should be known as one before its
   numbers are missing, not after. A plan with no logger says nothing here — its
   notes already said why.
-  """
-  @spec describe(plan(), Path.t()) :: [String.t()]
-  def describe(%{logger: nil}, _output_dir), do: []
 
-  def describe(%{logger: logger}, output_dir) do
+  The line names the handlers and not the directory they write to: this text is
+  what a run's page shows, and where a node keeps its own files is neither the
+  reader's business nor the same on anyone else's machine.
+  """
+  @spec describe(plan()) :: [String.t()]
+  def describe(%{logger: nil}), do: []
+
+  def describe(%{logger: logger}) do
     case Map.get(logger, :handlers, []) do
       [] ->
         ["logging: this config's logger keeps no handlers, so this run writes no statistics"]
 
       handlers ->
-        ["logging: the episode is reported to #{names(handlers)}, into #{output_dir}"]
+        ["logging: the episode is reported to #{names(handlers)}, in this run's own folder"]
     end
   end
 

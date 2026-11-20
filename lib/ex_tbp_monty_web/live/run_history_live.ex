@@ -121,6 +121,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        # a page for an id that is not a run draws no player, and would raise
        # asking for an assign nobody made.
        videos: [],
+       # Where a run's files are, on the page that shows it: `nil` until the run
+       # is known, for the same reason as the videos.
+       folder: nil,
        # Whether this instance is one of several, which is the only case in which
        # a run's node is a column worth having: a cluster has several run lists,
        # and a page merged over them needs to say whose each row is.
@@ -492,6 +495,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          # What a person can watch of this run, asked once: the videos are a
          # property of the run, not of the step on screen.
          |> assign(videos: Artifacts.videos(run.id))
+         # Where this run's files are. The page that shows a run is the page a
+         # reader comes to when they have to find it.
+         |> assign(folder: Artifacts.dir(run.id))
          |> put_parts(run)
          |> follow(run)
          |> stream(:log, log_tail(run.log), reset: true)
@@ -1825,6 +1831,20 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           >
             · nothing recorded for {quiet(@run)} — not progressing
           </span>
+        </p>
+
+        <%!-- Where this run's files are, in one line: a reader clearing space,
+        opening the log or looking at a picture by hand needs the folder, and
+        should not have to work it out from the node's name. `select-all` because
+        it is a path, and the first thing anyone does with one is copy it. In the
+        header and not in the log: a run's own sentences are about the run. --%>
+        <p
+          :if={@folder}
+          id="run-folder"
+          class="select-all font-mono text-[11px] text-base-content/60"
+          title="This run's files"
+        >
+          {@folder}
         </p>
       </header>
 

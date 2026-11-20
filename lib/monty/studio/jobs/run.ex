@@ -402,7 +402,7 @@ defmodule Monty.Studio.Jobs.Run do
     # A class the config names that this port does not have is said out loud
     # once, at the start, and the run goes on without it.
     Enum.each(
-      logging.notes ++ Logging.describe(logging, Artifacts.dir(run_id)),
+      logging.notes ++ Logging.describe(logging),
       &say(run_id, &1)
     )
 

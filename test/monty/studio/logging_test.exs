@@ -144,6 +144,18 @@ defmodule Monty.Studio.LoggingTest do
              Logging.report(%{logger: nil, notes: []}, run(), "/tmp/runs")
   end
 
+  test "says which handlers the run logs with, and not where they keep it" do
+    # This line is what a run's page shows, and the run's own folder is the
+    # node's business: the config's `output_dir` is the config's, not the place
+    # this run writes to either.
+    assert ["logging: the episode is reported to " <> said] =
+             Logging.describe(plan(@csv_and_json))
+
+    assert said =~ inspect(BasicCSVStatsHandler)
+    refute said =~ "/"
+    refute said =~ "/tmp"
+  end
+
   # The run a plan is reported against is not read when there is no logger, which
   # is exactly the case this covers: nothing about a run makes a silent config
   # write a file.

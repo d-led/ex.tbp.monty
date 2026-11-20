@@ -57,6 +57,34 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute html =~ "Watch the run"
     end
 
+    # Where the run's files are is on its page, because that is where a reader
+    # looks when they have to open one, clear space, or hand the folder to
+    # somebody else. One line, selectable in a click, in the header.
+    test "says which folder the run's files are in", %{conn: conn} do
+      _root = Monty.Test.Tmp.env_dir("run-folder", :studio_artifacts_dir)
+
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+
+      {:ok, view, _html} = live(conn, "/runs/#{run.id}")
+
+      folder = Artifacts.dir(run.id)
+
+      assert has_element?(view, "#run-folder", folder)
+      assert String.starts_with?(folder, "/")
+    end
+
+    # …and not in the run's own log, whose sentences are about the run: a path
+    # carries this machine's home directory into a page that has no use for it.
+    test "keeps the folder out of the log line about logging", %{conn: conn} do
+      _root = Monty.Test.Tmp.env_dir("run-folder", :studio_artifacts_dir)
+
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "finished"})
+
+      {:ok, _view, html} = live(conn, "/runs/#{run.id}")
+
+      refute html =~ "Application Support"
+    end
+
     defp write_video(run_id, sensor, kind) do
       {:ok, video} =
         ExTbpMonty.Core.FrameVideo.open(Artifacts.video_path(run_id, "run", sensor, kind),
