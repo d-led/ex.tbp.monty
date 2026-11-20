@@ -115,7 +115,7 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
   test "a channel outside 0..255 is clamped into a byte rather than raising" do
     # Whatever a camera says, what leaves here is bytes: a picture is never the
     # reason a process stops.
-    wild = %{"depth" => [[0.5]], "rgba" => [[[56100, -4.0, 300, 255]]]}
+    wild = %{"depth" => [[0.5]], "rgba" => [[[56_100, -4.0, 300, 255]]]}
 
     assert Camera.planes(wild).colour == <<255, 0, 255>>
   end
