@@ -145,4 +145,23 @@ defmodule Monty.Studio.RunTest do
       assert remembered(next) == ["new_object0"]
     end
   end
+
+  describe "the counters an episode is filed under" do
+    # A handler keys the episode by the run's own episode number, which is the two
+    # phase counters added up. Counters that were always nought wrote every episode
+    # of a phase into the same entry, so a run of six could not be read back one
+    # episode at a time.
+    test "says how many episodes of each phase came before this one" do
+      run = start(mode: :train, episodes: %{train: 3, eval: 2}, epoch: 1)
+
+      assert %{"train_episodes" => 3, "eval_episodes" => 2} = Run.logger_args(run)
+    end
+
+    test "counts the epochs of the phase it is stepping, and none of the other" do
+      args = Run.logger_args(start(mode: :train, epoch: 2))
+
+      assert %{"train_epochs" => 2, "eval_epochs" => 0} = args
+      assert %{"train_epochs" => 0, "eval_epochs" => 2} = Run.logger_args(start(epoch: 2))
+    end
+  end
 end

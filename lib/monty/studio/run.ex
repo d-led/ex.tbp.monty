@@ -42,7 +42,10 @@ defmodule Monty.Studio.Run do
     policy: nil,
     counter: nil,
     first_seen: %{},
-    started_in: []
+    started_in: [],
+    mode: :eval,
+    epoch: 0,
+    episodes: %{train: 0, eval: 0}
   ]
 
   @type t :: %__MODULE__{
@@ -58,6 +61,9 @@ defmodule Monty.Studio.Run do
           policy: Monty.Experiment.RecognitionStrategy.t() | nil,
           counter: Monty.Experiment.RecognitionStrategy.RecognitionContext.t() | nil,
           first_seen: %{optional(String.t()) => [number()]},
+          mode: Monty.Frameworks.Experiments.Mode.ExperimentMode.t(),
+          epoch: non_neg_integer(),
+          episodes: %{train: non_neg_integer(), eval: non_neg_integer()},
           # What starting this episode cost, part by part, in microseconds.
           started_in: [{String.t(), non_neg_integer()}]
         }
@@ -72,11 +78,13 @@ defmodule Monty.Studio.Run do
   (`:eval` or `:train`, default `:eval`),
   `:has_detailed_logger` (whether this run's logging wants the whole hypothesis
   space per step), `:sensors_step` (`:auto`, `:serial` or `:concurrent` — whether
-  a step asks its sensors together; see `Setup.model_spec/3`), and `:memory` —
-  the memory each learning module starts from, by module id, defaulting to the
-  pretrained one (`Setup.memories/1`). A run is one episode, so `:memory` and
-  `memories/1` are what let a training phase keep what it learned between
-  episodes.
+  a step asks its sensors together; see `Setup.model_spec/3`), `:episodes` (how
+  many episodes of each phase the run took before this one, as
+  `%{train: n, eval: n}`, which is what its statistics are filed under), and
+  `:memory` — the memory each learning module starts from, by module id,
+  defaulting to the pretrained one (`Setup.memories/1`). A run is one episode, so
+  `:memory` and `memories/1` are what let a training phase keep what it learned
+  between episodes.
 
   The episode number is not bookkeeping: a run's random draws come from the
   seed its episode derives from the experiment's, so the same experiment and a
@@ -177,7 +185,12 @@ defmodule Monty.Studio.Run do
              # Where each object stood the first time the experiment showed it.
              # A later epoch may place it somewhere else, and a graph has to
              # stay where it was learned.
-             first_seen: Keyword.get(opts, :first_seen, %{})
+             first_seen: Keyword.get(opts, :first_seen, %{}),
+             # The episode's place in the run, which is what its statistics are
+             # filed under: see `logger_args/1`.
+             mode: mode,
+             epoch: Keyword.get(opts, :epoch, 0),
+             episodes: Keyword.get(opts, :episodes, %{train: 0, eval: 0})
            }}
 
         {:error, reason} ->
@@ -406,20 +419,25 @@ defmodule Monty.Studio.Run do
   @doc """
   Monty's `logger_args`: the counters a handler keys an episode by.
 
-  They are counters of the *run so far*, which is why they are zero here: a studio
-  run is one episode and this is the first, and Monty's experiment increments them
-  after the logger has been given the episode — the episode being logged is the one
-  that has not been counted yet.
+  The episode counters are of the *run so far* — how many episodes of each phase
+  the run has taken before this one. Monty's experiment increments them after the
+  logger has been given the episode, so the episode being logged is the one that
+  has not been counted yet, and the run's own episode number is their sum: that is
+  the id a handler files the episode under, and a run whose counters were all zero
+  wrote every episode of a phase into the same place.
+
+  The step totals are not kept here: no handler in this port reads them, and a
+  number nobody reads is one that can only be wrong.
   """
   @spec logger_args(t()) :: map()
   def logger_args(%__MODULE__{episode_seed: seed} = run) do
     args = %{
       "total_train_steps" => 0,
-      "train_episodes" => 0,
-      "train_epochs" => 0,
+      "train_episodes" => run.episodes.train,
+      "train_epochs" => epochs_into(run, :train),
       "total_eval_steps" => 0,
-      "eval_episodes" => 0,
-      "eval_epochs" => 0,
+      "eval_episodes" => run.episodes.eval,
+      "eval_epochs" => epochs_into(run, :eval),
       "episode_seed" => seed
     }
 
@@ -428,6 +446,11 @@ defmodule Monty.Studio.Run do
       target -> Map.put(args, "target", target)
     end
   end
+
+  # Monty counts the epochs it has *finished*, so the epoch a run is stepping is
+  # the count — and only the phase being stepped has one.
+  defp epochs_into(%__MODULE__{mode: mode, epoch: epoch}, mode), do: epoch
+  defp epochs_into(%__MODULE__{}, _other_phase), do: 0
 
   @doc """
   Runs one timestep, returning the report and the advanced run.

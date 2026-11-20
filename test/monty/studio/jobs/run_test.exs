@@ -897,6 +897,23 @@ defmodule Monty.Studio.Jobs.RunTest do
       assert length(episodes) == 2
     end
 
+    test "files every episode of the run under its own number" do
+      # A detailed handler keys an episode by the run's own number, which is the
+      # two phase counters added up (`Run.logger_args/1`). They were all nought,
+      # so every episode of a run landed on the same id and the file could not be
+      # read back one episode at a time.
+      {:ok, record} =
+        start_run(
+          draft_with_logging("detailed_logging_eval", "detailed_info_monty_runs"),
+          2,
+          episodes: 2
+        )
+
+      assert {:ok, closed} = perform(record)
+
+      assert detailed_episode_ids(closed) == ["0", "1"]
+    end
+
     test "says what it logs with, and which classes it skipped, before stepping" do
       # wandb is off by default, and a note about a wandb class that was skipped
       # is not said to nobody — so this run is told one is configured.
@@ -969,6 +986,15 @@ defmodule Monty.Studio.Jobs.RunTest do
   defp stats_rows(closed) do
     File.read!(Path.join(Artifacts.dir(closed.id), "eval_stats.csv"))
     |> String.split("\n", trim: true)
+  end
+
+  # The ids the detailed statistics were filed under, in the order they were
+  # written: one JSON object per line, keyed by the run's episode number.
+  defp detailed_episode_ids(closed) do
+    Path.join(Artifacts.dir(closed.id), "detailed_run_stats.json")
+    |> File.read!()
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line -> line |> Jason.decode!() |> Map.keys() |> List.first() end)
   end
 
   # A picture a step kept, read back through the name the record kept: a picture

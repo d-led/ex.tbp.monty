@@ -430,6 +430,11 @@ defmodule Monty.Studio.Jobs.Run do
       # the episode of the *experiment* they took, so the parts of one run make one
       # chart rather than four charts that each count from nought.
       episodes_started: offset_of(record),
+      # The same count the way the statistics are filed: how many episodes of each
+      # phase the run has taken so far, which is Monty's `train_episodes` and
+      # `eval_episodes`. Their sum is `episodes_started`, so an episode is filed
+      # under the number the record and the chart give it.
+      episodes: episodes_of_phase(plan, offset_of(record)),
       mode: :eval,
       # What the phase has learned so far, by module. A run is one episode, so
       # this is the memory a training phase carries from one to the next; an
@@ -1303,6 +1308,15 @@ defmodule Monty.Studio.Jobs.Run do
 
   defp offset_of(_whole_run), do: 0
 
+  # The phase counters a handler files an episode under, counted from the run's
+  # first episode: the first phase of the plan holds the offset, and every episode
+  # since has added one to its own phase — so the two always sum to
+  # `episodes_started`.
+  defp episodes_of_phase([{mode, _epochs} | _rest], offset),
+    do: %{train: 0, eval: 0} |> Map.put(mode, offset)
+
+  defp episodes_of_phase([], _offset), do: %{train: 0, eval: 0}
+
   # The part of a parallel batch this run is, or `nil` for a run of the whole
   # experiment (`Monty.Studio.Partition`).
   defp part(%{inputs: %{"part" => %{} = part}}), do: part
@@ -1405,6 +1419,7 @@ defmodule Monty.Studio.Jobs.Run do
         episode: index,
         epoch: Map.get(callbacks, :epoch, 0),
         mode: state.mode,
+        episodes: state.episodes,
         first_seen: state.first_seen,
         has_detailed_logger: Logging.detailed?(state.logging),
         scheduling: scheduling_of(state.record),
@@ -1436,6 +1451,7 @@ defmodule Monty.Studio.Jobs.Run do
            | run: run,
              episode: episode,
              episodes_started: episode + 1,
+             episodes: Map.update!(state.episodes, state.mode, &(&1 + 1)),
              beliefs: %{},
              boundary: []
          }}
