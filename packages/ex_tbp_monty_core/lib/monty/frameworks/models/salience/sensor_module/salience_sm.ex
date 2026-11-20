@@ -44,7 +44,16 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
   alias Monty.Frameworks.Models.Salience.Strategies.Uniform
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
-  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2SalienceConfig
+
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.{
+    ColorChannelSalience,
+    DepthSalience,
+    NoOperatingLimits,
+    OrientationSalience,
+    SafeOperatingLimits,
+    Vocus2SalienceConfig
+  }
+
   alias Monty.Frameworks.Models.Salience.Telemetry.NoopSalienceSMTelemetry
   alias Monty.Random.Stream
   # Monty's two factors, as its private methods write them: a visit takes three
@@ -107,7 +116,21 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   @target "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM"
+
+  # A VOCUS2 strategy, in the two shapes Monty's own sensor configs write it: as a
+  # factory that takes the numbers (`from_config`), and as the class with its
+  # three channels written out.
+  @vocus2 "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2"
+  @vocus2_from_config "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2.from_config"
   @vocus2_config "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2SalienceConfig"
+  @color_channel "tbp.monty.frameworks.models.salience.strategies.vocus2.ColorChannelSalience"
+  @depth_salience "tbp.monty.frameworks.models.salience.strategies.vocus2.DepthSalience"
+
+  @orientation_salience "tbp.monty.frameworks.models.salience.strategies.vocus2.OrientationSalience"
+
+  # The numbers a centre-surround channel is built from: the sigmas of the two
+  # blurs, and how many scales and octaves of them to keep.
+  @channel_keys ["center_sigma", "surround_sigma", "n_scales", "max_octaves"]
 
   # This port's addition, and not Monty's: his `SalienceSM` says nothing about
   # drawing from the episode's stream, because Python steps the sensors one after
@@ -163,7 +186,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   # Only the classes this port has written can be built; a config that names
-  # another says so by failing to build, and `Setup` runs the stand-in.
+  # another says so by failing to build, and `Setup` refuses the experiment.
   defp built(key, target, spec) do
     case target do
       "tbp.monty.frameworks.models.salience.strategies.uniform.Uniform" ->
@@ -175,8 +198,11 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
       "tbp.monty.frameworks.models.salience.telemetry.NoopSalienceSMTelemetry" ->
         {:ok, {NoopSalienceSMTelemetry, NoopSalienceSMTelemetry.new()}}
 
-      "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2.from_config" ->
+      @vocus2_from_config ->
         vocus2(spec)
+
+      @vocus2 ->
+        vocus2_written_out(spec)
 
       _unsupported ->
         {:error, {:unsupported_layer, key, target}}
@@ -203,6 +229,96 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
 
   defp vocus2(spec) do
     {:error, {:unsupported_layer, "salience_strategy", Map.get(spec, "config")}}
+  end
+
+  # The other shape Monty's sensor configs use: the class with its arguments
+  # written out, which is Hydra instantiating `Vocus2.__init__` one parameter at a
+  # time. `color` is the one it requires; `depth` and `orientation` are `null`
+  # when the strategy is colour-only, which is how the cows family's view finder
+  # is configured.
+  defp vocus2_written_out(%{"color" => color} = spec) do
+    with :ok <- reads_only(spec, ["color", "depth", "orientation"]),
+         {:ok, color} <- color_channel(color),
+         {:ok, depth} <- salience_channel(spec["depth"], @depth_salience, &depth_salience/1),
+         {:ok, orientation} <-
+           salience_channel(spec["orientation"], @orientation_salience, &orientation_salience/1) do
+      {:ok, {Vocus2, Vocus2.new(color: color, depth: depth, orientation: orientation)}}
+    end
+  end
+
+  defp vocus2_written_out(_spec) do
+    {:error, {:unsupported_layer, "salience_strategy.color", nil}}
+  end
+
+  # `Vocus2.__init__` also names a `color_space_converter`, a `combine` and a
+  # `normalize`, and no config states any of them — so the defaults are Monty's.
+  # One that did would be refused rather than dropped, because a different
+  # combination or rescale is a different salience map under the same config's
+  # name.
+  defp reads_only(spec, keys) do
+    case Map.keys(spec) -- ["_target_" | keys] do
+      [] -> :ok
+      [key | _unread] -> {:error, {:argument_not_read, key}}
+    end
+  end
+
+  defp color_channel(%{"_target_" => @color_channel} = spec) do
+    with :ok <- reads_only(spec, ["operating_limits" | @channel_keys]),
+         {:ok, limits} <- operating_limits(spec["operating_limits"]) do
+      options = numbers(spec, @channel_keys)
+
+      {:ok,
+       ColorChannelSalience.new(
+         if(limits, do: options ++ [operating_limits: limits], else: options)
+       )}
+    end
+  end
+
+  defp color_channel(%{"_target_" => target}), do: {:error, {:unsupported_layer, "color", target}}
+
+  defp depth_salience(%{"_target_" => @depth_salience} = spec) do
+    with :ok <- reads_only(spec, @channel_keys) do
+      {:ok, DepthSalience.new(numbers(spec, @channel_keys))}
+    end
+  end
+
+  # A period is the one argument its own constructor requires; `sigma` defaults
+  # to `0.3 * period` inside it, which is Monty's rule.
+  defp orientation_salience(%{"_target_" => @orientation_salience} = spec) do
+    with :ok <- reads_only(spec, ["period", "sigma", "phase", "gamma", "n_orientations"]) do
+      {:ok,
+       OrientationSalience.new(
+         numbers(spec, ["period", "sigma", "phase", "gamma", "n_orientations"])
+       )}
+    end
+  end
+
+  defp salience_channel(nil, _target, _build), do: {:ok, nil}
+
+  defp salience_channel(%{"_target_" => target} = spec, target, build), do: build.(spec)
+
+  defp salience_channel(%{"_target_" => target}, _expected, _build),
+    do: {:error, {:unsupported_layer, "channel", target}}
+
+  defp operating_limits(nil), do: {:ok, nil}
+
+  defp operating_limits(%{"_target_" => target}) do
+    case target do
+      "tbp.monty.frameworks.models.salience.strategies.vocus2.NoOperatingLimits" ->
+        {:ok, NoOperatingLimits.new()}
+
+      "tbp.monty.frameworks.models.salience.strategies.vocus2.SafeOperatingLimits" ->
+        {:ok, SafeOperatingLimits.new()}
+
+      _unsupported ->
+        {:error, {:unsupported_layer, "operating_limits", target}}
+    end
+  end
+
+  # Only the keys the config states, because a keyword list carrying `nil` would
+  # overwrite a default with nothing.
+  defp numbers(spec, keys) do
+    for key <- keys, is_number(Map.get(spec, key)), do: {String.to_existing_atom(key), spec[key]}
   end
 
   @impl true

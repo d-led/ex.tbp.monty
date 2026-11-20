@@ -2078,6 +2078,12 @@ computation.
 
 The cows family stays refused until `SlicMerge`
 (`frameworks/models/salience/segmentation/slic_merge.py`, `skimage`'s SLIC plus
-a BFS merge) is written, and `SalienceSM` reads the _current_ config shape, where
-`salience_strategy` is a `Vocus2` object with inline channel objects rather than
-a `Vocus2.from_config` with a nested `Vocus2SalienceConfig`.
+a BFS merge) is written. Its view finder's salience strategy is read now:
+`SalienceSM` builds the shape Monty's configs write — the `Vocus2` class with its
+colour, depth and orientation channels as objects of their own, which is Hydra
+instantiating `Vocus2.__init__` one parameter at a time — as well as the older
+`Vocus2.from_config` with a nested `Vocus2SalienceConfig` that the two
+`camera_dist_*_vocus2` sensor configs still name. The three arguments no config
+states (`color_space_converter`, `combine`, `normalize`) are refused rather than
+dropped, because a different combination or rescale is a different salience map
+under the same config's name.

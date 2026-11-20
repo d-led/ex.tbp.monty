@@ -2639,6 +2639,9 @@ defmodule Monty.Studio.Setup do
   defp unbuildable_class({:unsupported_layer, key, _no_class}),
     do: "a #{key} this port has not written"
 
+  defp unbuildable_class({:argument_not_read, key}),
+    do: "an argument this port does not read (`#{key}`)"
+
   defp unbuildable_class({:unsupported_sensor_module, target}),
     do: "a sensor class this port has not written (#{inspect(target)})"
 

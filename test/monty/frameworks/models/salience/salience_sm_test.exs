@@ -17,8 +17,14 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.NoOperatingLimits
   alias Monty.Frameworks.Models.Salience.Telemetry.DetailedSalienceSMTelemetry
   alias Monty.Geometry.Rotation
+
+  @vocus2 "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2"
+  @color_channel "tbp.monty.frameworks.models.salience.strategies.vocus2.ColorChannelSalience"
+  @no_operating_limits "tbp.monty.frameworks.models.salience.strategies.vocus2.NoOperatingLimits"
 
   # Three by three, all on the object, one metre away, at x = pixel index.
   defp observation(semantic_ids \\ List.duplicate(1.0, 9)) do
@@ -258,20 +264,67 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
                })
     end
 
-    test "declines a strategy this port has not written" do
-      # A bare `Vocus2` is not something an experiment writes — the class takes
-      # three built channel processors — so a config that names it is refused
-      # rather than given a uniform view in its place.
-      assert {:error, {:unsupported_layer, "salience_strategy", target}} =
+    test "is built from the class written out with its channels, which is how the cows family asks for it" do
+      # `3sm_2d3d_dist_slic.yaml`'s `sensor_module_3`: Hydra instantiates
+      # `Vocus2.__init__` one parameter at a time, so the colour channel is an
+      # object of its own and the depth and orientation channels are `null`.
+      assert {:ok, sensor} =
                SalienceSM.from_config(%{
                  "_target_" => "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM",
                  "sensor_module_id" => "view_finder",
                  "salience_strategy" => %{
-                   "_target_" => "tbp.monty.frameworks.models.salience.strategies.vocus2.Vocus2"
+                   "_target_" => @vocus2,
+                   "color" => %{
+                     "_target_" => @color_channel,
+                     "center_sigma" => 1.0,
+                     "surround_sigma" => 3.0,
+                     "n_scales" => 2,
+                     "max_octaves" => 10,
+                     "operating_limits" => %{"_target_" => @no_operating_limits}
+                   },
+                   "depth" => nil,
+                   "orientation" => nil
                  }
                })
 
-      assert target =~ "Vocus2"
+      assert {Vocus2, strategy} = sensor.salience_strategy
+
+      assert strategy.color.center_sigma == 1.0
+      assert strategy.color.surround_sigma == 3.0
+      assert strategy.color.max_octaves == 10
+      assert %NoOperatingLimits{} = strategy.color.operating_limits
+      assert strategy.depth == nil
+      assert strategy.orientation == nil
+    end
+
+    test "declines a channel class this port has not written" do
+      assert {:error, {:unsupported_layer, "color", target}} =
+               SalienceSM.from_config(%{
+                 "_target_" => "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM",
+                 "sensor_module_id" => "view_finder",
+                 "salience_strategy" => %{
+                   "_target_" => @vocus2,
+                   "color" => %{"_target_" => "some.other.ColorChannelSalience"}
+                 }
+               })
+
+      assert target == "some.other.ColorChannelSalience"
+    end
+
+    test "declines an argument of the strategy this port does not read" do
+      # A different `combine` is a different salience map under the same config's
+      # name, so it is refused rather than dropped. No config in Monty's tree
+      # states one.
+      assert {:error, {:argument_not_read, "combine"}} =
+               SalienceSM.from_config(%{
+                 "_target_" => "tbp.monty.frameworks.models.salience.sensor_module.SalienceSM",
+                 "sensor_module_id" => "view_finder",
+                 "salience_strategy" => %{
+                   "_target_" => @vocus2,
+                   "color" => %{"_target_" => @color_channel},
+                   "combine" => %{"_target_" => "some.MapCombine"}
+                 }
+               })
     end
   end
 

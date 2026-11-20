@@ -429,6 +429,10 @@ defmodule Monty.Studio.SetupTest do
       assert finding.message =~ "view_finder"
       assert finding.message =~ "has not written"
       assert finding.message =~ "stand-in sensor"
+
+      # `SlicMerge` and not `Vocus2`: the strategy's class is written here and
+      # read from the config, so what stops the run is the segmentation.
+      assert finding.message =~ "SlicMerge as its segmentation_strategy"
     end
   end
 
