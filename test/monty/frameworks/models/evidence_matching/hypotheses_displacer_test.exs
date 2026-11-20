@@ -106,6 +106,32 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       assert Hypotheses.evidence(after_move) == Hypotheses.evidence(before)
       assert Hypotheses.poses(after_move) == Hypotheses.poses(before)
     end
+
+    # A walk is a sequence, not one step that replaces the last: every step adds
+    # to where the hypothesis already is, so walking there and back leaves it
+    # where it started. Displacing the hypotheses sampled at the start of the
+    # episode, instead of the ones displaced last step, leaves them on the nodes
+    # they were drawn from for the whole run — which was, measured against
+    # Monty on the same walk, the difference between a wrong object's evidence
+    # decaying to nothing and its rising forever.
+    test "a hypothesis walks with the sensor, so a step and its step back return it" do
+      there =
+        displacer()
+        |> HypothesesDisplacer.displace_hypotheses(hypotheses([1.0], [[0.0, 0.0, 0.0]]), [
+          0.25,
+          0.0,
+          0.0
+        ])
+        |> then(&HypothesesDisplacer.displace_hypotheses(displacer(), &1, [0.0, 0.25, 0.0]))
+
+      back =
+        displacer()
+        |> HypothesesDisplacer.displace_hypotheses(there, [0.0, -0.25, 0.0])
+        |> then(&HypothesesDisplacer.displace_hypotheses(displacer(), &1, [-0.25, 0.0, 0.0]))
+
+      assert [location] = Hypotheses.locations(back)
+      assert Enum.all?(location, &(abs(&1) < 1.0e-9))
+    end
   end
 
   describe "compute_evidence/5" do
@@ -195,6 +221,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
         )
 
       assert_in_delta hd(Hypotheses.evidence(updated)), -1.0, 1.0e-9
+    end
+
+    # What a run does to a wrong object: its hypotheses are carried along by the
+    # sensor, and once the walk has taken them off the graph they earn nothing —
+    # that is the evidence decay the slope tracker deletes them on, and without
+    # it nothing is ever pruned and no episode concludes. The graph here holds
+    # two nodes a decimetre apart with a half-metre reach, so a quarter of a
+    # metre a step leaves the second node behind and the third step leaves both.
+    test "a hypothesis carried off the object stops earning evidence" do
+      {_walked, series} =
+        Enum.reduce(1..3, {hypotheses([0.0], [[0.0, 0.0, 0.0]]), []}, fn _step,
+                                                                         {walked, series} ->
+          walked = HypothesesDisplacer.displace_hypotheses(displacer(), walked, [0.25, 0.0, 0.0])
+
+          {updated, _} =
+            HypothesesDisplacer.compute_evidence(displacer(), features(), 0.0, "mug", walked)
+
+          {updated, [hd(Hypotheses.evidence(updated)) | series]}
+        end)
+
+      assert Enum.reverse(series) == [2.0, 4.0, 3.0]
     end
 
     test "a hypothesis below the threshold is not tested and gains nothing" do
