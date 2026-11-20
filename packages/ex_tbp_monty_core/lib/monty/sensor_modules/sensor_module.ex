@@ -118,9 +118,22 @@ defmodule Monty.SensorModules.SensorModule do
   def propose_region(%__MODULE__{region: nil} = sm), do: {AttentionRegion.empty(), sm}
   def propose_region(%__MODULE__{region: region} = sm), do: {region, sm}
 
-  @doc "What this sensor's transforms have written down, as Monty reports it."
+  @doc """
+  What this sensor's transforms have written down, as Monty reports it.
+
+  A transform answers in the order a reader wants, which is not always the order
+  it keeps: `Snapshot` grows its lists at the front, so it reverses them here
+  (`Monty.Experiment.SensorModules.Telemetry.Snapshot.state_dict/2`). A
+  transform with nothing of its own to report at read time is left as it wrote.
+  """
   @spec state_dict(t()) :: map()
-  def state_dict(%__MODULE__{} = sm), do: sm.telemetry
+  def state_dict(%__MODULE__{} = sm) do
+    Enum.reduce(sm.transforms, sm.telemetry, fn {module, transform}, telemetry ->
+      if function_exported?(module, :state_dict, 2),
+        do: module.state_dict(transform, telemetry),
+        else: telemetry
+    end)
+  end
 
   @impl true
   def reset(%__MODULE__{} = sm), do: %__MODULE__{sm | goals: [], region: nil, telemetry: %{}}

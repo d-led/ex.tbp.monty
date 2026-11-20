@@ -2395,3 +2395,32 @@ What was left was the hypothesis space itself, and `evidences` is where it shows
 his field held one value per node, this port's two. A count of the hypotheses per
 object is the whole of the diagnosis, and the per-step `evidences` map both files
 carry is what reads it.
+
+## 2.40 A view finder's telemetry grows at the front, and a step costs its own frame
+
+Monty's `Snapshot` transform appends every raw observation of an episode to
+`payload.telemetry["raw_observations"]` — and the sensor module keeps that map
+across steps, so a view finder remembers every frame it measured. That is what
+the detailed logger reads: `SM_1["raw_observations"][step]` is the picture a
+patch was computed from.
+
+The port does the same, and the lists are **newest first**: Monty's
+`list.append` is amortised constant time, a list's end here is not, so recording
+an observation prepends and `Snapshot.state_dict/2` answers oldest first — the
+order Monty's `state_dict` has, which is what `SensorModule.state_dict/1` folds
+the transforms into. Appending at the end instead copied everything the sensor
+had already seen, once per step.
+
+**Measured while the dogs training run was being made to work** (`dogs/surf_unsupervised`,
+one episode, `--world ex_mujoco`, this box): the exploration never reached its
+thousandth step. At step 850 the view finder held 1.26 GB and the step process
+died with `maximum heap size reached` — `run_max_heap_mb`'s 4 GB, which a
+copying GC needs twice of. The frames are the reason: a 64 × 64 depth and colour
+frame is 1.4 MB as this port's nested float lists and about 85 KB as Monty's
+numpy arrays, so an episode Monty fits in ~85 MB needs 1.3 GB here.
+
+What closes it is the representation, not the keeping: frames as flat binaries
+(the plan §2.35 already names) is a quarter of the words and no boxing at all,
+and the sensor pipeline's consumers are the only places that have to learn it.
+Until then, a surf exploration longer than about 800 steps needs
+`run_max_heap_mb` raised past its default, or fewer steps.
