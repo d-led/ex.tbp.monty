@@ -2231,3 +2231,42 @@ interlaced one, a body whose length is not `height × (stride + 1)`, or a stream
 that is not deflate. A capture is 8-bit, one image, greyscale or colour with or
 without alpha, and anything else is a different picture rather than a smaller
 one.
+
+## 2.38 The image world is written; the interface and the world kind are not
+
+Monty's `SaccadeOnImageEnvironment` is a world with no simulator in it: a scene
+is a directory holding `rgb_<version>.png` and `depth_<version>.data`, both
+captured by an iPad, and an action moves a `patch_size` window over them —
+`look_up`/`look_down` along the rows, `turn_left`/`turn_right` along the columns.
+`Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment` is the class,
+implementing `Monty.Simulators.Environment`, and its sensor position is not a
+pixel index: the whole depth image is unprojected once per scene by Monty's own
+`DepthTo3DLocations` — every point, the iPad's 54.201° field of view, anything
+past `depth_clip_value` treated as background — and the middle of the patch
+answers the point under it, because a model compares positions and a pixel is not
+a distance.
+
+Checked against Monty's own capture (`tests/unit/resources/dataloader_test_images/0_numenta_mug`,
+640 × 480 RGBA): the colour reads byte-identically to `PIL.Image.open` (§2.37),
+the point cloud's middle pixel is `[0.00016, 0.00016, 0.2009, 1.0]` — three
+coordinates and "on surface" — and Monty's six integration cases run as written:
+the camera's defaults are the iPad's, `look_up` and `turn_right` move the sensor
+(0.0036 m and 0.0032 m on that capture), and `move_forward` moves it not at all,
+because the four saccades are the only actions this world has.
+
+**Two places the arithmetic is Monty's, not a choice.** A capture's depth can say
+"no return" as a NaN, and the BEAM has no NaN to carry (§2.33): a 32-bit word
+whose exponent is all ones is therefore read as the world's missing return the
+moment the file is read, which is the only place it can be seen — a float
+segment cannot even match one. And anything past 40 cm is dropped in
+`process_depth_data`, the number Monty hard-codes with a comment saying nobody has
+tuned it.
+
+**What is still missing, and why the family cannot run.** Three things, none of
+them in this class: `SaccadeOnImageInterface` (the experiment's interface, which
+walks a capture's scenes), a world kind in the studio beside `:mujoco`,
+`:ex_mujoco`, `:synthetic` and `:cad`, and the `worldimages` prerequisite that
+produces `${MONTY_DATA}/worldimages/bright_scenes/`. Until those land, readiness
+keeps classifying the family `not_planned` and the studio keeps naming the classes
+it has not written — which is the truth, and the opposite of standing a stand-in
+in their place (§2.34).

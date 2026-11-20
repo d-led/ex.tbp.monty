@@ -1079,7 +1079,8 @@ defmodule Monty.ModuleMap.Data do
           python: "OmniglotEnvironment"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/environments/two_d_data/saccade_on_image_environment.ex",
           elixir: "Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment",
           python: "SaccadeOnImageEnvironment"
         },
