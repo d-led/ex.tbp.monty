@@ -7,6 +7,7 @@ defmodule Monty.Studio.SetupTest do
 
   alias Monty.Experiment.MatchCriteria.NamedLMsMatch
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
+  alias Monty.Experiment.SensorModules.Telemetry.Snapshot
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.GraphMatching.GraphLM
@@ -608,6 +609,16 @@ defmodule Monty.Studio.SetupTest do
       # for: the config is one this application runs, and the run is its plan.
       assert Setup.valid?(setup)
       assert Setup.epoch_plan(setup) == [{:train, 10}]
+    end
+
+    test "the view finder the model gets is the config's, with its transform" do
+      setup = setup_for("surf_agent_unsupervised_10distinctobj")
+
+      view_finder =
+        Enum.find(Setup.model_spec(setup, "surf").sensor_modules, &(&1.id == "view_finder"))
+
+      assert view_finder.module == ExperimentSensorModule
+      assert [{Snapshot, %Snapshot{}}] = view_finder.state.transforms
     end
 
     test "counts Monty's MuJoCo simulator as ported, because it is" do
