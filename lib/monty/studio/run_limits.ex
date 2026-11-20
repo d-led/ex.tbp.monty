@@ -84,12 +84,16 @@ defmodule Monty.Studio.RunLimits do
   the flag existed. A page-started run of the 480 × 640 image world therefore
   grew past 4 GB untouched — the one ceiling that would have stopped it did not
   apply to the process holding the frames — and `docs/monty-differences.md` §2.41
-  has the measurement. `Process.flag/2` covers it, and `megabytes` is a seam for a
-  test that has no business allocating four gigabytes.
+  has the measurement. `Process.flag/2` covers it.
+
+  The ceiling is the setting's, read at the call unless a caller hands one over:
+  `megabytes` is a seam for a test that has no business allocating four
+  gigabytes, and it is a number like any other — there is no "unset" the caller
+  may pass, because a flag built from nothing would be a limit of zero words.
   """
   @spec apply_heap_limit(number()) :: :ok
-  def apply_heap_limit(megabytes \\ nil) do
-    flag = (megabytes || Settings.get(@heap_setting)) |> heap_flag()
+  def apply_heap_limit(megabytes \\ Settings.get(@heap_setting)) do
+    flag = heap_flag(megabytes)
     # `system_flag/2` answers the flag it replaced — `size: 0` when nothing had
     # set one — and the answer is not the point.
     _for_new_processes = :erlang.system_flag(:max_heap_size, flag)

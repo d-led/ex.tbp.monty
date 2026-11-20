@@ -56,6 +56,24 @@ defmodule Monty.Studio.RunLimitsTest do
       assert_receive {:DOWN, ^reference, :process, ^pid, :killed}, 5_000
       refute_received :survived
     end
+
+    # A run and a Mix task both call the arity-0 form, so its default is a
+    # ceiling somebody relies on rather than a convenience. The flag is put back
+    # the way it was found, so nothing this suite starts later inherits it, and
+    # ERTS answers with `include_shared_binaries/1` in the map as well, which is
+    # its business rather than this ceiling's.
+    test "is the setting's ceiling when the caller hands over none" do
+      ceiling = Settings.get(RunLimits.heap_setting())
+      no_ceiling = %{size: 0, kill: true, error_logger: true}
+      earlier = :erlang.system_flag(:max_heap_size, no_ceiling)
+      on_exit(fn -> :erlang.system_flag(:max_heap_size, earlier) end)
+
+      assert :ok = RunLimits.apply_heap_limit()
+
+      held = :erlang.system_flag(:max_heap_size, earlier)
+
+      assert Map.take(held, [:size, :kill, :error_logger]) == RunLimits.heap_flag(ceiling)
+    end
   end
 
   describe "what holds the memory" do

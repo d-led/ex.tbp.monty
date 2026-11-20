@@ -248,10 +248,10 @@ defmodule ExTbpMonty.MixProject do
       # `:cover` — which `mix cover.merge` calls — lives in `tools`, so a PLT
       # without it reads those calls as functions that do not exist.
       plt_add_apps: [:mix, :ex_unit, :tools],
-      # The types job is about the application: Mix tasks are operator tooling
-      # whose contract is the command line, and tests are exercised by running
-      # them. Warnings there would drown the signal.
-      exclude_paths: ["lib/mix/tasks/**", "test/**"],
+      # dialyxir excludes beam *directories* (`:excluded_paths`), and the Mix
+      # tasks and `test/support` compile into this application's own ebin — so
+      # they are in the gate's scope, and a warning in one of them is a finding
+      # to fix rather than noise to filter out.
       flags: [:error_handling, :extra_return, :missing_return]
     ]
   end
