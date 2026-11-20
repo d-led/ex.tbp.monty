@@ -64,6 +64,12 @@ panel states the input beside the modules (`Setup.input_name/1`).
 `mix monty.readiness` with no world argument prints the first column — each
 config stepping its own world — and `--world synthetic` the second.
 
+Both columns are a **dev** run. `config/test.exs` sets `world_simulator:
+:synthetic` for the suite, and that setting is what the first column's "own
+world" falls back to, so `MIX_ENV=test mix monty.readiness` prints the _second_
+column twice: a table copied from a test run would report the stand-in's
+refusals as the port's.
+
 |                           | each config steps its own | `--world synthetic` |
 | ------------------------- | ------------------------: | ------------------: |
 | experiments Monty ships   |                       157 |                 157 |
