@@ -149,6 +149,28 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert updater.initial_possible_poses == :first_observation
     end
 
+    test "decides the burst sampler's own arguments, not only its neighbour count" do
+      # `hypotheses_updater/burst_sampling_10nn_dts02.yaml` samples ten neighbours
+      # and deletes stalled hypotheses at a slope of 0.2 over bursts of three
+      # steps. Monty hands that group's arguments to the updater's constructor;
+      # a key that stops there runs a different search under the same name.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "hypotheses_updater_args" => %{
+              "max_nneighbors" => 10,
+              "deletion_trigger_slope" => 0.2,
+              "sampling_burst_duration" => 3
+            }
+          })
+        )
+
+      assert {BurstSamplingHypothesesUpdater, updater} = lm.hypotheses_updater
+      assert updater.displacer.max_nneighbors == 10
+      assert updater.deletion_trigger_slope == 0.2
+      assert updater.sampling_burst_duration == 3
+    end
+
     test "decides what memory an object is stored in" do
       {:ok, lm} = EvidenceGraphLM.from_config(config())
 

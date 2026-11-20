@@ -9,7 +9,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   The idea: when evidence stops moving, one more observation of the same
   hypotheses will not settle anything. So when the largest evidence slope falls
   to `burst_trigger_slope` or below — and no burst is already running — the
-  updater spends `burst_sampling_duration` steps sampling fresh hypotheses
+  updater spends `sampling_burst_duration` steps sampling fresh hypotheses
   around the best-matching nodes, and drops the ones whose evidence is falling
   faster than `deletion_trigger_slope`. A burst therefore explores without
   simply growing the hypothesis space.
@@ -46,7 +46,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
             umbilical_num_poses: 8,
             sampling_multiplier: 0.4,
             burst_trigger_slope: 1.0,
-            burst_sampling_duration: 5,
+            sampling_burst_duration: 5,
             deletion_trigger_slope: 0.5,
             sampling_burst_steps: 0,
             evidence_slope_trackers: %{},
@@ -83,7 +83,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       umbilical_num_poses: Keyword.get(options, :umbilical_num_poses, 8),
       sampling_multiplier: multiplier,
       burst_trigger_slope: Keyword.get(options, :burst_trigger_slope, 1.0),
-      burst_sampling_duration: Keyword.get(options, :burst_sampling_duration, 5),
+      sampling_burst_duration: Keyword.get(options, :sampling_burst_duration, 5),
       deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.5)
     }
   end
@@ -118,7 +118,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       updater
       | max_slope: max_slope,
         sampling_burst_steps:
-          if(stalled?, do: updater.burst_sampling_duration, else: updater.sampling_burst_steps)
+          if(stalled?, do: updater.sampling_burst_duration, else: updater.sampling_burst_steps)
     }
   end
 

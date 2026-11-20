@@ -389,21 +389,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp memory_options(config), do: present_options(@memory_options, config)
 
-  # Monty's Hydra instantiates the updater with `**hypotheses_updater_args`, so
-  # the poses a run starts from and the number it samples at a flat surface are
-  # the updater's own arguments and are read from there. A config that names
-  # neither keeps the updater's default, which is "informed" — hence nothing
-  # here rather than `nil`, which several updaters would read as "no pose at
-  # all".
-  #
-  # A fixed pose set is stored as matrices, which is what a hypothesis space
-  # holds: the aligned poses of the informed case arrive from
-  # `align_multiple_orthonormal_vectors_as_matrices/2` in the same shape.
+  # The updaters' own arguments, under Monty's names: what a config writes under
+  # `hypotheses_updater_args` Hydra hands to the updater's constructor, so a
+  # config that names a burst's length or the slope it deletes at is running that
+  # burst. A key dropped here runs a different search without saying so.
+  @updater_arguments [
+    {"umbilical_num_poses", :umbilical_num_poses},
+    {"sampling_multiplier", :sampling_multiplier},
+    {"sampling_burst_duration", :sampling_burst_duration},
+    {"burst_trigger_slope", :burst_trigger_slope},
+    {"deletion_trigger_slope", :deletion_trigger_slope}
+  ]
+
+  # The poses a run starts from are an updater argument too, and the one that
+  # needs translating: a config writes Euler angles and a hypothesis space holds
+  # matrices, which is the shape the informed case produces as well. A config
+  # that names none keeps the updater's default, which is "informed" — hence
+  # nothing here rather than `nil`, which several updaters would read as "no pose
+  # at all".
   defp updater_options(config) do
     args = Map.get(config, "hypotheses_updater_args") || %{}
 
     fixed_poses(Map.get(args, "initial_possible_poses")) ++
-      umbilical_poses(Map.get(args, "umbilical_num_poses"))
+      present_options(@updater_arguments, args)
   end
 
   defp fixed_poses(nil), do: []
@@ -413,9 +421,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     {:ok, rotations} = GraphMatchingUtils.initial_possible_poses(poses)
     [{:initial_possible_poses, Enum.map(rotations, &Rotation.to_matrix/1)}]
   end
-
-  defp umbilical_poses(nil), do: []
-  defp umbilical_poses(count), do: [{:umbilical_num_poses, count}]
 
   # A key a config does not name is absent, not `nil`: `nil` written into a
   # number's place fails a comparison much later, in the middle of a step.

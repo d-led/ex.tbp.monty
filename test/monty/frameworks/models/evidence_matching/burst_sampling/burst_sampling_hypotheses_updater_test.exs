@@ -190,12 +190,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   describe "starting and ending a burst" do
     test "a burst starts when evidence has stalled" do
-      assert BurstSamplingHypothesesUpdater.begin_step(updater(burst_sampling_duration: 3)).sampling_burst_steps ==
+      assert BurstSamplingHypothesesUpdater.begin_step(updater(sampling_burst_duration: 3)).sampling_burst_steps ==
                3
     end
 
     test "no burst starts while one is already running" do
-      started = BurstSamplingHypothesesUpdater.begin_step(updater(burst_sampling_duration: 3))
+      started = BurstSamplingHypothesesUpdater.begin_step(updater(sampling_burst_duration: 3))
       again = BurstSamplingHypothesesUpdater.begin_step(started)
 
       assert again.sampling_burst_steps == 3
@@ -203,7 +203,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
     test "each step of a burst counts down, and the count never goes below zero" do
       counted =
-        Enum.reduce(1..3, updater(burst_sampling_duration: 1), fn _step, updater ->
+        Enum.reduce(1..3, updater(sampling_burst_duration: 1), fn _step, updater ->
           updater
           |> BurstSamplingHypothesesUpdater.begin_step()
           |> BurstSamplingHypothesesUpdater.end_step()
@@ -487,7 +487,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       # this port says `nil` for "nothing measurable" and counts that as stalled.
       for duration <- 1..10 do
         updater =
-          updater(burst_sampling_duration: duration)
+          updater(sampling_burst_duration: duration)
           |> BurstSamplingHypothesesUpdater.begin_step()
 
         assert updater.max_slope == nil
@@ -501,7 +501,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       updater =
         updater(
           burst_trigger_slope: 1.0,
-          burst_sampling_duration: 5,
+          sampling_burst_duration: 5,
           tracker: {[0.0, 0.2, 0.1], [0.25, 0.5, -0.1]}
         )
         |> BurstSamplingHypothesesUpdater.begin_step()
@@ -517,7 +517,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       updater =
         updater(
           burst_trigger_slope: 1.0,
-          burst_sampling_duration: 5,
+          sampling_burst_duration: 5,
           tracker: {[0.0, 0.0, 0.0], [2.0, 2.0, 2.0]}
         )
         |> BurstSamplingHypothesesUpdater.begin_step()
@@ -533,7 +533,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       updater =
         updater(
           burst_trigger_slope: 1.0,
-          burst_sampling_duration: 5,
+          sampling_burst_duration: 5,
           stalled_tracker: true
         )
         |> Map.put(:sampling_burst_steps, 3)
@@ -561,7 +561,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       # Entering is Monty's `__enter__`, ending its `__exit__`; re-triggering is
       # prevented while a burst is under way, so the count only falls.
       updater =
-        updater(burst_trigger_slope: 1.0, burst_sampling_duration: 5, stalled_tracker: true)
+        updater(burst_trigger_slope: 1.0, sampling_burst_duration: 5, stalled_tracker: true)
 
       {history, updater} =
         Enum.map_reduce(1..5, updater, fn _step, updater ->

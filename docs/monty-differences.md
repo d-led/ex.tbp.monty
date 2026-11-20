@@ -2357,7 +2357,11 @@ hypothesis space, every evidence computed against a pose the config had ruled
 out — and the field that should have pruned to three pruned to one. `initial_possible_poses` and `umbilical_num_poses` are the
 updater's own arguments now, read where Monty's Hydra reads them, and
 `GraphMatchingUtils.initial_possible_poses/1` takes the config's words
-(`uniform`, `informed`, or the list) rather than a caller's translation.
+(`uniform`, `informed`, or the list) rather than a caller's translation. The same
+list carries the burst sampler's own arguments — its length in steps, the slopes
+that start and end a burst, and the slope it deletes stalled hypotheses at — since
+a config that names `deletion_trigger_slope: 0.2` is running that search and not
+the default one.
 
 Measured on this machine (osx-arm64, both tutorials, all six episodes of each):
 the two runs now agree episode by episode — `Anglo-Saxon_Futhorc_2` walks ten
