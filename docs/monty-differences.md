@@ -2530,3 +2530,42 @@ Two things this does not fix, and they are the next ones worth doing:
   process as it passed 4 GB, and the process went on to 19 GB. What `system_flag`
   inherits into a process that existed before the call is not documented as a
   promise, so this is a gap in the guard rather than a proven bug.
+
+## 2.43 A model grid is an absolute box, so the dogs' module asks for one a dog fits
+
+Monty's learning module builds its memory in a **grid of an absolute size**:
+`max_graph_size` metres on a side, cut into `num_model_voxels_per_dim` voxels and
+centred on the episode's _first_ observation. The defaults are a 0.3 m box over
+50 voxels — a 6 mm voxel — and `GridObjectModel` refuses a graph with fewer than
+90 % of its observations inside the box, because storing the part that fits
+"would store a lie". That size is right for Monty's corpora: a YCB mug is about
+10 cm in every direction, so a walk over it never leaves a 0.3 m box.
+
+A dog is not a mug. The importer normalises the corpus by **height** to 10 cm
+(§2.35's flatness problem is why it is height and not the longest side), and a
+dog 10 cm tall is 25–35 cm long: a surface agent that walks one end to the other
+leaves a box centred on its first touch. Measured on `dogs/surf_unsupervised`,
+seed 42, `--world ex_mujoco`, one episode, raw step cap varied:
+
+| `max_graph_size` | episode       | outcome                               |
+| ---------------- | ------------- | ------------------------------------- |
+| Monty's 0.3 m    | 200 raw steps | builds: **1 object, 34 nodes**        |
+| Monty's 0.3 m    | 400 raw steps | refuses: `fraction_in_bounds: 0.5625` |
+| 0.6 m            | 400 raw steps | builds: **1 object, 38 nodes**        |
+
+So this port's dogs set carries its own learning-module group,
+`monty/learning_module/evidence_1lm_nn5_dogs.yaml`: Monty's `evidence_1lm_nn5`
+unchanged except `max_graph_size: 0.6` and `num_model_voxels_per_dim: 100`, which
+keeps **Monty's 6 mm voxel** (0.6 / 100 = 0.3 / 50) over a box a dog fits in.
+`dogs/surf_unsupervised{,_mid,_small}` name it in place of Monty's module. It is a
+deviation about _this corpus's size_, not about Monty's arithmetic: a corpus of
+Monty-sized objects keeps Monty's module.
+
+The same numbers can be written at the experiment level instead —
+`experiment.config.monty_config.learning_modules.learning_module_0.max_graph_size`
+in the experiment file, which Hydra merges over the group's body because the body
+is composed last. Composed, that key lands beside the group's own
+(`max_match_distance: 0.02` written there composes as `0.02`, and
+`x_percent_threshold` stays the group's `50`). The dogs set still puts the size in
+a group: three experiments share it, and a reader of the module sees it where the
+module is defined.

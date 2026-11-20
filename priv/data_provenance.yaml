@@ -157,7 +157,15 @@ data:
     # with the measurement that excluded it, and a config that still named one
     # failed a training run forty minutes in with "unknown object type".
     # `test/monty/prerequisites/corpus_test.exs` holds the two files together.
-    hash: d866a32356fd02799d916fcb45f33dad73a9dd236e7501cf7bfebe2c6c1270d9
+    #
+    # The dogs training arm carries its own learning-module group
+    # (`sets/dogs/conf/monty/learning_module/evidence_1lm_nn5_dogs.yaml`): a
+    # model grid is an absolute box centred on the first touch, Monty's 0.3 m is
+    # a mug's size, and a dog normalised to 10 cm tall is 25–35 cm long, so the
+    # graph was refused for 90 % of its observations not fitting. It is Monty's
+    # module with a 0.6 m box over 100 voxels — the same 6 mm voxel.
+    # `docs/monty-differences.md` §2.43 carries the measurements.
+    hash: 9db178def53dea0a851b136bd337c04bab72521dd67b35118de891df6f352f24
 
   - path: priv/cad_experiments/conf
     kind: written

@@ -1,0 +1,59 @@
+# @package experiment.config.monty_config.learning_modules
+
+# Monty's `evidence_1lm_nn5`, sized for this corpus.
+#
+# A learning module's model grid is an **absolute** box: `max_graph_size` metres
+# on a side, centred on the first observation of the episode. Monty's default is
+# 0.3 m, which is a mug's size and is why no YCB config ever meets the limit. A
+# dog is not a mug — the importer normalises the corpus by height to 10 cm
+# (`ExTbpMonty.Objaverse.Import`), and a dog that is 10 cm tall is 25–35 cm long,
+# so a surf agent that walks it from one end to the other leaves a box centred on
+# its first touch. `GraphObjectModel` refuses to store a graph with fewer than
+# 90 % of its observations inside the box ("an object that big needs a bigger
+# model, and storing the part that fits would store a lie"), so the episode
+# silently learned nothing.
+#
+# Measured, `dogs/surf_unsupervised`, seed 42, `--world ex_mujoco`, one episode:
+#
+#   | max_graph_size | episode        | outcome                                  |
+#   | -------------- | -------------- | ---------------------------------------- |
+#   | Monty's 0.3 m  | 200 raw steps  | builds: 1 object, 34 nodes               |
+#   | Monty's 0.3 m  | 400 raw steps  | refuses: fraction_in_bounds 0.5625       |
+#   | 0.6 m          | 400 raw steps  | builds: 1 object, 38 nodes               |
+#
+# 0.6 m keeps Monty's own voxel as well: `max_graph_size / num_model_voxels_per_dim`
+# is 6 mm at 0.3 m over 50, and 6 mm again at 0.6 m over 100 — the same
+# resolution Monty's memory has, over a box a dog fits in.
+#
+# Everything else is Monty's file unchanged; `docs/monty-differences.md` §2.43
+# records the deviation.
+learning_module_0:
+  _target_: tbp.monty.frameworks.models.evidence_matching.learning_module.EvidenceGraphLM
+  tolerances:
+    patch:
+      hsv: ${np.array:[0.1, 0.2, 0.2]}
+      principal_curvatures_log: ${np.ones:2}
+  feature_weights:
+    patch:
+      hsv: ${np.array:[2, 0.5, 0.5]}
+      pose_vectors: ${np.ones:3}
+      principal_curvatures_log: ${np.ones:2}
+  max_match_distance: 0.01
+  x_percent_threshold: 50
+  graph_delta_thresholds:
+    patch:
+      distance: 0.01
+      pose_vectors: ${np.list_eval:[np.pi / 8, np.pi * 2, np.pi * 2]}
+      principal_curvatures_log:
+      - 1.0
+      - 1.0
+      hsv:
+      - 0.1
+      - 1
+      - 1
+  object_evidence_threshold: 100
+  required_symmetry_evidence: 20
+  hypotheses_updater_args:
+    max_nneighbors: 5
+  max_graph_size: 0.6
+  num_model_voxels_per_dim: 100

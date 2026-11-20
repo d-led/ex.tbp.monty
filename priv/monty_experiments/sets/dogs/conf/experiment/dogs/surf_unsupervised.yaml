@@ -6,7 +6,7 @@
 defaults:
   - /monty: graph_exp1000_e3_t100
   - /monty/motor_system_config: surface
-  - /monty/learning_module: evidence_1lm_nn5
+  - /monty/learning_module: evidence_1lm_nn5_dogs
   - /monty/sensor_module: camera_surf
   - /monty/connectivity: 1lm_1sm
   - /environment: mujoco_objaverse_dogs_surf_agent
