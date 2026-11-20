@@ -2569,3 +2569,32 @@ is composed last. Composed, that key lands beside the group's own
 `x_percent_threshold` stays the group's `50`). The dogs set still puts the size in
 a group: three experiments share it, and a reader of the module sees it where the
 module is defined.
+
+## 2.44 A module loads its memory where the memory is read
+
+Monty builds a learning module's state where it builds the model and hands the
+object along. Here that hand-over is the cost: a memory is a graph library of tens
+of megabytes, and the spec that carries it is copied into the model and again into
+each module server, while the module only reads it. So a spec may carry a
+**builder** instead of a value — `Setup.model_spec/3`'s `lazy_state: true` writes
+`state: {:lazy, fun}`, where the function captures the library's _identity_ (its
+path and the module's index), and `Monty.Runtime.LearningModuleServer.init/1` calls
+it in the module's own process. The load inside is
+`Monty.Studio.Memory.load/3`, which answers from the studio's `:persistent_term`
+cache: the term is handed over, not copied.
+
+Measured on this Mac, the ten-object `pretrained_ycb_v10` library: the same
+setup's spec is **241.3 MB eager and 8.9 KB lazy** by `:erts_debug.flat_size/1`,
+and a run through the lazy path is digit for digit the eager one
+(`mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8`
+answers the ladder `1.736 (1424, 3)` … `6.338 (1429, 2)`, `goals 15065`).
+
+A memory the **caller** holds is still built into the spec, and that is not an
+exception to the rule: a training run carries the memory its own last episode
+wrote, which is the run's state rather than a library to read again.
+
+Why it is written down: the reason a per-object parallel pass over a memory's
+graphs was 27× **slower** than doing the work serially
+(`scripts/probe_lm_graph_split.exs`) is that a task receives the term its closure
+captured, so every task copied the library. A library that no longer travels in
+the spec is the precondition for that pass, not the pass itself.
