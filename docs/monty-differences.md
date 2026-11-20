@@ -2116,22 +2116,24 @@ A worker killed mid-step takes the caller's `GenServer.call` with it, and the
 request that call carried is a step's whole observation — printing it would bury
 the sentence, so that shape is named rather than dumped.
 
-**Why it ran out of heap, measured:** both this config's sensors keep every
-observation of the episode — the patch through `save_raw_obs: true`
-(`SnapshotTelemetry`), the view finder through `Snapshot` — which is Monty's
-behaviour and costs it almost nothing, because one frame is a numpy array of
-16 kB. Here an observation is nested lists: a 64×64 RGBA frame is ~700 kB and a
-64×64 depth image ~300 kB, so 1200 steps of two sensors pass the 4 GB ceiling
-(the worker's heap reached 237 Mwords young + 522 Mwords block). Monty's own
-numbers are unaffected — nothing reads the pixels back — so this is the port's
-representation, not its model, and a 4000-step episode of this config will not fit
-in any ceiling this machine has. The choices, none of them taken yet:
+**Why it ran out of heap, measured** (this checkout, this machine, the config's
+own two 64×64 sensors): both sensors keep every observation of the episode — the
+patch through `save_raw_obs: true` (`SnapshotTelemetry`), the view finder through
+`Snapshot`. That is Monty's behaviour and costs it almost nothing, because one
+observation is two numpy arrays. Here one observation is **515 kB** as nested
+lists, 450 kB of it the two images (`:erts_debug.size/1`, rounded down), so 1200
+steps of two sensors is 1.2 GB before the model and its graphs are counted
+anywhere — the worker's heap had reached 237 Mwords young and 522 Mwords in its
+block when the ceiling stopped it. Nothing reads those pixels back, so this is the
+port's representation and not its model. The choices, none of them taken yet, now
+with their numbers:
 
-1. **Keep the pixels as monty does and raise the ceiling** — faithful, and it does
-   not fit: four thousand steps would be thirteen gigabytes.
-2. **Keep the poses and not the frames** — the run's own picture writer has
-   already put every step's frame in the run's video files, so the sensor's copy
-   is a second copy of a recording that exists.
-3. **Keep the frames as flat binaries** — 16 kB a frame instead of 700 kB, which
-   is numpy's cost; a reader that wants pixels decodes one binary, and no reader
-   today exists.
+1. **Keep the pixels as Monty does and raise the ceiling** — faithful, and it does
+   not fit: an episode is 4000 steps, so twelve gigabytes.
+2. **Keep the poses and not the frames** — nothing at all. The run's own picture
+   writer has already put each step's frame in the run's video files, so the
+   sensor's copy is a second copy of a recording that already exists.
+3. **Keep the frames as flat binaries** — the same numbers, `<<x::float-64>>`
+   after `<<x::float-64>>`, are **160 kB** an observation: 384 MB for a 1200-step
+   episode and 1.3 GB for a 4000-step one, which fits. A reader that wants pixels
+   decodes one binary; no reader exists today.
