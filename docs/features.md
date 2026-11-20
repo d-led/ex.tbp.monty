@@ -1,6 +1,6 @@
 # Features
 
-What this repository does, checked in the tree on 2026-11-19. Every claim links to
+What this repository does, checked in the tree on 2026-11-20. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
 guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
 not recalled — run it after anything lands that can move one.
@@ -208,7 +208,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 3,573 `test` declarations in the suite.
+- 3,604 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
