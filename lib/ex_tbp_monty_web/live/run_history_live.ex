@@ -2216,7 +2216,16 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          {:ok, _deleted} <- RunHistory.delete(run) do
       delete_run(socket, run)
     else
-      _already_gone -> {:noreply, assign(socket, confirming: nil)}
+      # The files stayed, so the record stays: a row that disappeared while its
+      # folder is still on the disk is a cleanup that only looks done.
+      {:error, {:files, reason}} ->
+        {:noreply,
+         socket
+         |> assign(confirming: nil)
+         |> put_flash(:error, not_deleted_reason(reason))}
+
+      _already_gone ->
+        {:noreply, assign(socket, confirming: nil)}
     end
   end
 
@@ -2444,10 +2453,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   @impl true
   def handle_async(:delete, {:ok, count}, socket) do
+    asked = socket.assigns.deleting.total
     socket = assign(socket, deleting: nil)
 
     {:noreply,
-     socket |> put_flash(:info, deleted(count)) |> load_runs(here_is_where_we_are(socket))}
+     socket
+     |> put_flash(:info, deleted(count))
+     |> told_about_kept(asked, count)
+     |> load_runs(here_is_where_we_are(socket))}
   end
 
   def handle_async(:delete, {:exit, reason}, socket) do
@@ -2456,6 +2469,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
      |> assign(deleting: nil)
      |> put_flash(:error, "The runs could not all be deleted: #{Failure.sentence(reason)}")}
   end
+
+  # A run whose folder could not be removed keeps its record, so the count is
+  # smaller than the request — and a page that said "deleted" over a list that
+  # still shows them would be the one lie that matters here.
+  defp told_about_kept(socket, asked, count) when count < asked do
+    put_flash(
+      socket,
+      :warning,
+      "#{asked - count} run(s) were kept: their folders could not be removed, so their records stay on the list."
+    )
+  end
+
+  defp told_about_kept(socket, _asked, _count), do: socket
 
   # Stamped when the read is finished, not when it started: the window is the
   # time between two reads, so a page cannot read faster than it can rebuild —
@@ -2628,6 +2654,14 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   # From the list, the row simply goes; from one run's page there is nothing
   # left to look at, so the reader is taken back to the list.
+  # A folder that could not be removed is named, with the reason the filesystem
+  # gave, because the cure is somebody looking at it.
+  defp not_deleted_reason({:cannot_remove, file, reason}),
+    do: "The run was not deleted: its folder could not be removed (#{file}: #{reason})."
+
+  defp not_deleted_reason(reason),
+    do: "The run was not deleted: its folder could not be removed (#{inspect(reason)})."
+
   defp delete_run(%{assigns: %{live_action: :index}} = socket, run) do
     {:noreply, socket |> assign(confirming: nil) |> stream_delete(:runs, run)}
   end

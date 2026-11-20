@@ -890,6 +890,73 @@ defmodule Monty.Studio.RunHistoryTest do
       refute File.exists?(Artifacts.dir(second.id))
     end
 
+    # The artifacts root is a deployment's setting, and it moved twice in this
+    # application's life. A run keeps the path it wrote to, so that is the folder
+    # a delete removes — not one recomputed from whatever root is configured now,
+    # which would leave the old directory behind for ever.
+    test "deletes the folder the run itself named, not the one today's root implies" do
+      root = Tmp.env_dir("run-delete-named", :studio_artifacts_dir)
+
+      {:ok, run} = RunHistory.start(@attributes)
+      named = Path.join([root, "an-older-root", run.id])
+      File.mkdir_p!(named)
+      File.write!(Path.join(named, "run.log"), "one\n")
+      {:ok, run} = RunHistory.attach_log(run, Path.join(named, "run.log"))
+
+      assert {:ok, _deleted} = RunHistory.delete(run)
+
+      refute File.exists?(named)
+      refute File.exists?(Path.join(root, Artifacts.dir(run.id) |> Path.basename()))
+    end
+
+    # A folder that cannot be removed is not a run that was deleted: the record
+    # stays, so the list still shows what is still taking space.
+    test "keeps the record when its folder cannot be removed" do
+      root = Tmp.env_dir("run-delete-locked", :studio_artifacts_dir)
+
+      {:ok, run} = RunHistory.start(@attributes)
+      locked = Path.join([root, "locked", run.id])
+      File.mkdir_p!(locked)
+      File.write!(Path.join(locked, "run.log"), "one\n")
+      {:ok, run} = RunHistory.attach_log(run, Path.join(locked, "run.log"))
+
+      # Deleting a file needs write permission on the folder that holds it, so a
+      # read-only parent is how a deletion fails on purpose.
+      parent = Path.join(root, "locked")
+      File.chmod!(parent, 0o500)
+      on_exit(fn -> File.chmod(parent, 0o755) end)
+
+      assert {:error, {:files, _reason}} = RunHistory.delete(run)
+
+      # The record is still there, and so is the folder that would not go: what a
+      # person needs is a run to delete again, not a list that says it is done.
+      assert RunHistory.get(run.id) != nil
+      assert File.exists?(locked)
+    end
+
+    test "a batch deletes the runs it could and keeps the ones it could not" do
+      root = Tmp.env_dir("run-delete-partly", :studio_artifacts_dir)
+
+      {:ok, goes} = RunHistory.start(%{@attributes | experiment: "goes"})
+      {:ok, stays} = RunHistory.start(%{@attributes | experiment: "stays"})
+      :ok = Artifacts.start(goes.id)
+      File.write!(Path.join(Artifacts.dir(goes.id), "run.log"), "one\n")
+
+      locked = Path.join([root, "locked", stays.id])
+      File.mkdir_p!(locked)
+      File.write!(Path.join(locked, "run.log"), "one\n")
+      {:ok, stays} = RunHistory.attach_log(stays, Path.join(locked, "run.log"))
+
+      parent = Path.join(root, "locked")
+      File.chmod!(parent, 0o500)
+      on_exit(fn -> File.chmod(parent, 0o755) end)
+
+      assert RunHistory.delete_ids([goes.id, stays.id]) == 1
+
+      assert RunHistory.get(goes.id) == nil
+      assert RunHistory.get(stays.id) != nil
+    end
+
     test "the runs with these ids, and no others" do
       {:ok, first} = RunHistory.start(%{@attributes | experiment: "one"})
       {:ok, second} = RunHistory.start(%{@attributes | experiment: "two"})

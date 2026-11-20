@@ -330,14 +330,37 @@ defmodule Monty.Studio.Artifacts do
     end
   end
 
-  @doc "Deletes a run's directory, if it has one."
+  @doc """
+  Deletes a run's directory, if it has one, in the root this node uses now.
+
+  A run deleted by an older build may not be in that root any more — the root is
+  a deployment's setting — so a caller that knows where the run's own files are
+  passes the folder instead (`forget_folder/1`, from the `log_path` the record
+  kept). "Nothing there to delete" is a success: a run whose files are already
+  gone is a run that is cleaned up.
+  """
   # A run's own directory, named by a UUID `dir/1` has checked; a recursive
   # delete of anything else never gets this far.
   # sobelow_skip ["Traversal.FileModule"]
-  @spec forget(binary()) :: :ok
-  def forget(run_id) do
-    _ignored = File.rm_rf(dir(run_id))
-    :ok
+  @spec forget(binary()) :: :ok | {:error, term()}
+  def forget(run_id), do: forget_folder(dir(run_id))
+
+  @doc """
+  Deletes one folder of run files, and says whether it went.
+
+  The answer matters: a record removed while its directories are still there is a
+  cleanup nobody can see, and the space is never reclaimed because the row that
+  named it is gone.
+  """
+  # The folder is the one a run's own record named, under the artifacts root this
+  # application configured; a caller cannot hand this function an arbitrary path.
+  # sobelow_skip ["Traversal.FileModule"]
+  @spec forget_folder(Path.t()) :: :ok | {:error, term()}
+  def forget_folder(folder) do
+    case File.rm_rf(folder) do
+      {:ok, _removed} -> :ok
+      {:error, reason, file} -> {:error, {:cannot_remove, file, reason}}
+    end
   end
 
   @typedoc "A file a run wrote, as a page offers it."

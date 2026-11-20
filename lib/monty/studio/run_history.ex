@@ -1324,45 +1324,80 @@ defmodule Monty.Studio.RunHistory do
     ids
     |> Enum.chunk_every(@delete_chunk)
     |> Enum.reduce(0, fn chunk, deleted ->
-      # What names a part's folder is the plan in the row's `inputs`, so the plan
-      # is read before the row goes. Only that column: the whole record is what
-      # this statement exists to avoid reading, because its pictures are
-      # megabytes and the plan is a few hundred bytes.
-      plans = Repo.all(from ran in Run, where: ran.id in ^chunk, select: ran.inputs)
+      # What names a part's folder is the plan in the row's `inputs`, and where a
+      # run's own files are is the `log_path` it kept — so both are read before
+      # the row goes. Only those columns: the whole record is what this statement
+      # exists to avoid reading, because its pictures are megabytes and these are
+      # a few hundred bytes.
+      rows =
+        Repo.all(
+          from ran in Run, where: ran.id in ^chunk, select: {ran.id, ran.inputs, ran.log_path}
+        )
 
-      {count, _rows} = Repo.delete_all(from(run in Run, where: run.id in ^chunk))
+      # A run whose files could not be removed keeps its record: deleting the row
+      # would leave a directory nobody can find again, and the space it takes
+      # would be lost to a cleanup that says it happened.
+      {removable, _kept} =
+        Enum.split_with(rows, fn {id, _inputs, log_path} -> forget(id, log_path) == :ok end)
+
+      removable_ids = Enum.map(removable, fn {id, _inputs, _log_path} -> id end)
+
+      {count, _rows} = Repo.delete_all(from(run in Run, where: run.id in ^removable_ids))
 
       # Their divisions too, for the reason `delete/1` gives: no foreign key, so
       # the statement that deletes a run deletes what belongs to it. A part row
       # left behind would be a row about a run nobody can open.
-      _ = Repo.delete_all(from(part in Part, where: part.run_id in ^chunk))
+      _ = Repo.delete_all(from(part in Part, where: part.run_id in ^removable_ids))
 
       deleted = deleted + count
 
-      # Said before the files go, not after: removing a run's directory is the
-      # slow part of deleting it, and a count that waits for it is a count that
+      # Said before the parts' files go, not after: removing a run's directories is
+      # the slow part of deleting it, and a count that waits for it is a count that
       # stands still for exactly as long as somebody is watching it.
       if on_progress, do: on_progress.(%{deleted: deleted, total: total})
 
-      Enum.each(chunk, &Monty.Studio.Artifacts.forget/1)
-      Enum.each(plans, &forget_parts/1)
+      Enum.each(removable, fn {_id, inputs, _log_path} -> forget_parts(inputs) end)
 
       deleted
     end)
   end
 
-  @doc "Deletes a run, and the files it wrote. Monty's artifacts are not ours to delete."
-  @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t()}
+  # Where a run's own files are: the folder its record named when it wrote its
+  # log, else the folder this node's artifacts root would give it today. A run
+  # started before that root moved is only findable the first way.
+  defp folder_of(_run_id, log_path) when is_binary(log_path) and log_path != "",
+    do: Path.dirname(log_path)
+
+  defp folder_of(run_id, _no_log_path), do: Monty.Studio.Artifacts.dir(run_id)
+
+  defp forget(run_id, log_path),
+    do: Monty.Studio.Artifacts.forget_folder(folder_of(run_id, log_path))
+
+  @doc """
+  Deletes a run, and the files it wrote.
+
+  The files go first: a record removed while its directory is still there is a
+  directory nobody will ever find again, so deleting the run would have cost
+  space rather than reclaimed it. A folder that cannot be removed is said rather
+  than swallowed, and the record stays so the next attempt has something to aim
+  at. Monty's own artifacts are not ours to delete.
+  """
+  @spec delete(Run.t()) :: {:ok, Run.t()} | {:error, Ecto.Changeset.t() | {:files, term()}}
   def delete(%Run{} = run) do
-    # The division goes with the run. There is no foreign key to do it: the two
-    # adapters this application runs on are Postgres and SQLite, and adding a
-    # constraint to an existing table is a table rebuild SQLite's adapter does
-    # not do — so the one place that deletes a run deletes what belongs to it.
-    _ = Repo.delete_all(from(part in Part, where: part.run_id == ^run.id))
-    deleted = Repo.delete(run)
-    Monty.Studio.Artifacts.forget(run.id)
-    forget_parts(run.inputs)
-    deleted
+    case forget(run.id, run.log_path) do
+      :ok ->
+        # The division goes with the run. There is no foreign key to do it: the two
+        # adapters this application runs on are Postgres and SQLite, and adding a
+        # constraint to an existing table is a table rebuild SQLite's adapter does
+        # not do — so the one place that deletes a run deletes what belongs to it.
+        _ = Repo.delete_all(from(part in Part, where: part.run_id == ^run.id))
+        deleted = Repo.delete(run)
+        forget_parts(run.inputs)
+        deleted
+
+      {:error, reason} ->
+        {:error, {:files, reason}}
+    end
   end
 
   # The folders a divided run's parts wrote.
