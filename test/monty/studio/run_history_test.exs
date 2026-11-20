@@ -845,11 +845,49 @@ defmodule Monty.Studio.RunHistoryTest do
       assert RunHistory.parts(second.id) == []
     end
 
-    test "deletes the record and nothing else" do
+    test "deletes the record" do
       {:ok, run} = RunHistory.start(@attributes)
 
       assert {:ok, _deleted} = RunHistory.delete(run)
       assert RunHistory.get(run.id) == nil
+    end
+
+    # The folder is the run: a run's pictures, its transcript and its statistics
+    # are files of its own directory, and a record that goes without them is a
+    # directory nobody will ever open again. The neighbour's stays, because the
+    # path is built from the id that is being deleted.
+    test "deletes the run's own folder, and leaves the neighbour's" do
+      Tmp.env_dir("run-delete", :studio_artifacts_dir)
+
+      {:ok, run} = RunHistory.start(@attributes)
+      {:ok, kept} = RunHistory.start(%{@attributes | experiment: "kept"})
+      :ok = Artifacts.start(run.id)
+      :ok = Artifacts.start(kept.id)
+
+      File.write!(Path.join(Artifacts.dir(run.id), "run.log"), "one\n")
+      File.write!(Path.join(Artifacts.dir(kept.id), "run.log"), "one\n")
+
+      assert {:ok, _deleted} = RunHistory.delete(run)
+
+      refute File.exists?(Artifacts.dir(run.id))
+      assert File.exists?(Path.join(Artifacts.dir(kept.id), "run.log"))
+    end
+
+    test "deletes a batch's folders as well as its records" do
+      Tmp.env_dir("run-delete-batch", :studio_artifacts_dir)
+
+      {:ok, first} = RunHistory.start(%{@attributes | experiment: "one"})
+      {:ok, second} = RunHistory.start(%{@attributes | experiment: "two"})
+
+      Enum.each([first, second], fn run ->
+        :ok = Artifacts.start(run.id)
+        File.write!(Path.join(Artifacts.dir(run.id), "run.log"), "one\n")
+      end)
+
+      assert RunHistory.delete_ids([first.id, second.id]) == 2
+
+      refute File.exists?(Artifacts.dir(first.id))
+      refute File.exists?(Artifacts.dir(second.id))
     end
 
     test "the runs with these ids, and no others" do
