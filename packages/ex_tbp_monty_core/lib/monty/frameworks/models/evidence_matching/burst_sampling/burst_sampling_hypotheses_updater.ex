@@ -28,6 +28,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
 
+  require Logger
+
   alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
@@ -113,6 +115,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     stalled? =
       updater.sampling_burst_steps == 0 and
         (is_nil(max_slope) or max_slope <= updater.burst_trigger_slope)
+
+    # The number that decides both deletion and re-sampling, and the one thing a
+    # run that never settles cannot be diagnosed without: a slope that stays at
+    # or below the trigger keeps opening bursts, and one that stays above the
+    # deletion threshold keeps every hypothesis alive.
+    Logger.debug(fn ->
+      "burst sampling: max slope #{inspect(max_slope)} against a trigger of " <>
+        "#{updater.burst_trigger_slope}, #{updater.sampling_burst_steps} burst " <>
+        "steps left"
+    end)
 
     %{
       updater
