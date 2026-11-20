@@ -1417,8 +1417,43 @@ defmodule Monty.Studio.Setup do
   @spec objects(t(), :train | :eval) :: [String.t()]
   def objects(%__MODULE__{} = setup, mode) do
     case Map.get(setup.objects_by_phase, mode, []) do
-      [] -> objects(setup)
+      # An image experiment walks captures, not objects: one per episode, named
+      # for the capture it shows. Everything that counts what an epoch holds —
+      # the log line, the episode's place in its epoch, the target a run reports —
+      # reads it here, and an empty list would divide by nothing.
+      [] -> image_objects(setup, mode) || objects(setup)
       names -> names
+    end
+  end
+
+  defp image_objects(%__MODULE__{environment: %{scene_versions: versions, data_path: path}}, mode) do
+    case Map.get(versions, mode, %{}) do
+      %{scenes: [_ | _] = scenes} ->
+        names = if is_binary(path), do: image_scene_names(path), else: []
+
+        Enum.map(scenes, fn index ->
+          names
+          |> Enum.at(index, "")
+          |> Monty.Experiment.Environment.SaccadeOnImageInterface.target_object_name()
+        end)
+
+      _no_captures ->
+        nil
+    end
+  end
+
+  defp image_objects(_setup, _mode), do: nil
+
+  defp image_scene_names(path) do
+    case File.ls(path) do
+      {:ok, names} ->
+        names
+        |> Enum.reject(&String.starts_with?(&1, "."))
+        |> Enum.filter(&File.dir?(Path.join(path, &1)))
+        |> Enum.sort()
+
+      {:error, _reason} ->
+        []
     end
   end
 

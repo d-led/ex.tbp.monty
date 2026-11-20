@@ -812,6 +812,20 @@ defmodule Monty.Studio.SetupTest do
                Setup.world(setup, :image, 4)
     end
 
+    test "has as many objects as it has captures, named for the capture each shows" do
+      # An image config walks captures, not objects: `scenes: [0, 0, 0, 0, 1, ...]`
+      # is four versions of the first capture and then the second, so the fifth
+      # episode's object is the second capture's. An empty list would divide an
+      # epoch's episode count by nothing.
+      captures = write_captures(["0_mug", "1_cup"])
+      setup = with_captures(setup_for("world_image_on_scanned_model"), captures)
+
+      objects = Setup.objects(setup, :eval)
+
+      assert length(objects) == 48
+      assert Enum.take(objects, 5) == ["mug", "mug", "mug", "mug", "cup"]
+    end
+
     test "refuses a directory that holds no capture, rather than pretending to step it" do
       empty = Path.join(System.tmp_dir!(), "no_captures_#{System.unique_integer([:positive])}")
       File.mkdir_p!(empty)

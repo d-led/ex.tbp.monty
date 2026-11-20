@@ -1978,6 +1978,9 @@ defmodule Monty.Studio.Jobs.Run do
   # an OpenGL context refuses it at open time rather than at the first image.
   defp world_of(%{"world" => "ex_mujoco"}), do: :ex_mujoco
   defp world_of(%{"world" => "synthetic"}), do: :synthetic
+  # Captured scenes, which a worker without them refuses by naming the directory
+  # it looked in rather than stepping this node's default world.
+  defp world_of(%{"world" => "image"}), do: :image
   # A part is the one world this node may not carry. It is still the world the
   # record names, so the run refuses it — `Setup.world/4` says which application
   # is missing — rather than stepping this worker's own default and reporting
