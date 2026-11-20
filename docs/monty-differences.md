@@ -2431,3 +2431,34 @@ learning module refused to start an object at all —
 the exploration had nothing to grow. A capped episode of 200 steps stores 34
 nodes, so the graph is buildable; what is too small is the grid the object is
 placed on, and the surf agent's 4000-step walk leaves it.
+
+## 2.41 A ceiling that did not cover the process holding the frames
+
+`camera_surf`-style tutorials and the image world keep every raw observation of
+an episode, and `bright_world_image_on_scanned_model`'s are 640 × 480 depth and
+colour: at Monty's numpy sizes that is ~10 MB a step, and this port's nested
+float lists are several times more.
+
+A page-started run of it (`2e7f1fb2`) took the machine's memory down in **45
+seconds** — 510 steps, one process over half the VM's memory, and no line from
+either ceiling. Two reasons, one of them a real defect:
+
+- `run_max_heap_mb` was applied with `:erlang.system_flag(:max_heap_size, …)`,
+  which is a default for processes created **after** the call. The run performs
+  its steps in the queue's worker, and that worker existed before
+  `apply_heap_limit/0` ran, so the one process holding the frames was the one
+  process the ceiling did not cover. It is now bounded by `Process.flag/2` as
+  well, and `test/monty/studio/run_limits_test.exs` proves it: without that call
+  the test's process survives its 4 000 000 words and says so.
+- the ceiling that _did_ watch the whole VM (`run_max_memory_mb`), and the alarm
+  that fired, said a number and not a name. A ceiling-crossed run now logs the
+  five heaviest processes with their registered name or their current function,
+  so the next one is a diagnosis rather than a mystery.
+
+**Measured on this box, that run's own episode, 15 steps** (`mix monty.run
+bright_world_image_on_scanned_model --steps 15`): the VM stayed under 1.1 GB,
+0.5 s a step. And the two sensors do not both move: the view finder's frames are
+identical between steps 10, 20 and 40 (mean difference 0.00 levels), while the
+patch's differ by 3.4 and then 11.5 levels — a still photograph and a patch
+walking over it. What grows is not movement but the frames kept per step, which
+is what the two ceilings and §2.40's encoding are about.

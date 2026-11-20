@@ -72,20 +72,73 @@ defmodule Monty.Studio.RunLimits do
   end
 
   @doc """
-  Applies the heap ceiling to every process started from now on.
+  Applies the heap ceiling to every process started from now on — and to this one.
 
   `:erlang.system_flag/2` is the runtime's own default for new processes — the
   same switch `+hmax` flips at boot — so no process the studio starts after this
   call can pass it, including the learning and sensor modules a run builds.
+
+  **The process asking for it is the one that needs it most.** A flag set now is
+  a default for processes created *later*, and the run performs its steps in the
+  worker that called this function: that worker was created by the queue before
+  the flag existed. A page-started run of the 480 × 640 image world therefore
+  grew past 4 GB untouched — the one ceiling that would have stopped it did not
+  apply to the process holding the frames — and `docs/monty-differences.md` §2.41
+  has the measurement. `Process.flag/2` covers it, and `megabytes` is a seam for a
+  test that has no business allocating four gigabytes.
   """
-  @spec apply_heap_limit() :: :ok
-  def apply_heap_limit do
-    flag = Settings.get(@heap_setting) |> heap_flag()
+  @spec apply_heap_limit(number()) :: :ok
+  def apply_heap_limit(megabytes \\ nil) do
+    flag = (megabytes || Settings.get(@heap_setting)) |> heap_flag()
     # `system_flag/2` answers the flag it replaced — `size: 0` when nothing had
     # set one — and the answer is not the point.
-    _was = :erlang.system_flag(:max_heap_size, flag)
+    _for_new_processes = :erlang.system_flag(:max_heap_size, flag)
+    bound(flag)
+  end
+
+  @doc """
+  Bounds this process to `flag`, which is `heap_flag/1`'s answer.
+
+  Its own function because it is its own question, and because setting the
+  *default* is a change to the whole VM: a test of the two together would leave
+  every process created afterwards in the test run carrying the ceiling it used.
+  """
+  @spec bound(map()) :: :ok
+  def bound(flag) do
+    _was = Process.flag(:max_heap_size, flag)
     :ok
   end
+
+  @doc """
+  The processes holding the most memory, heaviest first.
+
+  Asked when a ceiling is crossed, so the line a person reads names what took the
+  memory rather than only that something did: a run of the 480 × 640 image world
+  once reached tens of gigabytes, and the only trace of *which* process held them
+  was a number. `count` is how many to answer.
+  """
+  @spec heaviest(pos_integer()) :: [%{pid: pid(), bytes: non_neg_integer(), label: String.t()}]
+  def heaviest(count \\ 5) do
+    :erlang.processes()
+    |> Enum.flat_map(fn pid ->
+      case Process.info(pid, [:memory, :registered_name, :current_function]) do
+        [memory: bytes, registered_name: name, current_function: function] ->
+          [%{pid: pid, bytes: bytes, label: label(name, function)}]
+
+        nil ->
+          []
+      end
+    end)
+    |> Enum.sort_by(& &1.bytes, :desc)
+    |> Enum.take(count)
+  end
+
+  # A process nobody registered is named by where it is, which is the answer that
+  # says what it is: a module and function rather than a pid. A generator that is
+  # waiting is `gen_server:loop`, which is worth knowing too.
+  defp label([], {module, function, _arity}), do: "#{inspect(module)}.#{function}"
+  defp label([], function), do: inspect(function)
+  defp label(name, _function), do: inspect(name)
 
   @doc """
   Watches a run and stops it when the machine holds more than its ceiling.
@@ -124,13 +177,20 @@ defmodule Monty.Studio.RunLimits do
     if exceeded?(allowed, now) do
       Logger.error(
         "run #{run_id} passed its memory ceiling " <>
-          "(#{megabytes(now)} MB held, #{allowed} MB allowed) — asking it to stop"
+          "(#{megabytes(now)} MB held, #{allowed} MB allowed) — asking it to stop. " <>
+          "The heaviest processes: " <> heaviest_line()
       )
 
       stop.(run_id)
     else
       watch_loop(run_id, held, stop, interval, allowed)
     end
+  end
+
+  defp heaviest_line do
+    Enum.map_join(heaviest(), ", ", fn held ->
+      "#{held.label} (#{inspect(held.pid)}) #{megabytes(held.bytes)} MB"
+    end)
   end
 
   @doc """

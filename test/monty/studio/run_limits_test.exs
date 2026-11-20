@@ -30,6 +30,61 @@ defmodule Monty.Studio.RunLimitsTest do
       assert %{size: size} = RunLimits.heap_flag(1_024)
       assert size == 1_024 * 131_072
     end
+
+    # A ceiling set now is a default for processes created *later*, and a run
+    # steps in the worker that asked for it — the worker the queue created
+    # before. A page-started run of the 640 × 480 image world grew past 4 GB
+    # untouched because of exactly that (§2.41), so the asking process is bound
+    # as well. `bound/1` rather than `apply_heap_limit/1`, because the latter
+    # changes the default for every process the test run creates afterwards.
+    @tag timeout: 10_000
+    test "bounds the process that asked for it, not only the ones after it" do
+      parent = self()
+
+      {pid, reference} =
+        spawn_monitor(fn ->
+          ExUnit.CaptureLog.capture_log(fn ->
+            :ok = RunLimits.bound(RunLimits.heap_flag(1))
+            send(parent, :bounded)
+            # A megabyte is 131 072 words; four million is well past it.
+            _held = Enum.reduce(1..4_000_000, [], fn word, held -> [word | held] end)
+            send(parent, :survived)
+          end)
+        end)
+
+      assert_receive :bounded, 2_000
+      assert_receive {:DOWN, ^reference, :process, ^pid, :killed}, 5_000
+      refute_received :survived
+    end
+  end
+
+  describe "what holds the memory" do
+    # A ceiling that stops a run should say what took the memory: a page-started
+    # run of the image world reached tens of gigabytes and the only trace of
+    # which process held them was a number in an alarm.
+    @tag timeout: 10_000
+    test "names the heaviest processes, heaviest first" do
+      parent = self()
+
+      holder =
+        spawn(fn ->
+          held = Enum.reduce(1..2_000_000, [], fn word, held -> [word | held] end)
+          send(parent, :holding)
+          receive do: (:done -> :ok)
+          held
+        end)
+
+      assert_receive :holding, 2_000
+
+      heaviest = RunLimits.heaviest(3)
+
+      assert length(heaviest) == 3
+      assert Enum.map(heaviest, & &1.bytes) == Enum.sort(Enum.map(heaviest, & &1.bytes), :desc)
+      assert Enum.any?(heaviest, &(&1.pid == holder))
+      assert Enum.all?(heaviest, &is_binary(&1.label))
+
+      send(holder, :done)
+    end
   end
 
   describe "a ceiling and what is held" do
