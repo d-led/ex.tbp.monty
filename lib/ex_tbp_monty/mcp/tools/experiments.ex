@@ -237,24 +237,24 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     end
   end
 
-  defp world_name("mujoco"), do: "Monty's MuJoCo simulator, in this application"
-
-  defp world_name("ex_mujoco"),
-    do: "that same scene, stepped by the compiled binding this release carries"
-
-  defp world_name("cad"), do: "a CAD part, stepped through ex_monty_cad"
-
-  defp world_name("image"),
-    do: "captured scenes — photographs with their depth — opened from the config's data path"
-
-  defp world_name("omniglot"),
-    do: "the Omniglot dataset's characters, traced along the pen path that drew them"
-
-  defp world_name("synthetic"), do: "this port's synthetic scene"
+  # One sentence a world, kept as a table beside `@words` rather than as a clause
+  # each: a world added to the enum is a line here, and the function stays one
+  # lookup however many worlds there are (`world_of/1` in the run job has the same
+  # shape for the same reason).
+  @world_notes %{
+    "mujoco" => "Monty's MuJoCo simulator, in this application",
+    "ex_mujoco" => "that same scene, stepped by the compiled binding this release carries",
+    "synthetic" => "this port's synthetic scene",
+    "image" =>
+      "captured scenes — photographs with their depth — opened from the config's data path",
+    "omniglot" => "the Omniglot dataset's characters, traced along the pen path that drew them",
+    "cad" => "a CAD part, stepped through ex_monty_cad"
+  }
 
   # A world in the enum with no sentence here is a sentence short, and saying
   # "the stand-in scene" about it would be a description of another run.
-  defp world_name(other), do: "#{other}, a world this description does not know"
+  defp world_name(world),
+    do: Map.get(@world_notes, world, "#{world}, a world this description does not know")
 
   @doc "`monty_run_report`: what a run did, and what it is doing."
   def run_report(args, ctx) do
