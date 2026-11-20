@@ -135,18 +135,16 @@ what runs now.
 
 What is left is not a class, in the order worth doing:
 
-1. **The image world, which is nine configurations and half written.** Monty's
-   `*_world_image_on_scanned_model` family — and its two tutorials — steps a
-   camera window over a photograph instead of a simulator, so nothing about it is
-   a stand-in once it is written. Two of its parts are done: the class
-   (`SaccadeOnImageEnvironment`, which reads a capture and saccades over it,
-   `docs/monty-differences.md` §2.38), the PNG decoder its colour needs
-   (§2.37), and the interface that walks the config's (scene, version) pairs.
-   Two are not, and both are needed before a run happens: a world kind in the
-   studio beside `:mujoco`, `:ex_mujoco`, `:synthetic` and `:cad`, which has to
-   read a config's `env_init_args.data_path`; and the `worldimages` prerequisite
-   that produces the captures under the data directory. Until then readiness keeps
-   calling the family `not_planned`.
+1. **The image world's memory, now that it runs.** The `*_world_image_on_scanned_model`
+   family is written: the class, its interface, the PNG decoder its colour needs
+   and a world kind that opens a config's captures (`docs/monty-differences.md`
+   §2.37, §2.38). `mix monty.run world_image_on_scanned_model --world image`
+   steps a real capture at 80–150 ms a step, and readiness counts 143 runnable
+   under `--world image` where it counted 137. What a whole episode needs is the
+   decision §2.35 left open: each step keeps the 480 × 640 view finder as nested
+   lists, so a 400-step run was stopped at step 66 by the worker's heap ceiling.
+   Frames as binaries (a quarter of the cost) or poses without frames is what
+   turns 66 steps into Monty's 387.
 2. **The cows family's speed, not its correctness** — the fourteen configurations
    run, and one step of `base_infer_cows_small_compositional` in MuJoCo, whose
    view is 256×256, costs about 5 s where Monty's costs milliseconds: `SlicMerge`

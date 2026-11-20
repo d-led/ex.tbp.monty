@@ -85,14 +85,22 @@ defmodule Monty.Studio.ReadinessTest do
 
   # A world this build does not carry is postponed rather than refused: the
   # nearest config to it here runs, so nothing is missing that anybody means to
-  # write. Read for MuJoCo, because that is the world a run would step — the test
-  # environment's own default is the stand-in scene, which refuses nothing for a
-  # world it does not have.
+  # write. A world it *does* carry, read for a config that never asked for it, is
+  # refused instead — a MuJoCo scene of an image experiment is not the experiment.
   describe "an experiment whose world this build does not carry" do
     test "is not planned, not refused" do
-      entry = Readiness.classified("world_image_on_scanned_model", world_simulator: :mujoco)
+      # The stream of captures comes from a server this build does not have, and
+      # its environment class is unwritten (`SaccadeOnImageFromStreamEnvironment`).
+      entry =
+        Readiness.classified("world_image_from_stream_on_scanned_model", world_simulator: :image)
 
       assert entry.status == :not_planned
+    end
+
+    test "and a carried world the config never asked for is refused, not postponed" do
+      entry = Readiness.classified("world_image_on_scanned_model", world_simulator: :mujoco)
+
+      assert entry.status == :refused
       assert :world_not_carried in entry.codes
     end
 

@@ -8,6 +8,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Experiment.MatchCriteria.NamedLMsMatch
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Experiment.SensorModules.Telemetry.Snapshot
+  alias Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.GraphMatching.GraphLM
@@ -798,6 +799,31 @@ defmodule Monty.Studio.SetupTest do
                Setup.world(setup_for("tutorial/first_experiment"), :synthetic)
     end
 
+    test "is a captured scene when the config is an image experiment" do
+      # An image config's world is photographs of objects with the depth the same
+      # lens measured, and which one an episode is on is the config's own
+      # `eval_env_interface_args`: episode 4 of `world_image_on_scanned_model` is
+      # scene 1, version 0, because its lists open `[0, 0, 0, 0, 1, ...]` and
+      # `[0, 1, 2, 3, 0, ...]`.
+      captures = write_captures(["0_mug", "1_mug"])
+      setup = with_captures(setup_for("world_image_on_scanned_model"), captures)
+
+      assert %SaccadeOnImageEnvironment{scene: "1_mug", version: 0} =
+               Setup.world(setup, :image, 4)
+    end
+
+    test "refuses a directory that holds no capture, rather than pretending to step it" do
+      empty = Path.join(System.tmp_dir!(), "no_captures_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(empty)
+      on_exit(fn -> File.rm_rf(empty) end)
+
+      setup = with_captures(setup_for("world_image_on_scanned_model"), empty)
+
+      assert_raise ArgumentError, ~r/holds no scene/, fn ->
+        Setup.world(setup, :image, 0)
+      end
+    end
+
     test "is Monty's own simulator, ported to this build, when a run takes it" do
       # The world is `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`, the
       # class the config names, ported: the scene it builds comes from
@@ -1129,4 +1155,49 @@ defmodule Monty.Studio.SetupTest do
       refute :learning_module_not_buildable in Enum.map(setup.findings, & &1.code)
     end
   end
+
+  # Two captures, each a colour image and the depth that goes with it, written
+  # where the world expects them: a directory per scene, `rgb_<version>.png` and
+  # `depth_<version>.data` inside.
+  defp write_captures(scenes) do
+    path = Path.join(System.tmp_dir!(), "captures_#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf(path) end)
+
+    for scene <- scenes do
+      File.mkdir_p!(Path.join(path, scene))
+      for version <- 0..1, do: write_capture(Path.join(path, scene), version)
+    end
+
+    path
+  end
+
+  defp write_capture(scene_path, version) do
+    colour =
+      for(
+        row <- 0..15,
+        into: <<>>,
+        do: for(column <- 0..15, into: <<>>, do: <<row * 8, column * 8, 128>>)
+      )
+
+    depth =
+      for(
+        row <- 0..15,
+        column <- 0..15,
+        into: <<>>,
+        do: <<0.2 + 0.001 * (row + column)::float-little-32>>
+      )
+
+    File.write!(
+      Path.join(scene_path, "rgb_#{version}.png"),
+      ExTbpMonty.Core.Png.rgb_bytes(colour, 16, 16)
+    )
+
+    File.write!(Path.join(scene_path, "depth_#{version}.data"), depth)
+  end
+
+  defp with_captures(%Setup{environment: %{data_path: _} = environment} = setup, path) do
+    %{setup | environment: %{environment | data_path: path}}
+  end
+
+  defp with_captures(setup, _path), do: setup
 end

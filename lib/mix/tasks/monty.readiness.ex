@@ -68,6 +68,7 @@ defmodule Mix.Tasks.Monty.Readiness do
     "mujoco" => :mujoco,
     "ex_mujoco" => :ex_mujoco,
     "synthetic" => :synthetic,
+    "image" => :image,
     "cad" => :cad
   }
 

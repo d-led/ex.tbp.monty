@@ -196,6 +196,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     {"mujoco", :mujoco},
     {"ex_mujoco", :ex_mujoco},
     {"synthetic", :synthetic},
+    {"image", :image},
     {"cad", :cad}
   ]
 
@@ -241,6 +242,10 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     do: "that same scene, stepped by the compiled binding this release carries"
 
   defp world_name("cad"), do: "a CAD part, stepped through ex_monty_cad"
+
+  defp world_name("image"),
+    do: "captured scenes — photographs with their depth — opened from the config's data path"
+
   defp world_name("synthetic"), do: "this port's synthetic scene"
 
   # A world in the enum with no sentence here is a sentence short, and saying

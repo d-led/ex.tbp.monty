@@ -748,6 +748,14 @@ defmodule Monty.Studio.Setup do
 
   def world_name(setup, :mujoco), do: mujoco_world_name(setup)
 
+  # The image world opens captures: photographs of objects with the depth the
+  # same lens measured. Which directory they are in is the config's, so the label
+  # names it rather than claiming the world is the config's own.
+  def world_name(%__MODULE__{environment: %{data_path: path}}, :image) when is_binary(path),
+    do: "image captures (#{Path.basename(path)}) at #{path}"
+
+  def world_name(_setup, :image), do: "image captures (a photographed scene)"
+
   # An operator can configure a world this build does not carry. Saying so is
   # the whole answer; a page that crashed instead would blame itself.
   def world_name(_setup, other), do: "#{inspect(other)} (not carried by this application)"
@@ -784,7 +792,7 @@ defmodule Monty.Studio.Setup do
   of Monty — is refused here rather than given MuJoCo's simulator and allowed to
   look as if it ran.
   """
-  @spec world(t(), :synthetic | :mujoco | :cad) :: Monty.Simulators.Environment.t()
+  @spec world(t(), :synthetic | :mujoco | :image | :cad) :: Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world) when is_atom(world), do: world(setup, world, 0)
 
   @spec world(t(), non_neg_integer()) :: Monty.Simulators.Environment.t()
@@ -803,7 +811,7 @@ defmodule Monty.Studio.Setup do
   the agent — a scene built without it would show the first object in every
   episode and call that a run of ten.
   """
-  @spec world(t(), :synthetic | :mujoco | :cad, non_neg_integer()) ::
+  @spec world(t(), :synthetic | :mujoco | :image | :cad, non_neg_integer()) ::
           Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world, episode) when is_atom(world),
     do: world(setup, world, episode, [])
@@ -816,7 +824,7 @@ defmodule Monty.Studio.Setup do
   Both matter: `Predefined` walks its rotations one per epoch, so a world built
   without the epoch shows every episode of a run the same side of the object.
   """
-  @spec world(t(), :synthetic | :mujoco | :cad, non_neg_integer(), keyword()) ::
+  @spec world(t(), :synthetic | :mujoco | :image | :cad, non_neg_integer(), keyword()) ::
           Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, :mujoco, episode, opts) do
     case engine(setup) do
@@ -846,6 +854,17 @@ defmodule Monty.Studio.Setup do
       agent: setup.scene.agent,
       sensors: setup.scene.sensors
     )
+  end
+
+  # A captured scene: photographs of objects with the depth the same lens
+  # measured, and no simulator anywhere in it. Monty's own configs name the
+  # directory (`env_init_args.data_path`) and the interface names which capture an
+  # episode is on, so both are read from the config rather than chosen here.
+  def world(%__MODULE__{} = setup, :image, episode, opts) do
+    case engine(setup) do
+      :image -> image_world(setup, episode, opts)
+      _not_an_image_config -> raise ArgumentError, uncarried_world(setup)
+    end
   end
 
   # A CAD part, stepped by the same world the stand-in scene is: the kinematics,
@@ -880,7 +899,7 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{}, world, _episode, _opts) when is_atom(world) do
     raise ArgumentError,
           "#{inspect(world)} is not a world this application carries: only MuJoCo, " <>
-            "the stand-in scene and a CAD part can be stepped here."
+            "the stand-in scene, a CAD part and image captures can be stepped here."
   end
 
   defp uncarried_world(%__MODULE__{environment: nil}) do
@@ -909,7 +928,7 @@ defmodule Monty.Studio.Setup do
   """
   @spec worlds() :: [atom()]
   def worlds do
-    [:mujoco, :ex_mujoco, :synthetic] ++ if cad_step?(), do: [:cad], else: []
+    [:mujoco, :ex_mujoco, :synthetic, :image] ++ if cad_step?(), do: [:cad], else: []
   end
 
   # Carried, and with a part to open: a scene module and an empty `parts/` is an
@@ -921,6 +940,65 @@ defmodule Monty.Studio.Setup do
   # which brings quiddity and its Rust build, and a run on a node without it is
   # refused here — with the two things that would make it work — instead of
   # failing inside a world.
+  # An image config's `eval_env_interface_args` (and `train_...`, when it has
+  # one) name the scene and version of every episode. Absent lists are `nil`, not
+  # empty: a config that names none is one to ask about, not one to guess at.
+  defp scene_versions(config) do
+    Map.new([:train, :eval], fn phase ->
+      args = Map.get(config, "#{phase}_env_interface_args") || %{}
+
+      {phase, %{scenes: Map.get(args, "scenes"), versions: Map.get(args, "versions")}}
+    end)
+  end
+
+  defp image_world(setup, episode, opts) do
+    phase = Keyword.get(opts, :phase, :eval)
+
+    case capture_of(setup, phase, episode) do
+      {:ok, {scene, version}} ->
+        setup
+        |> image_data_path()
+        |> Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment.new()
+        |> Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment.switch_to_object(
+          scene,
+          version
+        )
+
+      :none ->
+        raise ArgumentError,
+              "This config names no capture for #{phase} episode #{episode}: an image " <>
+                "experiment's `#{phase}_env_interface_args` lists `scenes` and `versions`, " <>
+                "one per episode, and this config has neither."
+    end
+  end
+
+  # Monty's interface walks both lists together — `switch_to_object(scenes[i],
+  # versions[i])` — so an episode is the same index in each, wrapped at their
+  # length.
+  defp capture_of(%__MODULE__{environment: %{scene_versions: versions}}, phase, episode) do
+    case Map.get(versions, phase, %{}) do
+      %{scenes: [_ | _] = scenes, versions: [_ | _] = versions} ->
+        {:ok,
+         {Enum.at(scenes, rem(episode, length(scenes))),
+          Enum.at(versions, rem(episode, length(versions)))}}
+
+      _absent ->
+        :none
+    end
+  end
+
+  defp capture_of(_setup, _phase, _episode), do: :none
+
+  # Where an image config's captures are. Monty's configs resolve it already
+  # (`${oc.env:MONTY_DATA}/worldimages/...`), and a config that names none is
+  # asked for the directory the archive unpacks to under this application's data
+  # directory.
+  defp image_data_path(%__MODULE__{environment: %{data_path: path}}) when is_binary(path),
+    do: path
+
+  defp image_data_path(_setup),
+    do: Path.join([Monty.Paths.data(), "worldimages", "labeled_scenes"])
+
   defp cad_scene do
     module = cad_module()
 
@@ -1512,12 +1590,24 @@ defmodule Monty.Studio.Setup do
   def planned_episodes(%__MODULE__{} = setup) do
     # Added up rather than handed to `Enum.sum/1`, whose type is a list of
     # numbers summing to a number: an episode count is a count, and a type that
-    # admits a float invites one. Each phase counts its own objects.
+    # admits a float invites one. Each phase counts what it walks.
     setup
     |> epoch_plan()
-    |> Enum.map(fn {mode, epochs} -> length(objects(setup, mode)) * epochs end)
+    |> Enum.map(fn {mode, epochs} -> episodes_of(setup, mode) * epochs end)
     |> Enum.reduce(0, &+/2)
   end
+
+  # An image experiment walks captures, not objects: its config lists a scene and
+  # a version per episode, and it has no object list to count. A config with
+  # neither is a config with nothing to run, which is zero rather than a guess.
+  defp episodes_of(%__MODULE__{environment: %{scene_versions: versions}} = setup, mode) do
+    case Map.get(versions, mode, %{}) do
+      %{scenes: [_ | _] = scenes} -> length(scenes)
+      _no_captures_named -> length(objects(setup, mode))
+    end
+  end
+
+  defp episodes_of(%__MODULE__{} = setup, mode), do: length(objects(setup, mode))
 
   @doc """
   The same experiment with another seed.
@@ -1539,10 +1629,14 @@ defmodule Monty.Studio.Setup do
   (the operator's choice). This is what the config says, which is what decides
   whether the work it needs can be checked at all.
   """
-  @spec engine(t()) :: :mujoco | :habitat | nil
+  @spec engine(t()) :: :mujoco | :habitat | :image | nil
   def engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
   def engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
   def engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
+
+  def engine(%__MODULE__{environment: %{module: %{class: "SaccadeOnImageEnvironment"}}}),
+    do: :image
+
   def engine(%__MODULE__{}), do: nil
 
   # The class the experiment's agent is, from `env_init_args.agents` — which is
@@ -1972,7 +2066,11 @@ defmodule Monty.Studio.Setup do
           interface: describe_target(interface_class(config)),
           data_path: Map.get(args, "data_path"),
           objects: scene_objects(args),
-          assembly: Map.get(args, "assembly")
+          assembly: Map.get(args, "assembly"),
+          # Which capture each episode is on, for an image world: Monty's
+          # interface takes one (scene, version) pair per episode, one list per
+          # phase.
+          scene_versions: scene_versions(config)
         }
 
       _absent ->
@@ -3111,10 +3209,51 @@ defmodule Monty.Studio.Setup do
 
   defp world_finding(%__MODULE__{world: :cad} = setup), do: [not_carried(setup, :cad)]
 
+  # The image world is the config's own when the config is an image one; a config
+  # whose world is MuJoCo's asked for captures it never had. And a config that is
+  # an image one is still only runnable on a machine that has the captures, which
+  # is a download — so the finding says which directory is empty rather than
+  # leaving a run to fail on its first read.
+  defp world_finding(%__MODULE__{world: :image} = setup) do
+    case engine(setup) do
+      :image -> image_capture_findings(setup)
+      _not_an_image_config -> [not_carried(setup, :image)]
+    end
+  end
+
   # A world this build does not carry — an operator can configure one — is said
   # plainly rather than crashing the page: the experiment's numbers come from its
   # own simulator, and this is not it.
   defp world_finding(%__MODULE__{world: world} = setup), do: [not_carried(setup, world)]
+
+  defp image_capture_findings(%__MODULE__{} = setup) do
+    path = image_data_path(setup)
+
+    if captures?(path) do
+      []
+    else
+      [
+        Finding.new(
+          :error,
+          :world_holds_no_capture,
+          "This run steps captured scenes, and #{path} holds none. Download Monty's " <>
+            "worldimages archive and unpack it there, or choose another world in the " <>
+            "selector.",
+          "environment"
+        )
+      ]
+    end
+  end
+
+  # A directory of captures holds one directory per scene, and a scene holds its
+  # colour and its depth: a path that exists and holds nothing is the same answer
+  # as one that does not.
+  defp captures?(path) do
+    case File.ls(path) do
+      {:ok, names} -> Enum.any?(names, &File.dir?(Path.join(path, &1)))
+      {:error, _reason} -> false
+    end
+  end
 
   defp not_carried(setup, world) do
     Finding.new(

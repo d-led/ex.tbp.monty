@@ -162,10 +162,21 @@ defmodule Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment do
     %{environment | loc: get_next_loc(environment, action_name(action), amount)}
   end
 
-  defp action_name(%{name: name}) when is_binary(name), do: name
-  defp action_name(%{"name" => name}) when is_binary(name), do: name
-  defp action_name(name) when is_binary(name), do: name
-  defp action_name(%{action: name}), do: action_name(name)
+  # An action in this port is a struct whose module answers `name/0`, which is
+  # Monty's own `action.name`; a map or a string is what a test passes.
+  defp action_name(action) do
+    cond do
+      is_binary(action) -> action
+      is_binary(Map.get(action, :name)) -> action.name
+      is_binary(Map.get(action, "name")) -> action["name"]
+      is_struct(action) -> named_by_its_module(action.__struct__)
+      true -> nil
+    end
+  end
+
+  defp named_by_its_module(module) do
+    if function_exported?(module, :name, 0), do: module.name()
+  end
 
   defp rotation_degrees(%{rotation_degrees: degrees}) when is_number(degrees), do: degrees
   defp rotation_degrees(%{"rotation_degrees" => degrees}) when is_number(degrees), do: degrees

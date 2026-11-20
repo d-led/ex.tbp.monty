@@ -2271,11 +2271,25 @@ own words. Two things are this port's rather than Monty's: the world is threaded
 through and answered back — an interface here is a value — and the target is the
 map the port's other interface uses, not a dataclass.
 
-**What is still missing, and why the family cannot run.** Two things, none of them
-in these classes: a world kind in the studio beside `:mujoco`, `:ex_mujoco`,
-`:synthetic` and `:cad` (which has to read a config's `env_init_args.data_path`
-and its interface's `scenes`/`versions`), and the `worldimages` prerequisite that
-produces `${MONTY_DATA}/worldimages/bright_scenes/`. Until those land, readiness
-keeps classifying the family `not_planned` and the studio keeps naming the classes
-it has not written — which is the truth, and the opposite of standing a stand-in
-in their place (§2.34).
+**The family runs.** `:image` is a world kind beside `:mujoco`, `:ex_mujoco`,
+`:synthetic` and `:cad`: it opens the directory a config's `env_init_args.data_path`
+names and switches captures by the interface's `scenes`/`versions` (episode 4 of
+`world_image_on_scanned_model` is scene 1, version 0), and a machine with no
+captures is told which directory is empty rather than stepping an empty scene.
+`mix monty.run world_image_on_scanned_model --world image --episodes 1 --steps 25`
+steps a real capture at 80–150 ms a step, the model narrowing to `numenta_mug`
+with 2 182 hypotheses by the last step; readiness counts the six scanned-model
+configs as runnable, 143 of Monty's 157 where it counted 137.
+
+**And a long episode meets the ceiling, as §2.35 said it would.** The same run at
+400 steps was stopped at step 66 by the step worker's heap limit: every step
+keeps the whole 480 × 640 view finder as nested lists, which is four times the
+cost of a MuJoCo sensor's 64 × 64 image. What stopped it was reported, not
+silent ("the run stopped at a step: …"). A whole episode is Monty's 387 steps
+average, so this family waits on the observation-representation decision in
+§2.35 — frames as binaries, or poses without frames — the same decision the surf
+config is waiting on.
+
+**What is still missing.** `SaccadeOnImageFromStreamEnvironment`, which reads a
+stream of captures from a server this build does not carry, so
+`world_image_from_stream_on_scanned_model` stays `not_planned`.

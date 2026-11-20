@@ -45,7 +45,8 @@ defmodule Mix.Tasks.Monty.Run do
     * `--overlay DIR` — a config tree read before Monty's own copy: the
       experiments of ours that `mix monty.inputs` must not touch live in one
       (`priv/monty_experiments/conf`)
-    * `--world mujoco|ex_mujoco|synthetic|cad` — which world to step. Both
+    * `--world mujoco|ex_mujoco|synthetic|image|cad` — which world to step. An
+      image config's captures are opened by `image`. Both
       `mujoco` and `ex_mujoco` are the experiment's MuJoCo scene: the first is
       driven through the Python this application carries, the second is compiled
       and stepped by `ex_mujoco`'s NIF. `cad` steps the
@@ -526,9 +527,10 @@ defmodule Mix.Tasks.Monty.Run do
   defp world("ex_mujoco"), do: :ex_mujoco
   defp world("synthetic"), do: :synthetic
   defp world("cad"), do: :cad
+  defp world("image"), do: :image
 
   defp world(other),
-    do: Mix.raise("unknown world #{inspect(other)}: mujoco, ex_mujoco, synthetic or cad")
+    do: Mix.raise("unknown world #{inspect(other)}: mujoco, ex_mujoco, synthetic, image or cad")
 
   # The seed is the input a headless run most often varies: a sweep over seeds
   # is the simplest experiment there is.
