@@ -859,14 +859,15 @@ defmodule Monty.Studio.SetupTest do
     end
 
     test "says the dataset is missing rather than stepping a drawing it does not have" do
+      # The dataset is looked for under this machine's data root, so the root is
+      # the test's: an empty one is a run whose dataset has not been downloaded,
+      # and a directory somebody happens to have keeps nothing out of the report.
       empty = Path.join(System.tmp_dir!(), "no_drawings_#{System.unique_integer([:positive])}")
       File.mkdir_p!(empty)
       on_exit(fn -> File.rm_rf(empty) end)
+      Tmp.system_env("MONTY_DATA", empty)
 
-      setup =
-        "tutorial/omniglot_training"
-        |> setup_for(world_simulator: :omniglot)
-        |> with_data_path(empty)
+      setup = setup_for("tutorial/omniglot_training", world_simulator: :omniglot)
 
       assert :world_data_missing in Enum.map(Setup.findings(setup, :error), & &1.code)
 
