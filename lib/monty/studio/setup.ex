@@ -1764,14 +1764,14 @@ defmodule Monty.Studio.Setup do
   def with_seed(%__MODULE__{} = setup, seed), do: %{setup | seed: seed}
 
   @doc """
-  The world the **config** was written for: `:mujoco`, `:habitat`, or `nil` when
-  it names no simulator this application knows.
+  The world the **config** was written for: `:mujoco`, `:habitat`, a captured
+  scene, a drawing, or `nil` when it names no world this application knows.
 
   Not the same question as `world`, which is the world a run of it would step
   (the operator's choice). This is what the config says, which is what decides
   whether the work it needs can be checked at all.
   """
-  @spec engine(t()) :: :mujoco | :habitat | :image | nil
+  @spec engine(t()) :: :mujoco | :habitat | :image | :omniglot | nil
   def engine(%__MODULE__{environment: %{module: %{class: "MuJoCoSimulator"}}}), do: :mujoco
   def engine(%__MODULE__{environment: %{module: %{class: "HabitatEnvironment"}}}), do: :habitat
   def engine(%__MODULE__{environment: %{module: %{class: "HabitatSim"}}}), do: :habitat
