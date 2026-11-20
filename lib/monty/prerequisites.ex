@@ -416,10 +416,11 @@ defmodule Monty.Prerequisites do
   @doc """
   What a run of this setup reads off the disk, and whether each is there.
 
-  Only the external process reads anything: the connector drives the simulator
-  the config names, and that loads the objects its environment names and the
-  pretrained memory its config names — from the same three directories a Python
-  user puts them in. The stand-in steps a
+  A run in Monty's world reads two things: the objects its environment names and
+  the memory its config names, from the same directories a Python user puts them
+  in — and it reads them whichever program steps the scene, the copied simulator
+  in this application's interpreter or this port's compiled binding. The stand-in
+  steps a
   scene this port builds, and the memory the *ported* learning modules load is
   exported on the fly under the data folder (`<data>/libraries`), so a stand-in
   run needs nothing downloaded at all. That is the whole reason there is a
@@ -436,9 +437,14 @@ defmodule Monty.Prerequisites do
   def for_setup(%{world: :synthetic}), do: []
 
   # MuJoCo has no engine to check: its package travels in the interpreter this
-  # application carries, by construction. What it does need is the dataset and
-  # the memory — the two downloads — so those are what a page names.
-  def for_setup(%{world: :mujoco} = setup), do: data_need(setup) ++ models_need(setup)
+  # application carries, by construction, and the compiled binding is that same
+  # package by another route. What either reads is the dataset the environment
+  # names and the memory the config names — the two downloads — so a page names
+  # them for both. `:ex_mujoco` reached no clause but the catch-all below, and
+  # the dogs' page then listed no need at all: no dataset, and no way to the run
+  # that writes the memory it cannot find.
+  def for_setup(%{world: world} = setup) when world in [:mujoco, :ex_mujoco],
+    do: data_need(setup) ++ models_need(setup)
 
   # Monty's own world, stepped by an interpreter outside this build: its engine
   # is that interpreter's business, so what a page can offer a run of it is the

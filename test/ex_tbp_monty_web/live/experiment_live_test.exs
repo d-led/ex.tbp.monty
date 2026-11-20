@@ -166,6 +166,32 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
                []
     end
 
+    # A memory this installation has not trained is a link to the experiment
+    # that writes it, and a dataset is a link to the row that fetches it — but
+    # the compiled world answered no needs at all, so the dogs' page showed
+    # neither: no dataset, and "train that first" was a sentence to search the
+    # catalogue for.
+    test "the dogs' page names its files and links the run that writes its memory",
+         %{conn: conn} do
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.env_dir("libraries", :monty_libraries_dir)
+
+      {:ok, view, _html} = live(conn, ~p"/experiments/dogs/inference_dist")
+      await_composition(view)
+
+      view |> element("#world-choice") |> render_change(%{"world" => "ex_mujoco"})
+      await_composition(view)
+
+      assert view |> element("#need-models") |> render() =~
+               "the memory `dogs_supervised_pretraining`"
+
+      assert view |> element("#need-data-action") |> render() =~
+               ~s(href="/prerequisites?fetch=objaverse_dogs")
+
+      assert view |> element("#need-models-action") |> render() =~
+               ~s(href="/experiments/dogs/supervised_pretraining")
+    end
+
     test "the run is recorded with the world it was given", %{conn: conn} do
       download_prerequisites("base_config_10distinctobj_dist_agent")
 

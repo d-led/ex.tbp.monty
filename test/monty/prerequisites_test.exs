@@ -386,6 +386,19 @@ defmodule Monty.PrerequisitesTest do
       assert Enum.all?(needs, & &1.present?)
     end
 
+    # The compiled binding steps the experiment's own scene, so the two files a
+    # run of it reads are the same two Monty's simulator reads.
+    test "the compiled MuJoCo engine names the same data and memory" do
+      Tmp.system_env("MONTY_DATA", Tmp.dir("monty-data"))
+      Tmp.env_dir("libraries", :monty_libraries_dir)
+
+      needs =
+        Prerequisites.for_setup(%{world: :ex_mujoco, model_name_or_path: "pretrained_ycb_v13"})
+
+      assert Enum.map(needs, & &1.kind) == [:models]
+      refute Enum.any?(needs, & &1.present?)
+    end
+
     # A warning that says "missing" and nothing else sends the reader looking
     # through three directories by hand.
     test "says which are missing, and where each belongs" do
