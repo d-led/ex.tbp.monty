@@ -12,6 +12,7 @@ defmodule Monty.Experiment.SensorModule.ExperimentSensorModuleTest do
 
   alias Monty.Context
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
+  alias Monty.Experiment.SensorModules.Telemetry.Snapshot
   alias Monty.SensorModules.SensorModule
   alias Monty.SensorModules.SensorModule.Payload
 
@@ -74,6 +75,22 @@ defmodule Monty.Experiment.SensorModule.ExperimentSensorModuleTest do
                  "sensor_id" => "patch",
                  "transforms" => []
                })
+    end
+
+    # `surf_agent_unsupervised_10distinctobj` is the config that asks for this: its
+    # view finder records what it saw so a logger can show it afterwards.
+    test "builds the telemetry transform a config names, in the order it names them" do
+      assert {:ok, %SensorModule{transforms: transforms}} =
+               ExperimentSensorModule.from_config(%{
+                 "_target_" => "tbp.monty.experiment.sensor_module.ExperimentSensorModule",
+                 "sensor_module_id" => "view_finder",
+                 "sensor_id" => "view_finder",
+                 "transforms" => [
+                   %{"_target_" => "tbp.monty.experiment.sensor_modules.telemetry.Snapshot"}
+                 ]
+               })
+
+      assert [{Snapshot, %Snapshot{clear?: false}}] = transforms
     end
 
     test "declines the transforms this port has not written, and names them" do

@@ -2042,3 +2042,42 @@ translated value is read past and no record carries it (a record holding `nil`
 where a number belongs would be a broken feature, and none does). Where a NaN
 would reach a step, `nil` is what it becomes: the port's answer for a value that
 is absent.
+
+## 2.34 A sensor is refused when its own layers are missing
+
+`sensor_module_spec/2` in `Monty.Studio.Setup` used to fall back to the stand-in
+sensor when no ported class could build a config's entry. That is not what Monty
+does — `MontyExperiment` instantiates whatever the config names, and a config
+whose salience strategy or segmentation class does not exist is an import
+error — and it was not harmless: the cows family's view finder names `Vocus2` as
+its `salience_strategy` and `SlicMerge` as its `segmentation_strategy`, so the
+run stepped a plain camera instead, proposed no goals, and concluded nothing
+while looking healthy. `Setup` now records a `:sensor_module_not_buildable`
+finding and the config is refused.
+
+Two consequences worth knowing:
+
+- **A sensor's layers are part of the experiment.** `CameraSM`,
+  `TwoDSensorModule`, `ExperimentSensorModule` and `SalienceSM` each refuse the
+  layer classes this port has not written (`{:unsupported_layer, key, target}`)
+  rather than taking a default, and `TwoDSensorModule` now checks its `_target_`
+  like the others do, so it no longer claims a config that is not its own.
+- **A postponed config can carry the code too.** Monty's own test doubles are
+  sensors this port cannot build; a config of doubles is still shelved as
+  `:not_planned` (`:test_fixture_class`), and its codes now name both facts.
+
+`Snapshot` — `tbp/monty/experiment/sensor_modules/telemetry.py::Snapshot`, the one
+transform `surf_agent_unsupervised_10distinctobj`'s view finder names — is ported
+as `Monty.Experiment.SensorModules.Telemetry.Snapshot`, so that config builds and
+runs. It appends the observation to `telemetry["raw_observations"]` and the
+sensor's pose to `telemetry["sm_properties"]`, clearing both on the step after a
+reset, exactly as Monty's `_reset` flag does. The pose is written with Monty's
+keys and this port's quaternion order (`wxyz`, §2.4) as a list, where Monty
+stores numpy-quaternion's `[x, y, z, w]` array; nothing reads it back into a
+computation.
+
+The cows family stays refused until `SlicMerge`
+(`frameworks/models/salience/segmentation/slic_merge.py`, `skimage`'s SLIC plus
+a BFS merge) is written, and `SalienceSM` reads the _current_ config shape, where
+`salience_strategy` is a `Vocus2` object with inline channel objects rather than
+a `Vocus2.from_config` with a nested `Vocus2SalienceConfig`.

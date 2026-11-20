@@ -541,7 +541,8 @@ defmodule Monty.ModuleMap.Data do
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/experiment/sensor_module/telemetry/snapshot.ex",
           elixir: "Monty.Experiment.SensorModules.Telemetry.Snapshot",
           python: "Snapshot"
         }

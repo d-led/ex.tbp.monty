@@ -64,6 +64,8 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
 
   @edge_features ["edge_strength", "coherence"]
 
+  @target "tbp.monty.frameworks.models.two_d_sensor_module.TwoDSensorModule"
+
   defstruct sensor_module_id: nil,
             features: [],
             save_raw_obs: false,
@@ -95,7 +97,8 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   """
   @spec from_config(map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_config(%{} = config, options \\ []) do
-    with {:ok, features} <- features(config) do
+    with :ok <- check_target(Map.get(config, "_target_", @target)),
+         {:ok, features} <- features(config) do
       {:ok,
        build(
          Map.get(config, "sensor_module_id", "sensor_module_0"),
@@ -110,6 +113,13 @@ defmodule Monty.Frameworks.Models.TwoDSensorModule do
   # named.
   defp features(%{"features" => features}) when is_list(features), do: {:ok, features}
   defp features(config), do: {:error, {:unresolved_features, Map.get(config, "features")}}
+
+  # The check every other sensor module makes. Without it this clause answered
+  # *any* config — a view finder's SalienceSM spec among them — and the port read
+  # the refusal as "this sensor is missing features" rather than "this config
+  # names another class".
+  defp check_target(@target), do: :ok
+  defp check_target(target), do: {:error, {:unsupported_sensor_module, target}}
 
   @doc """
   A module for one sensor.

@@ -2549,6 +2549,7 @@ defmodule Monty.Studio.Setup do
   defp findings(setup, monty_config, config, unresolved?) do
     module_findings(setup) ++
       learning_module_findings(setup, unresolved?) ++
+      sensor_findings(setup) ++
       supervision_findings(setup) ++
       attention_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
@@ -2579,6 +2580,69 @@ defmodule Monty.Studio.Setup do
   end
 
   defp supervision_findings(%__MODULE__{}), do: []
+
+  # A sensor module is built from its class *and the classes its own config
+  # names*: a view finder's salience strategy and segmentation, a 2-D sensor's
+  # edge detector. `from_config` refuses a layer this port has not written, and
+  # with nothing recording that, `sensor_module_spec/2` built the stand-in — so
+  # the cows family's view finder, which names `SlicMerge`, was a sensor that was
+  # not the experiment's, and its episodes proposed no goals and concluded
+  # nothing while the run looked healthy. A config is refused here instead.
+  defp sensor_findings(%__MODULE__{sensors: sensors}) do
+    Enum.flat_map(sensors, fn sensor ->
+      case sensor_error(sensor.config) do
+        :ok -> []
+        {:error, reason} -> [sensor_finding(sensor, reason)]
+      end
+    end)
+  end
+
+  defp sensor_finding(sensor, reason) do
+    Finding.new(
+      :error,
+      :sensor_module_not_buildable,
+      "This config's sensor #{sensor.id} is built from #{unbuildable_class(reason)}, and this " <>
+        "port has not written it, so the run would step a stand-in sensor instead of the one " <>
+        "the experiment describes.",
+      if(sensor.module.python, do: sensor.module.python <> ".", else: nil) <> sensor.id
+    )
+  end
+
+  defp sensor_error(config) do
+    case ported_sensor_module(config, false) do
+      {:ok, _module, _state} -> :ok
+      :not_ported -> {:error, unported_sensor_reason(config)}
+    end
+  end
+
+  # Why the port's own classes between them cannot build this sensor. A module
+  # that is not the config's class answers `:unsupported_sensor_module`, which
+  # says nothing about the config; the reason worth reporting is the one from the
+  # class the config actually names.
+  defp unported_sensor_reason(config) do
+    Enum.find_value(
+      [CameraSM, TwoDSensorModule, ExperimentSensorModule, SalienceSM],
+      {:unsupported_sensor_module, Map.get(config, "_target_")},
+      fn module ->
+        case module.from_config(config, has_detailed_logger: false) do
+          {:error, {:unsupported_sensor_module, _its_own}} -> nil
+          {:error, reason} -> reason
+          {:ok, _state} -> nil
+        end
+      end
+    )
+  end
+
+  defp unbuildable_class({:unsupported_layer, key, target}) when is_binary(target),
+    do: "#{last_segment(target)} as its #{key}"
+
+  defp unbuildable_class({:unsupported_layer, key, _no_class}),
+    do: "a #{key} this port has not written"
+
+  defp unbuildable_class({:unsupported_sensor_module, target}),
+    do: "a sensor class this port has not written (#{inspect(target)})"
+
+  defp unbuildable_class(reason), do: inspect(reason)
 
   # Monty instantiates the attention config with Hydra, so any argument it states
   # is part of the experiment. This port reads `voxel_size` and the class; an

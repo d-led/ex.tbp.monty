@@ -18,12 +18,15 @@ defmodule Monty.Studio.ReadinessTest do
     # covers, so no row can place them. They belong to Monty's test suite rather
     # than to a reader — the port's own tests bring their own — so a config built
     # from them is shelved with the worlds this build does not carry instead of
-    # being counted as work somebody has taken on.
+    # being counted as work somebody has taken on. Its sensor is a double too, so
+    # the config also says this port cannot build that sensor; both are facts, and
+    # the shelf is decided by the doubles being there at all.
     test "a config built from Monty's test doubles is postponed, not refused" do
       entry = Readiness.classified("test/base_config/base")
 
       assert entry.status == :not_planned
-      assert entry.codes == [:test_fixture_class]
+      assert :test_fixture_class in entry.codes
+      assert :sensor_module_not_buildable in entry.codes
 
       assert "tests.unit.frameworks.models.fakes.sensor_modules.FakeSensorModule" in entry.blocked_by
     end

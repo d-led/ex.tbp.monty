@@ -19,9 +19,17 @@ defmodule Monty.Experiment.SensorModule.ExperimentSensorModule do
 
   use Monty.Frameworks.Models.AbstractMontyClasses.SensorModule
 
+  alias Monty.Experiment.SensorModules.Telemetry.Snapshot
   alias Monty.SensorModules.SensorModule
 
   @target "tbp.monty.experiment.sensor_module.ExperimentSensorModule"
+
+  # The transforms a config may name, by the class it writes. One at a time, and
+  # only the ones this port has written: a sensor that ran without a transform its
+  # config asks for would measure something else than the experiment.
+  @transforms %{
+    "tbp.monty.experiment.sensor_modules.telemetry.Snapshot" => Snapshot
+  }
 
   @doc """
   The sensor a config entry describes, or why it is not this class's.
@@ -59,8 +67,15 @@ defmodule Monty.Experiment.SensorModule.ExperimentSensorModule do
   # `AddNoiseToRawDepthImage` are still to come.
   defp transforms(%{"transforms" => []}), do: {:ok, []}
 
-  defp transforms(%{"transforms" => transforms}) when is_list(transforms),
-    do: {:error, {:unsupported_transforms, Enum.map(transforms, &Map.get(&1, "_target_"))}}
+  defp transforms(%{"transforms" => transforms}) when is_list(transforms) do
+    transforms
+    |> Enum.reduce_while({:ok, []}, fn spec, {:ok, built} ->
+      case Map.get(@transforms, Map.get(spec, "_target_")) do
+        nil -> {:halt, {:error, {:unsupported_transforms, [Map.get(spec, "_target_")]}}}
+        module -> {:cont, {:ok, built ++ [{module, module.new(spec)}]}}
+      end
+    end)
+  end
 
   defp transforms(_config), do: {:error, :transforms_missing}
 

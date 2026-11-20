@@ -412,6 +412,25 @@ defmodule Monty.Studio.SetupTest do
     end
   end
 
+  describe "a sensor module" do
+    # A sensor is built from its class *and the classes its own config names*, and
+    # `SalienceSM.from_config/2` refuses a layer this port has not written. Nothing
+    # recorded that refusal, so the cows family's view finder — which asks for a
+    # `SlicMerge` segmentation — was built as the stand-in sensor, and those runs
+    # proposed no goals and concluded nothing while looking healthy.
+    test "that names a class this port has not written is refused, naming it" do
+      setup = setup_for("base_infer_cows_small_compositional", world_simulator: :mujoco)
+
+      assert :sensor_module_not_buildable in errors(setup)
+
+      [finding] = Enum.filter(setup.findings, &(&1.code == :sensor_module_not_buildable))
+
+      assert finding.message =~ "view_finder"
+      assert finding.message =~ "has not written"
+      assert finding.message =~ "stand-in sensor"
+    end
+  end
+
   describe "the mistakes Monty would only find later" do
     test "a sensor no learning module matches on is not raised as a mistake" do
       setup = setup_for("tutorial/first_experiment")
