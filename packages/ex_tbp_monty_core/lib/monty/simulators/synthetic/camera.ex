@@ -140,7 +140,6 @@ defmodule Monty.Simulators.Synthetic.Camera do
   end
 
   defp colour_rows(rgba), do: Enum.map(rgba, fn row -> Enum.map(row, &colour_byte/1) end)
-
   defp colour_picture(rgba) do
     rgba
     |> colour_rows()
@@ -252,6 +251,16 @@ defmodule Monty.Simulators.Synthetic.Camera do
 
   # rgba arrives as four floats from 0 to 1; the fourth is alpha, and a frame of
   # this world is opaque, so it is not carried into the image.
+  # A picture's numbers arrive in the range its own camera produced them in, and
+  # the two worlds this port steps disagree: Monty's observations carry `rgba` as
+  # `0..255` (`Monty.Observations.SensorObservation`, and a MuJoCo camera answers
+  # exactly that), while the stand-in scene paints floats in `0..1`. An integer is
+  # already a byte; a float is a fraction of one. Scaling a byte again does not
+  # make a wrong colour, it makes a term that is not iodata at all.
+  defp colour_byte([red, green, blue | _alpha])
+       when is_integer(red) and is_integer(green) and is_integer(blue),
+       do: [red, green, blue]
+
   defp colour_byte([red, green, blue | _alpha]),
     do: [round(red * 255), round(green * 255), round(blue * 255)]
 

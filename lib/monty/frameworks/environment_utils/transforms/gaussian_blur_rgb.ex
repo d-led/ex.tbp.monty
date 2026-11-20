@@ -160,7 +160,21 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
     |> pad_reflect(pad)
     |> then(fn rows -> Enum.map(rows, &convolve(&1, kernel)) end)
     |> then(fn rows -> rows |> transpose() |> Enum.map(&convolve(&1, kernel)) |> transpose() end)
+    |> then(&as_written(&1, rgba))
   end
+
+  # `cv2.GaussianBlur` answers the image's own dtype: a blurred 8-bit picture is
+  # an 8-bit picture again, rounded, not a field of fractions. The arithmetic
+  # above is in floats either way — two passes, the intermediate kept exact — and
+  # the answer goes back into the representation it arrived in, which is what an
+  # observation promises about `rgba` (`Monty.Observations.SensorObservation`:
+  # `0..255`). A transform that handed back fractions left the observation
+  # claiming one range and carrying another.
+  defp as_written(rows, [[[first | _] | _] | _]) when is_integer(first) do
+    Enum.map(rows, fn row -> Enum.map(row, fn pixel -> Enum.map(pixel, &round/1) end) end)
+  end
+
+  defp as_written(rows, _fractions), do: rows
 
   # OpenCV's default border, `BORDER_REFLECT_101`: mirror about the edge pixel
   # without repeating it, so `[a b c d]` continues `[c b | a b c d | c b]`.

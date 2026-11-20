@@ -91,5 +91,17 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     assert Camera.frame("patch", observation(), 3) == Camera.frame("patch", observation(), 3)
   end
 
+  test "a picture's numbers are read in the range its own camera used" do
+    # Monty's observations, and a MuJoCo camera, carry `rgba` as `0..255`; the
+    # stand-in scene paints floats in `0..1`. Scaling a byte a second time does
+    # not make a wrong colour, it makes a term that is not iodata at all — which
+    # is how a recorded MuJoCo run died on its first frame.
+    bytes = %{"depth" => [[0.5]], "rgba" => [[[181, 164, 146, 255]]]}
+    assert Camera.planes(bytes).colour == <<181, 164, 146>>
+
+    painted = %{"depth" => [[0.5]], "rgba" => [[[1.0, 1.0, 1.0, 1.0]]]}
+    assert Camera.planes(painted).colour == <<255, 255, 255>>
+  end
+
   defp markup(frame), do: Phoenix.HTML.safe_to_string(frame.data)
 end

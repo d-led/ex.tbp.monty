@@ -202,6 +202,26 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.ImageTransformsTest do
       assert neighbour > 0.0
     end
 
+    test "leaves an 8-bit picture 8-bit, as OpenCV does" do
+      # Monty's cameras answer `rgba` as `0..255` integers and `cv2` rounds into
+      # the image's own dtype. A blurred frame that came back as fractions left
+      # the observation claiming bytes and carrying floats — which is how a
+      # recorded MuJoCo run died encoding its own picture.
+      image = [[[200, 100, 50, 255], [0, 0, 0, 255]]]
+      transform = GaussianBlurRGB.new(agent_id: @agent, sigma: 1.0, kernel_size: 3)
+
+      %{@agent => %{"patch" => %{"rgba" => blurred}}} =
+        GaussianBlurRGB.call(observations(%{"patch" => %{"rgba" => image}}), transform, ctx())
+
+      assert [[[red, _green, _blue, alpha] | _rest]] = blurred
+      assert alpha == 255
+
+      # Every channel is still a byte, and the pixel bled some of its colour into
+      # its neighbour.
+      assert blurred |> List.flatten() |> Enum.all?(&(is_integer(&1) and &1 in 0..255))
+      assert red > 0 and red < 200
+    end
+
     test "refuses a kernel size it cannot mean" do
       # Monty validates these in its constructor and so does the port: an even
       # kernel has no centre pixel, and a sigma of zero with an auto kernel has

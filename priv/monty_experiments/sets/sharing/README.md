@@ -3,17 +3,17 @@
 A limited experiment for the Thousand Brains "shared distributed learning"
 discussion (Jeff Hawkins' alternating parent–child inference cycles, Niels'
 hippocampal consolidation). Neither mechanism is implemented upstream and
-neither has a config key here, so this set tests the one thing a config *can*
+neither has a config key here, so this set tests the one thing a config _can_
 say: **two learning modules learning at the same time from two views of the same
 object, wired to each other only by a vote.**
 
 ## What is in it
 
-| file | what it is |
-| --- | --- |
+| file                                               | what it is                                                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `conf/monty/learning_module/displacement_2lm.yaml` | `displacement_1lm` twice — Monty's tutorial settings, `k: 5`, `match_attribute: displacement` |
-| `conf/monty/connectivity/2lm_2sm_dist.yaml` | LM0 ← `patch_0`, LM1 ← `patch_1`, no LM-to-LM input, both vote |
-| `conf/experiment/sharing/dist_two_columns.yaml` | one training epoch over two objects, both modules written |
+| `conf/monty/connectivity/2lm_2sm_dist.yaml`        | LM0 ← `patch_0`, LM1 ← `patch_1`, no LM-to-LM input, both vote                                |
+| `conf/experiment/sharing/dist_two_columns.yaml`    | one training epoch over two objects, both modules written                                     |
 
 Everything else is Monty's, from `tutorial/dist_agent_5lm_2obj_train`, named in
 `defaults` and not copied: the five-sensor distant agent, the two YCB objects,
@@ -43,7 +43,7 @@ runs it from the page.
 (the config's termination concludes each at 307):
 
 - `run finished: 614 steps`, `mug 307 steps (concluded)`, `banana 307 steps
-  (concluded)`, ~5.6 s in the model and ~17.6 s in the world.
+(concluded)`, ~5.6 s in the model and ~17.6 s in the world.
 - The log names the memory: "the memory **2 modules** learned is the library
   `sharing_dist_two_columns`".
 - The library holds `lm_index` 0 on `patch_0` with **11 nodes** (mug 9, banana 2)

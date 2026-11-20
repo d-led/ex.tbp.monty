@@ -151,7 +151,7 @@ data:
     # "shared distributed learning" question from the Thousand Brains discussion
     # of 2026-11-19 — `sets/sharing/README.md` says what it asks and what would
     # falsify it.
-    hash: d93c029011a6ca7b8baa8b474aa292ac847a1e5abd503e46bf665e8c20e28c0e
+    hash: 86f0f1045a0d207c549eeb422fbd7b5aacab33ea014c748fff2033c870a4d59b
 
   - path: priv/cad_experiments/conf
     kind: written
