@@ -28,8 +28,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   @behaviour Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
 
-  require Logger
-
   alias ExTbpMonty.Core.MatcherNif
   alias Monty.Frameworks.Models.EvidenceMatching.Channels
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker
@@ -40,6 +38,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
   alias Monty.Geometry.SurfacePoseVectors
+  alias Monty.Trace
 
   defstruct graph_memory: nil,
             displacer: nil,
@@ -119,8 +118,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     # The number that decides both deletion and re-sampling, and the one thing a
     # run that never settles cannot be diagnosed without: a slope that stays at
     # or below the trigger keeps opening bursts, and one that stays above the
-    # deletion threshold keeps every hypothesis alive.
-    Logger.debug(fn ->
+    # deletion threshold keeps every hypothesis alive. It is the experiment's
+    # word rather than a log level's — one per step per module — so `Trace` says
+    # it, and `MONTY_TRACE=1` is how a run that never settles is looked at.
+    Trace.trace(fn ->
       "burst sampling: max slope #{inspect(max_slope)} against a trigger of " <>
         "#{updater.burst_trigger_slope}, #{updater.sampling_burst_steps} burst " <>
         "steps left"
