@@ -147,6 +147,33 @@ defmodule Monty.Experiment.SensorModules.Telemetry.SnapshotTest do
     assert byte_size(kept) * 3 < heap_bytes
   end
 
+  # The question a run of the image world asked the hard way: keeping an episode
+  # of frames costs the frames, not their square. Appending at the end of the
+  # list copied everything the sensor had already seen on every step, which at
+  # fifty steps of a 640 × 480 observation is gigabytes of garbage for one step
+  # (§2.40, §2.41).
+  test "an episode of frames costs the frames, not their square" do
+    steps = 200
+    observation = frame()
+
+    telemetry =
+      Enum.reduce(1..steps, %{}, fn _step, telemetry ->
+        {payload, _snapshot} =
+          Snapshot.call(Snapshot.new(), ctx(), payload(observation, telemetry))
+
+        payload.telemetry
+      end)
+
+    kept = Enum.map(telemetry["raw_observations"], &byte_size/1) |> Enum.sum()
+    heap_bytes = :erts_debug.size(telemetry) * :erlang.system_info(:wordsize)
+
+    assert length(telemetry["raw_observations"]) == steps
+    # The heap holds the list and the binaries' headers; the frames themselves
+    # are the `kept` bytes. Anything near a square — `steps × kept` — is the copy
+    # coming back.
+    assert heap_bytes < 2 * kept
+  end
+
   # What a logger reads: the telemetry in the order it was taken, which is the
   # order Monty's `state_dict` holds.
   defp reported(telemetry), do: Snapshot.state_dict(Snapshot.new(), telemetry)
