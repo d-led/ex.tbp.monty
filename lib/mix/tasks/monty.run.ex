@@ -528,6 +528,7 @@ defmodule Mix.Tasks.Monty.Run do
   defp world("synthetic"), do: :synthetic
   defp world("cad"), do: :cad
   defp world("image"), do: :image
+  defp world("omniglot"), do: :omniglot
 
   defp world(other),
     do: Mix.raise("unknown world #{inspect(other)}: mujoco, ex_mujoco, synthetic, image or cad")

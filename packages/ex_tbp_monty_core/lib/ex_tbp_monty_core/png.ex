@@ -23,6 +23,21 @@ defmodule ExTbpMonty.Core.Png do
 
   @signature <<137, 80, 78, 71, 13, 10, 26, 10>>
 
+  # A one-bit scanline packs eight pixels into a byte, most significant bit
+  # first; this is that byte written out as eight pixels of eight bits, which is
+  # what a picture of one channel is everywhere else in this module.
+  @byte_as_pixels (for byte <- 0..255, into: %{} do
+                     pixels =
+                       for shift <- 7..0//-1, into: <<>> do
+                         case band(byte, 1 <<< shift) do
+                           0 -> <<0>>
+                           _one -> <<255>>
+                         end
+                       end
+
+                     {byte, pixels}
+                   end)
+
   @type rows :: [[number()]]
 
   @typedoc """
@@ -69,9 +84,13 @@ defmodule ExTbpMonty.Core.Png do
   encoder that picks a filter per scanline. All five filters are undone here,
   because a photograph is where the other four appear.
 
-  What is read is what a captured scene is — eight bits a channel, greyscale,
-  greyscale-with-alpha, colour or colour-with-alpha, one image and not
-  interlaced. Anything else is refused with the reason, since a palette or a
+  What is read is what a world's picture is — greyscale, greyscale-with-alpha,
+  colour or colour-with-alpha, one image and not interlaced, and a channel of
+  eight bits or of one. One bit is the Omniglot characters: a drawing is ink or
+  no ink, and the file spends a bit a pixel on it. It is read out as eight bits
+  a pixel, 0 or 255, so that a caller has one shape to handle.
+
+  Anything else is refused with the reason, since a palette, a two-bit or a
   sixteen-bit file decoded into a guess would be a different picture from the one
   Monty saw.
   """
@@ -112,16 +131,22 @@ defmodule ExTbpMonty.Core.Png do
   defp header(
          <<width::32, height::32, depth::8, colour::8, compression::8, filter::8, interlace::8>>
        ) do
-    with :ok <- eight_bits(depth),
-         {:ok, channels} <- channels(colour),
+    with {:ok, channels} <- channels(colour),
+         :ok <- bit_depth(depth, colour),
          :ok <- one_image(interlace),
          :ok <- one_method(compression, filter) do
-      {:ok, %{width: width, height: height, channels: channels}}
+      {:ok, %{width: width, height: height, channels: channels, depth: depth}}
     end
   end
 
-  defp eight_bits(8), do: :ok
-  defp eight_bits(depth), do: {:error, "a #{depth}-bit PNG is not a captured scene"}
+  defp bit_depth(depth, _colour) when depth in [8], do: :ok
+
+  # A drawing has two colours, and PNG keeps one bit a pixel for it. The other
+  # narrow widths (two and four bits, for a greyscale ramp) name no picture here.
+  defp bit_depth(1, 0), do: :ok
+
+  defp bit_depth(depth, _colour),
+    do: {:error, "a #{depth}-bit PNG is not a picture this port reads"}
 
   defp channels(0), do: {:ok, 1}
   defp channels(2), do: {:ok, 3}
@@ -129,28 +154,52 @@ defmodule ExTbpMonty.Core.Png do
   defp channels(6), do: {:ok, 4}
 
   defp channels(3),
-    do: {:error, "a palette PNG is not a captured scene: it has no pixels of its own"}
+    do: {:error, "a palette PNG is not a picture this port reads: it has no pixels of its own"}
 
   defp channels(type), do: {:error, "the colour type #{type} is not one PNG defines"}
 
   defp one_image(0), do: :ok
-  defp one_image(_interlaced), do: {:error, "an interlaced PNG is not a captured scene"}
+
+  defp one_image(_interlaced),
+    do: {:error, "an interlaced PNG is not a picture this port reads"}
 
   defp one_method(0, 0), do: :ok
 
   defp one_method(compression, filter),
     do: {:error, "the compression #{compression} and filter #{filter} are not PNG's own"}
 
-  defp image(%{width: width, height: height, channels: channels}, compressed) do
-    stride = width * channels
+  defp image(%{width: width, height: height, channels: channels, depth: depth}, compressed) do
+    stride = stride(width, channels, depth)
+    bpp = max(1, div(channels * depth, 8))
     expected = height * (stride + 1)
 
     with {:ok, raw} <- inflate(compressed),
          :ok <- whole_rows(raw, expected, width, height),
-         {:ok, pixels} <- unfilter(raw, stride, channels, :binary.copy(<<0>>, stride), []) do
+         {:ok, pixels} <- unfilter(raw, stride, bpp, :binary.copy(<<0>>, stride), []),
+         {:ok, pixels} <- as_bytes(pixels, depth, stride, width) do
       {:ok, %{width: width, height: height, channels: channels, pixels: pixels}}
     end
   end
+
+  # A scanline is a whole number of bytes, so a picture narrower than a multiple
+  # of eight pixels carries padding bits its width says are not pixels.
+  defp stride(width, channels, depth), do: div(width * channels * depth + 7, 8)
+
+  defp as_bytes(pixels, 8, _stride, _width), do: {:ok, pixels}
+
+  defp as_bytes(pixels, 1, stride, width) do
+    row_size = stride
+
+    expanded =
+      for <<row::binary-size(^row_size) <- pixels>>, into: <<>> do
+        binary_part(for(<<byte <- row>>, into: <<>>, do: @byte_as_pixels[byte]), 0, width)
+      end
+
+    {:ok, expanded}
+  end
+
+  defp as_bytes(_pixels, depth, _stride, _width),
+    do: {:error, "a #{depth}-bit PNG is not a picture this port reads"}
 
   defp inflate(compressed) do
     {:ok, :zlib.uncompress(compressed)}

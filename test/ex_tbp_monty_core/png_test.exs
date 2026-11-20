@@ -17,6 +17,10 @@ defmodule ExTbpMonty.Core.PngTest do
              "M+gzsDMwYMUggKJg2ecDDAyfIRL79BwYGBiuMDBBFEAwMoDxUUzI550Htx/E/8mwlLAbAFQnDPBhMH" <>
              "51AAAAAElFTkSuQmCC"
 
+  # A drawing is one bit a pixel: PIL 12.3 wrote this 13 × 3 mode-"1" picture.
+  @drawing "iVBORw0KGgoAAAANSUhEUgAAAA0AAAADAQAAAABgmrihAAAAEUlEQVR42mPY9IJBV4Dx/08AEAwD0ffm" <>
+             "tV0AAAAASUVORK5CYII="
+
   @capture_pixels [
     [
       [0, 0, 0, 255],
@@ -107,6 +111,22 @@ defmodule ExTbpMonty.Core.PngTest do
     end
   end
 
+  describe "a drawing" do
+    test "is read as one bit a pixel, written out as eight" do
+      # PIL 12.3 wrote it from a 13 × 3 mode-"1" picture with a pattern that ends
+      # mid-byte: a scanline is two bytes, so the last three bits of each row are
+      # padding and are not pixels.
+      assert {:ok, image} = Png.decode(Base.decode64!(@drawing))
+
+      assert %{width: 13, height: 3, channels: 1} = image
+
+      assert image.pixels ==
+               <<255, 0, 255, 255, 0, 0, 255, 0, 255, 255, 255, 0, 255, 0, 0, 255, 0, 255, 255, 0,
+                 255, 0, 0, 0, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                 255>>
+    end
+  end
+
   describe "a captured scene" do
     test "is read as the array the encoder was given, whichever filters it chose" do
       assert {:ok, image} = Png.decode(Base.decode64!(@capture))
@@ -123,19 +143,23 @@ defmodule ExTbpMonty.Core.PngTest do
     end
   end
 
-  describe "a file that is not a captured scene" do
+  describe "a file that is not a picture this port reads" do
     test "is refused rather than guessed at" do
       assert {:error, "not a PNG: the eight-byte signature is missing"} = Png.decode("GIF89a")
 
       assert {:error, "not a PNG: no header chunk"} = Png.decode(png([]))
 
-      assert {:error, "a 16-bit PNG is not a captured scene"} =
+      assert {:error, "a 16-bit PNG is not a picture this port reads"} =
                Png.decode(with_header(<<1::32, 1::32, 16, 0, 0, 0, 0>>))
 
-      assert {:error, "a palette PNG is not a captured scene: it has no pixels of its own"} =
+      assert {:error, "a 2-bit PNG is not a picture this port reads"} =
+               Png.decode(with_header(<<1::32, 1::32, 2, 0, 0, 0, 0>>))
+
+      assert {:error,
+              "a palette PNG is not a picture this port reads: it has no pixels of its own"} =
                Png.decode(with_header(<<1::32, 1::32, 8, 3, 0, 0, 0>>))
 
-      assert {:error, "an interlaced PNG is not a captured scene"} =
+      assert {:error, "an interlaced PNG is not a picture this port reads"} =
                Png.decode(with_header(<<1::32, 1::32, 8, 0, 0, 0, 1>>))
     end
 

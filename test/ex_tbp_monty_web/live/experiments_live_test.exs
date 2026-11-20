@@ -373,12 +373,16 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     test "an experiment whose world this build does not carry is not planned", %{conn: conn} do
       Tmp.app_env(:world_simulator, :mujoco)
 
+      # The stream of captures is a live camera this build has no server for, and
+      # its environment class is unwritten, so nothing about it is waiting on a
+      # reader.
       {:ok, postponed, _html} =
-        live(conn, ~p"/experiments?ready=not_planned&q=omniglot_training")
+        live(conn, ~p"/experiments?ready=not_planned&q=world_image_from_stream_on_scanned_model")
 
-      {:ok, refused, _html} = live(conn, ~p"/experiments?ready=no&q=omniglot_training")
+      {:ok, refused, _html} =
+        live(conn, ~p"/experiments?ready=no&q=world_image_from_stream_on_scanned_model")
 
-      assert row_names(postponed) == ["tutorial-omniglot_training"]
+      assert row_names(postponed) == ["world_image_from_stream_on_scanned_model"]
       assert row_names(refused) == []
     end
 

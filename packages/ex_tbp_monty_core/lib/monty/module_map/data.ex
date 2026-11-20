@@ -275,7 +275,8 @@ defmodule Monty.ModuleMap.Data do
           python: "OneObjectPerEpisodeInterface"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/experiment/environment/omniglot_interface.ex",
           elixir: "Monty.Experiment.Environment.OmniglotInterface",
           python: "OmniglotInterface"
         },
@@ -1070,12 +1071,13 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Frameworks.Environments.TwoDData",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "lib/monty/frameworks/environments/two_d_data/omniglot_environment.ex",
           elixir: "Monty.Frameworks.Environments.TwoDData.OmniglotEnvironment",
           python: "OmniglotEnvironment"
         },

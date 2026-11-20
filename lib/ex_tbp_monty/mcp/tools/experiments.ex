@@ -197,6 +197,7 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
     {"ex_mujoco", :ex_mujoco},
     {"synthetic", :synthetic},
     {"image", :image},
+    {"omniglot", :omniglot},
     {"cad", :cad}
   ]
 
@@ -245,6 +246,9 @@ defmodule ExTbpMonty.Mcp.Tools.Experiments do
 
   defp world_name("image"),
     do: "captured scenes — photographs with their depth — opened from the config's data path"
+
+  defp world_name("omniglot"),
+    do: "the Omniglot dataset's characters, traced along the pen path that drew them"
 
   defp world_name("synthetic"), do: "this port's synthetic scene"
 

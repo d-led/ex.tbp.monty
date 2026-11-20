@@ -21,6 +21,7 @@ defmodule Monty.Studio.Setup do
   alias Monty.Experiment.RecognitionStrategy
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Frameworks.Environments.ObjectInitSamplers.{Default, Predefined, RandomRotation}
+  alias Monty.Frameworks.Environments.TwoDData.OmniglotEnvironment
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.NoResetEvidenceMatching.MontyForNoResetEvidenceGraphMatching
@@ -756,6 +757,11 @@ defmodule Monty.Studio.Setup do
 
   def world_name(_setup, :image), do: "image captures (a photographed scene)"
 
+  def world_name(%__MODULE__{environment: %{data_path: path}}, :omniglot) when is_binary(path),
+    do: "Omniglot drawings (#{Path.basename(path)})"
+
+  def world_name(_setup, :omniglot), do: "Omniglot drawings (the dataset's characters)"
+
   # An operator can configure a world this build does not carry. Saying so is
   # the whole answer; a page that crashed instead would blame itself.
   def world_name(_setup, other), do: "#{inspect(other)} (not carried by this application)"
@@ -792,7 +798,8 @@ defmodule Monty.Studio.Setup do
   of Monty — is refused here rather than given MuJoCo's simulator and allowed to
   look as if it ran.
   """
-  @spec world(t(), :synthetic | :mujoco | :image | :cad) :: Monty.Simulators.Environment.t()
+  @spec world(t(), :synthetic | :mujoco | :ex_mujoco | :image | :omniglot | :cad) ::
+          Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world) when is_atom(world), do: world(setup, world, 0)
 
   @spec world(t(), non_neg_integer()) :: Monty.Simulators.Environment.t()
@@ -811,7 +818,11 @@ defmodule Monty.Studio.Setup do
   the agent — a scene built without it would show the first object in every
   episode and call that a run of ten.
   """
-  @spec world(t(), :synthetic | :mujoco | :image | :cad, non_neg_integer()) ::
+  @spec world(
+          t(),
+          :synthetic | :mujoco | :ex_mujoco | :image | :omniglot | :cad,
+          non_neg_integer()
+        ) ::
           Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, world, episode) when is_atom(world),
     do: world(setup, world, episode, [])
@@ -824,7 +835,12 @@ defmodule Monty.Studio.Setup do
   Both matter: `Predefined` walks its rotations one per epoch, so a world built
   without the epoch shows every episode of a run the same side of the object.
   """
-  @spec world(t(), :synthetic | :mujoco | :image | :cad, non_neg_integer(), keyword()) ::
+  @spec world(
+          t(),
+          :synthetic | :mujoco | :ex_mujoco | :image | :omniglot | :cad,
+          non_neg_integer(),
+          keyword()
+        ) ::
           Monty.Simulators.Environment.t()
   def world(%__MODULE__{} = setup, :mujoco, episode, opts) do
     case engine(setup) do
@@ -856,15 +872,15 @@ defmodule Monty.Studio.Setup do
     )
   end
 
-  # A captured scene: photographs of objects with the depth the same lens
-  # measured, and no simulator anywhere in it. Monty's own configs name the
-  # directory (`env_init_args.data_path`) and the interface names which capture an
-  # episode is on, so both are read from the config rather than chosen here.
-  def world(%__MODULE__{} = setup, :image, episode, opts) do
-    case engine(setup) do
-      :image -> image_world(setup, episode, opts)
-      _not_an_image_config -> raise ArgumentError, uncarried_world(setup)
-    end
+  # A captured scene, or a drawing: a 2-D dataset the config names, with no
+  # simulator anywhere in it. Monty's own configs name the directory
+  # (`env_init_args.data_path`) and their interface names which capture, or which
+  # character, an episode is on, so both are read from the config rather than
+  # chosen here — and each world is only stepped by a config written for it.
+  def world(%__MODULE__{} = setup, two_d, episode, opts) when two_d in [:image, :omniglot] do
+    if engine(setup) == two_d,
+      do: two_d_world(setup, two_d, episode, opts),
+      else: raise(ArgumentError, uncarried_world(setup))
   end
 
   # A CAD part, stepped by the same world the stand-in scene is: the kinematics,
@@ -899,7 +915,8 @@ defmodule Monty.Studio.Setup do
   def world(%__MODULE__{}, world, _episode, _opts) when is_atom(world) do
     raise ArgumentError,
           "#{inspect(world)} is not a world this application carries: only MuJoCo, " <>
-            "the stand-in scene, a CAD part and image captures can be stepped here."
+            "the stand-in scene, a CAD part, image captures and Omniglot drawings can be " <>
+            "stepped here."
   end
 
   defp uncarried_world(%__MODULE__{environment: nil}) do
@@ -909,9 +926,9 @@ defmodule Monty.Studio.Setup do
 
   defp uncarried_world(%__MODULE__{environment: %{module: %{class: class}}}) do
     "This experiment's world is #{class}, which MuJoCo cannot stand in for: this " <>
-      "application steps MuJoCo's world, captured scenes, the stand-in scene and a CAD " <>
-      "part. Choose the world the config was written for in the selector, or run a " <>
-      "config whose world is MuJoCo's."
+      "application steps MuJoCo's world, captured scenes, Omniglot drawings, the " <>
+      "stand-in scene and a CAD part. Choose the world the config was written for in " <>
+      "the selector, or run a config whose world is MuJoCo's."
   end
 
   @doc """
@@ -929,7 +946,7 @@ defmodule Monty.Studio.Setup do
   """
   @spec worlds() :: [atom()]
   def worlds do
-    [:mujoco, :ex_mujoco, :synthetic, :image] ++ if cad_step?(), do: [:cad], else: []
+    [:mujoco, :ex_mujoco, :synthetic, :image, :omniglot] ++ if cad_step?(), do: [:cad], else: []
   end
 
   # Carried, and with a part to open: a scene module and an empty `parts/` is an
@@ -941,16 +958,27 @@ defmodule Monty.Studio.Setup do
   # which brings quiddity and its Rust build, and a run on a node without it is
   # refused here — with the two things that would make it work — instead of
   # failing inside a world.
-  # An image config's `eval_env_interface_args` (and `train_...`, when it has
-  # one) name the scene and version of every episode. Absent lists are `nil`, not
-  # empty: a config that names none is one to ask about, not one to guess at.
-  defp scene_versions(config) do
+  # An image or Omniglot config's `eval_env_interface_args` (and `train_...`, when
+  # it has one) name what each episode shows: `scenes` and `versions` for a
+  # captured scene, `alphabets`, `characters` and `versions` for a drawing. Absent
+  # lists are `nil`, not empty: a config that names none is one to ask about, not
+  # one to guess at.
+  defp episode_args(config) do
     Map.new([:train, :eval], fn phase ->
       args = Map.get(config, "#{phase}_env_interface_args") || %{}
 
-      {phase, %{scenes: Map.get(args, "scenes"), versions: Map.get(args, "versions")}}
+      {phase,
+       %{
+         scenes: Map.get(args, "scenes"),
+         versions: Map.get(args, "versions"),
+         alphabets: Map.get(args, "alphabets"),
+         characters: Map.get(args, "characters")
+       }}
     end)
   end
+
+  defp two_d_world(setup, :image, episode, opts), do: image_world(setup, episode, opts)
+  defp two_d_world(setup, :omniglot, episode, opts), do: omniglot_world(setup, episode, opts)
 
   defp image_world(setup, episode, opts) do
     phase = Keyword.get(opts, :phase, :eval)
@@ -976,8 +1004,8 @@ defmodule Monty.Studio.Setup do
   # Monty's interface walks both lists together — `switch_to_object(scenes[i],
   # versions[i])` — so an episode is the same index in each, wrapped at their
   # length.
-  defp capture_of(%__MODULE__{environment: %{scene_versions: versions}}, phase, episode) do
-    case Map.get(versions, phase, %{}) do
+  defp capture_of(%__MODULE__{environment: %{interface_args: arguments}}, phase, episode) do
+    case Map.get(arguments, phase, %{}) do
       %{scenes: [_ | _] = scenes, versions: [_ | _] = versions} ->
         {:ok,
          {Enum.at(scenes, rem(episode, length(scenes))),
@@ -989,6 +1017,47 @@ defmodule Monty.Studio.Setup do
   end
 
   defp capture_of(_setup, _phase, _episode), do: :none
+
+  # A character is addressed by three numbers — which alphabet, which of its
+  # characters, which drawing of it — and Monty's interface walks all three lists
+  # together, so an episode is the same index in each, wrapped at its length.
+  defp character_of(%__MODULE__{environment: %{interface_args: arguments}}, phase, episode) do
+    case Map.get(arguments, phase, %{}) do
+      %{
+        alphabets: [_ | _] = alphabets,
+        characters: [_ | _] = characters,
+        versions: [_ | _] = versions
+      } ->
+        {:ok,
+         {Enum.at(alphabets, rem(episode, length(alphabets))),
+          Enum.at(characters, rem(episode, length(characters))),
+          Enum.at(versions, rem(episode, length(versions)))}}
+
+      _absent ->
+        :none
+    end
+  end
+
+  defp character_of(_setup, _phase, _episode), do: :none
+
+  defp omniglot_world(setup, episode, opts) do
+    phase = Keyword.get(opts, :phase, :eval)
+
+    case character_of(setup, phase, episode) do
+      {:ok, {alphabet, character, version}} ->
+        setup
+        |> omniglot_data_path()
+        |> OmniglotEnvironment.new()
+        |> OmniglotEnvironment.switch_to_object(alphabet, character, version)
+
+      :none ->
+        raise ArgumentError,
+              "This config names no character for #{phase} episode #{episode}: an Omniglot " <>
+                "experiment's `#{phase}_env_interface_args` lists `alphabets`, `characters` " <>
+                "and `versions`, one entry each per episode, and this config does not have " <>
+                "all three."
+    end
+  end
 
   # Where an image config's captures are. Monty's configs resolve it already
   # (`${oc.env:MONTY_DATA}/worldimages/...`), and a config that names none is
@@ -1417,17 +1486,21 @@ defmodule Monty.Studio.Setup do
   @spec objects(t(), :train | :eval) :: [String.t()]
   def objects(%__MODULE__{} = setup, mode) do
     case Map.get(setup.objects_by_phase, mode, []) do
-      # An image experiment walks captures, not objects: one per episode, named
-      # for the capture it shows. Everything that counts what an epoch holds —
-      # the log line, the episode's place in its epoch, the target a run reports —
+      # An image or Omniglot experiment walks what its interface names per
+      # episode — a capture, or a drawing — not an object list: one episode each,
+      # named for what it shows. Everything that counts what an epoch holds — the
+      # log line, the episode's place in its epoch, the target a run reports —
       # reads it here, and an empty list would divide by nothing.
-      [] -> image_objects(setup, mode) || objects(setup)
+      [] -> image_objects(setup, mode) || omniglot_objects(setup, mode) || objects(setup)
       names -> names
     end
   end
 
-  defp image_objects(%__MODULE__{environment: %{scene_versions: versions, data_path: path}}, mode) do
-    case Map.get(versions, mode, %{}) do
+  defp image_objects(
+         %__MODULE__{environment: %{interface_args: arguments, data_path: path}},
+         mode
+       ) do
+    case Map.get(arguments, mode, %{}) do
       %{scenes: [_ | _] = scenes} ->
         names = if is_binary(path), do: image_scene_names(path), else: []
 
@@ -1443,6 +1516,37 @@ defmodule Monty.Studio.Setup do
   end
 
   defp image_objects(_setup, _mode), do: nil
+
+  # A drawing experiment walks characters: the config names one per episode, and a
+  # character is named the way Monty's interface names it — its alphabet's
+  # directory and its number — so the two never disagree about what an episode is
+  # about.
+  defp omniglot_objects(%__MODULE__{environment: %{interface_args: arguments}} = setup, mode) do
+    case Map.get(arguments, mode, %{}) do
+      %{alphabets: [_ | _] = alphabets, characters: [_ | _] = characters} ->
+        interface(setup, alphabets, characters, Map.get(arguments, mode, %{}).versions).object_names
+
+      _nothing_named ->
+        nil
+    end
+  end
+
+  defp omniglot_objects(_setup, _mode), do: nil
+
+  defp interface(setup, alphabets, characters, versions) do
+    Monty.Experiment.Environment.OmniglotInterface.new(
+      alphabets: alphabets,
+      characters: characters,
+      versions: versions || Enum.map(characters, fn _character -> 1 end),
+      object_names: setup |> omniglot_data_path() |> OmniglotEnvironment.alphabet_names()
+    )
+  end
+
+  defp omniglot_data_path(%__MODULE__{environment: %{data_path: path}}) when is_binary(path),
+    do: path
+
+  defp omniglot_data_path(%__MODULE__{}),
+    do: OmniglotEnvironment.dataset_path(nil)
 
   defp image_scene_names(path) do
     case File.ls(path) do
@@ -1634,12 +1738,14 @@ defmodule Monty.Studio.Setup do
   end
 
   # An image experiment walks captures, not objects: its config lists a scene and
-  # a version per episode, and it has no object list to count. A config with
-  # neither is a config with nothing to run, which is zero rather than a guess.
-  defp episodes_of(%__MODULE__{environment: %{scene_versions: versions}} = setup, mode) do
-    case Map.get(versions, mode, %{}) do
+  # a version per episode, and it has no object list to count. An Omniglot
+  # experiment walks characters the same way. A config with neither is a config
+  # with nothing to run, which is zero rather than a guess.
+  defp episodes_of(%__MODULE__{environment: %{interface_args: arguments}} = setup, mode) do
+    case Map.get(arguments, mode, %{}) do
       %{scenes: [_ | _] = scenes} -> length(scenes)
-      _no_captures_named -> length(objects(setup, mode))
+      %{characters: [_ | _] = characters} -> length(characters)
+      _nothing_named -> length(objects(setup, mode))
     end
   end
 
@@ -1672,6 +1778,9 @@ defmodule Monty.Studio.Setup do
 
   def engine(%__MODULE__{environment: %{module: %{class: "SaccadeOnImageEnvironment"}}}),
     do: :image
+
+  def engine(%__MODULE__{environment: %{module: %{class: "OmniglotEnvironment"}}}),
+    do: :omniglot
 
   def engine(%__MODULE__{}), do: nil
 
@@ -2103,10 +2212,9 @@ defmodule Monty.Studio.Setup do
           data_path: Map.get(args, "data_path"),
           objects: scene_objects(args),
           assembly: Map.get(args, "assembly"),
-          # Which capture each episode is on, for an image world: Monty's
-          # interface takes one (scene, version) pair per episode, one list per
-          # phase.
-          scene_versions: scene_versions(config)
+          # Which capture, or which drawing, each episode is on: Monty's
+          # interface takes one entry per episode, one list set per phase.
+          interface_args: episode_args(config)
         }
 
       _absent ->
@@ -3257,6 +3365,17 @@ defmodule Monty.Studio.Setup do
     end
   end
 
+  # The same for a drawing: the config asks for Omniglot's characters, and the
+  # dataset is a download this machine may not have made. A world of drawings with
+  # no drawings in it is one the first step would fail to read, so it is said here,
+  # where the sentence can also name the archive.
+  defp world_finding(%__MODULE__{world: :omniglot} = setup) do
+    case engine(setup) do
+      :omniglot -> omniglot_findings(setup)
+      _not_a_drawing_config -> [not_carried(setup, :omniglot)]
+    end
+  end
+
   # A world this build does not carry — an operator can configure one — is said
   # plainly rather than crashing the page: the experiment's numbers come from its
   # own simulator, and this is not it.
@@ -3289,6 +3408,35 @@ defmodule Monty.Studio.Setup do
       {:ok, names} -> Enum.any?(names, &File.dir?(Path.join(path, &1)))
       {:error, _reason} -> false
     end
+  end
+
+  # A run needs both halves of the dataset: the pictures it shows, and the pen
+  # paths it walks. One without the other is a character with no strokes, which is
+  # an episode that moves nowhere.
+  defp omniglot_findings(%__MODULE__{} = setup) do
+    path = omniglot_data_path(setup)
+
+    missing =
+      for half <- ["images_background", "strokes_background"],
+          not File.dir?(Path.join(path, half)),
+          do: half
+
+    case missing do
+      [] -> []
+      halves -> [with_download(missing_omniglot(path, halves), Path.join(path, hd(halves)))]
+    end
+  end
+
+  defp missing_omniglot(path, halves) do
+    Finding.new(
+      :error,
+      :world_data_missing,
+      "This run traces Omniglot's drawings, and #{path} has no " <>
+        "#{Enum.join(halves, " and ")}. Download the dataset on the prerequisites " <>
+        "page — it is the two archives its `python/` folder holds — or choose another " <>
+        "world in the selector.",
+      "environment.env_init_args.data_path"
+    )
   end
 
   defp not_carried(setup, world) do

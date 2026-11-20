@@ -8,6 +8,7 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Experiment.MatchCriteria.NamedLMsMatch
   alias Monty.Experiment.SensorModule.ExperimentSensorModule
   alias Monty.Experiment.SensorModules.Telemetry.Snapshot
+  alias Monty.Frameworks.Environments.TwoDData.OmniglotEnvironment
   alias Monty.Frameworks.Environments.TwoDData.SaccadeOnImageEnvironment
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
@@ -838,6 +839,42 @@ defmodule Monty.Studio.SetupTest do
       end
     end
 
+    test "is a drawing when the config is an Omniglot experiment" do
+      # An Omniglot config names three lists — `alphabets`, `characters`,
+      # `versions` — and its interface walks them together: episode 3 of
+      # `tutorial/omniglot_training` is alphabet 1, character 1, version 1,
+      # because both lists open `[0, 0, 0, 1, ...]` and `[1, 2, 3, 1, ...]`.
+      setup = with_dataset(setup_for("tutorial/omniglot_training"))
+
+      assert %OmniglotEnvironment{alphabet: "Beta", character_id: 1, character_version: 1} =
+               Setup.world(setup, :omniglot, 3, phase: :train)
+    end
+
+    test "has as many objects as the config has characters, named for the alphabet each draws" do
+      setup = with_dataset(setup_for("tutorial/omniglot_training"))
+
+      objects = Setup.objects(setup, :train)
+
+      assert objects == ["Alpha_1", "Alpha_2", "Alpha_3", "Beta_1", "Beta_2", "Beta_3"]
+    end
+
+    test "says the dataset is missing rather than stepping a drawing it does not have" do
+      empty = Path.join(System.tmp_dir!(), "no_drawings_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(empty)
+      on_exit(fn -> File.rm_rf(empty) end)
+
+      setup =
+        "tutorial/omniglot_training"
+        |> setup_for(world_simulator: :omniglot)
+        |> with_data_path(empty)
+
+      assert :world_data_missing in Enum.map(Setup.findings(setup, :error), & &1.code)
+
+      assert_raise ArgumentError, ~r/holds no alphabet/, fn ->
+        Setup.world(setup, :omniglot, 0, phase: :train)
+      end
+    end
+
     test "is Monty's own simulator, ported to this build, when a run takes it" do
       # The world is `Monty.Simulators.Mujoco.Simulator.MuJoCoSimulator`, the
       # class the config names, ported: the scene it builds comes from
@@ -1214,4 +1251,16 @@ defmodule Monty.Studio.SetupTest do
   end
 
   defp with_captures(setup, _path), do: setup
+
+  # A small Omniglot dataset — two alphabets of three characters — where a drawing
+  # world can be pointed at it.
+  defp with_dataset(setup) do
+    path = OmniglotFixture.write(["Alpha", "Beta"])
+    on_exit(fn -> File.rm_rf(path) end)
+    with_data_path(setup, path)
+  end
+
+  defp with_data_path(%Setup{environment: %{data_path: _} = environment} = setup, path) do
+    %{setup | environment: %{environment | data_path: path}}
+  end
 end

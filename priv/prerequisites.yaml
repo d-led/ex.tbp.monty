@@ -279,3 +279,41 @@ prerequisites:
     target: mujoco/objects/objaverse_dogs
     extract: true
     unpacks_to: mujoco/objects/objaverse_dogs
+
+  # The Omniglot drawings Monty's tutorial experiment traces: 1623 handwritten
+  # characters from 50 alphabets, each drawn 20 times. The dataset is a git
+  # repository rather than an archive, and Monty's tutorial says to clone it and
+  # unzip these two files out of `python/` — so these two entries are that unzip,
+  # one per half, both landing in the same `python/` directory a world reads.
+  #
+  # A drawing is ink and paper, and the second archive is where the pen went:
+  # without it a character has a picture and no path to trace, which is a run that
+  # steps nowhere.
+  - id: omniglot_images_background
+    title: Omniglot drawings (alphabet images)
+    description: >
+      The 30 alphabets of drawings Monty's tutorial trains on, unpacked into
+      ~/tbp/data/omniglot/python/images_background.
+    url: https://github.com/brendenlake/omniglot/raw/master/python/images_background.zip
+    sha256: ad41ab679c8b5d90b271ef46be6987cc81211774a695c29dcc5367b2b26ee640
+    upstream: brendenlake/omniglot, the dataset Monty's tutorial names
+    licence: MIT, as the Omniglot dataset's own repository states
+    root: MONTY_DATA
+    target: omniglot/python/images_background.zip
+    extract: true
+    unpacks_to: omniglot/python
+
+  - id: omniglot_strokes_background
+    title: Omniglot drawings (pen paths)
+    description: >
+      The pen path each drawing was made with — the order the strokes were drawn,
+      which is what Monty's world follows instead of steering — unpacked into
+      ~/tbp/data/omniglot/python/strokes_background.
+    url: https://github.com/brendenlake/omniglot/raw/master/python/strokes_background.zip
+    sha256: c1e445d158fd74b6adf81f1387ebe051f5a23923bdb0c16f539d6e707ce056d4
+    upstream: brendenlake/omniglot, the dataset Monty's tutorial names
+    licence: MIT, as the Omniglot dataset's own repository states
+    root: MONTY_DATA
+    target: omniglot/python/strokes_background.zip
+    extract: true
+    unpacks_to: omniglot/python

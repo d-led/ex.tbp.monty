@@ -2293,3 +2293,51 @@ config is waiting on.
 **What is still missing.** `SaccadeOnImageFromStreamEnvironment`, which reads a
 stream of captures from a server this build does not carry, so
 `world_image_from_stream_on_scanned_model` stays `not_planned`.
+
+## 2.39 A drawing is a depth the world makes, not one it measures
+
+Monty's Omniglot tutorial is the other 2-D world in the same file
+(`frameworks/environments/two_d_data.py::OmniglotEnvironment`), and it is ported
+too: `Monty.Frameworks.Environments.TwoDData.OmniglotEnvironment`, with the three
+module-level functions the file also holds — `load_img`, `load_motor`,
+`space_motor_to_img` — in `Monty.Frameworks.Environments.TwoDData`, and the
+interface in `Monty.Experiment.Environment.OmniglotInterface`.
+
+**A character is a path, not a scene.** The dataset records where the pen went —
+`strokes_background/…/0709_01.txt`, one `x,y,time` point a line, `START` and
+`BREAK` around a stroke — and Monty's world steps _along that path_ instead of
+steering a sensor: an action only says how far (`rotation_degrees`, at least one
+point), and the sensor reads the path's point at that count, wrapping at the end.
+An episode is therefore the character drawn again, a patch at a time.
+
+**The depth is made.** There is no lens in this world: `depth = 1.2 -
+gaussian_filter(~patch, sigma=0.5)`, so the ink sits at 0.2 m, the paper at
+1.2 m, and the step at the edge of a stroke is smoothed rather than a cliff. The
+Gaussian is scipy's, with its defaults: a separable kernel of radius
+`int(4σ + 0.5)`, normalised to one, reflected at the patch's edges.
+`GetGoodView` smooths with zeros instead (`§1.15`) because Monty's two calls
+differ, and this port keeps them apart rather than picking one rule for both.
+
+**A drawing is one bit a pixel.** The dataset's PNGs are 1-bit greyscale, which
+the decoder now reads (`§2.37`'s `ExTbpMonty.Core.Png`), writing each pixel out
+as eight bits — 0 or 255 — so a caller has one shape to handle whatever the file
+holds.
+
+**Measured against Monty.** On the first character of his dataset, his class and
+this one agree on all 190 pen positions a 10-pixel patch fits at, on the semantic
+map, and on the depth to within one unit in the last place (the separable
+Gaussian is summed in the other order). The world's numbers in `mix monty.run`:
+`tutorial/omniglot_training --world omniglot` walks its six characters in 6 000
+steps, the memory ending with six objects and 904 nodes, in 2.9 s.
+
+**The two configs.** `:omniglot` is a world kind of its own, because a drawing is
+neither MuJoCo nor a capture: the environment reads the dataset
+(`env_init_args.data_path`, else `data/omniglot/python`), the config's
+`alphabets`/`characters`/`versions` name the character of each episode, and the
+episodes of the phase are counted from `characters` — an empty list would divide
+an epoch by nothing, which is what the image family hit before `§2.38`. The
+dataset itself is two entries in the prerequisite manifest (the `python/` folder's
+own two zips), so a machine without it is offered the download rather than the
+words "put it somewhere". `tutorial/omniglot_training` is runnable with the
+dataset; `tutorial/omniglot_inference` is waiting for its memory, which the
+training run writes (`no_pretrained_memory`).

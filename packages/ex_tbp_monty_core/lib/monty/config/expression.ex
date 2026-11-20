@@ -10,7 +10,8 @@ defmodule Monty.Config.Expression do
     * number literals (`8`, `0.7`, `1e-3`)
     * `np.pi`
     * `+`, `-`, `*`, `/` with the usual precedence, and parentheses
-    * a list of expressions in brackets
+    * lists of those, and lists inside lists — `[[10, 10]]` is one resolution per
+      sensor, which is how a transform is configured
 
   Anything outside that grammar is an error, which is the point: an evaluator
   that quietly accepts more would be an evaluator we cannot reason about.
@@ -26,6 +27,9 @@ defmodule Monty.Config.Expression do
 
       iex> Monty.Config.Expression.evaluate("[1, 2 * 3]")
       [1.0, 6.0]
+
+      iex> Monty.Config.Expression.evaluate("[[10, 10], [20, 20]]")
+      [[10.0, 10.0], [20.0, 20.0]]
   """
   @spec evaluate(String.t()) :: {:ok, value()} | {:error, term()}
   def evaluate(source) do
@@ -91,7 +95,7 @@ defmodule Monty.Config.Expression do
   end
 
   defp list(tokens, items) do
-    with {:ok, value, rest} <- additive(tokens) do
+    with {:ok, value, rest} <- expression(tokens) do
       case rest do
         [char | rest] when char == ?, -> list(rest, [value | items])
         [char | rest] when char == ?] -> {:ok, Enum.reverse([value | items]), rest}

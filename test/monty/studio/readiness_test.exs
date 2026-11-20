@@ -105,10 +105,20 @@ defmodule Monty.Studio.ReadinessTest do
     end
 
     test "the world outranks the classes it would also need" do
-      entry = Readiness.classified("tutorial/omniglot_training", world_simulator: :mujoco)
+      entry =
+        Readiness.classified("world_image_from_stream_on_scanned_model",
+          world_simulator: :image
+        )
 
       assert entry.status == :not_planned
-      assert "OmniglotEnvironment" in entry.blocked_by
+      assert "SaccadeOnImageFromStreamEnvironment" in entry.blocked_by
+    end
+
+    test "a drawing config asked for MuJoCo's world is refused, as an image config is" do
+      entry = Readiness.classified("tutorial/omniglot_training", world_simulator: :mujoco)
+
+      assert entry.status == :refused
+      assert :world_not_carried in entry.codes
     end
   end
 

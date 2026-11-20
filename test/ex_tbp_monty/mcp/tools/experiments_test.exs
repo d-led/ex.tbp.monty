@@ -453,7 +453,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
       # reads: `ex_mujoco` is the world this application started carrying when
       # the compiled binding arrived, and the run page offered it while this tool
       # refused it with a list of the worlds it did know.
-      assert offered == ["monty", "mujoco", "ex_mujoco", "synthetic", "image", "cad"]
+      assert offered == ["monty", "mujoco", "ex_mujoco", "synthetic", "image", "omniglot", "cad"]
 
       # And the other direction: a world `Monty.Studio.Setup` can step with no
       # word here would be the same bug from the other side.
@@ -489,7 +489,7 @@ defmodule ExTbpMonty.Mcp.Tools.ExperimentsTest do
                )
 
       assert message =~
-               "`world` must be one of `monty`, `mujoco`, `ex_mujoco`, `synthetic`, `image`, `cad`"
+               "`world` must be one of `monty`, `mujoco`, `ex_mujoco`, `synthetic`, `image`, `omniglot`, `cad`"
 
       assert message =~ "not `habitat2`"
     end
