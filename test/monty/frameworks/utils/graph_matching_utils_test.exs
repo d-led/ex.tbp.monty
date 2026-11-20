@@ -92,6 +92,26 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtilsTest do
       assert_in_delta x, 0.0, @tolerance
       assert_in_delta y, -1.0, @tolerance
     end
+
+    test "a configuration says all three the same way, in the config's own words" do
+      # Monty's `get_initial_possible_poses` takes the YAML value as written, so
+      # a config that writes `uniform` or lists the poses is read without the
+      # caller translating it first.
+      assert initial_possible_poses("informed") == {:ok, :first_observation}
+      assert {:ok, poses} = initial_possible_poses("uniform")
+      assert length(poses) == 256
+
+      euler_poses = [[0.0, 0.0, 90.0]]
+
+      assert initial_possible_poses(euler_poses) ==
+               initial_possible_poses({:euler_degrees, euler_poses})
+    end
+
+    test "a pose setting this port cannot read is refused by name" do
+      assert_raise ArgumentError, ~r/initial_possible_poses "diagonal"/, fn ->
+        initial_possible_poses("diagonal")
+      end
+    end
   end
 
   describe "add_pose_features_to_tolerances/2" do

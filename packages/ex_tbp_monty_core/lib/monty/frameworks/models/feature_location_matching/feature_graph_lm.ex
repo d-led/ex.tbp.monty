@@ -51,7 +51,6 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
 
   use Monty.Frameworks.Models.AbstractMontyClasses.LearningModule
 
-
   alias Monty.Cmp.Message
   alias Monty.Frameworks.Models.Buffer.FeatureAtLocationBuffer
   alias Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphMemory
@@ -180,25 +179,13 @@ defmodule Monty.Frameworks.Models.FeatureLocationMatching.FeatureGraphLM do
   defp initial_possible_poses(options) do
     {:ok, poses} =
       GraphMatchingUtils.initial_possible_poses(
-        named_poses(Keyword.get(options, :initial_possible_poses, :informed))
+        Keyword.get(options, :initial_possible_poses, :informed)
       )
 
     case poses do
       :first_observation -> nil
       poses -> poses
     end
-  end
-
-  defp named_poses("uniform"), do: :uniform
-  defp named_poses("informed"), do: :informed
-  defp named_poses(:uniform), do: :uniform
-  defp named_poses(:informed), do: :informed
-  defp named_poses(poses) when is_list(poses), do: {:euler_degrees, poses}
-
-  defp named_poses(other) do
-    raise ArgumentError,
-          "initial_possible_poses #{inspect(other)} is not one this port reads: " <>
-            ~s("uniform", "informed", or a list of Euler poses)
   end
 
   @doc """

@@ -62,7 +62,10 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
         {:ok, k_n}
 
       num_datapoints > 2 ->
-        Monty.Trace.trace("setting k_n to #{num_datapoints - 1} for #{num_datapoints} observations")
+        Monty.Trace.trace(
+          "setting k_n to #{num_datapoints - 1} for #{num_datapoints} observations"
+        )
+
         {:ok, num_datapoints - 1}
 
       true ->
@@ -143,21 +146,38 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
   observation instead (there is nothing to assume yet), and a list of Euler
   poses means "try exactly these" — inverted, because they describe how the
   object sits rather than how it must be turned.
+
+  The argument is the config's value as it is written, which is Monty's
+  `get_initial_possible_poses(initial_possible_pose_type)`: `"uniform"`,
+  `"informed"` or the list itself, since a configuration says these in words.
   """
   @spec initial_possible_poses(
           :uniform
           | :informed
+          | String.t()
           | {:euler_degrees, [SpatialArithmetics.vector()]}
+          | [SpatialArithmetics.vector()]
         ) ::
           {:ok, [Rotation.t()] | :first_observation}
   def initial_possible_poses(:uniform), do: {:ok, uniform_initial_possible_poses()}
   def initial_possible_poses(:informed), do: {:ok, :first_observation}
+  def initial_possible_poses("uniform"), do: initial_possible_poses(:uniform)
+  def initial_possible_poses("informed"), do: initial_possible_poses(:informed)
 
   def initial_possible_poses({:euler_degrees, euler_poses}) do
     {:ok,
      Enum.map(euler_poses, fn euler ->
        euler |> then(&Rotation.from_euler_degrees/1) |> elem(1) |> Rotation.invert()
      end)}
+  end
+
+  def initial_possible_poses(euler_poses) when is_list(euler_poses),
+    do: initial_possible_poses({:euler_degrees, euler_poses})
+
+  def initial_possible_poses(other) do
+    raise ArgumentError,
+          "initial_possible_poses #{inspect(other)} is not one this port reads: " <>
+            ~s("uniform", "informed", or a list of Euler poses)
   end
 
   @doc """
@@ -204,6 +224,7 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
             Monty.Trace.trace(fn ->
               "no curvatures contained in the features #{inspect(Map.keys(features))}"
             end)
+
             @curvature_fallback
 
           key ->
@@ -314,7 +335,10 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtils do
     [search_locations, nearest_node_locations]
     |> Enum.zip()
     |> Enum.map(fn {search_location, node_locations} ->
-      Enum.map(node_locations, &SpatialArithmetics.magnitude(SpatialArithmetics.subtract(&1, search_location)))
+      Enum.map(
+        node_locations,
+        &SpatialArithmetics.magnitude(SpatialArithmetics.subtract(&1, search_location))
+      )
     end)
   end
 

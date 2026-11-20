@@ -11,11 +11,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHypothesesUpdater
+  alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Models.ObjectModel.GridObjectModel
+  alias Monty.Geometry.Rotation
 
   # What `learning_module/evidence_1lm_nn5_dod0025.yaml` composes to, together
   # with the burst sampler that group selects.
@@ -109,6 +111,42 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       assert {BurstSamplingHypothesesUpdater, updater} = lm.hypotheses_updater
       assert updater.displacer.max_nneighbors == 5
+    end
+
+    test "decides the poses a run starts from, out of the updater's own arguments" do
+      # Monty's Hydra instantiates the updater with `**hypotheses_updater_args`,
+      # and `learning_module/evidence_omniglot_tutorial.yaml` pins
+      # `initial_possible_poses: [[0, 0, 0]]` there. Reading it as "informed"
+      # instead gave every node two aligned poses where Monty has one — twice
+      # the hypothesis space, and a different run.
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "hypotheses_updater_class" =>
+              "tbp.monty.frameworks.models.evidence_matching.hypotheses_updater.DefaultHypothesesUpdater",
+            "hypotheses_updater_args" => %{
+              "initial_possible_poses" => [[0, 0, 0]],
+              "umbilical_num_poses" => 4
+            }
+          })
+        )
+
+      assert {DefaultHypothesesUpdater, updater} = lm.hypotheses_updater
+      assert updater.initial_possible_poses == [Rotation.to_matrix(Rotation.identity())]
+      assert updater.umbilical_num_poses == 4
+    end
+
+    test "a config that names no poses starts from the first observation" do
+      {:ok, lm} =
+        EvidenceGraphLM.from_config(
+          config(%{
+            "hypotheses_updater_class" =>
+              "tbp.monty.frameworks.models.evidence_matching.hypotheses_updater.DefaultHypothesesUpdater"
+          })
+        )
+
+      assert {DefaultHypothesesUpdater, updater} = lm.hypotheses_updater
+      assert updater.initial_possible_poses == :first_observation
     end
 
     test "decides what memory an object is stored in" do

@@ -2342,16 +2342,28 @@ words "put it somewhere". `tutorial/omniglot_training` is runnable with the
 dataset; `tutorial/omniglot_inference` runs once that training run has written its
 memory.
 
-**What does not match yet: the tutorial's answer.** Monty's own two tutorials were
-run here as the oracle (his `run.py`, his venv, his data). Training agrees
-exactly in size — his checkpoint holds 904 nodes over the same six objects, and
-so does the library this port exports. Inference does not: his run recognises
-six of six (`4, 4, 4, 4, 10, 4` steps, evidence at most 14.5), and this port
-recognises four — on `Anglo-Saxon_Futhorc_2` and `_3` its evidence falls from
-2.35 to −0.27 over four steps until no match is possible. The configs are the
-same file for file (his composed snapshot and this port's are byte-identical,
-`min_eval_steps: 3` included), so the difference is inside the step the model
-takes, not in what the config asks for. Reproduce:
+**The tutorial's answer, once the poses were read.** Monty's own two tutorials
+were run here as the oracle (his `run.py`, his venv, his data), and the configs
+are the same file for file — his composed snapshot and this port's are
+byte-identical, `min_eval_steps: 3` included. Training agrees exactly in size:
+his checkpoint holds 904 nodes over the same six objects, and so does the library
+this port exports. Inference used to recognise four of six, and the fault was not
+in the step but in what the step was told to start from. The tutorial's
+learning-module config pins exactly one starting pose under the updater's own
+arguments — `initial_possible_poses: [[0, 0, 0]]` — and this port read those
+arguments for `max_nneighbors` only: the module fell back to its informed default
+and gave every node two aligned poses where the config names one. Twice the
+hypothesis space, every evidence computed against a pose the config had ruled
+out — and the field that should have pruned to three pruned to one. `initial_possible_poses` and `umbilical_num_poses` are the
+updater's own arguments now, read where Monty's Hydra reads them, and
+`GraphMatchingUtils.initial_possible_poses/1` takes the config's words
+(`uniform`, `informed`, or the list) rather than a caller's translation.
+
+Measured on this machine (osx-arm64, both tutorials, all six episodes of each):
+the two runs now agree episode by episode — `Anglo-Saxon_Futhorc_2` walks ten
+steps with evidence rising by 1.5 a step to 14.5 and one object leading from the
+second step, `Anglo-Saxon_Futhorc_1` and `_3` and the three Magi characters take
+four, and six of six are recognised. Reproduce:
 
     MONTY_DATA=~/tbp/data mix monty.run tutorial/omniglot_training --world omniglot
     MONTY_DATA=~/tbp/data mix monty.run tutorial/omniglot_inference --world omniglot
@@ -2361,30 +2373,21 @@ takes, not in what the config asks for. Reproduce:
       experiment=tutorial/omniglot_training
     ... experiment=tutorial/omniglot_inference   # then eval_stats.csv
 
-**What the harness already settles.** Both runs write the same
-`detailed_run_stats.json` (his handler is ported, and a studio run's logging plan
-builds it from the config). Comparing episode 5 step by step:
+**What located it.** Both runs write the same `detailed_run_stats.json` (his
+handler is ported, and a studio run's logging plan builds it from the config), and
+comparing episode 5 step by step said where to look:
 
 - the features are identical to the last digit — `pose_vectors`,
-  `principal_curvatures_log`, `on_object` at steps 0 and 1 are the same
-  numbers, so the observation path and the transform are at parity;
-- the sensed locations are identical for all five steps this port took,
-  `[32.551, 0.022, 21.887] → [32.551, 0.022, 32.887] → …`;
+  `principal_curvatures_log`, `on_object` at steps 0 and 1 are the same numbers,
+  so the observation path and the transform are at parity;
+- the displacements and sensed locations are identical step for step
+  (`[32.551, 0.022, 21.887]`, then the same walk along the pen path), so the
+  world, the motor policy and the buffer agree;
 - the trained graphs are the same geometry: his first nodes are
   `[18.3207, 0.0223, 36.4687]` and this library's are
   `[18.32067, 0.02225, 36.46874]`, float32 against float64.
 
-So the difference is inside the evidence update, not in what it is given — and
-the first step of it is where it starts. Step 0 agrees to the digit: six
-hypotheses possible in both, `Anglo-Saxon_Futhorc_2` at 1.0, `_1` at 0.988, `_3`
-at 0.966. One update later his field has three hypotheses possible and stands at
-2.5, 2.409, 2.254 — every one of them gained 1.3 to 1.5 — while this port's has
-one possible and reads 2.351, 1.667, 1.19: the leader gained less than his and
-the others gained almost nothing (+0.22 for `_3` here against +1.29 there). From
-then on his evidence rises by exactly 1.5 a step (1.0, 2.5, 4.0 … 14.5) with one
-object leading throughout, and this port's goes 1.0 → 2.351 → 1.529 (and the
-leader changes) → 0.727 → −0.273. Three
-instruments, in order: a unit case for `EvidenceGraphLM`'s evidence update for one
-matching object and one hypothesis; `evidence_omniglot_tutorial`'s knobs against
-his (`evidence_update_threshold`, tolerances); and the per-step `evidences` map
-both files carry, which is what this comparison read.
+What was left was the hypothesis space itself, and `evidences` is where it shows:
+his field held one value per node, this port's two. A count of the hypotheses per
+object is the whole of the diagnosis, and the per-step `evidences` map both files
+carry is what reads it.

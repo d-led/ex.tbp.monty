@@ -275,6 +275,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
                    get_in(config, ["hypotheses_updater_args", "max_nneighbors"]) ||
                      @default_max_nneighbors,
                  hypotheses_updater: updater,
+                 hypotheses_updater_options: updater_options(config),
                  gsg: goal_generator(config),
                  # The experiment's, not the config's: a run that logs detail
                  # asks its modules for it, which is Monty's
@@ -387,6 +388,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp module_options(config), do: present_options(@module_options, config)
 
   defp memory_options(config), do: present_options(@memory_options, config)
+
+  # Monty's Hydra instantiates the updater with `**hypotheses_updater_args`, so
+  # the poses a run starts from and the number it samples at a flat surface are
+  # the updater's own arguments and are read from there. A config that names
+  # neither keeps the updater's default, which is "informed" — hence nothing
+  # here rather than `nil`, which several updaters would read as "no pose at
+  # all".
+  #
+  # A fixed pose set is stored as matrices, which is what a hypothesis space
+  # holds: the aligned poses of the informed case arrive from
+  # `align_multiple_orthonormal_vectors_as_matrices/2` in the same shape.
+  defp updater_options(config) do
+    args = Map.get(config, "hypotheses_updater_args") || %{}
+
+    fixed_poses(Map.get(args, "initial_possible_poses")) ++
+      umbilical_poses(Map.get(args, "umbilical_num_poses"))
+  end
+
+  defp fixed_poses(nil), do: []
+  defp fixed_poses("informed"), do: []
+
+  defp fixed_poses(poses) do
+    {:ok, rotations} = GraphMatchingUtils.initial_possible_poses(poses)
+    [{:initial_possible_poses, Enum.map(rotations, &Rotation.to_matrix/1)}]
+  end
+
+  defp umbilical_poses(nil), do: []
+  defp umbilical_poses(count), do: [{:umbilical_num_poses, count}]
 
   # A key a config does not name is absent, not `nil`: `nil` written into a
   # number's place fails a comparison much later, in the middle of a step.
