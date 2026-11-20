@@ -38,12 +38,12 @@ defmodule Monty.Experiment.SensorModules.Telemetry.SnapshotTest do
 
   # test_appends_observation_to_telemetry_raw_observations
   test "the observation joins the ones already in the telemetry" do
-    telemetry = %{"raw_observations" => @kept}
-    snapshot = Snapshot.new()
+    {payload, snapshot} = Snapshot.call(Snapshot.new(), ctx(), payload(:observed_once, %{}))
 
-    {payload, _snapshot} = Snapshot.call(snapshot, ctx(), payload(@new_observation, telemetry))
+    {payload, _snapshot} =
+      Snapshot.call(snapshot, ctx(), payload(@new_observation, payload.telemetry))
 
-    assert reported(payload.telemetry)["raw_observations"] == @observations ++ [@new_observation]
+    assert reported(payload.telemetry)["raw_observations"] == [:observed_once, @new_observation]
   end
 
   # Monty appends to a list it keeps oldest first. The port grows the list at the
@@ -112,6 +112,39 @@ defmodule Monty.Experiment.SensorModules.Telemetry.SnapshotTest do
 
     assert reported["raw_observations"] == [@new_observation, :observed_again]
     assert length(reported["sm_properties"]) == 2
+  end
+
+  # A frame, shaped like the ones a view finder measures: nested lists of floats
+  # are what the world hands a sensor, and what a term of them costs. The numbers
+  # are drawn rather than written, so the lists are built at run time like a
+  # world's are — a literal frame of one repeated float is shared and measures as
+  # a handful of words.
+  defp frame do
+    :rand.seed(:exsss, {1, 2, 3})
+
+    %{
+      "depth" => for(_row <- 1..64, do: for(_pixel <- 1..64, do: :rand.uniform())),
+      "cam_to_world" => for(_row <- 1..4, do: for(_column <- 1..4, do: :rand.uniform()))
+    }
+  end
+
+  test "a frame comes back exactly as it was measured" do
+    {payload, _snapshot} = Snapshot.call(Snapshot.new(), ctx(), payload(frame(), %{}))
+
+    assert reported(payload.telemetry)["raw_observations"] == [frame()]
+  end
+
+  # What is kept is a thousand frames, so the encoding is the point: as a term a
+  # frame is seven times the heap it needs as a binary (§2.40).
+  test "a frame is kept at a fraction of the heap the term takes" do
+    observation = frame()
+
+    {payload, _snapshot} = Snapshot.call(Snapshot.new(), ctx(), payload(observation, %{}))
+
+    [kept] = payload.telemetry["raw_observations"]
+    heap_bytes = :erts_debug.size(observation) * :erlang.system_info(:wordsize)
+
+    assert byte_size(kept) * 3 < heap_bytes
   end
 
   # What a logger reads: the telemetry in the order it was taken, which is the

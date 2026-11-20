@@ -24,10 +24,18 @@ defmodule Monty.Experiment.SensorModules.Telemetry.Snapshot do
   Monty's `list.append` gives, and the one a logger reads. Monty's append is
   ``payload.telemetry[key].append(x)``; the port's is ``[x | list]``, so the
   lists differ in direction until they are read. Appending at the end instead
-  copied everything the sensor had already seen, once per step: a view finder
-  recording a 64 × 64 frame per step rebuilt ~1.3 GB of list on the 870th step
-  of a dogs episode, which passed the step process's heap ceiling and stopped
-  the run (``docs/monty-differences.md`` §2.40).
+  copied everything the sensor had already seen, once per step.
+
+  ## A frame is kept encoded
+
+  An observation is stored as one binary rather than as a term. A term is what a
+  run of this port cannot afford to keep a thousand of: a 64 × 64 depth and
+  colour frame is 450 KB of heap as nested float lists and 64 KB of
+  `term_to_binary`, and a view finder keeps one per step — 1.26 GB by the 850th
+  step of a dogs exploration, which a copying garbage collector needs twice of
+  and which passed the step process's heap ceiling. Decoding costs about 120 µs
+  a step and is paid once per episode, when a logger reads the telemetry.
+  (``docs/monty-differences.md`` §2.40.)
   """
 
   @behaviour Monty.Experiment.SensorModule.ExperimentTransform
@@ -62,26 +70,42 @@ defmodule Monty.Experiment.SensorModules.Telemetry.Snapshot do
 
   defp recorded(telemetry, ctx, payload) do
     telemetry
-    |> Map.update(@raw_observations, [payload.observation], &[payload.observation | &1])
+    |> Map.update(
+      @raw_observations,
+      [encoded(payload.observation)],
+      &[
+        encoded(payload.observation) | &1
+      ]
+    )
     |> Map.update(@properties, [properties(ctx)], &[properties(ctx) | &1])
   end
+
+  # `minor_version: 2` is what makes a float 8 bytes rather than 24 in the
+  # binary; without it the encoding saves nothing over the term.
+  defp encoded(observation), do: :erlang.term_to_binary(observation, minor_version: 2)
 
   @doc """
   The telemetry as a reader wants it: every observation and pose, oldest first.
 
   What a logger asks for, and the shape Monty's `state_dict` holds — which is
-  why the lists are reversed here rather than when they are grown.
+  why the lists are reversed, and the observations decoded, here rather than
+  when they are grown.
   """
   @spec state_dict(t(), map()) :: map()
   def state_dict(%__MODULE__{}, telemetry) do
     telemetry
-    |> oldest_first(@raw_observations)
-    |> oldest_first(@properties)
+    |> oldest_first(@raw_observations, &decoded/1)
+    |> oldest_first(@properties, & &1)
   end
 
-  defp oldest_first(telemetry, key) do
+  # sobelow_skip ["Misc.BinToTerm"]
+  # The binary is one `encoded/1` wrote, in this process, of a frame this sensor
+  # measured: nothing decoded here came from outside.
+  defp decoded(encoded), do: :erlang.binary_to_term(encoded)
+
+  defp oldest_first(telemetry, key, transform) do
     case telemetry do
-      %{^key => list} -> %{telemetry | key => Enum.reverse(list)}
+      %{^key => list} -> %{telemetry | key => list |> Enum.reverse() |> Enum.map(transform)}
       _nothing_recorded -> telemetry
     end
   end

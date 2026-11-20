@@ -2419,8 +2419,15 @@ copying GC needs twice of. The frames are the reason: a 64 × 64 depth and colou
 frame is 1.4 MB as this port's nested float lists and about 85 KB as Monty's
 numpy arrays, so an episode Monty fits in ~85 MB needs 1.3 GB here.
 
-What closes it is the representation, not the keeping: frames as flat binaries
-(the plan §2.35 already names) is a quarter of the words and no boxing at all,
-and the sensor pipeline's consumers are the only places that have to learn it.
-Until then, a surf exploration longer than about 800 steps needs
-`run_max_heap_mb` raised past its default, or fewer steps.
+What closed it is the representation, not the keeping: a frame is now kept as
+`term_to_binary(observation, minor_version: 2)` — 64 KB for a frame whose term is
+450 KB of heap — and decoded in `Snapshot.state_dict/2`, so a logger reads exactly
+the map the world produced. The same episode then runs to its 4000-step budget
+instead of dying at 870, at ~120 µs a step for the encoding.
+
+That run then failed a different way, which is where the work is now: the
+learning module refused to start an object at all —
+`GridTooSmallError{fraction_in_bounds: 0.634}` — so the memory kept 0 nodes and
+the exploration had nothing to grow. A capped episode of 200 steps stores 34
+nodes, so the graph is buildable; what is too small is the grid the object is
+placed on, and the surf agent's 4000-step walk leaves it.
