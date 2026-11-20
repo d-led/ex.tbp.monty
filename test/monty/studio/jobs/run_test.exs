@@ -912,7 +912,11 @@ defmodule Monty.Studio.Jobs.RunTest do
                "the episode is reported to Monty.Frameworks.Loggers.MontyHandlers.BasicCSVStatsHandler"
 
       assert log =~ "wandb_handlers.py::WandbWrapper wraps no handler this port has"
-      assert log =~ Artifacts.dir(closed.id)
+
+      # Where a node keeps its files is not the same on anyone's machine, and
+      # this line is what the run's page shows: it names the handlers, not a path.
+      assert log =~ "in this run's own folder"
+      refute log =~ Artifacts.dir(closed.id)
     end
 
     test "a config that asks for silent logging writes no statistics, and says so" do

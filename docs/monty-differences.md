@@ -2159,6 +2159,17 @@ checked against `skimage` 0.26 itself: a 16×16 view's label field is a test
 fixture (`test/…/slic_merge_test.exs`), and a real 64×64 MuJoCo view was
 compared label for label, with no pixel differing.
 
+**The order is what makes it exact, so the order stays.** A rewrite of the
+k-means loop — pixel-major instead of seed-major, tuples instead of `:array`,
+a bisection instead of filtering every window — was 27% faster (1.6 s against
+2.1 s on the 256×256 view) and left one pixel of the 64×64 view's label field
+differing, from the sixth of the ten iterations on. One pixel is not a rounding
+detail: `base_infer_cows_small_compositional` reached `learning_module_2:
+match` at step 35 with 923 062 goals proposed on the exact loop, and had no
+conclusion at step 60 with 1 567 990 on the fast one. The rewrite was reverted;
+speed is a NIF's job, where the arithmetic is the same arithmetic and only the
+interpreter changes.
+
 **Two colours, because Monty has two.** The merge compares mean colours in the
 Lab that `cv2.cvtColor` answers divided by 255, so `merge_threshold` of 0.04 is a
 distance in `[0, 1]` — `Images.rgb_to_lab/1` does that. SLIC's k-means runs in
@@ -2180,12 +2191,12 @@ it. Each is done where Monty does it.
   follows, so the centroid is marked dead and skipped — the same label field
   without the NaN.
 
-**What it costs, measured** on this machine: a 64×64 view takes 155 ms, and the
-cows family's 256×256 view takes 2.1 s — against 5 ms for `skimage`'s Cython on
-the same view. That, plus `Vocus2`'s salience map at 2.6 s for the same view, is
-5.7 s a step on `base_infer_cows_small_compositional`, where the run itself was
-35 steps for one episode and concluded (`learning_module_2: match`, goals
-proposed at last). A run of the whole experiment is therefore hours of
-arithmetic rather than minutes: the numbers are Monty's, the speed is not yet,
-and moving SLIC into a NIF is the obvious next step if the cows runs are wanted
-at Monty's rate.
+**What it costs, measured** on this machine: a 64×64 view takes about 150 ms,
+and the cows family's 256×256 view takes 2.1 s — against 5 ms for `skimage`'s
+Cython on the same view. That, plus `Vocus2`'s salience map at 2.6 s for the
+same view, is about 5 s a step on `base_infer_cows_small_compositional`, where
+the run itself was 35 steps for one episode and concluded (`learning_module_2:
+match`, goals proposed at last). A run of the whole experiment is therefore
+hours of arithmetic rather than minutes: the numbers are Monty's, the speed is
+not yet, and moving SLIC into a NIF is the obvious next step if the cows runs
+are wanted at Monty's rate.

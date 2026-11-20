@@ -602,17 +602,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   defp visit(neighbour, state) do
     label = :array.get(neighbour, state.labels)
 
-    claimed =
-      try do
-        :array.get(neighbour, state.connected)
-      rescue
-        error ->
-          IO.puts(
-            "BAD n=#{inspect(neighbour)} w=#{inspect(state.width)} err=#{inspect(error)} array=#{inspect(state.connected, limit: 2)}"
-          )
-
-          reraise error, __STACKTRACE__
-      end
+    claimed = :array.get(neighbour, state.connected)
 
     cond do
       claimed == -1 and label == state.label ->
