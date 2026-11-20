@@ -52,9 +52,9 @@ column and `--world synthetic` the second.
 |                           | MuJoCo (the default) | stand-in scene |
 | ------------------------- | -------------------: | -------------: |
 | experiments Monty ships   |                  157 |            157 |
-| run here                  |                  123 |            102 |
+| run here                  |                  137 |            112 |
 | waiting for prerequisites |                    0 |              0 |
-| cannot run here           |                   22 |             43 |
+| cannot run here           |                    8 |             33 |
 | not planned               |                   12 |             12 |
 | do not compose at all     |                    0 |              0 |
 
@@ -75,23 +75,23 @@ not the same question as the world a run steps. It is read through
 `Setup.engine/1`, the same rule that decides `not planned`, so the two cannot
 disagree.
 
-## Why the 22 cannot run here
+## Why the 8 cannot run here
 
-| reason                        | cannot run | postponed | what it is                                                                              |
-| ----------------------------- | ---------: | --------: | --------------------------------------------------------------------------------------- |
-| `sensor_module_not_buildable` |         14 |         3 | a sensor's own layers — the cows family's `Vocus2` config shape and `SlicMerge` (§2.34) |
-| `no_pretrained_memory`        |          8 |         1 | the config's model is not exported on this machine                                      |
-| `world_not_carried`           |          0 |         9 | images another program rendered — **postponed**, not a blocker                          |
-| `test_fixture_class`          |          0 |         3 | a class the module map cannot place — Monty's own test doubles                          |
-| `modules_not_ported`          |          0 |         9 | image-dataset classes, all of them postponed                                            |
-| `world_holds_no_object`       |          0 |         1 | the data is there and none of the meshes this config names is in it                     |
+| reason                        | cannot run | postponed | what it is                                                             |
+| ----------------------------- | ---------: | --------: | ---------------------------------------------------------------------- |
+| `no_pretrained_memory`        |          8 |         1 | the config's model is not exported on this machine                     |
+| `world_not_carried`           |          0 |         9 | images another program rendered — **postponed**, not a blocker         |
+| `test_fixture_class`          |          0 |         3 | a class the module map cannot place — Monty's own test doubles         |
+| `modules_not_ported`          |          0 |         9 | image-dataset classes, all of them postponed                           |
+| `sensor_module_not_buildable` |          0 |         3 | a sensor's own layers — no experiment of Monty's is stopped by one now |
+| `world_holds_no_object`       |          0 |         1 | the data is there and none of the meshes this config names is in it    |
 
-`modules_not_ported` reads 0 and `sensor_module_not_buildable` does not: no
-experiment is stopped for a _module class_ this port has not written, and 14 are
-stopped because a **sensor's** own layers are missing. `Setup` used to answer
-that case with the stand-in sensor, which is how the cows family ran hundreds of
-episodes that proposed no goals and concluded nothing while looking healthy;
-`docs/monty-differences.md` §2.34 says what changed and why the stand-in is gone.
+Both counts that used to stand for missing classes read 0 now: no experiment is
+stopped for a _module class_ this port has not written, and none is stopped for a
+**sensor's** own layers either — the cows family's `Vocus2` and `SlicMerge` are
+written (`docs/monty-differences.md` §2.34, §2.36), and those configurations run.
+`Setup` still refuses a sensor whose layers are missing rather than stepping a
+stand-in; there is simply no experiment left that needs one.
 
 The table is about **this machine**, which is why it moves: `world_data_missing`
 was 19, then 2, and is 0, because the memory those runs load is exported and read.
@@ -135,13 +135,11 @@ what runs now.
 
 What is left is not a class, in the order worth doing:
 
-1. **The cows family's sensor layers** — fourteen configurations are stopped by
-   `sensor_module_not_buildable` alone: their view finder names `Vocus2` with
-   inline channel objects (a config shape `SalienceSM` does not read yet) and
-   `SlicMerge` as its segmentation strategy, which is not written. `SlicMerge` is
-   `skimage.segmentation.slic` plus a BFS merge, so it is an algorithm to port
-   with Monty's numbers as fixtures, not a wrapper. Nothing else unblocks those
-   fourteen (`docs/monty-differences.md` §2.34).
+1. **The cows family's speed, not its correctness** — the fourteen configurations
+   run, and a step of 256×256 view costs 5.7 s where Monty's costs milliseconds:
+   `SlicMerge` 2.1 s and `Vocus2` 2.6 s (`docs/monty-differences.md` §2.36). SLIC
+   in a NIF, and the salience map's pyramids, are what would make a whole run of
+   that family practical rather than an evening.
 2. **Monty's own pytest fixtures** — three `test/*` configs name test doubles
    from Monty's `tests/` tree, which no port can have; they cannot run here and
    should stay so unless the fixtures themselves are ported.

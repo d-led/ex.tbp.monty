@@ -2137,3 +2137,55 @@ with their numbers:
    after `<<x::float-64>>`, are **160 kB** an observation: 384 MB for a 1200-step
    episode and 1.3 GB for a 4000-step one, which fits. A reader that wants pixels
    decodes one binary; no reader exists today.
+
+## 2.36 `SlicMerge` is skimage's SLIC, computed here
+
+The cows family's view finder names `SlicMerge` as its segmentation, and a
+salience module with no segmentation proposes goals and no region — which is why
+those fourteen experiments were refused rather than run with a stand-in sensor
+(§2.34). `Monty.Frameworks.Models.Salience.Segmentation.SlicMerge` is the port,
+and it is the whole class: SLIC superpixels, each superpixel's mean colour in
+Lab, the graph of shared edges, the walk outward from the point of fixation, and
+the mask the walk answers.
+
+**SLIC itself.** `skimage.segmentation.slic` is Cython, so there is nothing to
+call: the port computes the same arithmetic in the same order — `regular_grid`'s
+seeds (a 256×256 view with 70 requested seeds gets a step of 16 and 256 seeds),
+the window of twice the step around each seed, colour distance plus `1/step²`
+times squared pixel distance, the strict `>` that hands a pixel over, ten
+iterations or until nothing changes, and `_enforce_label_connectivity`'s
+breadth-first pass that absorbs a blob smaller than half a nominal segment. It is
+checked against `skimage` 0.26 itself: a 16×16 view's label field is a test
+fixture (`test/…/slic_merge_test.exs`), and a real 64×64 MuJoCo view was
+compared label for label, with no pixel differing.
+
+**Two colours, because Monty has two.** The merge compares mean colours in the
+Lab that `cv2.cvtColor` answers divided by 255, so `merge_threshold` of 0.04 is a
+distance in `[0, 1]` — `Images.rgb_to_lab/1` does that. SLIC's k-means runs in
+`skimage`'s Lab, `L` in `0..100` with `a` and `b` unshifted, which is the scale
+`compactness` of 10 is calibrated against; the port's conversion is re-scaled to
+it. Each is done where Monty does it.
+
+**Two things that cannot be written the same way.**
+
+- **The Lab values differ in the last decimals.** Monty's two paths are OpenCV's
+  8-bit lookup tables (§1.12) and `skimage`'s own floats; the port uses one
+  floating-point chain for both. Same colour space, and the largest disagreement
+  is a percent of the range in the darkest, most saturated corner of it. A
+  segmentation decision that falls inside that difference could differ from
+  Monty's; none did on the views compared.
+- **A segment that wins no pixel is dead, not NaN.** `skimage` divides its
+  centroid by zero and carries a NaN, which can never claim a pixel again. NaN is
+  `nil` here (`docs/validation.md`) and `nil` poisons every comparison that
+  follows, so the centroid is marked dead and skipped — the same label field
+  without the NaN.
+
+**What it costs, measured** on this machine: a 64×64 view takes 155 ms, and the
+cows family's 256×256 view takes 2.1 s — against 5 ms for `skimage`'s Cython on
+the same view. That, plus `Vocus2`'s salience map at 2.6 s for the same view, is
+5.7 s a step on `base_infer_cows_small_compositional`, where the run itself was
+35 steps for one episode and concluded (`learning_module_2: match`, goals
+proposed at last). A run of the whole experiment is therefore hours of
+arithmetic rather than minutes: the numbers are Monty's, the speed is not yet,
+and moving SLIC into a NIF is the obvious next step if the cows runs are wanted
+at Monty's rate.

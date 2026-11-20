@@ -11,7 +11,10 @@ defmodule Monty.Studio.SetupTest do
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMatching
   alias Monty.Frameworks.Models.GraphMatching.GraphLM
+  alias Monty.Frameworks.Models.Salience.Segmentation.SlicMerge
   alias Monty.Frameworks.Models.Salience.SensorModule.SalienceSM
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalience
   alias Monty.Frameworks.Models.SensorModules.{CameraSM, FeatureChangeFilter}
   alias Monty.Frameworks.Models.TwoDSensorModule
   alias Monty.SensorModules.SensorModule
@@ -414,25 +417,61 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "a sensor module" do
-    # A sensor is built from its class *and the classes its own config names*, and
-    # `SalienceSM.from_config/2` refuses a layer this port has not written. Nothing
-    # recorded that refusal, so the cows family's view finder — which asks for a
-    # `SlicMerge` segmentation — was built as the stand-in sensor, and those runs
-    # proposed no goals and concluded nothing while looking healthy.
-    test "that names a class this port has not written is refused, naming it" do
+    # A sensor is built from its class *and the classes its own config names*. Two
+    # things went wrong here: `SalienceSM.from_config/2` refused a layer this port
+    # had not written and nothing recorded it, so `Setup` built the stand-in sensor
+    # instead — and the cows family's view finder, which names a `Vocus2` strategy
+    # and a `SlicMerge` segmentation, then ran episodes that proposed no goals and
+    # concluded nothing while looking healthy.
+    test "is the config's own, with the strategy and segmentation it names" do
       setup = setup_for("base_infer_cows_small_compositional", world_simulator: :mujoco)
+
+      refute :sensor_module_not_buildable in errors(setup)
+
+      view_finder =
+        Enum.find(Setup.model_spec(setup, "cows").sensor_modules, &(&1.id == "view_finder"))
+
+      assert view_finder.module == SalienceSM
+
+      assert {Vocus2, %Vocus2{color: %ColorChannelSalience{center_sigma: 1.0}}} =
+               view_finder.state.salience_strategy
+
+      assert {SlicMerge, %SlicMerge{}} = view_finder.state.segmentation_strategy
+    end
+
+    # The refusal is still what happens to a sensor whose layers are missing: a
+    # run that stepped a stand-in would measure something else than the config
+    # describes, which is the failure this rule exists for.
+    test "that names a layer this port has not written is refused, naming it" do
+      setup =
+        Setup.from_text("""
+        # @package _global_
+
+        defaults:
+          - /monty: graph_exp1000_e3_t3
+          - /monty/learning_module: evidence_1lm_nn5_dod003
+          - /environment: mujoco_ycb_dist_agent
+
+        experiment:
+          _target_: "tbp.monty.frameworks.experiments.monty_experiment.MontyExperiment"
+          config:
+            monty_config:
+              sensor_modules:
+                view_finder:
+                  _target_: tbp.monty.frameworks.models.salience.sensor_module.SalienceSM
+                  sensor_module_id: view_finder
+                  segmentation_strategy:
+                    _target_: tbp.monty.frameworks.models.salience.segmentation.some_watershed.SomeWatershed
+        """)
+        |> elem(1)
 
       assert :sensor_module_not_buildable in errors(setup)
 
       [finding] = Enum.filter(setup.findings, &(&1.code == :sensor_module_not_buildable))
 
       assert finding.message =~ "view_finder"
-      assert finding.message =~ "has not written"
+      assert finding.message =~ "SomeWatershed as its segmentation_strategy"
       assert finding.message =~ "stand-in sensor"
-
-      # `SlicMerge` and not `Vocus2`: the strategy's class is written here and
-      # read from the config, so what stops the run is the segmentation.
-      assert finding.message =~ "SlicMerge as its segmentation_strategy"
     end
   end
 

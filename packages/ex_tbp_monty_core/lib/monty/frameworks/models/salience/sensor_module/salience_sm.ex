@@ -42,6 +42,7 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
   alias Monty.Frameworks.Models.Salience.OnObjectObservation
   alias Monty.Frameworks.Models.Salience.ReturnInhibitor
+  alias Monty.Frameworks.Models.Salience.Segmentation.SlicMerge
   alias Monty.Frameworks.Models.Salience.Strategies.Uniform
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2
 
@@ -132,6 +133,19 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   # blurs, and how many scales and octaves of them to keep.
   @channel_keys ["center_sigma", "surround_sigma", "n_scales", "max_octaves"]
 
+  @slic_merge "tbp.monty.frameworks.models.salience.segmentation.slic_merge.SlicMerge"
+
+  # The seven numbers `SlicMerge` takes, and the key each is written under.
+  @slic_merge_keys [
+    "n_seeds",
+    "compactness",
+    "max_iter",
+    "sigma",
+    "min_size_factor",
+    "max_size_factor",
+    "merge_threshold"
+  ]
+
   # This port's addition, and not Monty's: his `SalienceSM` says nothing about
   # drawing from the episode's stream, because Python steps the sensors one after
   # another (`docs/monty-differences.md` §2.28). The dither is drawn from that
@@ -204,8 +218,26 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
       @vocus2 ->
         vocus2_written_out(spec)
 
+      @slic_merge ->
+        slic_merge(spec)
+
       _unsupported ->
         {:error, {:unsupported_layer, key, target}}
+    end
+  end
+
+  # `SlicMerge` takes seven numbers, and the cows configs state none of them —
+  # `new/1`'s defaults are Monty's, which is what the class's own `__init__`
+  # declares. A key this port would drop is refused rather than ignored.
+  defp slic_merge(spec) do
+    with :ok <- reads_only(spec, @slic_merge_keys) do
+      {:ok,
+       {SlicMerge,
+        SlicMerge.new(
+          for key <- @slic_merge_keys,
+              is_number(Map.get(spec, key)),
+              do: {String.to_existing_atom(key), Map.get(spec, key)}
+        )}}
     end
   end
 

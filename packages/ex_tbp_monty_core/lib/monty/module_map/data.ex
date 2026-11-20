@@ -2218,12 +2218,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Frameworks.Models.Salience.Segmentation.SlicMerge",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/frameworks/models/salience/segmentation/slic_merge.ex",
           elixir: "Monty.Frameworks.Models.Salience.Segmentation.SlicMerge",
           python: "SlicMerge"
         }
