@@ -10,8 +10,9 @@ defmodule Mix.Tasks.Monty.Objaverse.Import do
 
   A manifest is a JSON file with an `objects` list; each object names its `id`
   (the directory the world will use), its Objaverse `uid` and `shard`, and the
-  attribution — `name`, `author`, `licence`, `page`. The default manifest is
-  `priv/monty_experiments/objaverse_dogs.json`.
+  attribution — `name`, `author`, `licence`, `page`. A set's manifest sits beside
+  the configs that step it, `priv/monty_experiments/sets/<set>/<corpus>.json`,
+  and the default is the dogs corpus.
 
   GLBs are cached under `$MONTY_DATA/downloads/<corpus>`, one file per object,
   and fetched from `https://huggingface.co/datasets/allenai/objaverse` only when
@@ -26,7 +27,7 @@ defmodule Mix.Tasks.Monty.Objaverse.Import do
 
   @switches [manifest: :string, from: :string, into: :string, download: :boolean, only: :string]
 
-  @manifest "priv/monty_experiments/objaverse_dogs.json"
+  @manifest "priv/monty_experiments/sets/dogs/objaverse_dogs.json"
   @glb "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs"
 
   @impl true

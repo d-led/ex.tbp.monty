@@ -3,16 +3,17 @@
 # The objects training walks, one per episode, each in every rotation Monty's
 # `constants.rotations_all` names — the supervised counterpart of
 # `env_interface/train_distinctobj_predefined`, with the corpus swapped.
+#
+# The corpus's five dogs. Three of Objaverse's eight are excluded there and not
+# here: a scan whose material carries only a base colour is a flat grey patch,
+# and the reason each one was left out is in `objaverse_dogs.json`.
 do_train: true
 train_env_interface_args:
   object_names:
-    - boykin_spaniel
     - milka
     - dog_free_fire
     - kinder_guard_dog
-    - puppy_dog
     - puppy
-    - smoothie_3d
     - dogs_head
   object_init_sampler:
     _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined

@@ -1,16 +1,15 @@
 # @package experiment.config
 
 # The unsupervised counterpart: the same objects, a random rotation per episode.
+# Five, because the corpus carries five — the three untextured scans are excluded
+# in `objaverse_dogs.json`, with the measurement that excluded each one.
 do_train: true
 train_env_interface_args:
   object_names:
-    - boykin_spaniel
     - milka
     - dog_free_fire
     - kinder_guard_dog
-    - puppy_dog
     - puppy
-    - smoothie_3d
     - dogs_head
   object_init_sampler:
     _target_: tbp.monty.frameworks.environments.object_init_samplers.RandomRotation

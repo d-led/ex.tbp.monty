@@ -151,7 +151,13 @@ data:
     # "shared distributed learning" question from the Thousand Brains discussion
     # of 2026-11-19 — `sets/sharing/README.md` says what it asks and what would
     # falsify it.
-    hash: 86f0f1045a0d207c549eeb422fbd7b5aacab33ea014c748fff2033c870a4d59b
+    #
+    # The dogs interfaces name the corpus's five objects (2026-11-20): three of
+    # Objaverse's eight are excluded in `sets/dogs/objaverse_dogs.json`, each
+    # with the measurement that excluded it, and a config that still named one
+    # failed a training run forty minutes in with "unknown object type".
+    # `test/monty/prerequisites/corpus_test.exs` holds the two files together.
+    hash: d866a32356fd02799d916fcb45f33dad73a9dd236e7501cf7bfebe2c6c1270d9
 
   - path: priv/cad_experiments/conf
     kind: written
