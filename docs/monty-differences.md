@@ -2200,3 +2200,34 @@ match`, goals proposed at last). A run of the whole experiment is therefore
 hours of arithmetic rather than minutes: the numbers are Monty's, the speed is
 not yet, and moving SLIC into a NIF is the obvious next step if the cows runs
 are wanted at Monty's rate.
+
+## 2.37 A captured scene's PNG is decoded here, byte for byte
+
+The image world (`SaccadeOnImageEnvironment`, the family of
+`*_world_image_on_scanned_model` configs) is still unwritten — the module map
+says `:planned` and readiness says `not_planned`, because it needs a world kind
+this build does not carry. Its first dependency is written, because it is the one
+that could be wrong silently: Monty opens a capture with
+`PIL.Image.open(rgb_path)` and takes `np.array` of it as the observation's
+`rgba`, so a decoder that is nearly right would feed every sensor a picture
+Monty never saw.
+
+`ExTbpMonty.Core.Png.decode/1` is the other half of the module that already
+writes the run's frames: signature, chunks, `IHDR`, one inflate, and the five
+scanline filters undone — `None`, `Sub`, `Up`, `Average`, `Paeth`. A photograph's
+encoder chooses a filter per row, so all five are needed; the writer here only
+ever emits `None`, which is why reading a capture is not a round trip.
+
+Checked against PIL itself on a real capture — Monty's own
+`tests/unit/resources/dataloader_test_images/0_numenta_mug/rgb_0.png`, 640 × 480
+RGBA from an iPad — with **all 1 228 800 bytes identical**: `PIL.Image.open` and
+`np.array` on this machine (PIL 12.3.0) and this decoder answer the same
+SHA-256, `0344E07E…1CCE60`. The committed test carries two fixtures an encoder
+chose the filters for (PIL's own choice of `Sub`/`Paeth`/`Up`, and a body forced
+to `Average`), so the filters are covered without a photograph in the tree.
+
+What it refuses, it refuses by name: a 16-bit file, a palette PNG, an
+interlaced one, a body whose length is not `height × (stride + 1)`, or a stream
+that is not deflate. A capture is 8-bit, one image, greyscale or colour with or
+without alpha, and anything else is a different picture rather than a smaller
+one.
