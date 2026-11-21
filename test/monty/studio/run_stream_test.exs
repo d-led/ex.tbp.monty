@@ -241,8 +241,8 @@ defmodule Monty.Studio.RunStreamTest do
       assert png |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
     end
 
-    # Drawing two PNGs a sensor and base64ing them costs about three times what
-    # the archive's own planes cost, and it used to happen on every step — in the
+    # Drawing two PNGs a sensor and base64ing them costs about as much again as
+    # the archive's own planes, and it used to happen on every step — in the
     # process that stands between a run and its pages. The page is a player: it is
     # handed a picture at its own rate, and a step between two pictures announces
     # itself without any. The archive is not throttled, because its places are the
@@ -268,6 +268,20 @@ defmodule Monty.Studio.RunStreamTest do
       :ok = Pictures.settle()
       assert {:ok, _first} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
       assert {:ok, _second} = Artifacts.frame_bytes(run_id, "1/patch-depth.png")
+    end
+
+    # The interval is a floor and the cost is the rest: a picture that took a
+    # tenth of a second buys itself a tenth of a second, so the writer spends at
+    # most half of its time drawing whatever a camera answers — which is what
+    # keeps a view finder's picture from putting the writer behind the run.
+    test "a picture that took a while buys itself a while before the next" do
+      now = System.monotonic_time(:millisecond)
+
+      assert Pictures.due?(nil, 0, 100)
+      assert Pictures.due?(now - 200, 0, 100)
+      refute Pictures.due?(now, 0, 100)
+      refute Pictures.due?(now - 200, 300, 100)
+      assert Pictures.due?(now - 350, 300, 100)
     end
 
     test "cost a run its pictures when one cannot be drawn, never the process", %{run_id: run_id} do

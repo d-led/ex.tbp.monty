@@ -111,6 +111,7 @@ defmodule Monty.Studio.RunStream.Pictures do
           videos: %{term() => reference()},
           episodes: %{term() => term()},
           frames_at: %{binary() => integer()},
+          frames_cost: %{binary() => non_neg_integer()},
           stalled: MapSet.t(),
           refused: MapSet.t(),
           flushing: reference() | nil
@@ -130,6 +131,20 @@ defmodule Monty.Studio.RunStream.Pictures do
   @spec frames_interval() :: non_neg_integer()
   def frames_interval,
     do: Application.get_env(:ex_tbp_monty, :studio_frames_interval, @frames_interval_default)
+
+  @doc """
+  Whether a page watching a run is due another picture.
+
+  `nil` is a page that has not been given one yet. Otherwise the answer is yes
+  once the interval has passed **or** as long as drawing the last picture took,
+  whichever is longer: a picture that costs a tenth of a second buys itself a
+  tenth of a second before the next, so the writer never spends more than half of
+  its time drawing and never falls behind a run — the rule a player drops frames
+  by, and what makes a view finder's picture affordable at all.
+  """
+  @spec due?(integer() | nil, non_neg_integer(), non_neg_integer()) :: boolean()
+  def due?(nil, _cost, _interval), do: true
+  def due?(at, cost, interval), do: now() - at >= max(interval, cost)
 
   @doc """
   Draws and writes a step's pictures, and announces the step.
@@ -231,6 +246,7 @@ defmodule Monty.Studio.RunStream.Pictures do
          videos: %{},
          episodes: %{},
          frames_at: %{},
+         frames_cost: %{},
          stalled: MapSet.new(),
          refused: MapSet.new(),
          flushing: nil
@@ -331,19 +347,18 @@ defmodule Monty.Studio.RunStream.Pictures do
       behind?() ->
         {[], state}
 
-      due?(run, interval, state) ->
-        frames = frames_of(step, images_of(step))
-        {frames, %{state | frames_at: Map.put(state.frames_at, run, now())}}
+      due?(Map.get(state.frames_at, run), Map.get(state.frames_cost, run, 0), interval) ->
+        {microseconds, frames} = :timer.tc(fn -> frames_of(step, images_of(step)) end)
+
+        {frames,
+         %{
+           state
+           | frames_at: Map.put(state.frames_at, run, now()),
+             frames_cost: Map.put(state.frames_cost, run, div(microseconds, 1000))
+         }}
 
       true ->
         {[], state}
-    end
-  end
-
-  defp due?(run, interval, state) do
-    case Map.get(state.frames_at, run) do
-      nil -> true
-      at -> now() - at >= interval
     end
   end
 
