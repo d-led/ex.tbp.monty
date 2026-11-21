@@ -56,6 +56,8 @@ defmodule Monty.Studio.RunLog do
       # are mostly the rest is doing bookkeeping around it.
       "sensors_us" => Map.get(info, :sensors_us, 0),
       "modules_us" => Map.get(info, :modules_us, 0),
+      "round_us" => Map.get(info, :round_us, 0),
+      "motor_us" => Map.get(info, :motor_us, 0),
       # The world steps the agent before the model sees anything, and that time
       # is not the model's: a step's own clock measures the modules only. Without
       # this the wall clock of a run cannot be split into the simulation it is
@@ -351,7 +353,9 @@ defmodule Monty.Studio.RunLog do
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
       "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))} · " <>
       "sensors #{Duration.humanize(Map.get(entry, "sensors_us", 0))} · " <>
-      "modules #{Duration.humanize(Map.get(entry, "modules_us", 0))}" <> believed(entry)
+      "modules #{Duration.humanize(Map.get(entry, "modules_us", 0))} · " <>
+      "round #{Duration.humanize(Map.get(entry, "round_us", 0))} · " <>
+      "motor #{Duration.humanize(Map.get(entry, "motor_us", 0))}" <> believed(entry)
   end
 
   alias Monty.Studio.LocalClock

@@ -431,17 +431,19 @@ defmodule Monty.Runtime.Step do
   # is not reading while it is inside a `handle_call`. The seam is here so that the
   # deferred reply is a second caller of the same tail, not a second tail.
   defp finish_step(%State{} = state, pending) do
-    {state, vote_info, goals} = round_and_goals(state, pending)
+    {round_us, {state, vote_info, goals}} = timed(fn -> round_and_goals(state, pending) end)
 
-    {actions, state} =
-      step_motor_system(
-        state,
-        pending.observations,
-        pending.proprioceptive_state,
-        pending.percepts,
-        goals,
-        pending.ctx
-      )
+    {motor_us, {actions, state}} =
+      timed(fn ->
+        step_motor_system(
+          state,
+          pending.observations,
+          pending.proprioceptive_state,
+          pending.percepts,
+          goals,
+          pending.ctx
+        )
+      end)
 
     {state, processed?} = advance(state)
 
@@ -474,6 +476,11 @@ defmodule Monty.Runtime.Step do
       # compute is waited for), and everything else — routing, votes, motor.
       sensors_us: Map.get(pending, :sensors_us, 0),
       modules_us: Map.get(pending, :modules_us, 0),
+      # The rest of the step, split the same way: the vote-and-goals round (which
+      # is where a module's own vote is computed, in a round of blocking calls),
+      # and the motor system.
+      round_us: round_us,
+      motor_us: motor_us,
       duration_us: elapsed_us(pending.started_at)
     }
 
