@@ -139,6 +139,28 @@ defmodule Monty.Studio.Jobs.RunTest do
     performed
   end
 
+  # What a run found, step by step, without the two things a division is allowed
+  # to change: which part took the step, and the clock it took it at. A division
+  # is a change of schedule, so every other field of every step is the run's
+  # answer and has to be the answer the undivided run gave.
+  defp findings(%RunHistory.Run{log: log}) do
+    log
+    |> Enum.sort_by(&{&1["episode"], &1["step"]})
+    |> Enum.map(
+      &Map.take(&1, [
+        "episode",
+        "step",
+        "percepts",
+        "inputs",
+        "votes",
+        "goals",
+        "actions",
+        "beliefs",
+        "still_believing"
+      ])
+    )
+  end
+
   # Two fields of a record are choices the config cannot make for a particular
   # run: the world to step and the seed to step it from. Both are read back from
   # the record, so a seed a page shows is the seed the run used.
@@ -756,6 +778,32 @@ defmodule Monty.Studio.Jobs.RunTest do
 
       assert Summary.outcomes_line(closed.summary["outcomes"]) ==
                "learning_module_0: #{verdict} 4 of 4"
+    end
+
+    # A division may change how long a run takes; it may not change what the run
+    # found. The same four episodes, walked by one run and by two parts: every
+    # step of every episode is the step the undivided run took — the same
+    # percepts, the same votes, the same beliefs — and the two close with the
+    # same tally. This is the referee the division was missing: the parts were
+    # shown to cover the episodes, never to compute what the whole run computes.
+    test "finds what the undivided run finds, episode for episode" do
+      {:ok, whole} = start_run(@experiment, 2, episodes: 4)
+      assert {:ok, whole} = perform(whole)
+
+      {:ok, opened} = Monty.Studio.open(@experiment)
+      plan = Partition.plan(opened.setup, 2, 4)
+      parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
+
+      {:ok, divided} = RunHistory.start(RunLog.attributes(opened, 2, 0, 2, 4, %{parts: parts}))
+      assert {:ok, divided} = perform(divided)
+
+      # Four episodes of two steps each: the comparison has something to compare,
+      # and each step carries the beliefs the page draws.
+      assert length(findings(whole)) == 8
+      assert Enum.any?(findings(whole), &Map.has_key?(&1, "beliefs"))
+
+      assert findings(divided) == findings(whole)
+      assert divided.summary["outcomes"] == whole.summary["outcomes"]
     end
 
     # The pictures of a run of several parts were served from a directory nothing
