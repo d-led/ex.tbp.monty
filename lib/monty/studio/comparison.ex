@@ -36,11 +36,14 @@ defmodule Monty.Studio.Comparison do
 
   # The summary's numbers, in the order a reader compares them: how far the run
   # got, then what it cost, then the two counters that say whether the schedule
-  # lost anything on the way.
+  # lost anything on the way. "Episode time" is the statistics file's own — the
+  # sum of an episode's elapsed time — and a side that has no statistics file
+  # leaves the row out rather than guessing at it.
   @measures [
     {"Steps", "steps"},
     {"Model time", "duration_us"},
     {"World time", "world_us"},
+    {"Episode time", "episode_us"},
     {"Wall clock", "wall_us"},
     {"Deadline hits", "deadline_hits"}
   ]
@@ -62,6 +65,85 @@ defmodule Monty.Studio.Comparison do
 
   def compare(%{experiment: a_experiment}, %{experiment: b_experiment}) do
     {:error, {:different_experiments, a_experiment, b_experiment}}
+  end
+
+  @doc """
+  A side built from a run's — or a part's — statistics file.
+
+  A part has no summary: its numbers are the `eval_stats.csv` it wrote in its own
+  directory, which is also what a whole run's merged file is made of. So a
+  comparison that reads one side from a summary and the other from a file would
+  be two vocabularies in one table, and a part would answer "no steps" beside a
+  run's thousands. When either side is a part, both are read this way, and the
+  table says so.
+
+  The shape is the summary's — steps, the episode's time, and one conclusion per
+  module, counted by the episode's own exit — so the page draws one table either
+  way.
+  """
+  @spec from_stats(String.t(), String.t(), map(), Monty.Studio.EvalStats.t(), integer() | nil) ::
+          side()
+  def from_stats(name, experiment, inputs, stats, wall_us \\ nil) do
+    episodes = episodes_of(stats)
+
+    %{
+      name: name,
+      experiment: experiment,
+      inputs: inputs,
+      summary:
+        Map.merge(
+          %{
+            "steps" => Enum.sum(Enum.map(episodes, &count_of(&1, "num_steps"))),
+            "episode_us" => Enum.sum(Enum.map(episodes, &seconds_as_microseconds(&1, "time")))
+          },
+          conclusions_of(stats.rows)
+        ),
+      wall_us: wall_us
+    }
+  end
+
+  # One row an episode: a statistics file writes a row per module, and counting
+  # a module's copy of the episode's steps once per module would report a run of
+  # five modules as five times its length. `by_seed` is the reader's own index of
+  # the episodes it could join on; a file too old to carry a seed has no better
+  # grouping than its rows.
+  defp episodes_of(%{seeded?: true, by_seed: by_seed}), do: Map.values(by_seed)
+  defp episodes_of(%{rows: rows}), do: rows
+
+  defp count_of(row, column) do
+    case row |> Map.get(column, "") |> String.trim() |> Integer.parse() do
+      {count, ""} -> count
+      _not_a_count -> 0
+    end
+  end
+
+  defp seconds_as_microseconds(row, column) do
+    case row |> Map.get(column, "") |> String.trim() |> Float.parse() do
+      {seconds, ""} -> round(seconds * 1_000_000)
+      _not_a_duration -> 0
+    end
+  end
+
+  # What each module concluded, in the words the statistics file uses and in the
+  # shape a summary holds: one entry a state, and one for the module's last
+  # answer.
+  defp conclusions_of(rows) do
+    by_module = Enum.group_by(rows, &module_of/1, &Monty.Studio.EvalStats.exit_of/1)
+
+    outcomes =
+      Map.new(by_module, fn {module, exits} -> {module, Enum.frequencies(exits)} end)
+
+    last =
+      Map.new(by_module, fn {module, exits} -> {module, List.last(exits)} end)
+
+    %{"outcomes" => outcomes, "outcome" => last}
+  end
+
+  defp module_of(row) do
+    case row |> Map.get("lm_id", "") |> String.trim() do
+      "" -> "learning module"
+      module -> module
+    end
   end
 
   @doc """

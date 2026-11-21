@@ -52,6 +52,73 @@ defmodule Monty.Studio.ComparisonTest do
              Comparison.compare(a, b)
   end
 
+  # A part has no summary: its numbers are the statistics file it wrote, which is
+  # the same format a whole run's merged file is made of. So a side is built from
+  # the rows — one episode counted once, however many modules wrote about it, and
+  # each module's exits as its own tally.
+  test "a side read from statistics counts an episode once, and each module's exits" do
+    first = %{"episode_seed" => "11", "num_steps" => "14", "time" => "1.5"}
+    second = %{"episode_seed" => "12", "num_steps" => "20", "time" => "2.0"}
+
+    stats = %{
+      rows: [
+        Map.merge(first, %{"primary_performance" => "correct", "lm_id" => "LM_0"}),
+        Map.merge(first, %{"primary_performance" => "correct", "lm_id" => "LM_1"}),
+        Map.merge(second, %{"primary_performance" => "time_out", "lm_id" => "LM_0"}),
+        Map.merge(second, %{"primary_performance" => "time_out", "lm_id" => "LM_1"})
+      ],
+      by_seed: %{
+        11 => Map.merge(first, %{"primary_performance" => "correct", "lm_id" => "LM_1"}),
+        12 => Map.merge(second, %{"primary_performance" => "time_out", "lm_id" => "LM_1"})
+      },
+      seeded?: true
+    }
+
+    side = Comparison.from_stats("part 2", @experiment, %{"part" => "2 of 2"}, stats)
+
+    assert side.summary["steps"] == 34
+    assert side.summary["episode_us"] == 3_500_000
+
+    assert side.summary["outcomes"] == %{
+             "LM_0" => %{"matched" => 1, "steps_exhausted" => 1},
+             "LM_1" => %{"matched" => 1, "steps_exhausted" => 1}
+           }
+
+    assert side.summary["outcome"] == %{"LM_0" => "steps_exhausted", "LM_1" => "steps_exhausted"}
+  end
+
+  test "two statistics sides are compared on the episode's time, which a summary does not hold" do
+    stats = %{
+      rows: [
+        %{
+          "episode_seed" => "11",
+          "num_steps" => "14",
+          "time" => "1.5",
+          "lm_id" => "LM_0",
+          "primary_performance" => "correct"
+        }
+      ],
+      by_seed: %{
+        11 => %{
+          "episode_seed" => "11",
+          "num_steps" => "14",
+          "time" => "1.5",
+          "lm_id" => "LM_0",
+          "primary_performance" => "correct"
+        }
+      },
+      seeded?: true
+    }
+
+    fast = Comparison.from_stats("part 1", @experiment, %{"part" => "1 of 2"}, stats)
+    slow = Comparison.from_stats("part 2", @experiment, %{"part" => "2 of 2"}, stats)
+
+    assert {:ok, %{differences: ["part"], rows: rows}} = Comparison.compare(fast, slow)
+
+    assert %{label: "Episode time", a: 1_500_000, b: 1_500_000} =
+             Enum.find(rows, &(&1.label == "Episode time"))
+  end
+
   test "a module that concluded differently is the row that says so" do
     barrier = side("barrier", %{})
 

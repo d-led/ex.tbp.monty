@@ -148,6 +148,34 @@ defmodule Monty.Studio.Parts do
 
   def parts_of(_run_of_the_whole_experiment), do: []
 
+  @doc """
+  One part of a run's plan: the wave it belongs to and the number the division
+  gave it.
+
+  `:not_planned` for a run that was not divided, and `:no_such_part` for a number
+  the plan does not have — the two refusals a page can meet, said apart because
+  they mean different things: in the first there are no parts at all, in the
+  second the reader picked one that does not exist.
+  """
+  @spec find(RunHistory.Run.t() | map(), String.t() | atom() | nil, integer()) ::
+          {:ok, map()} | {:error, :not_planned | :no_such_part}
+  def find(run, phase, index) do
+    case parts_of(run) do
+      [] ->
+        {:error, :not_planned}
+
+      parts ->
+        parts
+        |> Enum.find(
+          &(&1["index"] == index and (is_nil(phase) or &1["phase"] == to_string(phase)))
+        )
+        |> case do
+          nil -> {:error, :no_such_part}
+          part -> {:ok, part}
+        end
+    end
+  end
+
   # A part a peer is stepping, by the number the division gave it: the record's
   # plan says which parts there are and where their steps are written, and the
   # claim row says which node has one — the only place a node is written down.
