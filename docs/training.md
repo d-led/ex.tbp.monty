@@ -194,19 +194,21 @@ graph, so a library's node count is what a percept can be matched against.
 | `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration)    | 2       | ~1 500          |
 | `trained/surf_agent_2obj_unsupervised` (2 episodes)                        | 2       | ~540            |
 | `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent)  | 8       | 29 … 88         |
-| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |     | `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's own scan) | 5   | **124 … 1 109** |
+| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |
+| `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's own scan)  | 5       | **185 … 334**   |
 
 The last row is the memory `dogs/inference_dist` reads, i.e. the one a dogs run
-is judged by, and its spread is the whole story of that run: **milka is 1 109
-nodes and the other four are 124–223**, so milka is the only object above the
-hundreds-of-nodes floor above, and nine episodes of `dogs/inference_dist`
-concluded `milka` in eight of them — including four whose target was another dog.
+is judged by, and its spread used to be the whole story of that run. Before the
+corpus was normalised by area, the same recipe gave **1 109 nodes for milka and
+124–223 for the other four** — one object above the hundreds-of-nodes floor — and
+nine episodes of `dogs/inference_dist` concluded `milka` in eight of them,
+four of them with another dog as the target.
 
 Why one recipe produced that spread is the corpus, not the recipe: the import
 used to normalise every object to one **height**, and these five reach 10 cm of
 height with surfaces from **133 cm² to 586 cm²**. A memory holds one node per
-patch-sized cell of surface, so milka's graph is the dense one and the memory
-follows. `mix monty.objaverse.import` prints that as one line
+patch-sized cell of surface, so milka's graph was the dense one and the memory
+followed. `mix monty.objaverse.import` now prints exactly that
 (`corpus: areas … — NOT comparable, the patch fills them unequally`), and
 `ExTbpMonty.Objaverse.Corpus` is the rule.
 
@@ -215,10 +217,19 @@ Monty's own objects have at 10 cm — with two sensor bounds kept: no shorter th
 5.4 cm, because the patch clips at 5 cm, and no wider than 18 cm, because a 2 cm
 patch has to be a meaningful part of the object it stands on. Re-imported, the
 five dogs come out at 200 cm² each (`1.0× the median`), heights 5.8 … 12.3 cm and
-footprints 6.3 … 14.1 cm. **The memories in the table above were built on the
-height-normalised corpus**, so they are due a rebuild: the row for
-`dogs_supervised_pretraining` is what recognition was judged by, not what the
-corpus now is.
+footprints 6.3 … 14.1 cm, and the supervisor's scan over them gives the row
+above: **334, 238, 211, 196, 185 nodes** — an 1.8× spread where there was 8.9×,
+and every object inside the band recognition needs.
+
+**Measured after the rebuild**, the same config, the same five episodes
+(`--world ex_mujoco`, seed 42): the possible set now collapses to **one object**
+and the evidence climbs to **26.9** where it used to stop at 3–12 — so the
+density ranking is gone and the memory is being matched — but every episode still
+ends `time_out`, and one of them consumed the run's whole 6 000-step budget
+without concluding. Two levers are left, and neither is the corpus: **nodes per
+object** (the row above is at the band's floor, and the density is `epochs ×
+sensors`), and the **episode budget** (6 000 steps for the run, so one slow
+episode starves the rest).
 
 The policy is not the limiter, and the earlier reading says the same: against
 20–88-node memories the episodes timed out with the patch seeing the dog.
