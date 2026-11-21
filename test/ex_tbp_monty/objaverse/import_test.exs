@@ -62,16 +62,33 @@ defmodule ExTbpMonty.Objaverse.ImportTest do
 
       metadata = into |> Path.join("dog_one/metadata.json") |> File.read!() |> JSON.decode!()
 
-      # The triangle spans 1 in x and 2 in z, so its longest side is 2 and it is
-      # scaled to the corpus's 10 cm; refpos is the footprint's centre, on the
-      # lowest vertex.
+      # The triangle's area is 1 in its own units (base 1, height 2), so a corpus
+      # of 200 cm² an object would scale it by sqrt(0.02) — 28 cm along its
+      # longest side, past the 18 cm a 2 cm patch can still be a part of. So the
+      # larger of the two bounds decides: 18 / 2 = 0.09, and this object's
+      # surface comes out smaller than the corpus's.
       assert metadata["refpos"] == [1.5, -3.0, 2.0]
       assert metadata["refquat"] == [1.0, 0.0, 0.0, 0.0]
-      assert metadata["scale"] == [0.05, 0.05, 0.05]
+      assert metadata["scale"] == [0.09, 0.09, 0.09]
 
       # The world refuses a metadata key it does not know, so the provenance
       # lives in ATTRIBUTION.md rather than in this file.
       assert Map.keys(metadata) |> Enum.sort() == ["refpos", "refquat", "scale"]
+    end
+
+    # The area a memory's nodes follow, reported rather than left to be
+    # re-derived: a corpus is comparable by this number, not by how big the
+    # objects look.
+    test "the row says what surface the object will present" do
+      source = source_with([{"u1", Gltf.triangle_glb()}])
+      into = Tmp.dir("objaverse-surface")
+
+      assert {:ok, [row]} = Import.import(source, [entry("u1", "dog_one")], into)
+      assert row.area == 0.0081
+
+      # Nine centimetres along x, none along y (the triangle is one plane), and
+      # eighteen up z — the bound that decided the scale.
+      assert row.size == {0.09, 0.0, 0.18}
     end
 
     test "an untextured material becomes the one-pixel PNG MuJoCo is given" do

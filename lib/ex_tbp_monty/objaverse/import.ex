@@ -24,12 +24,23 @@ defmodule ExTbpMonty.Objaverse.Import do
 
   alias ExTbpMonty.Objaverse.Glb
 
-  # The world's surface agent rides 10 cm up and its patch clips at 5 cm, so an
-  # object shorter than that is only ever half readable — the failure the hand-over
-  # records for spoons. A corpus is therefore normalised by **height**, not by its
-  # longest side: a dog is long and low, and scaling its length to 10 cm leaves it
-  # under the clip.
-  @height 0.10
+  # One corpus, one **surface area**. A learning module matches a percept against
+  # every object's graph at one voxel size, so a graph's node count follows its
+  # surface: an object with four times another's area has four times the cells a
+  # patch can fill, and its evidence climbs four times as fast. Normalising the
+  # area is what makes the objects of a corpus comparable at all — the height
+  # normalisation it replaces made each object *visible* while leaving their
+  # areas 4× apart, which is why one object's graph dominated recognition
+  # (`docs/training.md`, `ExTbpMonty.Objaverse.Corpus`).
+  #
+  # Two bounds survive from the old rule because they are about the sensor, not
+  # the corpus: the patch clips at 5 cm, so an object shorter than that is only
+  # ever half readable (the spoon failure), and a patch 2 cm wide must still be a
+  # meaningful piece of the object it stands on. Where the area and a bound
+  # disagree, visibility wins and the bound is reported.
+  @area 0.02
+  @min_height 0.054
+  @max_footprint 0.18
   @default_colour {0.6, 0.6, 0.6}
 
   @type entry :: %{
@@ -77,7 +88,7 @@ defmodule ExTbpMonty.Objaverse.Import do
 
     with {:ok, mesh} <- Glb.read_file(path),
          :ok <- has_faces(mesh),
-         {:ok, placement, zup} <- placement(mesh.vertices, entry),
+         {:ok, placement, zup} <- placement(mesh, entry),
          :ok <- File.mkdir_p(directory),
          :ok <- write_object(Path.join(directory, "textured.obj"), %{mesh | vertices: zup}),
          :ok <- write_texture(Path.join(directory, "texture_map.png"), mesh.texture),
@@ -94,7 +105,10 @@ defmodule ExTbpMonty.Objaverse.Import do
          # without textures is a corpus of shapes, which is not the same experiment.
          textured: match?({:image, _bytes, _mime}, mesh.texture),
          scale: placement["scale"],
-         size: size(zup, placement["scale"])
+         size: size(zup, placement["scale"]),
+         # The surface the memory will hold cells of, after the scale: this is
+         # the number a corpus is comparable by.
+         area: Float.round(surface_area(mesh) * :math.pow(hd(placement["scale"]), 2), 6)
        }}
     else
       {:error, reason} -> {:error, {:cannot_import, entry["id"] || entry["uid"], reason}}
@@ -106,20 +120,25 @@ defmodule ExTbpMonty.Objaverse.Import do
 
   # Where the object sits and how big it is, in the world's frame: the glTF Y-up
   # frame turned Z-up, centred on its own footprint, resting on z = 0, and scaled
-  # to one height for the whole corpus. A flat object (a height of nought) falls
-  # back to its longest side, which is the only dimension it has.
-  defp placement(vertices, _entry) do
-    zup = Enum.map(vertices, fn {x, y, z} -> {x, -z, y} end)
+  # to one **surface area** for the whole corpus, within the two bounds the sensor
+  # sets (see `@area`). A mesh with no measurable area falls back to its longest
+  # side, which is the only dimension it has.
+  defp placement(mesh, _entry) do
+    zup = Enum.map(mesh.vertices, fn {x, y, z} -> {x, -z, y} end)
     {min_x, max_x, min_y, max_y, min_z, max_z} = bounds(zup)
 
     longest = Enum.max([max_x - min_x, max_y - min_y, max_z - min_z])
     height = max_z - min_z
     by = if height > longest / 3, do: height, else: longest
 
+    area = surface_area(mesh)
+
     if by <= 0 do
       {:error, :degenerate_mesh}
     else
-      scale = @height / by
+      # A mesh whose triangles add up to nothing has no area to normalise: it
+      # keeps the dimension rule, at the height the patch needs.
+      scale = if area > 0, do: clamp(scale_for(area), height, longest), else: @min_height / by
 
       {:ok,
        %{
@@ -132,6 +151,47 @@ defmodule ExTbpMonty.Objaverse.Import do
          "scale" => [scale, scale, scale]
        }, zup}
     end
+  end
+
+  # The scale that gives the mesh `@area`.
+  defp scale_for(area), do: :math.sqrt(@area / area)
+
+  # Visibility first, comparability second, and visibility again when the two
+  # disagree: no shorter than the patch's clip, no wider than a patch can be a
+  # meaningful part of.
+  defp clamp(scale, height, longest) do
+    floor = if height > 0, do: @min_height / height, else: 0.0
+
+    scale
+    |> max(floor)
+    |> min(@max_footprint / longest)
+    |> max(floor)
+  end
+
+  # The mesh's own surface, in its own units: the sum of its triangles' areas.
+  # This is the number the corpus is normalised by, so it is measured rather than
+  # assumed — a bounding box says nothing about how much surface a patch can walk.
+  defp surface_area(%{triangles: triangles, vertices: vertices}) do
+    points = List.to_tuple(vertices)
+
+    Enum.reduce(triangles, 0.0, fn {a, b, c}, sum ->
+      sum + triangle_area(elem(points, a), elem(points, b), elem(points, c))
+    end)
+  end
+
+  defp triangle_area({ax, ay, az}, {bx, by, bz}, {cx, cy, cz}) do
+    ux = bx - ax
+    uy = by - ay
+    uz = bz - az
+    vx = cx - ax
+    vy = cy - ay
+    vz = cz - az
+
+    nx = uy * vz - uz * vy
+    ny = uz * vx - ux * vz
+    nz = ux * vy - uy * vx
+
+    0.5 * :math.sqrt(nx * nx + ny * ny + nz * nz)
   end
 
   defp rounded(value), do: Float.round(value, 6)

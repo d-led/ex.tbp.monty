@@ -14,86 +14,105 @@ defmodule ExTbpMonty.Objaverse.Corpus do
   very different footprints. What it can do is say so, which is what this module
   is for: one number a person reads before trusting a corpus.
 
-  The measure is the **footprint** — the horizontal extent of what the world will
-  see, in metres — because that is the plane a surface agent walks and a distant
-  agent lands on. Two rows of `{0.05, 0.06, 0.10}` and `{0.06, 0.05, 0.10}`
-  footprints of 6 cm each are one corpus; 4.7 cm against 23.5 cm is not, and
-  `outliers/1` names the second.
+  The measure is the **surface area**, in square metres, because that is what a
+  memory's node count follows: the import normalises each object to one area, and
+  a corpus whose areas still differ is one where a patch fills one graph faster
+  than another. The footprint travels with the report because it is what a motor
+  policy has to walk — an object 24 cm long and one 5 cm long are the same
+  experiment to a memory and a very different one to a gait — but it is not what
+  makes a corpus comparable.
 
   """
 
   @typedoc """
-  `rows` are the import's own rows: `:id` and `:size` as `{x, y, z}` in metres.
+  `rows` are the import's own rows: `:id`, the `:area` in square metres and the
+  `:size` as `{x, y, z}` in metres.
   """
-  @type row :: %{required(:id) => String.t(), required(:size) => {float(), float(), float()}}
+  @type row :: %{
+          required(:id) => String.t(),
+          required(:size) => {float(), float(), float()},
+          optional(:area) => float() | nil
+        }
 
   @typedoc """
-  `spread` is widest footprint divided by the median one, and `outliers` are the
-  objects above `limit` times the median — the ones the patch sees least of.
+  `spread` is the widest area divided by the median one, and `outliers` are the
+  objects above `limit` times the median — the ones whose graph fills fastest.
   """
   @type report :: %{
-          footprints: %{String.t() => float()},
-          median: float(),
-          widest: {String.t(), float()},
-          narrowest: {String.t(), float()},
-          spread: float(),
+          areas: %{String.t() => number()},
+          footprints: %{String.t() => number()},
+          median: number(),
+          widest: {String.t(), number()},
+          narrowest: {String.t(), number()},
+          spread: number(),
           outliers: [String.t()]
         }
 
   @doc """
-  How far apart the corpus's footprints are.
+  How far apart the corpus's objects are, by surface area.
 
   A corpus of one object is comparable with itself and says so.
   """
   @spec report([row()]) :: report()
   def report(rows) do
-    footprints = footprints(rows)
-    sizes = footprints |> Map.values() |> Enum.sort()
+    areas = areas(rows)
+    pairs = Map.to_list(areas)
+    sizes = pairs |> Enum.map(&elem(&1, 1)) |> Enum.sort()
 
     median = median(sizes)
-    widest = footprints |> Enum.max_by(&elem(&1, 1))
-    narrowest = footprints |> Enum.min_by(&elem(&1, 1))
+    {widest, narrowest} = extremes(pairs)
+    outliers = outliers(pairs, median)
 
     %{
-      footprints: footprints,
+      areas: areas,
+      footprints: footprints(rows),
       median: median,
       widest: widest,
       narrowest: narrowest,
       spread: if(median > 0, do: elem(widest, 1) / median, else: 0.0),
-      outliers: for({id, size} <- footprints, size > median * limit(), do: id)
+      outliers: outliers
     }
   end
 
   @doc """
   Whether `report/1` calls a corpus comparable: no object above `limit/0` times
-  the median footprint, and none below its reciprocal.
+  the median area, and none below its reciprocal.
 
   A corpus of one object is comparable with itself and says so.
   """
-  @spec comparable?(report()) :: boolean()
-  def comparable?(%{footprints: footprints}) when map_size(footprints) < 2, do: true
+  @spec comparable?(map()) :: boolean()
+  def comparable?(%{areas: areas}) when map_size(areas) < 2, do: true
 
-  def comparable?(%{median: median, footprints: footprints}) do
-    sizes = Map.values(footprints)
+  def comparable?(%{median: median, areas: areas}) do
+    sizes = Map.values(areas)
     Enum.max(sizes) <= median * limit() and Enum.min(sizes) >= median / limit()
   end
 
   @doc """
-  How far apart two footprints may be before a patch cannot treat them alike.
+  How far apart two areas may be before a patch cannot treat them alike.
 
-  Two, because a patch's coverage falls with the square of the object's size: at
-  twice the footprint the same patch sees a quarter of the object, which is
-  already a different experiment.
+  Two, because coverage falls with the square of the object's size: at twice the
+  area the same patch sees half the object in a view, and its graph fills twice
+  as slowly.
   """
   @spec limit() :: float()
   def limit, do: 2.0
 
+  @doc "The surface area of each row, in square metres."
+  @spec areas([row()]) :: %{String.t() => float()}
+  def areas(rows) do
+    for %{id: id} = row <- rows, into: %{} do
+      {id, Map.get(row, :area) || 0.0}
+    end
+  end
+
   @doc "The footprint of each row: the larger of its two horizontal extents."
   @spec footprints([row()]) :: %{String.t() => float()}
   def footprints(rows) do
-    Map.new(rows, fn %{id: id, size: {x, y, _z}} -> {id, max(x, y)} end)
+    for %{id: id, size: {x, y, _z}} <- rows, into: %{}, do: {id, max(x, y)}
   end
 
+  @spec median([number()]) :: float()
   defp median([]), do: 0.0
 
   defp median(sizes) do
@@ -101,9 +120,30 @@ defmodule ExTbpMonty.Objaverse.Corpus do
     middle = div(count, 2)
 
     if rem(count, 2) == 1 do
-      Enum.at(sizes, middle)
+      Enum.at(sizes, middle, 0.0)
     else
-      (Enum.at(sizes, middle - 1) + Enum.at(sizes, middle)) / 2
+      (Enum.at(sizes, middle - 1, 0.0) + Enum.at(sizes, middle, 0.0)) / 2
     end
+  end
+
+  # The objects whose graph fills faster than the rest: more than `limit/0` times
+  # the median area, which is the whole of what "not comparable" means here.
+  @spec outliers([{String.t(), number()}], number()) :: [String.t()]
+  defp outliers(pairs, median) do
+    for {id, area} <- pairs, area > median * limit(), do: id
+  end
+
+  # The largest and smallest areas with the object each belongs to, and nothing
+  # at all for a corpus that has no objects yet.
+  @spec extremes([{String.t(), number()}]) :: {{String.t(), number()}, {String.t(), number()}}
+  defp extremes([]), do: {{"", 0.0}, {"", 0.0}}
+
+  defp extremes([{id, area} | rest]) do
+    Enum.reduce(rest, {{id, area}, {id, area}}, fn {other, size}, {widest, narrowest} ->
+      {
+        if(size > elem(widest, 1), do: {other, size}, else: widest),
+        if(size < elem(narrowest, 1), do: {other, size}, else: narrowest)
+      }
+    end)
   end
 end

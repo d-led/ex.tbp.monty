@@ -72,28 +72,32 @@ defmodule Mix.Tasks.Monty.Objaverse.Import do
     end
   end
 
-  # One number a person reads before trusting a corpus: a patch sees the same
-  # area of every object, so an object whose footprint is twice another's is
-  # covered a quarter as well, and its graph collects a quarter of the nodes —
-  # recognition over the corpus then ranks graph density, not shape
-  # (`ExTbpMonty.Objaverse.Corpus`). Naming the outliers is the point of the
-  # line: an unbalanced corpus is a corpus to fix, not a corpus to run.
+  # One number a person reads before trusting a corpus: a memory holds one node per
+  # patch-sized cell of surface, so an object with four times another's area has
+  # four times the cells and its evidence climbs four times as fast — recognition
+  # over the corpus then ranks graph density, not shape
+  # (`ExTbpMonty.Objaverse.Corpus`). The import normalises the area, so a spread
+  # here means a bound got in the way (an object too flat to be visible at the
+  # patch's 5 cm clip, or too wide for a patch to be a part of), and naming it is
+  # the point of the line.
   defp say_comparable(rows) do
     report = Corpus.report(rows)
     {widest_id, widest} = report.widest
     {narrowest_id, narrowest} = report.narrowest
 
     spread =
-      "footprints #{Float.round(narrowest, 3)} … #{Float.round(widest, 3)} m " <>
-        "(#{Float.round(report.spread, 1)}× the median)"
+      "areas #{Float.round(narrowest * 10_000, 1)} … #{Float.round(widest * 10_000, 1)} cm² " <>
+        "(#{Float.round(report.spread, 1)}× the median)" <>
+        " · footprints #{Float.round(Enum.min(Map.values(report.footprints)) * 100, 1)} … " <>
+        "#{Float.round(Enum.max(Map.values(report.footprints)) * 100, 1)} cm"
 
     if Corpus.comparable?(report) do
       Mix.shell().info("  corpus: #{spread} — comparable")
     else
       Mix.shell().info(
-        "  corpus: #{spread} — NOT comparable, the patch covers them unequally: " <>
-          "#{Enum.join(report.outliers, ", ")} " <>
-          "(#{narrowest_id} #{Float.round(narrowest, 3)} m, #{widest_id} #{Float.round(widest, 3)} m)"
+        "  corpus: #{spread} — NOT comparable, the patch fills them unequally: " <>
+          "#{narrowest_id} #{Float.round(narrowest * 10_000, 1)} cm², " <>
+          "#{widest_id} #{Float.round(widest * 10_000, 1)} cm²"
       )
     end
   end

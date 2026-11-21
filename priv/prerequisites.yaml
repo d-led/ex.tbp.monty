@@ -263,15 +263,19 @@ prerequisites:
         target: cad_objects
 
   # The dogs' object set, imported from Objaverse's own GLBs. The manifest beside
-  # the experiments says which eight dogs, with author, licence and page for
-  # each; this entry is the import, and the GLBs are cached under downloads/ so a
-  # second run fetches nothing.
+  # the experiments says which dogs — three of the eight scanned are excluded
+  # there, each with the measurement that excluded it — with author, licence and
+  # page for each; this entry is the import, and the GLBs are cached under
+  # `downloads/` so a second run fetches nothing. The import normalises each
+  # object to one **surface area**, because a memory holds one node per
+  # patch-sized cell of surface and objects of different areas are not a corpus a
+  # recognition can be scored over (`docs/training.md`).
   - id: objaverse_dogs
     title: Objaverse dogs (object set)
     description: >
-      The eight scanned dogs the corpus experiments step, imported from Objaverse
-      1.0 into ~/tbp/data/mujoco/objects/objaverse_dogs. Each is CC-BY, and the
-      attribution travels with the object set.
+      The scanned dogs the corpus experiments step, imported from Objaverse 1.0
+      into the data folder's mujoco/objects/objaverse_dogs, one surface area
+      each. Every one is CC-BY, and the attribution travels with the object set.
     build: objaverse_dogs
     upstream: allenai/objaverse on HuggingFace; each model's author and page are in the set's ATTRIBUTION.md
     licence: CC-BY, per model

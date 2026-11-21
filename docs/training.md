@@ -203,15 +203,25 @@ hundreds-of-nodes floor above, and nine episodes of `dogs/inference_dist`
 concluded `milka` in eight of them — including four whose target was another dog.
 
 Why one recipe produced that spread is the corpus, not the recipe: the import
-normalises every object to one height, and these five reach 10 cm of height at
-footprints from **5.1 cm to 24.1 cm**. The patch is 2 cm, so it covers a quarter
-as much of milka per view as of the smallest dog, and the memory follows
-(`mix monty.objaverse.import` now prints `corpus: footprints … (2.5× the median)
-— NOT comparable, the patch covers them unequally: milka`, and names the
-outliers; `ExTbpMonty.Objaverse.Corpus` is the rule). A corpus worth recognising
-over needs one footprint, or a memory balanced per object afterwards. The policy
-is not the limiter, and the earlier reading says the same: against 20–88-node
-memories the episodes timed out with the patch seeing the dog.
+used to normalise every object to one **height**, and these five reach 10 cm of
+height with surfaces from **133 cm² to 586 cm²**. A memory holds one node per
+patch-sized cell of surface, so milka's graph is the dense one and the memory
+follows. `mix monty.objaverse.import` prints that as one line
+(`corpus: areas … — NOT comparable, the patch fills them unequally`), and
+`ExTbpMonty.Objaverse.Corpus` is the rule.
+
+**The import normalises surface area now**, at 200 cm² an object — the area
+Monty's own objects have at 10 cm — with two sensor bounds kept: no shorter than
+5.4 cm, because the patch clips at 5 cm, and no wider than 18 cm, because a 2 cm
+patch has to be a meaningful part of the object it stands on. Re-imported, the
+five dogs come out at 200 cm² each (`1.0× the median`), heights 5.8 … 12.3 cm and
+footprints 6.3 … 14.1 cm. **The memories in the table above were built on the
+height-normalised corpus**, so they are due a rebuild: the row for
+`dogs_supervised_pretraining` is what recognition was judged by, not what the
+corpus now is.
+
+The policy is not the limiter, and the earlier reading says the same: against
+20–88-node memories the episodes timed out with the patch seeing the dog.
 The same inference, over two of those memories:
 
 - **`tutorial/surf_agent_2obj_eval`, against the 1 500-node YCB memory: 6 of 6
