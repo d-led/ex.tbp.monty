@@ -263,11 +263,30 @@ episode here ends when its viewpoints are used up, not when its epochs are
 counted, so raising the epoch count buys nothing and the 6 000-step total is not
 what closed them.
 
-That leaves the pose, and the two things that could resolve it are both visible
-in Monty's own numbers rather than guessed at: Monty's supervised pretraining is
-fourteen rotations of **five sensors** (seventy passes, ~2 400 nodes), and the one
-arm here that does match — `tutorial/surf_agent_2obj_eval` against the
-1 500-node YCB memory — is a **different module** from `noresetevidence_1lm`.
+**The module is the gate, and the dogs do conclude.** `dogs/inference_supervised`
+is the other dogs inference arm: Monty's supervised evidence-graph module
+(`evidencegraph_exp1000_emin_t3` + `evidence_tutorial_surf_agent_2obj`), the same
+world, the same agent, the same five episodes — and it concludes **5 of 5
+`match`** against the base 5° memory and 5 of 5 against the dense one:
+
+| arm                               | memory | module                              | steps, 5 episodes | concluded          |
+| --------------------------------- | ------ | ----------------------------------- | ----------------- | ------------------ |
+| `dogs/inference_supervised`       | 5°     | `evidence_tutorial_surf_agent_2obj` | **635**           | **5 of 5 `match`** |
+| `dogs/inference_supervised_dense` | 3°     | `evidence_tutorial_surf_agent_2obj` | 755               | **5 of 5 `match`** |
+| `dogs/inference_dist`             | 5°     | `noresetevidence_1lm`               | 21 490            | 0 of 5 `time_out`  |
+| `dogs/inference_dist_bydense`     | 3°     | `noresetevidence_1lm`               | 2 814             | 0 of 5 `time_out`  |
+
+So the corpus normalisation is what unblocked the dogs: this is the same
+`dogs/inference_supervised` that concluded **0 of 8** against the 20–88-node
+memories (§ below), and it now concludes every episode in about a hundred steps
+each. What is left is a difference between the two modules — the unsupervised one
+ends an episode with hundreds of hypotheses of a single object still alive and no
+pose to name, where the supervised one accepts the object and its pose — and that
+is the next thing to read, module against module, not corpus against corpus.
+
+The CLI's log carries the conclusions and not the judgement, so "5 of 5 `match`"
+is a statement about concluding: whether each match named the dog it was shown is
+what the run page's verdict reports, and these four runs were not recorded.
 
 The policy is not the limiter, and the earlier reading says the same: against
 20–88-node memories the episodes timed out with the patch seeing the dog.
@@ -287,10 +306,11 @@ density of a supervised pretraining is `epochs × sensors`: Monty's
 passes an object, and that is where its ~2 400 nodes come from. One epoch of one
 sensor is one pass and ~20 nodes.
 
-Hundreds are necessary and not sufficient: the measured arm above has ~630 an
-object and still concludes nothing, because the object narrows and the pose does
-not. Read the table as the shape of the curve — evidence rises with nodes, one
-object possible appears with them — and not as a threshold.
+Hundreds are necessary and not sufficient: the unsupervised arm above has ~630 an
+object and still concludes nothing, while the supervised one concludes on the
+~230-node base memory — so the count is a floor for the corpus and the module
+decides what is done with it. Read the table as the shape of the curve — evidence
+rises with nodes, one object possible appears with them — and not as a threshold.
 
 **Trap — `NaiveScan`'s `fixed_amount` is a step size in degrees, not a count.**
 The spiral is `k * (k - 1) + 1` steps with `k = ceil(90 / fixed_amount)`
