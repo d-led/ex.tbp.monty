@@ -256,8 +256,8 @@ defmodule Monty.Runtime.Step do
 
     started_at = System.monotonic_time()
 
-    {percepts, sensor_timeouts} =
-      step_sensor_modules(state, observations, proprioceptive_state, ctx)
+    {sensors_us, {percepts, sensor_timeouts}} =
+      timed(fn -> step_sensor_modules(state, observations, proprioceptive_state, ctx) end)
 
     pending = %{
       observations: observations,
@@ -265,6 +265,7 @@ defmodule Monty.Runtime.Step do
       ctx: ctx,
       percepts: percepts,
       sensor_timeouts: sensor_timeouts,
+      sensors_us: sensors_us,
       started_at: started_at
     }
 
@@ -278,11 +279,16 @@ defmodule Monty.Runtime.Step do
         park_step(state, from, pending)
 
       :barrier ->
-        {outputs, _output_timeouts} = gather_outputs(state)
+        # The modules' own answer to the previous hand-off, waited for: a step's
+        # biggest phase when a module is doing real work, and the number that says
+        # whether several modules are overlapping or taking turns.
+        {modules_us, {outputs, _output_timeouts}} = timed(fn -> gather_outputs(state) end)
         {inputs, input_counts} = route_inputs(state, percepts, outputs)
         step_learning_modules(state, inputs, ctx)
 
-        {reply, state} = finish_step(state, Map.put(pending, :input_counts, input_counts))
+        {reply, state} =
+          finish_step(state, Map.merge(pending, %{input_counts: input_counts, modules_us: modules_us}))
+
         {:reply, reply, state}
     end
   end
@@ -463,6 +469,11 @@ defmodule Monty.Runtime.Step do
       terminal_states: state.terminal_states,
       still_believing: state.still_believing,
       done?: state.done?,
+      # A step is a sequence of rounds, and these are what a run is spent on: the
+      # sensors' percepts, the modules' answers (which is where a module's own
+      # compute is waited for), and everything else — routing, votes, motor.
+      sensors_us: Map.get(pending, :sensors_us, 0),
+      modules_us: Map.get(pending, :modules_us, 0),
       duration_us: elapsed_us(pending.started_at)
     }
 
@@ -1237,5 +1248,13 @@ defmodule Monty.Runtime.Step do
 
   defp elapsed_us(started_at) do
     System.convert_time_unit(System.monotonic_time() - started_at, :native, :microsecond)
+  end
+
+  # One phase of a step, and how long it took: a step is a sequence of rounds, and
+  # which round a run is spent in is what decides where to look next.
+  defp timed(fun) do
+    started_at = System.monotonic_time()
+    value = fun.()
+    {elapsed_us(started_at), value}
   end
 end

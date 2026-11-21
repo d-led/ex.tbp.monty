@@ -57,6 +57,10 @@ defmodule Monty.Runtime.StepTest do
     Model.step(model_id, observations, proprioceptive_state, Context.new(1))
   end
 
+  # A step's report without the clocks it carries: how long a round took is never
+  # part of what the step decided, so two steps are compared on what they said.
+  defp without_clocks(info), do: Map.drop(info, [:duration_us, :sensors_us, :modules_us])
+
   # What the coordinator holds attention as, read the way a recording run reads
   # it (`state_dict/1`) rather than out of the struct.
   defp attention_state(model_id) do
@@ -253,7 +257,7 @@ defmodule Monty.Runtime.StepTest do
       # as well — and the price was the only thing that moved.
       assert Enum.sort(concurrent_info.percept_ids) == [:patch, :view_finder]
 
-      assert %{concurrent_info | duration_us: 0} == %{serial_info | duration_us: 0}
+      assert without_clocks(concurrent_info) == without_clocks(serial_info)
     end
 
     test "a sensor that draws keeps the phase one at a time" do
@@ -948,7 +952,7 @@ defmodule Monty.Runtime.StepTest do
       {:ok, second_actions, second_info} = step(second_model)
 
       assert first_actions == second_actions
-      assert Map.delete(first_info, :duration_us) == Map.delete(second_info, :duration_us)
+      assert without_clocks(first_info) == without_clocks(second_info)
     end
   end
 

@@ -166,6 +166,30 @@ defmodule Monty.Studio.RunLogTest do
       assert Jason.encode!(entry) |> Jason.decode!() == entry
     end
 
+    test "a module that ruled objects out says which, in a name order a reader can compare" do
+      # A graph-matching module votes with the set of objects it ruled out
+      # (Monty's `send_out_vote`), not with one name: a five-module run died at
+      # printing its step because the record asked a set to become a string.
+      votes = %{lm_0: MapSet.new(["mug", "spoon"]), lm_1: MapSet.new()}
+
+      entry = info() |> Map.put(:still_believing, votes) |> RunLog.entry()
+
+      assert entry["ruled_out"] == %{"lm_0" => ["mug", "spoon"], "lm_1" => []}
+      refute Map.has_key?(entry, "still_believing")
+      assert Jason.encode!(entry) |> Jason.decode!() == entry
+    end
+
+    test "a module that is still considering objects says which" do
+      # An evidence-matching vote names the objects it still considers, which is
+      # the answer this field was named for.
+      vote = %{possible_states: %{"mug" => [%{}], "spoon" => []}, sensed_pose_rel_body: nil}
+
+      entry = info() |> Map.put(:still_believing, %{lm_0: vote}) |> RunLog.entry()
+
+      assert entry["still_believing"] == %{"lm_0" => ["mug", "spoon"]}
+      refute Map.has_key?(entry, "ruled_out")
+    end
+
     test "and is left out entirely when every module concluded on its own" do
       refute Map.has_key?(RunLog.entry(info(), %{}, []), "still_believing")
 

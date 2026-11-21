@@ -50,6 +50,12 @@ defmodule Monty.Studio.RunLog do
       "goals" => info.goals,
       "actions" => length(info.actions),
       "duration_us" => info.duration_us,
+      # The same step split into its rounds: the sensors' percepts, the modules'
+      # answers (a module's own compute is waited for here), and the rest. A run
+      # whose steps are mostly the modules' round is doing work; one whose steps
+      # are mostly the rest is doing bookkeeping around it.
+      "sensors_us" => Map.get(info, :sensors_us, 0),
+      "modules_us" => Map.get(info, :modules_us, 0),
       # The world steps the agent before the model sees anything, and that time
       # is not the model's: a step's own clock measures the modules only. Without
       # this the wall clock of a run cannot be split into the simulation it is
@@ -62,22 +68,50 @@ defmodule Monty.Studio.RunLog do
     |> put_part(Keyword.get(options, :part))
   end
 
-  # What a module that ran out of steps was **voting for** when the episode
+  # What a module that ran out of steps was **voting** when the episode
   # closed, asked of the module in one round at the settle window's close
   # (`Monty.Runtime.Step`'s `ask_for_bets/2`). It is kept beside the beliefs
   # because it is the module's own answer: a belief is the hypothesis it happened
   # to hold, and a page that reads only beliefs is inferring a vote from it.
+  #
+  # A vote's shape is the module family's, and the two mean opposite things, so
+  # they are two keys rather than one: an evidence-matching module answers with
+  # the objects it still considers (`possible_states`, kept as `still_believing`),
+  # and a graph-matching module answers with the **set of objects it ruled out**
+  # (Monty's `send_out_vote`, kept as `ruled_out`). Both are names, a set as a
+  # sorted list, because a record is JSON and a `MapSet` is not — which is how a
+  # five-module run died at printing its step.
   defp put_still_believing(entry, votes) when map_size(votes) == 0, do: entry
 
   defp put_still_believing(entry, votes) do
-    Map.put(
-      entry,
-      "still_believing",
-      for {id, object} <- votes, object != nil, into: %{} do
-        {to_string(id), to_string(object)}
-      end
-    )
+    {believing, ruled_out} =
+      votes
+      |> Enum.reject(fn {_id, vote} -> is_nil(vote) end)
+      |> Enum.reduce({%{}, %{}}, fn {id, vote}, {believing, ruled_out} ->
+        case voted(vote) do
+          {:believing, objects} -> {Map.put(believing, to_string(id), objects), ruled_out}
+          {:ruled_out, objects} -> {believing, Map.put(ruled_out, to_string(id), objects)}
+        end
+      end)
+
+    entry
+    |> put_names("still_believing", believing)
+    |> put_names("ruled_out", ruled_out)
   end
+
+  defp put_names(entry, _key, votes) when map_size(votes) == 0, do: entry
+  defp put_names(entry, key, votes), do: Map.put(entry, key, votes)
+
+  # An evidence-matching vote names the objects it still considers; a graph-
+  # matching one names the objects it excluded; a module that names one object
+  # sends that name.
+  defp voted(%{possible_states: states}), do: {:believing, names(Map.keys(states))}
+  defp voted(%{"possible_states" => states}), do: {:believing, names(Map.keys(states))}
+  defp voted(%MapSet{} = vote), do: {:ruled_out, vote |> MapSet.to_list() |> names()}
+  defp voted(vote) when is_list(vote), do: {:believing, names(vote)}
+  defp voted(vote), do: {:believing, to_string(vote)}
+
+  defp names(objects), do: objects |> Enum.map(&to_string/1) |> Enum.sort()
 
   # Which part of a parallel run took a step, when the run has parts. A run of
   # several parts keeps one transcript — the parts' steps one after the other, in
@@ -315,8 +349,9 @@ defmodule Monty.Studio.RunLog do
 
     "step #{entry["step"]} · percepts #{Enum.join(Map.get(entry, "percepts", []), ",")} · " <>
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
-      "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))}" <>
-      believed(entry)
+      "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))} · " <>
+      "sensors #{Duration.humanize(Map.get(entry, "sensors_us", 0))} · " <>
+      "modules #{Duration.humanize(Map.get(entry, "modules_us", 0))}" <> believed(entry)
   end
 
   alias Monty.Studio.LocalClock

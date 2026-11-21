@@ -48,9 +48,11 @@ defmodule Monty.Studio.Verdict do
   `beliefs` is the record's own shape: module id to what the module held, with
   `"terminal_state"`, `"detected_object"` and its graphs. `still_believing` is
   the step's collected answer — what each module that ran out of steps was voting
-  for when the episode closed — and an object named there is the one printed,
-  because the module said it; the belief it happened to hold is the fallback for a
-  record written before that answer was kept.
+  when the episode closed — and an object a module **named** there is the one
+  printed, because the module said it; the belief it happened to hold is the
+  fallback for a record written before that answer was kept. A module whose
+  answer is the set of objects it ruled out names nothing by it, and is printed
+  from its belief instead: a set is not a guess.
   """
   @spec of(%{optional(String.t()) => map()}, %{optional(String.t()) => String.t()}) ::
           t() | nil
@@ -98,7 +100,8 @@ defmodule Monty.Studio.Verdict do
   # and the reason `still_believing` is asked for at all.
   defp named(belief, "match", _vote), do: Map.get(belief, "detected_object") || believed(belief)
   defp named(_belief, "no_match", _vote), do: nil
-  defp named(belief, _undecided, vote), do: vote || believed(belief)
+  defp named(_belief, _undecided, vote) when is_binary(vote), do: vote
+  defp named(belief, _undecided, _vote), do: believed(belief)
 
   # The object a module held, from its current hypothesis where the record kept
   # one and from the strongest graph otherwise: a module whose hypothesis was
