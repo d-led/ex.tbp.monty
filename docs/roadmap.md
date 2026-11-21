@@ -207,11 +207,9 @@ The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
 projections between an angle and a vector) and `pc_moving_average` are identical to
 Monty's, line for line. `Context.rng_for/2`, which seeds Erlang's `:exsss` per
 module and per step, is still the draw site for `ActionSampler.stream/3` and for a
-transform's noise. That matters beyond tidiness: `Monty.Random.Numpy` now has
-`randint`/`choice`, so those draws can move onto the episode's one
-`Monty.Random.Stream` — and until they do, a config whose sampler draws is not
-walking Monty's walk, which is what a conclusion that arrives late looks like
-from the outside (§2.1).
+transform's noise; `Monty.Random.Numpy` has `randint`/`choice`, so those draws can
+move onto the episode's one `Monty.Random.Stream` — and until they do, a config
+whose sampler draws is not walking Monty's walk (§2.1).
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the

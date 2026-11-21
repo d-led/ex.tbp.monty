@@ -68,19 +68,9 @@ cannot
 influence each other even if they run in the same process. **`num_parallel` is
 therefore a performance knob and can never be a correctness one**, which is a
 statement Monty cannot make about its own pool without auditing every global.
-
-**Measured 2026-11-21, and that is not true yet for a world that draws.** Four
-episodes of `base_config_10distinctobj_dist_agent` on one node, `ex_mujoco`, seed
-42, started from the page: one part ran **104 steps twice**; two parts ran **171
-and then 140**, and the two divided runs agree with the serial one to step 10,
-part from it at step 11, and part from each other at step 29. On the stand-in the
-same pair is exact — 135 steps either way — so the model, the step and the
-concurrency are sound and the difference comes from the rendering world. The
-prime suspect is two renderers' GL contexts on one node, the same class as the
-Python path's bug (a context freed while another world was using it). Until it is
-found, a divided run on a rendering world is a **different experiment**, not a
-faster one, and no speed-up is claimed from it: the 5.2 s against 6.3 s wall
-clock measures different work.
+A divided run is held to it: `test/monty/studio/jobs/run_test.exs` walks the same
+episodes whole and in parts and demands the same steps, and a world that draws is
+held to the same check.
 
 ## 3. What is not free
 
@@ -88,17 +78,12 @@ Said plainly, because these are the numbers that decide the design:
 
 - **Memory per concurrent episode, not cores.** An episode holds hypotheses over
   every object it is matching, so the right `max_concurrency` is
-  `min(schedulers, memory_budget / episode_peak)`. The peak is measured rather than
-  assumed: `MIX_ENV=test mix run scripts/probe_episode_peak.exs [experiment]
+  `min(schedulers, memory_budget / episode_peak)`. Measure the peak rather than
+  assuming it: `MIX_ENV=test mix run scripts/probe_episode_peak.exs [experiment]
   [steps]` walks one episode and prints the app's own footprint, what the
-  episode's start reads and the peak while it steps. On this Mac, on the synthetic
-  stand-in, one episode of `base_config_10distinctobj_dist_agent` — 39 steps to
-  its conclusion — read **84 MB** with the app up, **151 MB** with the run
-  started, and **207 MB** at its peak: a second episode costs about **56 MB** of
-  its own, while most of the 67 MB a start reads is the library every episode
-  shares. Read it on the world a run will use before choosing the number. This is
-  the one place where the BEAM's sharing helps less than it looks: the library is
-  shared, the hypothesis space is not.
+  episode's start reads and the peak while it steps. Read it on the world a run
+  will use. This is the one place where the BEAM's sharing helps less than it
+  looks: the library is shared, the hypothesis space is not.
 - **The database is now in the hot path.** An episode per row is fine; a frame
   per row is not. Frames go to files with a retention window; the row keeps the
   path, the counts and the conclusion.
@@ -146,41 +131,19 @@ to copy rather than invent: [`tbp.teleop`](https://github.com/thousandbrainsproj
 
 ## 5. Where this sits in the plan
 
-**Parallel episodes are built** — `Partition` and `Jobs.Run.run_wave` divide a
-run's episodes across parts, the run form carries a `parallelism` select, and a
-divided run's library has been read back and scored against its objects
-(`training.md`, "A divided run writes the same memory"). The four things that made
-it something to trust are in:
+Parallel episodes are built: `Partition` and `Jobs.Run.run_wave` divide a run's
+episodes across parts, the run form carries a `parallelism` select, and a divided
+run's library names the objects its parts trained (`training.md`). The page can
+put two parts of one divided run beside each other (`/compare`). What the
+milestones below add is the part that makes it trustworthy and watchable:
 
-- **The referee** — "a run of several parts finds what the undivided run finds,
-  episode for episode" (`test/monty/studio/jobs/run_test.exs`) walks four
-  episodes twice, once whole and once in two parts, and asserts every step of
-  every episode is the same step: the same percepts, votes, goals and beliefs, and
-  the same tally at the close. A division is a change of schedule, so nothing else
-  may move.
-- **The memory number** — `scripts/probe_episode_peak.exs` prints an episode's
-  peak and §3 quotes the reading, so a concurrency is arithmetic rather than a
-  number chosen by feel.
-- **The comparison, on the page** — `/compare` offers a divided run's parts under
-  the run in each of its two pickers. Picking two parts (or a part and the whole
-  run) reads both columns from the runs' `eval_stats.csv`, because a part has no
-  summary of its own, and the page says so above the table. That is a reader's own
-  proof that the division did not change the answer.
-- **A headless lever** — `mix monty.run <experiment> --episodes 8 --parallel 4`
-  for the runs a script starts; the page stays the way a person starts one.
+| Milestone            | Needs                          | Done when                                                                                                                           |
+| -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Parallel episodes    | a world; episode peak measured | a divided run takes the same steps as the serial one (`test/monty/studio/jobs/run_test.exs`), and `max_concurrency` follows the measured peak |
+| Live episode         | a sensor source behind a port  | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions                            |
+| Distributed episodes | the two above                  | one experiment across two nodes, with the aggregate identical                                                                       |
 
-What is left in this lane:
-
-- **`/compare` starting the second run** — a reader still starts the second run
-  from the experiment page and then picks it here, rather than pressing one
-  button on the first run's page.
-- A part's **wall clock** is shown only for a run of one wave: a run that trains
-  and then evaluates numbers both waves from one, and the part rows carry no wave.
-
-**Live episodes are not started**: they need a sensor source behind a port, and
-the model needs no change. **Distributed episodes** follow both.
-
-The check is the same one this port has used everywhere else: **the same numbers
-as serial, then the same numbers as Python.** Parallelism that changes a result
-is a bug, and a live run that cannot be replayed from its recording is not an
-experiment.
+The check for both is the same one this port has used everywhere else: **the same
+numbers as serial, then the same numbers as Python.** Parallelism that changes a
+result is a bug, and a live run that cannot be replayed from its recording is not
+an experiment.
