@@ -14,6 +14,12 @@ config :ex_tbp_monty, world_simulator: :synthetic
 # `ExTbpMontyWeb.ExperimentLive`.
 config :ex_tbp_monty, chart_interval: 0
 
+# A page is handed a step's pictures at a display rate (`RunStream.Pictures`),
+# ten a second in a deployment. The suite asks for the step's own rate, so a test
+# that publishes one step sees that step's pictures; the rate itself is asserted
+# where it is decided.
+config :ex_tbp_monty, studio_frames_interval: 0
+
 # The studio's long-lived processes hibernate when idle so that the heap of the
 # biggest batch they were handed is given back (`Monty.Studio.RunWriter` measures
 # why). A test cannot wait five seconds to see that, so the idleness is short

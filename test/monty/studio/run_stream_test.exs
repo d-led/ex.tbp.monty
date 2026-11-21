@@ -241,6 +241,35 @@ defmodule Monty.Studio.RunStreamTest do
       assert png |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
     end
 
+    # Drawing two PNGs a sensor and base64ing them costs about three times what
+    # the archive's own planes cost, and it used to happen on every step — in the
+    # process that stands between a run and its pages. The page is a player: it is
+    # handed a picture at its own rate, and a step between two pictures announces
+    # itself without any. The archive is not throttled, because its places are the
+    # step numbers.
+    test "are handed to a page at a display rate, while every step is archived", %{
+      run_id: run_id
+    } do
+      Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Studio.Jobs.Run.topic(run_id))
+
+      # A minute between pictures: the first step is due, the second is not.
+      Pictures.drawn(step(depth: [[0.05, 0.07], [0.05, 0.07]]), run_id, "0",
+        frames_interval: 60_000
+      )
+
+      assert_receive {:studio, ^run_id, {:step, %{step: 1, frames: [_ | _]}}}, 5_000
+
+      Pictures.drawn(step(step: 2, depth: [[0.05, 0.05], [0.05, 0.05]]), run_id, "1",
+        frames_interval: 60_000
+      )
+
+      assert_receive {:studio, ^run_id, {:step, %{step: 2, frames: []}}}, 5_000
+
+      :ok = Pictures.settle()
+      assert {:ok, _first} = Artifacts.frame_bytes(run_id, "0/patch-depth.png")
+      assert {:ok, _second} = Artifacts.frame_bytes(run_id, "1/patch-depth.png")
+    end
+
     test "cost a run its pictures when one cannot be drawn, never the process", %{run_id: run_id} do
       # A camera that answers something no picture can be made of used to end the
       # writer, and with it the node: the supervisor restarted it into the same

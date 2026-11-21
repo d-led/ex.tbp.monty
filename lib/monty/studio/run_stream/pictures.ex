@@ -31,6 +31,17 @@ defmodule Monty.Studio.RunStream.Pictures do
   has, `frame_key/2`), and this refuses to write: a picture that is missing is
   better than a picture of the wrong step, and the warning names the file.
 
+  ## The page is a player, not an archive
+
+  A step's pictures are archived for **every** step — the video's places are the
+  step numbers — but the page is handed one at a rate of its own
+  (`:studio_frames_interval`, ten a second by default), because a page draws the
+  newest picture and a run steps tens of times a second. Drawing a step's two
+  PNGs a sensor and base64ing them costs about as much again as the archive's own
+  planes — tens of milliseconds a sensor at a view finder's size — so doing it a
+  step is the largest thing in this process, and this process sits between a run
+  and its pages. At a rate, that cost is a page's refresh instead of a step's.
+
   ## Why a process of its own
 
   A boundary asks `RunStream` for everything it has been handed, and that barrier
@@ -93,16 +104,32 @@ defmodule Monty.Studio.RunStream.Pictures do
 
   @typedoc """
   What is remembered between steps: the video open for each sensor and kind, the
-  episode the last frame of each stream belonged to, and the streams that cannot
-  be written any more.
+  episode the last frame of each stream belonged to, when the page watching a run
+  was last given a picture, and the streams that cannot be written any more.
   """
   @type state :: %{
           videos: %{term() => reference()},
           episodes: %{term() => term()},
+          frames_at: %{binary() => integer()},
           stalled: MapSet.t(),
           refused: MapSet.t(),
           flushing: reference() | nil
         }
+
+  # How often a page watching a run is handed a picture, in milliseconds: ten a
+  # second is a video's rate, and it is the page's rate rather than the step's.
+  # Zero is every step, which is what the suite asks for.
+  @frames_interval_default 100
+
+  @doc """
+  How often a page is handed a picture, in milliseconds.
+
+  The setting is the deployment's (`:studio_frames_interval`), because how fast a
+  page should refresh is not a run's decision.
+  """
+  @spec frames_interval() :: non_neg_integer()
+  def frames_interval,
+    do: Application.get_env(:ex_tbp_monty, :studio_frames_interval, @frames_interval_default)
 
   @doc """
   Draws and writes a step's pictures, and announces the step.
@@ -113,11 +140,20 @@ defmodule Monty.Studio.RunStream.Pictures do
   `announce?: false` is a run nobody is watching — `mix monty.run` records its
   steps itself and has no page to push a frame to — and it draws nothing for the
   page: only the video is written.
+
+  `:frames_interval` is how long the page's last picture must be old for this
+  step's pictures to be worth drawing (milliseconds; `frames_interval/0` by
+  default). A step inside the interval still announces its line and its beliefs.
   """
   @spec drawn(map(), binary(), String.t(), keyword()) :: :ok
   def drawn(step, pictures_in, frame, options \\ []) do
     announce? = Keyword.get(options, :announce, true)
-    GenServer.cast(__MODULE__, {:drawn, carried(step, queued()), pictures_in, frame, announce?})
+    interval = Keyword.get(options, :frames_interval, frames_interval())
+
+    GenServer.cast(
+      __MODULE__,
+      {:drawn, carried(step, queued()), pictures_in, frame, announce?, interval}
+    )
   end
 
   @doc """
@@ -191,11 +227,18 @@ defmodule Monty.Studio.RunStream.Pictures do
   def init(_opts),
     do:
       {:ok,
-       %{videos: %{}, episodes: %{}, stalled: MapSet.new(), refused: MapSet.new(), flushing: nil}}
+       %{
+         videos: %{},
+         episodes: %{},
+         frames_at: %{},
+         stalled: MapSet.new(),
+         refused: MapSet.new(),
+         flushing: nil
+       }}
 
   @impl true
-  def handle_cast({:drawn, step, pictures_in, frame, announce?}, state) do
-    {:noreply, draw(step, pictures_in, frame, announce?, state)}
+  def handle_cast({:drawn, step, pictures_in, frame, announce?, interval}, state) do
+    {:noreply, draw(step, pictures_in, frame, announce?, interval, state)}
   end
 
   # A picture is never worth the run, and never worth the node: a step this
@@ -203,8 +246,9 @@ defmodule Monty.Studio.RunStream.Pictures do
   # would be worse than losing a video — the supervisor would restart it into the
   # same step until it gave up, and the application would go with it, which is how
   # a MuJoCo run's wrong-sized channel ended a whole node.
-  defp draw(step, pictures_in, frame, announce?, state) do
+  defp draw(step, pictures_in, frame, announce?, interval, state) do
     state = write(step, pictures_in, frame, state) |> schedule_flush()
+    {frames, state} = page_frames(step, pictures_in, interval, state)
 
     # What a page draws a step from: its line, the pictures, and what the learning
     # modules concluded. The observations themselves stay in `RunStream.steps/1`,
@@ -212,7 +256,7 @@ defmodule Monty.Studio.RunStream.Pictures do
     # are the same drawing a live page would get, and a step pays for two PNGs a
     # sensor rather than four because the step already encoded its pixels.
     if announce? do
-      broadcast(pictures_in, {:step, announcement(step, page_frames(step))})
+      broadcast(pictures_in, {:step, announcement(step, frames)})
     end
 
     state
@@ -276,13 +320,34 @@ defmodule Monty.Studio.RunStream.Pictures do
     end
   end
 
-  # A page shows the newest step's pictures, and a writer this far behind is
-  # drawing steps nobody looks at. Answering with no frames leaves the page's
-  # pictures where they are, where drawing them would keep the writer behind for
-  # good: every step of the archive would be late by the backlog's length.
-  defp page_frames(step) do
-    if behind?(), do: [], else: frames_of(step, images_of(step))
+  # A page shows the newest step's pictures at the rate it can draw them. A step
+  # inside the interval announces itself without pictures, so a run that steps
+  # faster than a page refreshes does not pay for the drawing it cannot show:
+  # the archive still has every step's frame, because the video is written above,
+  # before this is asked. A writer this far behind is drawing steps nobody looks
+  # at, and answering with no frames leaves the page's pictures where they are.
+  defp page_frames(step, run, interval, state) do
+    cond do
+      behind?() ->
+        {[], state}
+
+      due?(run, interval, state) ->
+        frames = frames_of(step, images_of(step))
+        {frames, %{state | frames_at: Map.put(state.frames_at, run, now())}}
+
+      true ->
+        {[], state}
+    end
   end
+
+  defp due?(run, interval, state) do
+    case Map.get(state.frames_at, run) do
+      nil -> true
+      at -> now() - at >= interval
+    end
+  end
+
+  defp now, do: System.monotonic_time(:millisecond)
 
   # One picture a step a sensor a kind, in the order the steps were taken.
   defp write(step, pictures_in, frame, state) do
