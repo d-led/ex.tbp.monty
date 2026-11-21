@@ -159,6 +159,50 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
     end
   end
 
+  describe "a step's worth of queries in one call" do
+    # The batch exists to be cheaper than asking one at a time, never to answer
+    # differently: these hold it to the per-query answers, which are specified
+    # above.
+    test "answers what asking each query on its own answers" do
+      points = points(500)
+      tree = KdTree.build(points)
+      questions = queries(60)
+
+      rows = KdTree.nearest_many_with_distances(tree, questions, 3)
+
+      assert rows == Enum.map(questions, &KdTree.nearest_with_distances(tree, &1, 3))
+    end
+
+    test "takes the query rows as the bytes they already are" do
+      points = points(500)
+      tree = KdTree.build(points)
+      questions = queries(60)
+
+      from_points = KdTree.nearest_many_with_distances(tree, questions, 3)
+      from_bytes = KdTree.nearest_many_with_distances(tree, KdTree.points_bytes(questions), 3)
+
+      assert from_bytes == from_points
+    end
+
+    test "answers as many neighbours as the index holds" do
+      points = points(2)
+      tree = KdTree.build(points)
+
+      assert [row] = KdTree.nearest_many_with_distances(tree, [[0.0, 0.0, 0.0]], 3)
+      assert length(row) == 2
+    end
+
+    test "an empty index has nothing near anything" do
+      assert KdTree.nearest_many_with_distances(KdTree.build([]), [[0.0, 0.0, 0.0]], 3) == []
+    end
+
+    test "a reference tree has no batch to hand back" do
+      tree = 10 |> points() |> KdTree.build_elixir()
+
+      assert KdTree.nearest_many_with_distances(tree, [[0.0, 0.0, 0.0]], 3) == nil
+    end
+  end
+
   describe "shapes a naive split gets wrong" do
     test "points on a line" do
       points = for x <- 0..20, do: {[x / 10, 0.0, 0.0], x}

@@ -289,6 +289,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Hypotheses do
   def locations(%__MODULE__{locations: bytes}),
     do: rows(bytes, @location_width, &decode_location/1)
 
+  @doc """
+  The location column as a step holds it: three f64 per hypothesis.
+
+  What an index reads, where `locations/1` is what a caller that walks them
+  wants — an index asked once for the neighbours of every hypothesis takes the
+  rows as the bytes they already are.
+  """
+  @spec locations_bytes(t()) :: binary()
+  def locations_bytes(%__MODULE__{locations: bytes}), do: bytes
+
   @doc "One hypothesis' location."
   @spec location(t(), non_neg_integer()) :: location()
   def location(%__MODULE__{locations: bytes}, index) do

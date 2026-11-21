@@ -196,6 +196,46 @@ defmodule Monty.Frameworks.Utils.KdTree do
     |> Enum.map(fn {squared, id} -> {:math.sqrt(squared), id} end)
   end
 
+  @doc """
+  The same answers as `nearest_with_distances/3`, for a batch of queries.
+
+  One call for the lot, and the point of it is the call: a native query is a
+  dirty NIF, and one of those costs about ten microseconds however small the
+  question is — a step that asked it once per hypothesis spent most of its vote
+  round crossing the boundary. `queries` is the bytes of the points as a kernel
+  reads them, which is how a hypothesis set already holds its locations.
+
+  `nil` for a tree that is not the native index: the Elixir tree answers one
+  query at a time and has no bytes to hand back, so a caller keeps whatever path
+  it had.
+  """
+  @spec nearest_many_with_distances(t(), [point()] | binary(), pos_integer()) ::
+          [[{float(), id()}]] | nil
+  def nearest_many_with_distances({:nif, index}, queries, count) do
+    queries = if is_binary(queries), do: queries, else: points_bytes(queries)
+
+    case min(count, ExTbpMonty.Core.KdTreeNif.nodes(index)) do
+      0 ->
+        []
+
+      # The index answers `count` neighbours per query, fewer only when it holds
+      # fewer points, and its answer is already laid out row by row.
+      width ->
+        {ids, distances} =
+          ExTbpMonty.Core.KdTreeNif.nearest_many_with_distances(index, queries, count)
+
+        ids
+        |> ids_in()
+        |> Enum.zip(distances_in(distances))
+        |> Enum.chunk_every(width)
+        |> Enum.map(fn row ->
+          for {id, distance} <- row, id != @no_neighbour, do: {distance, id}
+        end)
+    end
+  end
+
+  def nearest_many_with_distances(_tree, _queries, _count), do: nil
+
   # The descent threads its answers as `{kept, size}`; a query wants only the
   # answers and the number of nodes that found them.
   defp query(tree, query, count) do

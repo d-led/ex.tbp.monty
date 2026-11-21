@@ -1864,9 +1864,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     evidence =
       Enum.zip_with(
         Hypotheses.evidence(hypotheses),
-        Hypotheses.locations(hypotheses),
-        fn evidence, location ->
-          case best_vote_within_reach(lm, location, tree, confidences, neighbours) do
+        nearest_votes(tree, hypotheses, neighbours),
+        fn evidence, nearest ->
+          case best_vote_within_reach(lm, nearest, confidences) do
             nil -> evidence
             vote -> weigh_vote(lm, evidence, vote)
           end
@@ -1876,42 +1876,59 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     Hypotheses.put_evidence(hypotheses, evidence)
   end
 
+  # The three nearest votes of every hypothesis, one row each, nearest first.
+  #
+  # One call to the index for the whole space: a native query is a dirty NIF and
+  # costs about ten microseconds whether the answer is three neighbours or one,
+  # so asking it per hypothesis was the vote round's whole cost. A machine whose
+  # index is the Elixir tree has no batch to ask for, and answers one at a time.
+  defp nearest_votes(tree, hypotheses, neighbours) do
+    case KdTree.nearest_many_with_distances(tree, Hypotheses.locations_bytes(hypotheses), neighbours) do
+      nil ->
+        hypotheses
+        |> Hypotheses.locations()
+        |> Enum.map(&KdTree.nearest_with_distances(tree, &1, neighbours))
+
+      rows ->
+        rows
+    end
+  end
+
   # The highest confidence among the votes that reach a hypothesis: its three
   # nearest ones, each weighed by how far off it is, and the ones out of reach
   # masked.
   #
   # The index answers nearest first and breaks a tie between equidistant votes by
   # the order they were cast, which is the order the sort this replaces gave.
-  defp best_vote_within_reach(%__MODULE__{} = lm, location, tree, confidences, neighbours) do
-    nearest =
-      tree
-      |> KdTree.nearest_with_distances(location, neighbours)
-      |> Enum.map(fn {distance, cast} -> {distance, elem(confidences, cast)} end)
-
-    # `too_far_away = node_distance_weights <= 0` in Monty, and the same votes are
-    # masked here: the weight is zero exactly at `max_match_distance`.
-    weights = get_node_distance_weights(lm, Enum.map(nearest, fn {distance, _} -> distance end))
-
-    nearest
-    |> Enum.zip(weights)
-    |> Enum.reject(fn {_vote, weight} -> weight <= 0 end)
-    |> Enum.map(fn {{_distance, confidence}, _weight} -> confidence end)
-    |> Enum.max(fn -> nil end)
+  #
+  # One walk: a weight and a maximum over at most three votes, with nothing built
+  # beside them — this ran once per hypothesis of every object of every step.
+  defp best_vote_within_reach(%__MODULE__{} = lm, nearest, confidences) do
+    Enum.reduce(nearest, nil, fn {distance, cast}, best ->
+      # `too_far_away = node_distance_weights <= 0` in Monty, and the same votes
+      # are masked here: the weight is zero exactly at `max_match_distance`.
+      if weight(lm, distance) > 0 do
+        larger(best, elem(confidences, cast))
+      else
+        best
+      end
+    end)
   end
+
+  defp larger(nil, confidence), do: confidence
+  defp larger(best, confidence) when confidence > best, do: confidence
+  defp larger(best, _confidence), do: best
 
   # Monty's `_get_node_distance_weights`: how much a vote counts by how far from
   # the hypothesis it was cast. The vote round reads only its sign, but the
   # number is Monty's, so it is computed as his.
-  defp get_node_distance_weights(%__MODULE__{max_match_distance: max}, distances)
-       when max > 0 do
-    Enum.map(distances, fn distance -> (max - distance) / max end)
-  end
+  defp weight(%__MODULE__{max_match_distance: max}, distance) when max > 0,
+    do: (max - distance) / max
 
   # A zero radius divides by zero in Monty too, where numpy answers `-inf` (or
   # `nan` at the point itself). There is no infinity in the BEAM; `-1` masks the
   # vote, which is what `-inf` does there.
-  defp get_node_distance_weights(%__MODULE__{}, distances),
-    do: Enum.map(distances, fn _distance -> -1.0 end)
+  defp weight(%__MODULE__{}, _distance), do: -1.0
 
   # Bounded evidence averages, unbounded evidence adds: the same rule the
   # displacer uses for an observation, so a vote and a percept of equal
