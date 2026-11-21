@@ -194,8 +194,24 @@ graph, so a library's node count is what a percept can be matched against.
 | `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration)    | 2       | ~1 500          |
 | `trained/surf_agent_2obj_unsupervised` (2 episodes)                        | 2       | ~540            |
 | `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent)  | 8       | 29 … 88         |
-| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |
+| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |     | `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's own scan) | 5   | **124 … 1 109** |
 
+The last row is the memory `dogs/inference_dist` reads, i.e. the one a dogs run
+is judged by, and its spread is the whole story of that run: **milka is 1 109
+nodes and the other four are 124–223**, so milka is the only object above the
+hundreds-of-nodes floor above, and nine episodes of `dogs/inference_dist`
+concluded `milka` in eight of them — including four whose target was another dog.
+
+Why one recipe produced that spread is the corpus, not the recipe: the import
+normalises every object to one height, and these five reach 10 cm of height at
+footprints from **5.1 cm to 24.1 cm**. The patch is 2 cm, so it covers a quarter
+as much of milka per view as of the smallest dog, and the memory follows
+(`mix monty.objaverse.import` now prints `corpus: footprints … (2.5× the median)
+— NOT comparable, the patch covers them unequally: milka`, and names the
+outliers; `ExTbpMonty.Objaverse.Corpus` is the rule). A corpus worth recognising
+over needs one footprint, or a memory balanced per object afterwards. The policy
+is not the limiter, and the earlier reading says the same: against 20–88-node
+memories the episodes timed out with the patch seeing the dog.
 The same inference, over two of those memories:
 
 - **`tutorial/surf_agent_2obj_eval`, against the 1 500-node YCB memory: 6 of 6
