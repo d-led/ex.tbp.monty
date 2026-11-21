@@ -110,6 +110,47 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert output =~ "recorded as run #{run.id}"
     end
 
+    # Monty's `run_parallel.py` from the command line: the episodes are divided
+    # into parts and the queue's own runner performs them, so what comes out is
+    # one record holding every episode of the slice, each step saying which part
+    # took it — the same division a page starts, reached without a browser.
+    test "--parallel divides the episodes into parts of one record" do
+      output =
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "1",
+          "--episodes",
+          "2",
+          "--parallel",
+          "2"
+        ])
+
+      run = recorded_run()
+
+      assert run.inputs["parallel"] == 2
+      assert run.inputs["parts"] |> Enum.map(& &1["index"]) == [0, 1]
+      assert run.log |> Enum.map(& &1["episode"]) |> Enum.sort() == [0, 1]
+      assert run.log |> Enum.map(& &1["part"]) |> Enum.uniq() |> Enum.sort() == [0, 1]
+      assert output =~ "recorded as run #{run.id}"
+    end
+
+    # A part is a piece of a run's record, so asking for a divided run with
+    # nothing to record is refused by name: the alternative is an undivided run
+    # printed under a name that promised otherwise.
+    test "--parallel refuses --no-record, and says why" do
+      assert_raise Mix.Error, ~r/needs a record/, fn ->
+        Mix.Tasks.Monty.Run.run([
+          "base_config_10distinctobj_dist_agent",
+          "--episodes",
+          "1",
+          "--parallel",
+          "2",
+          "--no-record"
+        ])
+      end
+    end
+
     test "leaves nothing running" do
       run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "1", "--episodes", "1"])
 

@@ -8,6 +8,7 @@ defmodule Mix.Tasks.Monty.Run do
       mix monty.run tutorial/first_experiment
       mix monty.run randrot_noise_10distinctobj_5lms_dist_agent --steps 40
       mix monty.run base_config_10distinctobj_dist_agent --no-record --quiet
+      mix monty.run base_config_10distinctobj_dist_agent --episodes 8 --parallel 4
 
   What runs is the experiment's own topology: every sensor and learning module
   is a supervised process, wired as its config wires them. A config that names a
@@ -56,6 +57,11 @@ defmodule Mix.Tasks.Monty.Run do
       is not the experiment's, so a run that should be comparable has to say
       `--world mujoco`
     * `--record` / `--no-record` — whether to write a run history row
+    * `--parallel N` — divide the experiment into `N` parts and let the queue's
+      own runner perform them at once, which is Monty's `run_parallel.py` as a
+      division of episodes (`Monty.Studio.Partition`). The parts are the run's
+      record, so `--parallel` needs a recorded run and refuses `--no-record`
+      rather than running undivided under a name that promised otherwise.
     * `--quiet` — findings and summary only, no per-step lines
   """
 
@@ -74,7 +80,8 @@ defmodule Mix.Tasks.Monty.Run do
     world: :string,
     sensors: :string,
     scheduling: :string,
-    settle: :integer
+    settle: :integer,
+    parallel: :integer
   ]
 
   @impl true
@@ -105,6 +112,14 @@ defmodule Mix.Tasks.Monty.Run do
 
     unless Monty.Studio.Setup.valid?(opened.setup), do: refuse(opened.setup.findings)
 
+    if divided?(opts), do: run_divided(opened, opts), else: run_whole(opened, opts)
+  end
+
+  defp divided?(opts), do: is_integer(opts[:parallel]) and opts[:parallel] > 1
+
+  # One run, one process, episode after episode: the shape this task has always
+  # had, and what `--parallel 1` asks for.
+  defp run_whole(opened, opts) do
     history = record(opened, opts)
     {infos, history, conclusion, outcomes} = run_phases(opened, opts, history)
 
@@ -113,6 +128,54 @@ defmodule Mix.Tasks.Monty.Run do
     unless opts[:quiet], do: Mix.shell().info(Monty.Studio.Summary.outcomes_line(outcomes))
 
     describe_run(finish(history, summary), summary)
+  end
+
+  # Monty's `run_parallel.py` from the command line: the experiment divided into
+  # parts, and each part performed by the queue's own runner — the division the
+  # page offers, reused rather than restated, so there is one answer to "which
+  # episodes does a part take" and one worker that takes them.
+  #
+  # A part is a piece of a run's record, so a divided run is recorded. The
+  # refusal is a sentence rather than a quiet fallback to an undivided run,
+  # which would print a divided run's name over work that was never divided.
+  defp run_divided(opened, opts) do
+    count = opts[:parallel]
+
+    if opts[:record] == false do
+      Mix.raise(
+        "--parallel #{count} needs a record: a part lives in a run's record, " <>
+          "and `--no-record` leaves none"
+      )
+    end
+
+    parts =
+      opened.setup
+      |> Monty.Studio.Partition.plan(count, opts[:episodes])
+      |> Monty.Studio.Partition.parts()
+      |> Enum.map(&Map.put(&1, :stream, Ecto.UUID.generate()))
+
+    {:ok, record} =
+      Monty.Studio.RunHistory.start(
+        Monty.Studio.RunLog.attributes(
+          opened,
+          steps(opened, opts),
+          0,
+          count,
+          opts[:episodes],
+          Map.put(levers(opts), :parts, parts)
+        )
+      )
+
+    summary =
+      case Monty.Studio.Jobs.Run.perform(%Oban.Job{args: %{"run_id" => record.id}, attempt: 1}) do
+        {:ok, closed} -> Monty.Studio.Summary.restore(closed.summary)
+        {:error, reason} -> Mix.raise("the divided run did not finish: #{inspect(reason)}")
+      end
+
+    unless opts[:quiet],
+      do: Mix.shell().info(Monty.Studio.Summary.outcomes_line(summary.outcomes))
+
+    describe_run(Monty.Studio.RunHistory.get(record.id), summary)
   end
 
   # Monty's `run()`: every epoch of every phase the config runs, train before
