@@ -69,6 +69,19 @@ influence each other even if they run in the same process. **`num_parallel` is
 therefore a performance knob and can never be a correctness one**, which is a
 statement Monty cannot make about its own pool without auditing every global.
 
+**Measured 2026-11-21, and that is not true yet for a world that draws.** Four
+episodes of `base_config_10distinctobj_dist_agent` on one node, `ex_mujoco`, seed
+42, started from the page: one part ran **104 steps twice**; two parts ran **171
+and then 140**, and the two divided runs agree with the serial one to step 10,
+part from it at step 11, and part from each other at step 29. On the stand-in the
+same pair is exact — 135 steps either way — so the model, the step and the
+concurrency are sound and the difference comes from the rendering world. The
+prime suspect is two renderers' GL contexts on one node, the same class as the
+Python path's bug (a context freed while another world was using it). Until it is
+found, a divided run on a rendering world is a **different experiment**, not a
+faster one, and no speed-up is claimed from it: the 5.2 s against 6.3 s wall
+clock measures different work.
+
 ## 3. What is not free
 
 Said plainly, because these are the numbers that decide the design:
