@@ -165,7 +165,7 @@ data:
     # graph was refused for 90 % of its observations not fitting. It is Monty's
     # module with a 0.6 m box over 100 voxels — the same 6 mm voxel.
     # `docs/monty-differences.md` §2.43 carries the measurements.
-    hash: 9db178def53dea0a851b136bd337c04bab72521dd67b35118de891df6f352f24
+    hash: 6fbf296badd1d50dfd753243b0776b406e2eceff630d64233ef37b50d6218dfa
 
   - path: priv/cad_experiments/conf
     kind: written

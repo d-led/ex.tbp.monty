@@ -187,22 +187,23 @@ Measured 2026-11-17, on this box, with the data folder's `libraries/` read by
 `MIX_ENV=test mix run --no-start /tmp/library_nodes.exs <dir>` — one record a
 graph, so a library's node count is what a percept can be matched against.
 
-| library                                                                    | objects | nodes an object |
-| -------------------------------------------------------------------------- | ------- | --------------- |
-| Monty's own `supervised_pre_training_5lms` (exported from its `model.pt`)  | 10      | 2 668 … 376     |
-| Monty's own `supervised_pre_training_10distinctobj_vocus2`                 | 10      | 1 253 … 531     |
-| `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration)    | 2       | ~1 500          |
-| `trained/surf_agent_2obj_unsupervised` (2 episodes)                        | 2       | ~540            |
-| `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent)  | 8       | 29 … 88         |
-| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch) | 8       | 9 … 41          |
-| `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's own scan)  | 5       | **185 … 334**   |
+| library                                                                     | objects | nodes an object |
+| --------------------------------------------------------------------------- | ------- | --------------- |
+| Monty's own `supervised_pre_training_5lms` (exported from its `model.pt`)   | 10      | 2 668 … 376     |
+| Monty's own `supervised_pre_training_10distinctobj_vocus2`                  | 10      | 1 253 … 531     |
+| `trained/surf_agent_1lm_2obj_train` (a surface agent's own exploration)     | 2       | ~1 500          |
+| `trained/surf_agent_2obj_unsupervised` (2 episodes)                         | 2       | ~540            |
+| `trained/dogs_surf_unsupervised` (8 dogs, one epoch of the surface agent)   | 8       | 29 … 88         |
+| `trained/dogs_supervised_pretraining_small` (8 dogs, one naive-scan epoch)  | 8       | 9 … 41          |
+| `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's scan at 5°) | 5       | **185 … 334**   |
+| `trained/dogs_supervised_pretraining_dense` (the same at 3°)                | 5       | **502 … 931**   |
 
-The last row is the memory `dogs/inference_dist` reads, i.e. the one a dogs run
-is judged by, and its spread used to be the whole story of that run. Before the
-corpus was normalised by area, the same recipe gave **1 109 nodes for milka and
-124–223 for the other four** — one object above the hundreds-of-nodes floor — and
-nine episodes of `dogs/inference_dist` concluded `milka` in eight of them,
-four of them with another dog as the target.
+The second row from the bottom is the memory `dogs/inference_dist` reads, i.e.
+the one a dogs run is judged by, and its spread used to be the whole story of
+that run. Before the corpus was normalised by area, the same recipe gave **1 109
+nodes for milka and 124–223 for the other four** — one object above the
+hundreds-of-nodes floor — and nine episodes of `dogs/inference_dist` concluded
+`milka` in eight of them, four of them with another dog as the target.
 
 Why one recipe produced that spread is the corpus, not the recipe: the import
 used to normalise every object to one **height**, and these five reach 10 cm of
@@ -226,10 +227,47 @@ and every object inside the band recognition needs.
 and the evidence climbs to **26.9** where it used to stop at 3–12 — so the
 density ranking is gone and the memory is being matched — but every episode still
 ends `time_out`, and one of them consumed the run's whole 6 000-step budget
-without concluding. Two levers are left, and neither is the corpus: **nodes per
+without concluding. Two levers were left, and neither is the corpus: **nodes per
 object** (the row above is at the band's floor, and the density is `epochs ×
 sensors`), and the **episode budget** (6 000 steps for the run, so one slow
 episode starves the rest).
+
+**Nodes per object: measured, and not the last gate.** The dogs set's
+`supervised_pretraining_dense` is the same recipe with the scan at three degrees
+instead of five, so each pass an object has a third more views of it. It ran to
+70 episodes in 60 970 steps and **3 165 nodes**, against the base recipe's 1 164:
+**2.7× on every object** (502 … 931 against 185 … 334), and the 1.85× spread
+between the widest and the narrowest is unchanged — density multiplies the
+memory, it does not reorder it. `dogs/inference_dist_bydense` is
+`dogs/inference_dist` with `model_name_or_path` pointed at that memory and
+nothing else changed; the same five episodes:
+
+| memory                                   | nodes | evidence at the end | hypotheses | possible | steps, 5 episodes | concluded |
+| ---------------------------------------- | ----- | ------------------- | ---------- | -------- | ----------------- | --------- |
+| `dogs_supervised_pretraining` (5°)       | 1 164 | 26.9                | —          | 1        | 21 490            | 0 of 5    |
+| `dogs_supervised_pretraining_dense` (3°) | 3 165 | **100.9**           | 587        | 1        | **2 814**         | 0 of 5    |
+
+So the density lever is real and it is large: the same conclusion, one object
+possible, arrives in a seventh of the steps and at four times the evidence. What
+it does not do is produce a **match**, and the reason is visible in the two
+numbers beside the evidence — the episode ends with 587 hypotheses of that one
+object still alive, and a match needs the pose to narrow as well as the object
+(`update_terminal_condition/1`: `get_unique_pose_if_available/2`, one object and
+a pose inside `path_similarity_threshold` / `pose_similarity_threshold`).
+
+The episode budget is not the gate either, which the same measurement shows:
+`n_eval_epochs: 30` instead of 10 over the dense memory — written as a throwaway
+`--overlay`, so no config carries the number — ran **two episodes in 663 steps**
+and ended the second at 2 possible — _shorter_ episodes, not longer ones. An
+episode here ends when its viewpoints are used up, not when its epochs are
+counted, so raising the epoch count buys nothing and the 6 000-step total is not
+what closed them.
+
+That leaves the pose, and the two things that could resolve it are both visible
+in Monty's own numbers rather than guessed at: Monty's supervised pretraining is
+fourteen rotations of **five sensors** (seventy passes, ~2 400 nodes), and the one
+arm here that does match — `tutorial/surf_agent_2obj_eval` against the
+1 500-node YCB memory — is a **different module** from `noresetevidence_1lm`.
 
 The policy is not the limiter, and the earlier reading says the same: against
 20–88-node memories the episodes timed out with the patch seeing the dog.
@@ -248,6 +286,11 @@ density of a supervised pretraining is `epochs × sensors`: Monty's
 `supervised_pre_training_5lms` is fourteen rotations of five sensors, i.e. seventy
 passes an object, and that is where its ~2 400 nodes come from. One epoch of one
 sensor is one pass and ~20 nodes.
+
+Hundreds are necessary and not sufficient: the measured arm above has ~630 an
+object and still concludes nothing, because the object narrows and the pose does
+not. Read the table as the shape of the curve — evidence rises with nodes, one
+object possible appears with them — and not as a threshold.
 
 **Trap — `NaiveScan`'s `fixed_amount` is a step size in degrees, not a count.**
 The spiral is `k * (k - 1) + 1` steps with `k = ceil(90 / fixed_amount)`
