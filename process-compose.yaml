@@ -156,22 +156,38 @@ processes:
       # own (`ExTbpMonty.Cluster.Capabilities`): uncomment on one side only, and
       # Settings → Nodes says what each one can do, and who can do what.
       # - "MONTY_CAPABILITIES=gpu,world:mujoco"
+      # A build tree of this node's own. Both nodes used `_build/dev` and took
+      # turns over its lock, which is where the 26-second `GET /` came from and
+      # why the probe read a serving node as a sick one: a request that triggers a
+      # recompile waited for the other node's compile to finish. `_build/node1`
+      # and `_build/node2` are separate, so neither waits and neither purges the
+      # other's modules. The price is one cold compile per node the first time
+      # (348 MB each); dependencies stay in one `deps/`.
+      - "MIX_BUILD_PATH=_build/node1"
     readiness_probe:
       http_get:
         host: 127.0.0.1
         port: 4001
         path: "/"
-      # A cold boot compiles, and both nodes share one `_build`: the second one
-      # waits on the first one's Mix lock ("Waiting for lock on the build
-      # directory"), so its endpoint is not listening for a minute or more. With
-      # no delay the probe reads that as unhealthy, the supervisor sends SIGTERM,
-      # `mix phx.server` shuts down **cleanly**, and the node is `Completed` — it
-      # never comes back. What is left in the log is the plugins retrying the
-      # handshake against a name epmd still advertises: "invalid challenge reply".
-      initial_delay_seconds: 120
+      # The probe kills what it reads as unhealthy: a failed threshold sends
+      # SIGTERM, `mix phx.server` shuts down **cleanly**, and the node is
+      # `Completed` — it never comes back. So the grace has to be a boot that
+      # compiles on a loaded machine, once per build tree, and the timeout has to
+      # be longer than a page render can block.
+      #
+      # What it used to be: five seconds and twenty-four failures. Measured on a
+      # boot that needed 3m45s to listen and a `GET /` that took **26 seconds**
+      # because the other node held the shared Mix lock — twenty-four such
+      # timeouts stopped a node that was up and serving, which is what "the stack
+      # keeps stopping" was. Each node has its own `MIX_BUILD_PATH` now, so the
+      # lock waits are gone; the numbers below are for the boot that compiles,
+      # which is minutes and not seconds (a fresh build tree compiles the whole
+      # project and its dependencies — fourteen minutes and still going on a box
+      # that was also running the test suite and two Rust builds).
+      initial_delay_seconds: 300
       period_seconds: 5
-      timeout_seconds: 5
-      failure_threshold: 24
+      timeout_seconds: 60
+      failure_threshold: 240
 
   node2:
     command: "elixir --name node2@127.0.0.1 --cookie {{.MONTY_CLUSTER_SECRET}} -S mix phx.server"
@@ -186,18 +202,19 @@ processes:
       # One run at a time, as on node1: the two nodes share one queue, so a
       # laptop's peak is now two runs rather than four.
       - "MONTY_STUDIO_CONCURRENCY=1"
+      # Its own build tree, for the reason node1's has one.
+      - "MIX_BUILD_PATH=_build/node2"
     readiness_probe:
       http_get:
         host: 127.0.0.1
         port: 4002
         path: "/"
-      # The same patience as node1, and for the same reason: on a cold boot the
-      # two nodes take turns over the Mix lock, so the probe must not read
-      # "still compiling" as "unhealthy".
-      initial_delay_seconds: 120
+      # The same patience as node1, and for the same reason: a request that waits
+      # on a recompile is a slow request and not a sick node.
+      initial_delay_seconds: 300
       period_seconds: 5
-      timeout_seconds: 5
-      failure_threshold: 24
+      timeout_seconds: 60
+      failure_threshold: 240
 
   # Not a studio node: a plugin host, in the same cluster, from a project of its
   # own. It has no HTTP to probe and no database to migrate — it registers what it
@@ -209,6 +226,38 @@ processes:
     environment:
       - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
+    # There is no HTTP to probe, so the check asks the one thing that makes this a
+    # host at all: does its node name answer, with its own application running on
+    # it. A short-lived hidden node does the asking and exits non-zero when the
+    # connect fails or the application is not among the ones that node runs — so a
+    # VM that died and a VM whose plugin failed to start give the same answer.
+    #
+    # Its name is fixed and unique to this check: the supervisor substitutes `$`
+    # in a probe command, so a `$$`-based unique name arrives as a broken one, and
+    # two different plugins' checks must not fight over a name. One check of one
+    # plugin cannot overlap itself because the period is longer than the timeout.
+    readiness_probe:
+      exec:
+        command: >-
+          elixir --name check_example_plugin@127.0.0.1 --hidden --cookie {{.MONTY_CLUSTER_SECRET}}
+          -e 'node = :"example_plugin@127.0.0.1";
+          running = Enum.any?(:rpc.call(node, Application, :started_applications, []),
+          &match?({:example_plugin, _, _}, &1));
+          if Node.connect(node) == true and running, do: :ok, else: System.halt(1)'
+      # A first boot compiles this project's own dependencies, so the grace is
+      # generous and the failures below are a steady state, not one slow answer.
+      initial_delay_seconds: 300
+      period_seconds: 60
+      timeout_seconds: 30
+      failure_threshold: 10
+    # A plugin host carries no run state of its own — it is a node in the cluster
+    # that offers modules and policies — so one that fell over should come back.
+    # A throw does not loop: the probe's own SIGTERM is a clean exit, and only a
+    # failure restarts.
+    availability:
+      restart: "on_failure"
+      backoff_seconds: 15
+      max_restarts: 5
 
   # The pack the flyverse plugin steps is `tmp/flyverse-pack`, written once with
   # `mix flyverse_plugin.pack` (see this file's header). A connectome is data, so
@@ -228,3 +277,24 @@ processes:
       - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "FLYVERSE_PACK=../../tmp/flyverse-pack"
+    # The same question as the other host's, asked of this name: a plugin whose
+    # node is gone, or whose application is not running, cannot answer a run's
+    # call for a policy.
+    readiness_probe:
+      exec:
+        command: >-
+          elixir --name check_flyverse_plugin@127.0.0.1 --hidden --cookie {{.MONTY_CLUSTER_SECRET}}
+          -e 'node = :"flyverse_plugin@127.0.0.1";
+          running = Enum.any?(:rpc.call(node, Application, :started_applications, []),
+          &match?({:flyverse_plugin, _, _}, &1));
+          if Node.connect(node) == true and running, do: :ok, else: System.halt(1)'
+      # This one compiles a Rustler crate on its first boot, so its grace is that
+      # compile plus a margin.
+      initial_delay_seconds: 600
+      period_seconds: 60
+      timeout_seconds: 30
+      failure_threshold: 10
+    availability:
+      restart: "on_failure"
+      backoff_seconds: 15
+      max_restarts: 5
