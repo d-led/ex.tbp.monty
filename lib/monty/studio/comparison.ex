@@ -17,6 +17,8 @@ defmodule Monty.Studio.Comparison do
   has the records and a test that has two maps ask the same function.
   """
 
+  alias Monty.Studio.StepShape
+
   @type side :: %{
           required(:name) => String.t(),
           required(:experiment) => String.t(),
@@ -31,6 +33,7 @@ defmodule Monty.Studio.Comparison do
           sides: [String.t()],
           differences: [String.t()],
           unrecorded: [String.t()],
+          shapes: [{String.t(), [String.t()]}],
           rows: [row()]
         }
 
@@ -59,6 +62,11 @@ defmodule Monty.Studio.Comparison do
        sides: [a.name, b.name],
        differences: differences(a.inputs, b.inputs),
        unrecorded: unrecorded(a.inputs, b.inputs),
+       # What each side's step numbers are a measurement of. Two runs of one seed
+       # with one lever moved are this page's whole purpose, and the lever is
+       # exactly a change to what a number means — so the meaning travels with
+       # the comparison rather than being left to a reader who knows the levers.
+       shapes: shapes(a, b),
        rows: rows(a, b)
      }}
   end
@@ -168,6 +176,17 @@ defmodule Monty.Studio.Comparison do
   end
 
   def differences(_a, _b), do: []
+
+  # Each side that has something to say about how its numbers were measured, in
+  # the words of the numbers: a side of Monty's own shape says nothing, because
+  # there is nothing to explain.
+  defp shapes(a, b) do
+    for side <- [a, b],
+        sentences = StepShape.sentences(side.inputs || %{}),
+        sentences != [] do
+      {side.name, sentences}
+    end
+  end
 
   # The division of a run is an input a reader compares — one part against four is
   # a different experiment — but each part also carries the id of the stream that

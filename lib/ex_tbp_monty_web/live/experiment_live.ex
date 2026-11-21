@@ -44,6 +44,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     RunLog,
     RunStream,
     Setup,
+    StepShape,
     Yaml
   }
 
@@ -613,6 +614,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               <option value="serial" selected={@sensors == :serial}>serial</option>
               <option value="concurrent" selected={@sensors == :concurrent}>concurrent</option>
             </select>
+            <%!-- What each of these does to the numbers the log will show: a
+            round of sensors served at once costs its slowest member, and a lagged
+            run applies the epoch before. Said beside the choice, because it is a
+            property of the choice and not of a run that happened to be made with
+            it. --%>
+            <ul
+              :if={step_shape(assigns) != []}
+              id="step-shape"
+              class="basis-full list-disc ps-4 text-[11px] leading-4 text-base-content/60"
+            >
+              <li :for={sentence <- step_shape(assigns)} class="break-words">{sentence}</li>
+            </ul>
           </form>
           <button id="step" phx-click="step" class="btn btn-sm" disabled={!startable?(assigns)}>
             <.icon name="hero-forward-mini" class="size-4" /> One step
@@ -1039,23 +1052,34 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           </figure>
         </section>
 
-        <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <p id="frames-empty" class="hidden only:block text-xs text-base-content/50">
-            Sensor views appear here as the run steps.
+        <div id="frames-box" class="space-y-1">
+          <%!-- A card a sensor, and the sensors are throttled apart: a run whose
+          sensors are served at the same instant still sends each one's picture
+          on its own clock, so a card can be a step behind its neighbours. Each
+          says which step it is from, which is the whole of what makes the grid
+          readable while it is parallel. --%>
+          <p id="frames-note" class="text-[11px] text-base-content/50">
+            One card a sensor. Each is throttled on its own, so a card can be a step behind
+            its neighbours — every card says which step its picture is from.
           </p>
-          <figure
-            :for={{dom_id, frame} <- @streams.frames}
-            id={dom_id}
-            class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
-          >
-            <figcaption class="flex items-baseline justify-between px-0.5 pb-1 text-[11px] text-base-content/60">
-              <span class="font-mono">{frame.sensor_id}</span>
-              <span>{frame.note}</span>
-            </figcaption>
-            <%!-- The frame is markup this application built, with every value in
+          <div id="frames" phx-update="stream" class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <p id="frames-empty" class="hidden only:block text-xs text-base-content/50">
+              Sensor views appear here as the run steps.
+            </p>
+            <figure
+              :for={{dom_id, frame} <- @streams.frames}
+              id={dom_id}
+              class="rounded-field border border-base-300 bg-base-100 p-1.5 text-base-content"
+            >
+              <figcaption class="flex items-baseline justify-between px-0.5 pb-1 text-[11px] text-base-content/60">
+                <span class="font-mono">{frame.sensor_id}</span>
+                <span>{frame.note}</span>
+              </figcaption>
+              <%!-- The frame is markup this application built, with every value in
             it escaped where it was built. --%>
-            <div class="text-base-content/80">{frame.data}</div>
-          </figure>
+              <div class="text-base-content/80">{frame.data}</div>
+            </figure>
+          </div>
         </div>
 
         <%!-- One card per part, one after the other: the pyview dashboard's
@@ -1096,6 +1120,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       <div :if={@run_id} id="run-log-panel" class="space-y-1">
         <div class="flex flex-wrap items-center gap-2">
           <h3 class="text-sm font-medium">Log</h3>
+
           <form id="log-filter" phx-change="filter" phx-debounce="150" class="flex-1">
             <%!-- The value is deliberately not bound: a run's log arrives
             while a person is typing, and a re-render that rewrites the box
@@ -2966,6 +2991,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   # about what a machine can do: each run is its own world and its own simulator
   # process, and a number large enough to matter is a number that ends in swap.
   @most_in_parallel 8
+
+  # What the numbers in the run's log measure, from the levers this page holds:
+  # the sentences a finished run's page reads from its record, built here from the
+  # choice instead. `:auto` is passed as `nil`, which is how the shape module says
+  # "the deployment's rule, not a choice".
+  defp step_shape(assigns) do
+    StepShape.sentences(%{
+      "sensors_step" => chosen(assigns.sensors),
+      "scheduling" => to_string(assigns.scheduling),
+      "sensors" => if(assigns.opened, do: Setup.sensor_ids(assigns.opened.setup), else: [])
+    })
+  end
+
+  defp chosen(:auto), do: nil
+  defp chosen(choice), do: to_string(choice)
 
   defp parallelism(params) do
     case Integer.parse(to_string(params["parallelism"] || "")) do

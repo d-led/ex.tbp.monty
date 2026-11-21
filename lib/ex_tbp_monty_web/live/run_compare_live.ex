@@ -310,6 +310,21 @@ defmodule ExTbpMontyWeb.RunCompareLive do
           <span class="font-mono">{Enum.join(@comparison.differences, ", ")}</span>
         </p>
 
+        <%!-- What each side's step numbers measured. A lever is a change to what
+        a number means, so the side that chose one says what its `sensors` or its
+        `receive` counts — two runs compared without that is a comparison of two
+        different questions. --%>
+        <div
+          :if={@comparison && @comparison.shapes != []}
+          id="compare-shape"
+          class="space-y-1 text-sm"
+        >
+          <p :for={{name, sentences} <- @comparison.shapes} id={"compare-shape-#{name}"}>
+            <span class="font-mono">{name}</span>
+            <span class="text-base-content/60">{Enum.join(sentences, " ")}</span>
+          </p>
+        </div>
+
         <p
           :if={@comparison && @comparison.unrecorded != []}
           id="compare-unrecorded"

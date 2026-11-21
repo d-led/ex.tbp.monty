@@ -108,6 +108,18 @@ Said plainly, because these are the numbers that decide the design:
   votes and the same beliefs, and a step is ~700 ms of which the world is ~80 ms.
   So before deciding what to fan out, read the split: the biggest term here was a
   loop that had no business being in a step at all.
+- **A page says what its numbers measured.** A step's `sensors` is a round's wall
+  clock, not the sum of what ran inside it, and the same is true of `await` and of
+  the round's parts — so the same line means two different things depending on how
+  the run was shaped, and a concurrent run reads as a faster machine rather than
+  as a run that spent less time. `Monty.Studio.StepShape` turns the levers a
+  record keeps (`sensors_step`, `scheduling`) into the sentences that make the
+  line readable, and they are shown beside the log on a run's page, beside the
+  levers on the experiment page — where the choice is made — and, per side, on
+  `/compare`, because a comparison of a serial run with a concurrent one is a
+  comparison of two different questions unless it says so. The sensor cards say
+  the other half: each is throttled on its own, so a card can be a step behind its
+  neighbours, and every card names the step its picture is from.
 
 ## 4. A live experiment
 

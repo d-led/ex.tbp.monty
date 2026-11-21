@@ -518,6 +518,27 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.inputs["sensors_step"] == "concurrent"
     end
 
+    # The levers decide what a step's numbers will mean, so what they do to the
+    # numbers is said beside them: a round of sensors served at once costs the
+    # slowest of them, and a lagged run applies the epoch before. Five sensors is
+    # the experiment where the first sentence has something to say.
+    test "the page says what those choices do to a step's numbers", %{conn: conn} do
+      {:ok, view, _html} =
+        live(conn, ~p"/experiments/randrot_noise_10distinctobj_5lms_dist_agent")
+
+      # The port's own rule, stated as the rule it is.
+      assert view |> element("#step-shape") |> render() =~ "`auto`"
+
+      view |> element("#run-budget") |> render_change(%{"sensors" => "concurrent"})
+      assert view |> element("#step-shape") |> render() =~ "slowest of them, not their sum"
+
+      view |> element("#run-budget") |> render_change(%{"sensors" => "serial"})
+      assert view |> element("#step-shape") |> render() =~ "one after another"
+
+      view |> element("#run-budget") |> render_change(%{"scheduling" => "lagged"})
+      assert view |> element("#step-shape") |> render() =~ "a step behind"
+    end
+
     test "and the step it records is one step of that experiment, not a redraw", %{conn: conn} do
       # The whole point of the button: the config runs, for one step, and what
       # that step saw is in the record.
@@ -1480,6 +1501,9 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       poll(view)
 
       assert has_element?(view, "#frames figure")
+      # A card a sensor, throttled apart: the grid says so, because a card that
+      # is a step behind its neighbours is otherwise read as a run stalling.
+      assert has_element?(view, "#frames-note")
     end
 
     test "a page opened on a run that has already believed draws its charts", %{conn: conn} do

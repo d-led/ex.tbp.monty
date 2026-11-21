@@ -30,6 +30,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     RunLog,
     RunStream,
     Setup,
+    StepShape,
     Yaml
   }
 
@@ -492,6 +493,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
          |> put_configuration(run)
          |> assign(kind: run_kind(run))
          |> assign(setup: setup_of(run))
+         # What the log's numbers are a measurement of: a concurrent round of
+         # sensors costs the slowest of them instead of their sum, and a lagged
+         # run applies the epoch before. Read off the record, so a page opened
+         # long after the run says what the run was.
+         |> assign(step_shape: StepShape.sentences(run.inputs))
          # What a person can watch of this run, asked once: the videos are a
          # property of the run, not of the step on screen.
          |> assign(videos: Artifacts.videos(run.id))
@@ -2072,6 +2078,19 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       <ExTbpMontyWeb.RunParts.parts :if={@parts != []} parts={@parts} />
       <section :if={@run} class="space-y-1">
         <h2 class="text-sm font-medium">Log</h2>
+        <%!-- What the line's numbers are a measurement of, said once beside the
+        lines rather than left to be inferred from them: a concurrent round of
+        sensors costs the slowest of them instead of their sum, and a lagged run
+        applies the epoch before. --%>
+        <ul
+          :if={@step_shape != []}
+          id="run-step-shape"
+          class="list-disc ps-4 text-xs text-base-content/60"
+        >
+          <li :for={sentence <- @step_shape} id="run-step-shape-#{:erlang.phash2(sentence)}">
+            {sentence}
+          </li>
+        </ul>
         <p :if={@trimmed_log?} id="run-log-trimmed" class="text-xs text-base-content/60">
           The last {@log_tail} of {@logged} lines: this page does not carry a
           whole transcript, and the run's own file has every line of it.

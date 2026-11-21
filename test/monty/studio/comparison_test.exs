@@ -164,6 +164,31 @@ defmodule Monty.Studio.ComparisonTest do
              Enum.find(rows, &(&1.label == "learning_module_1 time_out"))
   end
 
+  # A lever is a change to what a step's numbers mean, so the side that moved one
+  # says what its numbers measured: a run of five sensors served at once costs the
+  # slowest of them, and comparing it with a serial run without saying so is
+  # comparing two different questions.
+  test "each side says what its step numbers measured" do
+    sensor_ids = ~w(vf patch_0 patch_1 patch_2 patch_3)
+
+    serial = side("serial", %{inputs: %{"sensors" => sensor_ids, "sensors_step" => "serial"}})
+
+    concurrent =
+      side("concurrent", %{inputs: %{"sensors" => sensor_ids, "sensors_step" => "concurrent"}})
+
+    monty = side("monty", %{inputs: %{"sensors" => ["patch_0"]}})
+
+    assert {:ok,
+            %{shapes: [{"serial", [serial_sentence]}, {"concurrent", [concurrent_sentence]}]}} =
+             Comparison.compare(serial, concurrent)
+
+    assert serial_sentence =~ "their sum"
+    assert concurrent_sentence =~ "slowest of them"
+
+    # Nothing to explain about a round of one, so that side says nothing.
+    assert {:ok, %{shapes: []}} = Comparison.compare(monty, monty)
+  end
+
   test "an input only one run records is not a difference, and is said separately" do
     a = side("old", %{inputs: %{}})
     b = side("new", %{})

@@ -253,6 +253,61 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   # A parted run is one record and one transcript, so the page is the only place
   # a reader learns there was a division at all — and, once a part may be
   # performed elsewhere, which node has which part.
+  # A step's phase numbers are the wall clock of rounds rather than the sum of
+  # what ran in them, so the page says which shape produced them — read off the
+  # record, so a page opened long after the run says what the run was.
+  describe "what the log's numbers measured" do
+    test "a run whose sensors were served at once says so", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 0,
+          config: %{},
+          inputs: %{
+            "sensors" => ~w(vf patch_0 patch_1 patch_2 patch_3),
+            "sensors_step" => "concurrent"
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-step-shape") |> render() =~ "slowest of them, not their sum"
+    end
+
+    # Monty's own round of one: there is no difference between "at once" and
+    # "one after another" to explain.
+    test "a run with nothing to explain says nothing", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 0,
+          config: %{},
+          inputs: %{"sensors" => ["patch_0"]}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#run-step-shape")
+    end
+
+    test "a lagged run says its deliveries belong to the epoch before", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 0,
+          config: %{},
+          inputs: %{"sensors" => ["patch_0"], "scheduling" => "lagged"}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#run-step-shape") |> render() =~ "a step behind"
+    end
+  end
+
   describe "the division of a run" do
     test "says how far it has got, and names the node each part is on", %{conn: conn, run: run} do
       :ok = RunHistory.plan_parts(run.id, [%{index: 0, of: 2}, %{index: 1, of: 2}])

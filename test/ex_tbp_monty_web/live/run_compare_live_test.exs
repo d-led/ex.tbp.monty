@@ -45,6 +45,31 @@ defmodule ExTbpMontyWeb.RunCompareLiveTest do
     assert has_element?(view, "#compare-steps", "9000")
   end
 
+  # A lever changes what a step's numbers measure, so a comparison where one side
+  # moved it says what that side's numbers mean: two runs of one seed compared
+  # without it is a comparison of two different questions.
+  test "a side that chose a lever says what its step numbers measured", %{conn: conn} do
+    sensors = ~w(vf patch_0 patch_1 patch_2 patch_3)
+
+    serial =
+      run(%{
+        inputs: %{"sensors" => sensors, "sensors_step" => "serial"},
+        summary: %{"steps" => 10}
+      })
+
+    concurrent =
+      run(%{
+        inputs: %{"sensors" => sensors, "sensors_step" => "concurrent"},
+        summary: %{"steps" => 10}
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/compare?a=#{serial.id}&b=#{concurrent.id}")
+
+    assert has_element?(view, "#compare-shape")
+    assert has_element?(view, "#compare-shape", "their sum")
+    assert has_element?(view, "#compare-shape", "slowest of them")
+  end
+
   test "two different experiments are refused rather than compared", %{conn: conn} do
     one = run(%{experiment: "tutorial/first_experiment"})
     other = run(%{})
