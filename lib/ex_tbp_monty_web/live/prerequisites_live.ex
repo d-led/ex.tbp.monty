@@ -70,18 +70,32 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
         # reader whose run needs the memory.
         pending: Map.new(prerequisites, &{&1.id, memory_pending?(&1)}),
         # Read off the disk rather than out of a download's counters: a bundle that
-        # was here before this page existed still has a size worth knowing.
-        sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
+        # was here before this page existed still has a size worth knowing. It is
+        # *measured* beside the page and not while it is drawn — a walk of the
+        # ycb tree is thousands of files and a gigabyte, and a page that waited
+        # for it answered `GET /prerequisites` in a minute or not at all on a busy
+        # disk (the request-log test timed out on exactly that).
+        sizes: Map.new(prerequisites, &{&1.id, :measuring}),
         python: EmbeddedPython.version(),
         wandb: EmbeddedPython.wandb_mode(),
         engines: Prerequisites.engines(),
-        # What each root already holds is a walk of the tree, and that costs what
-        # the disk costs, not what the page costs: it is answered in a task, so the
-        # page is usable — downloads included — while it is measured.
+        # What each root already holds is a walk of the tree too, and it costs what
+        # the disk costs rather than what the page costs.
         storage: room(prerequisites)
       )
 
-    {:ok, start_async(socket, :space, fn -> held(prerequisites) end)}
+    {:ok, start_async(socket, :measured, fn -> measured(prerequisites) end)}
+  end
+
+  # Everything this page asks of the disk, answered once, in a task: what each
+  # bundle takes and what each root holds. One task rather than two, because the
+  # page waits for its answer as one thing (`render_async/1`) and because the two
+  # walks overlap — a root contains the bundles.
+  defp measured(prerequisites) do
+    %{
+      sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
+      held: held(prerequisites)
+    }
   end
 
   # Where these downloads land: what each directory already holds, and what is
@@ -416,16 +430,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # that failed says nothing about the files, so the page says nothing about the
   # space rather than showing a nought.
   @impl true
-  def handle_async(:space, {:ok, held}, socket) do
+  def handle_async(:measured, {:ok, %{sizes: sizes, held: held}}, socket) do
     roots =
       Enum.map(socket.assigns.storage.roots, fn root ->
         %{root | occupied: Map.get(held, root.root)}
       end)
 
-    {:noreply, assign(socket, storage: %{socket.assigns.storage | roots: roots})}
+    {:noreply,
+     assign(socket,
+       sizes: sizes,
+       storage: %{socket.assigns.storage | roots: roots}
+     )}
   end
 
-  def handle_async(:space, {:exit, _reason}, socket), do: {:noreply, socket}
+  def handle_async(:measured, {:exit, _reason}, socket), do: {:noreply, socket}
 
   # Arriving with a prerequisite named is a link that starts the download it
   # points at — a finding that says a run is waiting for an archive offers the
@@ -621,6 +639,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # what Make wrote, and "unpacked" would name an unpacking nobody did. A
   # prerequisite that is not here yet says so rather than showing zero bytes,
   # which reads like an empty bundle.
+  # A row whose size is still being measured says so: it is not "nothing on disk
+  # yet", which is what a bundle that is not there says.
+  defp size_label(_prerequisite, :measuring), do: "measuring…"
+
   defp size_label(%{build: build}, %{unpacked: nil}) when is_binary(build),
     do: "nothing on disk yet"
 

@@ -80,8 +80,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
-    # The sizes are measured off the process on mount, so the row says "nothing
-    # on disk yet" until that answer lands.
+    # The sizes are measured beside the page rather than while it is drawn, so the
+    # row says "measuring…" until that answer lands.
     render_async(view)
 
     assert view |> element("#size-made_here") |> render() =~ ~r/2\.0 KiB written/
@@ -245,6 +245,20 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     assert view |> element("#embedded-engine-mujoco") |> render() =~ "MuJoCo: installed"
+  end
+
+  # A walk of a bundle's directory is thousands of files on a prepared machine, so
+  # the page does not take it while it is drawn: the answer to a request says
+  # "measuring…" and the number arrives when the walk does. This is what the
+  # request-log test timed out inside, on a busy disk.
+  test "the page answers before the sizes are measured", %{conn: conn} do
+    {:ok, view, html} = live(conn, ~p"/prerequisites")
+
+    assert html =~ "measuring…"
+    refute html =~ "nothing on disk yet"
+
+    render_async(view)
+    refute view |> element("#size-tiny") |> render() =~ "measuring…"
   end
 
   # A download that fills the disk is the failure this page exists to make
