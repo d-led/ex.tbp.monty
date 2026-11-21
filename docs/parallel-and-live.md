@@ -93,6 +93,21 @@ Said plainly, because these are the numbers that decide the design:
 - **Fairness.** `Task.async_stream` with `ordered: false` gives completion order;
   a long episode must not starve a queue of short ones — which is what the
   existing queue (Oban) is for, rather than a bare task per episode.
+- **The largest term in a step was a sort, not a phase to divide.** On the
+  ten-distinct-objects evidence experiment
+  (`randrot_noise_10distinctobj_5lms_dist_agent`, seed 42, 26 steps, world
+  `ex_mujoco`, on the Mac this was measured on) the model took 121 s and the
+  world 3.5 s. The log's own split put nine tenths of that in the vote round and
+  nearly all of the round in `receive` — the modules applying the votes they
+  heard. A round carries about 160 votes for one object and a module holds
+  thirteen thousand hypotheses, and each hypothesis sorted the whole vote list to
+  find its three nearest: O(H·V log V) in Elixir for what Monty asks a KD-tree,
+  O(H log V). `EvidenceGraphLM` now builds that index — `KdTree`, native when
+  this machine has it — and asks it for the three nearest of each hypothesis. The
+  same episode then takes **18 s** in the model, with the same steps, the same
+  votes and the same beliefs, and a step is ~700 ms of which the world is ~80 ms.
+  So before deciding what to fan out, read the split: the biggest term here was a
+  loop that had no business being in a step at all.
 
 ## 4. A live experiment
 

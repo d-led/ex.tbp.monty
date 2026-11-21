@@ -91,6 +91,35 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     SurfacePoseVectors.new([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
   end
 
+  # A vote another module casts for `location`, believing it as strongly as
+  # `confidence` says. It arrives already routed into this module's frame —
+  # `receive_votes/2` is given what
+  # `MontyForEvidenceGraphMatching.combine_votes/2` made of it.
+  defp vote(location, confidence) do
+    {:ok, message} =
+      Message.new(
+        location: location,
+        morphological_features: %{
+          "pose_vectors" => %OrientationMatrix{value: @identity},
+          "pose_fully_defined" => true
+        },
+        non_morphological_features: %{},
+        confidence: confidence,
+        pass_message: true,
+        process_features_in_lm: true,
+        sender_id: "LM_1",
+        sender_type: :lm
+      )
+
+    message
+  end
+
+  # The module after hearing exactly these votes about the one object it knows.
+  defp hear(lm, votes) do
+    {:ok, heard} = EvidenceGraphLM.receive_votes(%{"mug" => votes}, lm)
+    heard
+  end
+
   # The same surface seen from the opposite side, with the curvature direction
   # turned a quarter turn: as unlike the stored pose as a pose can be.
   defp opposite_pose do
@@ -361,22 +390,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       before = Enum.max(Hypotheses.evidence(lm.hypotheses["mug"]))
 
-      {:ok, vote} =
-        Message.new(
-          location: [0.2, 0.0, 0.0],
-          morphological_features: %{
-            "pose_vectors" => %OrientationMatrix{value: @identity},
-            "pose_fully_defined" => true
-          },
-          non_morphological_features: %{},
-          confidence: 0.9,
-          pass_message: true,
-          process_features_in_lm: true,
-          sender_id: "LM_1",
-          sender_type: :lm
-        )
-
-      {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, lm)
+      {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote([0.2, 0.0, 0.0], 0.9)]}, lm)
 
       assert Enum.max(Hypotheses.evidence(lm.hypotheses["mug"])) > before
     end
@@ -389,24 +403,26 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       before = Hypotheses.evidence(lm.hypotheses["mug"])
 
-      {:ok, vote} =
-        Message.new(
-          location: [9.0, 9.0, 9.0],
-          morphological_features: %{
-            "pose_vectors" => %OrientationMatrix{value: @identity},
-            "pose_fully_defined" => true
-          },
-          non_morphological_features: %{},
-          confidence: 0.9,
-          pass_message: true,
-          process_features_in_lm: true,
-          sender_id: "LM_1",
-          sender_type: :lm
-        )
-
-      {:ok, lm} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, lm)
+      {:ok, lm} =
+        EvidenceGraphLM.receive_votes(%{"mug" => [vote([9.0, 9.0, 9.0], 0.9)]}, lm)
 
       assert Hypotheses.evidence(lm.hypotheses["mug"]) == before
+    end
+
+    # `vote_nn = 3` in Monty: a hypothesis hears the three votes nearest it, and
+    # the strongest of those is the one applied. A fourth vote at the same place,
+    # however confident, was cast after them and is not one of the three.
+    test "reads the three nearest votes and no more" do
+      lm =
+        learning_module(mug())
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+        |> step([percept([0.2, 0.0, 0.0], [0.2])])
+
+      here = [0.2, 0.0, 0.0]
+      three = [vote(here, 0.1), vote(here, 0.2), vote(here, 0.3)]
+
+      assert best_evidence(hear(lm, three ++ [vote(here, 0.9)]), "mug") ==
+               best_evidence(hear(lm, three), "mug")
     end
 
     # This is the pair the model makes: every module votes, the model moves
@@ -464,22 +480,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       concluded = %{lm | possible_matches: [], terminal_state: :no_match}
 
-      {:ok, vote} =
-        Message.new(
-          location: [0.2, 0.0, 0.0],
-          morphological_features: %{
-            "pose_vectors" => %OrientationMatrix{value: @identity},
-            "pose_fully_defined" => true
-          },
-          non_morphological_features: %{},
-          confidence: 0.9,
-          pass_message: true,
-          process_features_in_lm: true,
-          sender_id: "LM_1",
-          sender_type: :lm
-        )
+      {:ok, heard} =
+        EvidenceGraphLM.receive_votes(%{"mug" => [vote([0.2, 0.0, 0.0], 0.9)]}, concluded)
 
-      {:ok, heard} = EvidenceGraphLM.receive_votes(%{"mug" => [vote]}, concluded)
       assert heard.possible_matches != []
 
       assert EvidenceGraphLM.update_stats_after_vote(heard).terminal_state == nil

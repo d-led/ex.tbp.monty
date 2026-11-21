@@ -80,6 +80,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   alias Monty.Frameworks.Models.GoalGeneration
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
+  alias Monty.Frameworks.Utils.KdTree
   alias Monty.Geometry
   alias Monty.Geometry.{GazeDirection, OrientationMatrix, Rotation, SurfacePoseVectors}
 
@@ -1812,9 +1813,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   unbounded). A vote for somewhere we are not is simply not for us — the
   hypothesis keeps the evidence it had.
 
-  Monty finds the closest votes with a KD-tree; this compares every hypothesis
-  against every vote, which gives the same neighbours for the handful of votes
-  a round carries.
+  Monty finds the closest votes with a KD-tree; this asks the same index the same
+  question, so a hypothesis costs the logarithm of the vote count rather than the
+  count.
   """
   @impl true
   @spec receive_votes(%{optional(graph_id()) => [Message.t()]}, t()) :: {:ok, t()}
@@ -1849,8 +1850,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   defp update_evidence_with_vote(%__MODULE__{} = lm, %Hypotheses{} = hypotheses, votes) do
-    vote_locations = Enum.map(votes, & &1.location)
-    vote_confidences = Enum.map(votes, & &1.confidence)
+    # Monty puts the vote locations in a KD-tree (`vote_location_tree`) and asks
+    # it for the three nearest of every hypothesis, so a hypothesis costs the
+    # logarithm of the vote count rather than the count. Ours is the same index:
+    # a vote's id is its place in the round, which is how it is read back.
+    tree = KdTree.build(Enum.with_index(Enum.map(votes, & &1.location)))
+
+    # A tuple, because the answer is an id and the confidence is what an id is
+    # read for: reading it out of a list by index walked the list every time.
+    confidences = votes |> Enum.map(& &1.confidence) |> List.to_tuple()
     neighbours = min(3, length(votes))
 
     evidence =
@@ -1858,7 +1866,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         Hypotheses.evidence(hypotheses),
         Hypotheses.locations(hypotheses),
         fn evidence, location ->
-          case best_vote_within_reach(lm, location, vote_locations, vote_confidences, neighbours) do
+          case best_vote_within_reach(lm, location, tree, confidences, neighbours) do
             nil -> evidence
             vote -> weigh_vote(lm, evidence, vote)
           end
@@ -1868,31 +1876,26 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     Hypotheses.put_evidence(hypotheses, evidence)
   end
 
-  defp best_vote_within_reach(
-         %__MODULE__{} = lm,
-         location,
-         vote_locations,
-         vote_confidences,
-         neighbours
-       ) do
+  # The highest confidence among the votes that reach a hypothesis: its three
+  # nearest ones, each weighed by how far off it is, and the ones out of reach
+  # masked.
+  #
+  # The index answers nearest first and breaks a tie between equidistant votes by
+  # the order they were cast, which is the order the sort this replaces gave.
+  defp best_vote_within_reach(%__MODULE__{} = lm, location, tree, confidences, neighbours) do
     nearest =
-      vote_locations
-      |> Enum.with_index()
-      |> Enum.map(fn {vote_location, index} ->
-        {norm(Geometry.subtract(location, vote_location)), index}
-      end)
-      |> Enum.sort()
-      |> Enum.take(neighbours)
+      tree
+      |> KdTree.nearest_with_distances(location, neighbours)
+      |> Enum.map(fn {distance, cast} -> {distance, elem(confidences, cast)} end)
 
     # `too_far_away = node_distance_weights <= 0` in Monty, and the same votes are
     # masked here: the weight is zero exactly at `max_match_distance`.
-    weights =
-      get_node_distance_weights(lm, Enum.map(nearest, fn {distance, _index} -> distance end))
+    weights = get_node_distance_weights(lm, Enum.map(nearest, fn {distance, _} -> distance end))
 
     nearest
     |> Enum.zip(weights)
     |> Enum.reject(fn {_vote, weight} -> weight <= 0 end)
-    |> Enum.map(fn {{_distance, index}, _weight} -> Enum.at(vote_confidences, index) end)
+    |> Enum.map(fn {{_distance, confidence}, _weight} -> confidence end)
     |> Enum.max(fn -> nil end)
   end
 

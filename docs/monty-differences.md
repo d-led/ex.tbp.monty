@@ -1602,10 +1602,10 @@ Monty's documentation makes; the rest are claims the code makes about itself.
   resets that record per episode, and keeps the selector's own record for
   `state_dict`, as its comments say.
 
-## 2.24 The vote round finds its neighbours by scanning
+## 2.24 The vote round's neighbour search
 
-**In one line:** the same neighbours, the same arithmetic, found by a scan
-instead of a k-d tree.
+**In one line:** the same neighbours found by the same index — the port used to
+scan every vote for every hypothesis.
 
 **What Monty does.** `_update_evidence_with_vote` builds a `KDTree` over the
 votes the module has been given, asks it for the three nearest votes to every
@@ -1620,23 +1620,26 @@ otherwise.
 **What this port does.**
 [`EvidenceGraphLM.update_evidence_with_vote/3`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex)
 computes the same three things in the same order, and both blends are Monty's
-lines. The neighbour search is the difference: it walks the votes for each
-hypothesis and keeps the three nearest, rather than asking an index. The
-acceptance is the same set — `distance < max_match_distance` here is
-`node_distance_weights <= 0` there, because the weight is zero exactly at the
+lines. The neighbour search is the same question asked of the port's own index —
+`Monty.Frameworks.Utils.KdTree`, the native one on a machine whose `_build` has
+`native/kd_tree_nif` — over the vote locations, a vote's id being its place in
+the round. The acceptance is the same set — `distance < max_match_distance` here
+is `node_distance_weights <= 0` there, because the weight is zero exactly at the
 radius — and the maximum over the surviving votes is the same value.
 
-**Why.** There is no k-d tree on the BEAM that answers "the three nearest of a
-few dozen points, repeatedly", and the port's vote rounds carry a handful of
-votes: the scan is `hypotheses × votes` distance computations, which a step
-affords, and it keeps the whole arithmetic in Elixir where it can be read
-against Monty's. If a config ever votes with thousands of points, the index is
-the answer and `native/kd_tree_nif` already exists for it.
+**Why the scan went.** A measurement, not a taste: on
+`randrot_noise_10distinctobj_5lms_dist_agent` (seed 42, 26 steps, world
+`ex_mujoco`, the `mix monty.run` on the machine this was measured on) the vote
+round was nine tenths of a step and the scan was nearly all of the round. A round
+carries about 160 votes for one object and a module holds thirteen thousand
+hypotheses, so the scan was `hypotheses × votes × log votes` in Elixir for what a
+tree answers in `hypotheses × log votes`: that episode spent 121 s in the model
+and now spends 18 s, with the same steps, the same votes and the same beliefs.
 
-**What is therefore not compared.** The tree's own answers — the order of equal
-distances, and numpy's tie-breaking — because this port does not have a tree.
-For distinct distances the two agree exactly, and the vote round is covered by
-the learning module's own cases.
+**What is therefore not compared.** numpy's tie-breaking among equidistant votes.
+The port's index orders equal distances by the vote's place in the round, which
+is also what the scan did, so the set of three is the same either way; but
+`cKDTree`'s own order among equal distances is not something either side states.
 
 ## 2.25 Two epoch brackets have no counterpart here
 
