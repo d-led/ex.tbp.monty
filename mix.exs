@@ -208,8 +208,10 @@ defmodule ExTbpMonty.MixProject do
       # was published. 0.2.4 is the first that a **release** can boot: 0.2.3's
       # `@on_load` hook runs from the release's boot script while the kernel is
       # still starting, and the VM died there before any application started —
-      # every desktop bundle and both images.
-      {:ex_mujoco, "~> 0.2.4"},
+      # every desktop bundle and both images. 0.2.6 is the first whose renderer
+      # cannot be disturbed by a renderer made after it, which is what a run of
+      # two parts on one node is (`docs/parallel-and-live.md`).
+      {:ex_mujoco, "~> 0.2.6"},
       # A corpus of 3D scans arrives as GLB, and its textures are PNG or JPEG.
       # The world wants `texture_map.png`, and MuJoCo is not asked to read a
       # JPEG: this reads either and writes the PNG the object set names.
