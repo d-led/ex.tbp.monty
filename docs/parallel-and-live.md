@@ -74,13 +74,18 @@ statement Monty cannot make about its own pool without auditing every global.
 Said plainly, because these are the numbers that decide the design:
 
 - **Memory per concurrent episode, not cores.** An episode holds hypotheses over
-  every object it is matching; the suite that exercises the numeric core peaks at
-  859 MB, measured with `/usr/bin/time -l mix cover` on 2026-10-28, and one
-  episode against the ten-object library is the number that matters — the right
-  `max_concurrency` is `min(schedulers, memory_budget / episode_peak)` and has to
-  be **measured** on a real episode before it is chosen. This is the one place
-  where the BEAM's sharing helps less than it looks: the library is shared, the
-  hypothesis space is not.
+  every object it is matching, so the right `max_concurrency` is
+  `min(schedulers, memory_budget / episode_peak)`. The peak is measured rather than
+  assumed: `MIX_ENV=test mix run scripts/probe_episode_peak.exs [experiment]
+  [steps]` walks one episode and prints the app's own footprint, what the
+  episode's start reads and the peak while it steps. On this Mac, on the synthetic
+  stand-in, one episode of `base_config_10distinctobj_dist_agent` — 39 steps to
+  its conclusion — read **84 MB** with the app up, **151 MB** with the run
+  started, and **207 MB** at its peak: a second episode costs about **56 MB** of
+  its own, while most of the 67 MB a start reads is the library every episode
+  shares. Read it on the world a run will use before choosing the number. This is
+  the one place where the BEAM's sharing helps less than it looks: the library is
+  shared, the hypothesis space is not.
 - **The database is now in the hot path.** An episode per row is fine; a frame
   per row is not. Frames go to files with a retention window; the row keeps the
   path, the counts and the conclusion.
@@ -128,16 +133,41 @@ to copy rather than invent: [`tbp.teleop`](https://github.com/thousandbrainsproj
 
 ## 5. Where this sits in the plan
 
-Not yet: both depend on a world, and the world is the next phase. Recorded here so
-that the shape is a decision already made when it arrives.
+**Parallel episodes are built** — `Partition` and `Jobs.Run.run_wave` divide a
+run's episodes across parts, the run form carries a `parallelism` select, and a
+divided run's library has been read back and scored against its objects
+(`training.md`, "A divided run writes the same memory"). The four things that made
+it something to trust are in:
 
-| Milestone            | Needs                          | Done when                                                                                                                           |
-| -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Parallel episodes    | a world; episode peak measured | `mix monty.run --parallel 8` over 64 episodes gives the same conclusions and the same evidence as serial, and the wall clock scales |
-| Live episode         | a sensor source behind a port  | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions                            |
-| Distributed episodes | the two above                  | one experiment across two nodes, with the aggregate identical                                                                       |
+- **The referee** — "a run of several parts finds what the undivided run finds,
+  episode for episode" (`test/monty/studio/jobs/run_test.exs`) walks four
+  episodes twice, once whole and once in two parts, and asserts every step of
+  every episode is the same step: the same percepts, votes, goals and beliefs, and
+  the same tally at the close. A division is a change of schedule, so nothing else
+  may move.
+- **The memory number** — `scripts/probe_episode_peak.exs` prints an episode's
+  peak and §3 quotes the reading, so a concurrency is arithmetic rather than a
+  number chosen by feel.
+- **The comparison, on the page** — `/compare` offers a divided run's parts under
+  the run in each of its two pickers. Picking two parts (or a part and the whole
+  run) reads both columns from the runs' `eval_stats.csv`, because a part has no
+  summary of its own, and the page says so above the table. That is a reader's own
+  proof that the division did not change the answer.
+- **A headless lever** — `mix monty.run <experiment> --episodes 8 --parallel 4`
+  for the runs a script starts; the page stays the way a person starts one.
 
-The check for both is the same one this port has used everywhere else: **the same
-numbers as serial, then the same numbers as Python.** Parallelism that changes a
-result is a bug, and a live run that cannot be replayed from its recording is not
-an experiment.
+What is left in this lane:
+
+- **`/compare` starting the second run** — a reader still starts the second run
+  from the experiment page and then picks it here, rather than pressing one
+  button on the first run's page.
+- A part's **wall clock** is shown only for a run of one wave: a run that trains
+  and then evaluates numbers both waves from one, and the part rows carry no wave.
+
+**Live episodes are not started**: they need a sensor source behind a port, and
+the model needs no change. **Distributed episodes** follow both.
+
+The check is the same one this port has used everywhere else: **the same numbers
+as serial, then the same numbers as Python.** Parallelism that changes a result
+is a bug, and a live run that cannot be replayed from its recording is not an
+experiment.
