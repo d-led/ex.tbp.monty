@@ -80,7 +80,7 @@ Said plainly, because these are the numbers that decide the design:
   every object it is matching, so the right `max_concurrency` is
   `min(schedulers, memory_budget / episode_peak)`. Measure the peak rather than
   assuming it: `MIX_ENV=test mix run scripts/probe_episode_peak.exs [experiment]
-  [steps]` walks one episode and prints the app's own footprint, what the
+[steps]` walks one episode and prints the app's own footprint, what the
   episode's start reads and the peak while it steps. Read it on the world a run
   will use. This is the one place where the BEAM's sharing helps less than it
   looks: the library is shared, the hypothesis space is not.
@@ -137,11 +137,22 @@ run's library names the objects its parts trained (`training.md`). The page can
 put two parts of one divided run beside each other (`/compare`). What the
 milestones below add is the part that makes it trustworthy and watchable:
 
-| Milestone            | Needs                          | Done when                                                                                                                           |
-| -------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone            | Needs                          | Done when                                                                                                                                     |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Parallel episodes    | a world; episode peak measured | a divided run takes the same steps as the serial one (`test/monty/studio/jobs/run_test.exs`), and `max_concurrency` follows the measured peak |
-| Live episode         | a sensor source behind a port  | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions                            |
-| Distributed episodes | the two above                  | one experiment across two nodes, with the aggregate identical                                                                       |
+| Live episode         | a sensor source behind a port  | the studio shows a live episode's hypotheses; a frame-per-tick recording replays to the same conclusions                                      |
+| Distributed episodes | the two above                  | one experiment across two nodes, with the aggregate identical                                                                                 |
+
+A world that **draws** has one more requirement, and it is not the division's: a
+render must not depend on what else rendered first. Two parts on one node are two
+renderers, and `ex_mujoco` bound the offscreen buffer once per renderer, so the
+first of them to draw after the second was made drew into the second's buffer and
+read its own back — black below row 42 of 64, on that one render. A divided run of
+`base_config_10distinctobj_dist_agent` therefore took different steps from the
+serial one (104 whole, 171 then 140 in two parts) while the stand-in scene agreed
+exactly. Fixed in `ex_mujoco` 0.2.6 by binding the buffer per render, and held by
+`renderer_test.exs`: "a second renderer of the same scene does not change the
+first one's picture".
 
 The check for both is the same one this port has used everywhere else: **the same
 numbers as serial, then the same numbers as Python.** Parallelism that changes a
