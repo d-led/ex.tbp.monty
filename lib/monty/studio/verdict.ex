@@ -29,6 +29,8 @@ defmodule Monty.Studio.Verdict do
           object: String.t() | nil
         }
 
+  alias Monty.Studio.Belief
+
   @typedoc """
   `object` is the object the concluded modules named, and `agreed?` says whether
   they all named it. No module concluded at this step is `object: nil` with
@@ -90,7 +92,7 @@ defmodule Monty.Studio.Verdict do
   end
 
   defp result(module_id, belief, still_believing) do
-    state = belief |> Map.get("terminal_state") |> normalised()
+    state = Belief.state(belief)
 
     %{module_id: module_id, state: state, object: named(belief, state, still_believing)}
   end
@@ -98,36 +100,10 @@ defmodule Monty.Studio.Verdict do
   # A concluded module named the object it matched; one still working names the
   # object it was voting for when the episode closed, which is the answer it gave
   # and the reason `still_believing` is asked for at all.
-  defp named(belief, "match", _vote), do: Map.get(belief, "detected_object") || believed(belief)
+  defp named(belief, "match", _vote),
+    do: Map.get(belief, "detected_object") || Belief.named(belief)
+
   defp named(_belief, "no_match", _vote), do: nil
   defp named(_belief, _undecided, vote) when is_binary(vote), do: vote
-  defp named(belief, _undecided, _vote), do: believed(belief)
-
-  # The object a module held, from its current hypothesis where the record kept
-  # one and from the strongest graph otherwise: a module whose hypothesis was
-  # never built still has graphs, and its strongest is what it believed.
-  defp believed(belief) do
-    case get_in(belief, ["mlh", "graph_id"]) do
-      nil -> strongest(belief)
-      graph_id -> graph_id
-    end
-  end
-
-  defp strongest(belief) do
-    case Map.get(belief, "graphs", %{}) do
-      graphs when map_size(graphs) == 0 ->
-        nil
-
-      graphs ->
-        {name, _graph} =
-          Enum.max_by(graphs, fn {_name, graph} ->
-            Map.get(graph, "max_evidence") || 0
-          end)
-
-        name
-    end
-  end
-
-  defp normalised(nil), do: nil
-  defp normalised(state), do: to_string(state)
+  defp named(belief, _undecided, _vote), do: Belief.named(belief)
 end

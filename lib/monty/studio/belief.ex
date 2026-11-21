@@ -130,6 +130,43 @@ defmodule Monty.Studio.Belief do
     }
   end
 
+  @doc """
+  The object a stored belief names: the graph its most likely hypothesis is
+  about, or — for a belief whose hypothesis was never built — the object whose
+  graph holds the strongest evidence.
+
+  Every surface that says what a module believes asks here, so a page's verdict
+  sentence and its strip of claims cannot name two objects for one module.
+  """
+  @spec named(map()) :: String.t() | nil
+  def named(belief) do
+    case get_in(belief, ["mlh", "graph_id"]) do
+      nil -> strongest(belief)
+      graph_id -> graph_id
+    end
+  end
+
+  @doc "How a belief's terminal state reads back, which is as a string or not at all."
+  @spec state(map()) :: String.t() | nil
+  def state(belief) do
+    case Map.get(belief, "terminal_state") do
+      nil -> nil
+      concluded -> to_string(concluded)
+    end
+  end
+
+  defp strongest(belief) do
+    case Map.get(belief, "graphs", %{}) do
+      graphs when map_size(graphs) == 0 ->
+        nil
+
+      graphs ->
+        graphs
+        |> Enum.max_by(fn {_name, graph} -> Map.get(graph, "max_evidence") || 0 end)
+        |> elem(0)
+    end
+  end
+
   @doc "The belief of a running module, by the model and module ids it was started with."
   @spec of(String.t(), atom() | String.t()) :: t() | nil
   def of(model_id, module_id) do

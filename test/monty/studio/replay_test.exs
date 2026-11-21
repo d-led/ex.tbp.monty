@@ -448,26 +448,115 @@ defmodule Monty.Studio.ReplayTest do
       assert Replay.best_evidence(run(0..2)) == nil
     end
 
-    test "the two theories at a step are the two strongest, the strongest first" do
-      # Step 3: the run's guess is still bowl, with mug climbing behind it.
-      assert Replay.theories(Replay.at(with_graphs([0, 3]), 3)) == [
-               %{object: "bowl", evidence: 7.0},
-               %{object: "mug", evidence: 3.0}
+    # What a reader watching a run keeps asking: which object does each module
+    # think it is looking at, and how sure is it. The answer is the module's own
+    # most likely hypothesis, one row a module — not the step's aggregate, which
+    # says what the ensemble was weighing and nothing about who held it.
+    test "a claim is the module's own hypothesis, named with the module" do
+      record =
+        believing(%{
+          "learning_module_0" => %{"mlh" => %{"graph_id" => "mug", "evidence" => 4.5}},
+          "learning_module_1" => %{"mlh" => %{"graph_id" => "bowl", "evidence" => 2.0}}
+        })
+
+      claims = Replay.claims(Replay.at(record, 0))
+
+      assert Enum.map(claims, &{&1.module_id, &1.object, &1.evidence}) == [
+               {"learning_module_0", "mug", 4.5},
+               {"learning_module_1", "bowl", 2.0}
              ]
     end
 
-    test "a theory with no evidence behind it is not worth naming" do
-      assert Replay.theories(Replay.at(with_graphs([0]), 0)) == [
-               %{object: "bowl", evidence: 10.0}
-             ]
+    test "the claim is the hypothesis, not merely the strongest object" do
+      # A module can hold a hypothesis about one object while another object's
+      # graph is stronger: what it would answer is the hypothesis.
+      record =
+        believing(%{
+          "learning_module_0" => %{
+            "mlh" => %{"graph_id" => "mug", "evidence" => 4.5},
+            "graphs" => %{
+              "mug" => %{"max_evidence" => 4.5},
+              "bowl" => %{"max_evidence" => 9.0}
+            }
+          }
+        })
+
+      assert [%{object: "mug", evidence: 4.5}] = Replay.claims(Replay.at(record, 0))
     end
 
-    test "a step whose modules built no graphs has no theories" do
-      assert Replay.theories(Replay.at(run(0..2), 1)) == []
+    test "a module down to one object says so" do
+      record =
+        believing(%{
+          "learning_module_0" => %{
+            "mlh" => %{"graph_id" => "mug", "evidence" => 4.5},
+            "possible_matches" => ["mug"]
+          }
+        })
+
+      assert [%{possible: 1}] = Replay.claims(Replay.at(record, 0))
     end
 
-    test "how many theories to name is the caller's choice" do
-      assert [%{object: "bowl"}] = Replay.theories(Replay.at(with_graphs([3]), 3), 1)
+    test "a spread of objects is counted, not hidden" do
+      record =
+        believing(%{
+          "learning_module_0" => %{
+            "mlh" => %{"graph_id" => "mug"},
+            "possible_matches" => ["mug", "bowl", "cup"]
+          }
+        })
+
+      assert [%{possible: 3}] = Replay.claims(Replay.at(record, 0))
+    end
+
+    test "a module still weighing every object claims no object yet, and says how many" do
+      record = believing(%{"learning_module_0" => %{"possible_matches" => ["mug", "bowl"]}})
+
+      assert [%{object: nil, possible: 2}] = Replay.claims(Replay.at(record, 0))
+    end
+
+    test "a record that kept no count says nothing about the count" do
+      assert [%{possible: nil}] = Replay.claims(Replay.at(with_graphs([0]), 0))
+    end
+
+    test "a module that concluded says which way" do
+      record =
+        believing(%{
+          "learning_module_0" => %{
+            "mlh" => %{"graph_id" => "mug"},
+            "terminal_state" => "match"
+          },
+          "learning_module_1" => %{
+            "mlh" => %{"graph_id" => "mug"},
+            "terminal_state" => "no_match"
+          }
+        })
+
+      assert Enum.map(Replay.claims(Replay.at(record, 0)), & &1.state) == ["match", "no_match"]
+    end
+
+    test "modules are named in one order, whichever order the record kept them" do
+      record =
+        believing(%{
+          "learning_module_1" => %{"mlh" => %{"graph_id" => "mug"}},
+          "learning_module_0" => %{"mlh" => %{"graph_id" => "bowl"}}
+        })
+
+      assert Enum.map(Replay.claims(Replay.at(record, 0)), & &1.module_id) ==
+               ["learning_module_0", "learning_module_1"]
+    end
+
+    test "a step whose modules built no graphs has no claims" do
+      assert Replay.claims(Replay.at(run(0..2), 1)) == []
+    end
+
+    test "a module with neither a hypothesis nor a graph claims nothing" do
+      assert Replay.claims(Replay.at(believing(%{"learning_module_0" => %{}}), 0)) == []
+    end
+
+    # A run of one step whose modules hold exactly the beliefs given: a claim is
+    # read off the record's own shape, so the fixture is that shape.
+    defp believing(beliefs) do
+      %Run{timeline: [moment(0)], log: [%{"step" => 0, "beliefs" => beliefs}]}
     end
   end
 

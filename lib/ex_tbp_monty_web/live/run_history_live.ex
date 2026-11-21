@@ -927,7 +927,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       # `false` is an answer too, and `||` on it asked again at every step.
       pictures: Map.get_lazy(socket.assigns, :pictures, fn -> kept_pictures?(run) end),
       best: catalog.best,
-      theories: Replay.theories(moment),
+      claims: Replay.claims(moment),
       # What the modules concluded at this step, and whether they agreed: Monty
       # ends an episode on the first match, so the report of a parallel run is
       # one `match` and a row of `time_out` — the criterion's doing, not the
@@ -2022,7 +2022,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
           series={@series}
           series_id={@series_id}
           best={@best}
-          theories={@theories}
+          claims={@claims}
           verdict={@verdict}
           graphs={@graphs}
           pictures={@pictures}

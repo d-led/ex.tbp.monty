@@ -375,6 +375,62 @@ defmodule ExTbpMontyWeb.StudioComponents do
   end
 
   @doc """
+  What each module believes, in one row a module.
+
+  The object is the hypothesis the module would name if it were asked now, so
+  the row is the answer and not a summary of one: the evidence is that
+  hypothesis's own, the count is how many objects are still possible — one is an
+  answer, several is a spread — and a module that concluded says so where its
+  object stands.
+
+  The page draws this under the header, where the chart is read, and again above
+  the frames, which are a tall chart away: the question a reader keeps asking
+  while they scroll is the one it answers, and the answer should not be a scroll
+  back.
+  """
+  attr :claims, :list, default: []
+  attr :id, :string, required: true
+
+  def claims(assigns) do
+    ~H"""
+    <section
+      :if={@claims != []}
+      id={@id}
+      class="min-w-0 rounded-field bg-base-200/60 px-3 py-1.5"
+    >
+      <p class="text-[11px] font-medium tracking-wide text-base-content/55 uppercase">
+        believes
+      </p>
+      <ul class="mt-0.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <li
+          :for={claim <- @claims}
+          id={"#{@id}-#{claim.module_id}"}
+          class="flex items-baseline gap-1.5"
+        >
+          <span class="font-mono text-[10px] text-base-content/45">{claim.module_id}</span>
+          <span class={[
+            "truncate font-mono text-lg font-semibold leading-none",
+            is_nil(claim.object) && "font-normal text-base-content/50"
+          ]}>
+            {claim.object || "no hypothesis yet"}
+          </span>
+          <span :if={claim.evidence != nil} class="font-mono text-xs text-base-content/60">
+            {format_value(claim.evidence)}
+          </span>
+          <span :if={claim.possible != nil} class="badge badge-xs badge-ghost">
+            {claim.possible} possible
+          </span>
+          <span :if={claim.state == "match"} class="badge badge-xs badge-success">matched</span>
+          <span :if={claim.state == "no_match"} class="badge badge-xs badge-error">
+            nothing here
+          </span>
+        </li>
+      </ul>
+    </section>
+    """
+  end
+
+  @doc """
   A finished run, step by step: the slider, the frames at that step, and a chart.
 
   Replaying is reading, not running: the frames come from the observations the
@@ -387,7 +443,9 @@ defmodule ExTbpMontyWeb.StudioComponents do
   attr :series, :list, default: []
   attr :series_id, :string, default: nil
   attr :best, :map, default: nil
-  attr :theories, :list, default: []
+  # What each module believes at the step under the slider, one row a module
+  # (`Monty.Studio.Replay.claims/1`).
+  attr :claims, :list, default: []
   # When the run began: the page says how long it has been going beside the
   # plot, because a step count answers how far it got and not how fast.
   attr :started_at, :string, default: nil
@@ -495,23 +553,13 @@ defmodule ExTbpMontyWeb.StudioComponents do
         }
       </script>
 
-      <%!-- What the step under the slider was deciding between. Two names and two
-      numbers, so dragging the slider answers "and then what?" without reading a
-      chart or a log. --%>
-      <p
-        :if={@moment && @theories != []}
-        id="replay-theories"
-        class="flex flex-wrap items-baseline gap-x-2 px-0.5 text-xs"
-      >
-        <span class="text-base-content/60">strongest theories</span>
-        <span
-          :for={{theory, rank} <- Enum.with_index(@theories)}
-          class={["font-mono", rank == 0 && "font-semibold"]}
-        >
-          {theory.object}
-          <span class="text-base-content/60">{format_value(theory.evidence)}</span>
-        </span>
-      </p>
+      <%!-- What the modules believe at the step under the slider: the object each
+      would name now, the evidence behind it and how many objects are still
+      possible. It was one aggregate line of the step's strongest theories, which
+      answered a question about the ensemble; a reader watching a run asks about
+      the belief, and asks it again at the frames — which is why the same strip
+      is drawn there too. --%>
+      <.claims claims={@claims} id="replay-claims" />
 
       <%!-- Full screen is for reading a shape, not for watching a run: it takes
       the plot out of the page's columns and gives it the window, and the plot
@@ -1267,6 +1315,12 @@ defmodule ExTbpMontyWeb.StudioComponents do
           {duration(@moment.entry["duration_us"])}
         </span>
       </div>
+
+      <%!-- The same answer the chart carries, for the same reason the slider and
+      the buttons are here twice: the frames are a screen below the header on a
+      tall chart, and which object the run thinks it is looking at is not a
+      question that should need a scroll back. --%>
+      <.claims claims={@claims} id="replay-claims-below" />
 
       <div :if={@moment} class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div :if={@moment.frames != []} id="replay-frames" class="grid gap-1.5 sm:grid-cols-2">

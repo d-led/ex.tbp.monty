@@ -15,6 +15,7 @@ defmodule Monty.Studio.Replay do
   """
 
   alias Monty.Simulators.Synthetic.Camera
+  alias Monty.Studio.Belief
   alias Monty.Studio.Chart
   alias Monty.Studio.Replay.Digest
   alias Monty.Studio.RunHistory.Run
@@ -193,47 +194,74 @@ defmodule Monty.Studio.Replay do
   @spec best_evidence(Run.t()) :: %{object: String.t(), value: number()} | nil
   def best_evidence(%Run{} = run), do: run |> digest() |> Digest.best()
 
-  @doc """
-  The theories the run was still weighing at one step, strongest first.
+  @typedoc """
+  One module's answer at a step: the object it believes most, the evidence
+  behind that hypothesis, how many of its objects are still possible, and what
+  it had concluded — `"match"` or `"no_match"` — when the step was recorded.
 
-  A replay is a slider, and what a person wants while dragging it is the short
-  version: not the ten lines, two names and two numbers. Objects the modules have
-  ruled out to nothing are left out rather than listed at zero — a theory with no
-  evidence behind it is not a theory.
-
-  `count` is how many to name. The default is two because that is what fits on
-  one line beside the step, and because a decision between two is the shape of
-  the moment being looked at.
+  `possible` is `nil` for a belief that did not keep the count, which is how a
+  record written before the field existed reads back.
   """
-  @spec theories(moment(), pos_integer()) :: [%{object: String.t(), evidence: number()}]
-  def theories(moment, count \\ 2) do
+  @type claim :: %{
+          module_id: String.t(),
+          object: String.t() | nil,
+          evidence: number() | nil,
+          possible: non_neg_integer() | nil,
+          state: String.t() | nil
+        }
+
+  @doc """
+  What each module believes at one step — Monty's most likely hypothesis, one a
+  module.
+
+  A replay is a slider, and the question a reader keeps asking while they drag
+  it is which object the run thinks it is looking at. One aggregate line of the
+  step's strongest theories answered a question about the ensemble; this answers
+  the one about the module holding the belief: what it would name if it were
+  asked now, the evidence behind that hypothesis, and how many of its objects are
+  still alive — one is an answer, several is a spread.
+
+  Modules are named in the order `Monty.Studio.Verdict` names them, so a
+  concluded module stands where the sentence about the conclusion puts it.
+  """
+  @spec claims(moment()) :: [claim()]
+  def claims(moment) do
     moment
-    |> object_names()
-    |> Enum.map(&%{object: &1, evidence: evidence_of(moment, &1)})
-    |> Enum.reject(&(&1.evidence <= 0))
-    |> Enum.sort_by(& &1.evidence, :desc)
-    |> Enum.take(count)
+    |> beliefs_of()
+    |> Enum.map(fn {module_id, belief} -> claim(to_string(module_id), belief) end)
+    |> Enum.reject(&(&1.object == nil and &1.possible == nil))
+    |> Enum.sort_by(& &1.module_id)
   end
 
-  defp object_names(moment) do
-    moment
-    |> beliefs()
-    |> Enum.flat_map(fn belief -> belief |> Map.get("graphs", %{}) |> Map.keys() end)
-    |> Enum.uniq()
+  defp claim(module_id, belief) do
+    object = Belief.named(belief)
+
+    %{
+      module_id: module_id,
+      object: object,
+      evidence: evidence(belief, object),
+      possible: possible(belief),
+      state: Belief.state(belief)
+    }
   end
 
-  # An object's evidence on a step: the strongest any module held for it. One
-  # number per object per step is what a line needs, and the best module is the
-  # one whose belief the ensemble acted on.
-  defp evidence_of(moment, name) do
-    moment
-    |> beliefs()
-    |> Enum.map(&(&1 |> Map.get("graphs", %{}) |> Map.get(name, %{}) |> Map.get("max_evidence")))
-    |> Enum.reject(&is_nil/1)
-    |> Enum.max(fn -> 0.0 end)
+  # The hypothesis's own evidence. A module whose hypothesis was never built is
+  # named from its strongest graph (`Belief.named/1`), and the number beside that
+  # name is then the same graph's — an object with no number to stand behind it
+  # would make the strip look unmeasured rather than early.
+  defp evidence(belief, object) do
+    get_in(belief, ["mlh", "evidence"]) || get_in(belief, ["graphs", object, "max_evidence"])
   end
 
-  defp beliefs(moment), do: moment |> beliefs_of() |> Map.values()
+  # A module that has built no graph yet keeps no count, and says nothing beside
+  # its name; one whose objects have all been ruled out keeps a count of nought,
+  # which is a fact about the step and not a missing field.
+  defp possible(belief) do
+    case Map.fetch(belief, "possible_matches") do
+      {:ok, matches} -> length(matches)
+      :error -> nil
+    end
+  end
 
   # The entry's beliefs, keyed by the module that held them: the key is the only
   # place a module's name is written down.

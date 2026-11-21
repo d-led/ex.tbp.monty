@@ -1097,6 +1097,34 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
     run_believing(steps, fn evidence -> %{"learning_module_0" => evidence} end)
   end
 
+  # A finished run of one step whose modules hold exactly the beliefs given: a
+  # claim is read off the record's own shape, so the fixture is that shape.
+  defp run_of_beliefs(beliefs) do
+    {:ok, run} =
+      RunHistory.start(%{
+        experiment: "tutorial/first_experiment",
+        source: "monty",
+        steps: 1,
+        config: %{}
+      })
+
+    entry = %{
+      "episode" => 0,
+      "step" => 0,
+      "percepts" => ["patch"],
+      "inputs" => %{"learning_module_0" => 1},
+      "votes" => %{"sent" => 1, "used" => 1},
+      "goals" => 1,
+      "actions" => 1,
+      "duration_us" => 120,
+      "beliefs" => beliefs
+    }
+
+    {:ok, run} = RunHistory.record_step(run, entry, moment(0))
+    {:ok, run} = RunHistory.finish(run, %{"steps" => 1})
+    run
+  end
+
   # A run of a heterarchy: the same steps, but every module says its own thing
   # about each object, which is what a run of five modules actually records.
   defp run_believing(steps, by_module) do
@@ -1642,10 +1670,10 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert view |> element("#run-progress") |> render() =~ "step 8 /"
 
       # Step 0 is older than the window: its report comes from the record, and
-      # the theories beside the replay are the ones that step believed.
+      # the claim beside the replay is the one that step believed.
       render_hook(view, "replay_seek", %{"step" => 0})
 
-      assert view |> element("#replay-theories") |> render() =~ "mug"
+      assert view |> element("#replay-claims") |> render() =~ "mug"
     end
 
     # A step is several messages — the line, the beliefs, the pictures — and each
@@ -2393,26 +2421,63 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert Enum.any?(samples(view), &(&1["line"] == "bowl" and &1["step"] == 0))
     end
 
-    test "the two strongest theories change as the slider moves", %{conn: conn} do
+    test "what the modules believe changes as the slider moves", %{conn: conn} do
       run = run_believing([%{"mug" => 1.0, "bowl" => 4.0}, %{"mug" => 9.0, "bowl" => 2.0}])
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      # The page opens where the run ended: mug is the guess by then.
-      assert view |> element("#replay-theories") |> render() =~ "mug"
-      assert view |> element("#replay-theories") |> render() =~ "9.00"
+      # The page opens where the run ended, and the module's answer there is mug.
+      assert view |> element("#replay-claims") |> render() =~ "mug"
+      assert view |> element("#replay-claims") |> render() =~ "9.00"
 
       view |> element("#replay-seek") |> render_change(%{"step" => "0"})
 
-      theories = view |> element("#replay-theories") |> render()
-      assert theories =~ "bowl"
-      assert theories =~ "4.00"
+      claims = view |> element("#replay-claims") |> render()
+      assert claims =~ "bowl"
+      assert claims =~ "4.00"
+    end
+
+    test "the same answer is drawn where the frames are", %{conn: conn} do
+      run = run_believing(%{"mug" => 5.0})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      # The frames are a screen below the header on a tall chart, and which
+      # object the run thinks it is looking at should not need a scroll back.
+      assert view |> element("#replay-claims") |> render() =~ "mug"
+      assert view |> element("#replay-claims-below") |> render() =~ "mug"
+      assert has_element?(view, "#replay-claims-learning_module_0")
+    end
+
+    test "a module down to one object says so", %{conn: conn} do
+      run =
+        run_of_beliefs(%{
+          "learning_module_0" => %{
+            "mlh" => %{"graph_id" => "mug", "evidence" => 21.7},
+            "possible_matches" => ["mug"]
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      claim = view |> element("#replay-claims-learning_module_0") |> render()
+      assert claim =~ "mug"
+      assert claim =~ "21.70"
+      assert claim =~ "1 possible"
+    end
+
+    test "a module that concluded says so where its object stands", %{conn: conn} do
+      run = run_that_concluded(%{"learning_module_0" => {"match", "mug"}})
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert view |> element("#replay-claims-learning_module_0") |> render() =~ "matched"
     end
 
     test "a step that weighed nothing says nothing", %{conn: conn, run: run} do
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      refute has_element?(view, "#replay-theories")
+      refute has_element?(view, "#replay-claims")
     end
 
     test "a run with nothing to compare gets one line and no legend", %{conn: conn, run: run} do
