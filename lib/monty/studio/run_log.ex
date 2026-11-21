@@ -56,8 +56,13 @@ defmodule Monty.Studio.RunLog do
       # are mostly the rest is doing bookkeeping around it.
       "sensors_us" => Map.get(info, :sensors_us, 0),
       "modules_us" => Map.get(info, :modules_us, 0),
+      "await_us" => Map.get(info, :await_us, 0),
       "round_us" => Map.get(info, :round_us, 0),
       "motor_us" => Map.get(info, :motor_us, 0),
+      # The round's own split: of vote, combine, deliver, goals, regions and
+      # attention, which one the step spent itself on. A round is most of a step,
+      # so "the round is slow" answers nothing on its own.
+      "round_parts" => round_parts(Map.get(info, :round_parts, %{})),
       # The world steps the agent before the model sees anything, and that time
       # is not the model's: a step's own clock measures the modules only. Without
       # this the wall clock of a run cannot be split into the simulation it is
@@ -353,10 +358,33 @@ defmodule Monty.Studio.RunLog do
       "inputs #{inputs} · votes #{votes["used"]}/#{votes["sent"]} · " <>
       "goals #{entry["goals"]} · #{Duration.humanize(Map.get(entry, "duration_us", 0))} · " <>
       "sensors #{Duration.humanize(Map.get(entry, "sensors_us", 0))} · " <>
+      "await #{Duration.humanize(Map.get(entry, "await_us", 0))} · " <>
       "modules #{Duration.humanize(Map.get(entry, "modules_us", 0))} · " <>
-      "round #{Duration.humanize(Map.get(entry, "round_us", 0))} · " <>
-      "motor #{Duration.humanize(Map.get(entry, "motor_us", 0))}" <> believed(entry)
+      "round #{Duration.humanize(Map.get(entry, "round_us", 0))}" <>
+      round_split(entry) <>
+      " · motor #{Duration.humanize(Map.get(entry, "motor_us", 0))}" <> believed(entry)
   end
+
+  # The round's split in the order the round runs them, so a log line reads like
+  # the pipeline it is. A lagged round has only two of these parts and says so.
+  @round_parts ~w(vote combine deliver receive settle goals regions attention)
+
+  defp round_split(entry) do
+    parts = Map.get(entry, "round_parts", %{})
+
+    words =
+      for name <- @round_parts, Map.has_key?(parts, name) do
+        "#{name} #{Duration.humanize(Map.fetch!(parts, name))}"
+      end
+
+    case words do
+      [] -> ""
+      words -> " (" <> Enum.join(words, " · ") <> ")"
+    end
+  end
+
+  defp round_parts(parts) when is_map(parts),
+    do: Map.new(parts, fn {name, us} -> {to_string(name), us} end)
 
   alias Monty.Studio.LocalClock
 

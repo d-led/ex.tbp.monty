@@ -60,7 +60,16 @@ defmodule Monty.Runtime.StepTest do
   # A step's report without the clocks it carries: how long a round took is never
   # part of what the step decided, so two steps are compared on what they said.
   defp without_clocks(info),
-    do: Map.drop(info, [:duration_us, :sensors_us, :modules_us, :round_us, :motor_us])
+    do:
+      Map.drop(info, [
+        :duration_us,
+        :sensors_us,
+        :modules_us,
+        :await_us,
+        :round_us,
+        :round_parts,
+        :motor_us
+      ])
 
   # What the coordinator holds attention as, read the way a recording run reads
   # it (`state_dict/1`) rather than out of the struct.

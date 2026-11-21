@@ -279,15 +279,25 @@ defmodule Monty.Runtime.Step do
         park_step(state, from, pending)
 
       :barrier ->
-        # The modules' own answer to the previous hand-off, waited for: a step's
-        # biggest phase when a module is doing real work, and the number that says
-        # whether several modules are overlapping or taking turns.
+        # The previous hand-off's answers, read: already there, because the step
+        # that handed the work over waited for them (`await_us` below).
         {modules_us, {outputs, _output_timeouts}} = timed(fn -> gather_outputs(state) end)
         {inputs, input_counts} = route_inputs(state, percepts, outputs)
-        step_learning_modules(state, inputs, ctx)
+
+        # The modules' own compute, and the phase a barrier step is: every module
+        # has the epoch before this wait begins, so they overlap, and the number
+        # is the slowest of them rather than the sum.
+        {await_us, :ok} = timed(fn -> step_learning_modules(state, inputs, ctx) end)
 
         {reply, state} =
-          finish_step(state, Map.merge(pending, %{input_counts: input_counts, modules_us: modules_us}))
+          finish_step(
+            state,
+            Map.merge(pending, %{
+              input_counts: input_counts,
+              modules_us: modules_us,
+              await_us: await_us
+            })
+          )
 
         {:reply, reply, state}
     end
@@ -431,7 +441,7 @@ defmodule Monty.Runtime.Step do
   # is not reading while it is inside a `handle_call`. The seam is here so that the
   # deferred reply is a second caller of the same tail, not a second tail.
   defp finish_step(%State{} = state, pending) do
-    {round_us, {state, vote_info, goals}} = timed(fn -> round_and_goals(state, pending) end)
+    {round_us, {state, vote_info, goals, parts}} = timed(fn -> round_and_goals(state, pending) end)
 
     {motor_us, {actions, state}} =
       timed(fn ->
@@ -476,11 +486,19 @@ defmodule Monty.Runtime.Step do
       # compute is waited for), and everything else — routing, votes, motor.
       sensors_us: Map.get(pending, :sensors_us, 0),
       modules_us: Map.get(pending, :modules_us, 0),
+      # The modules' compute itself, which is where a barrier step's time goes
+      # when a module is doing real work: the hand-off is a cast, so this is the
+      # coordinator waiting for each module to finish the epoch it was given.
+      # `modules_us` above is only the read of those answers, already computed.
+      await_us: Map.get(pending, :await_us, 0),
       # The rest of the step, split the same way: the vote-and-goals round (which
       # is where a module's own vote is computed, in a round of blocking calls),
       # and the motor system.
       round_us: round_us,
       motor_us: motor_us,
+      # The round's own split: the modules' vote calls, the combine, the delivery
+      # and settle rounds, the two proposal rounds, and attention.
+      round_parts: parts,
       duration_us: elapsed_us(pending.started_at)
     }
 
@@ -646,7 +664,7 @@ defmodule Monty.Runtime.Step do
   defp round_and_goals(%State{scheduling: :lagged, step: step} = state, %{reports: reports}) do
     epoch = step - 1
 
-    vote_info = deliver_lagged_votes(state, epoch, reports)
+    {deliver_epoch_us, vote_info} = timed(fn -> deliver_lagged_votes(state, epoch, reports) end)
 
     learning_goals = Enum.map(reports, fn {_id, report} -> report.goals end)
     learning_regions = Enum.map(reports, fn {_id, report} -> report.region end)
@@ -661,8 +679,10 @@ defmodule Monty.Runtime.Step do
     goals = Enum.concat(learning_goals ++ sensor_goals(state))
     regions = sensor_regions(state) ++ learning_regions
 
-    {state, goals} = State.step_attention(state, goals, regions)
-    {state, vote_info, goals}
+    {attention_us, {state, goals}} = timed(fn -> State.step_attention(state, goals, regions) end)
+
+    {state, vote_info, goals,
+     %{deliver: deliver_epoch_us, attention: attention_us}}
   end
 
   defp round_and_goals(%State{} = state, _pending), do: vote_and_pass_goals(state)
@@ -675,8 +695,13 @@ defmodule Monty.Runtime.Step do
   # default `:infinity` reproduces Monty's synchronous round.
   defp vote_and_pass_goals(%State{lm_to_lm_vote: nil} = state) do
     zero = %{sent: 0, used: 0, deadline_hit?: false, timed_out: []}
-    {state, goals} = State.step_attention(state, propose_goals(state), propose_regions(state))
-    {state, zero, goals}
+
+    {goals_us, goals} = timed(fn -> propose_goals(state) end)
+    {regions_us, regions} = timed(fn -> propose_regions(state) end)
+    {attention_us, {state, goals}} =
+      timed(fn -> State.step_attention(state, goals, regions) end)
+
+    {state, zero, goals, %{goals: goals_us, regions: regions_us, attention: attention_us}}
   end
 
   defp vote_and_pass_goals(%State{model_id: model_id, lm_to_lm_vote: vote_matrix} = state) do
@@ -690,7 +715,8 @@ defmodule Monty.Runtime.Step do
          end}
       end)
 
-    %{replies: votes, timed_out: timed_out} = Barrier.run(requests, state.vote_timeout)
+    {vote_us, %{replies: votes, timed_out: timed_out}} =
+      timed(fn -> Barrier.run(requests, state.vote_timeout) end)
 
     vote_info = %{
       sent: length(receivers),
@@ -699,10 +725,26 @@ defmodule Monty.Runtime.Step do
       timed_out: timed_out
     }
 
-    deliver_votes(state, state.combine_votes.(votes, state))
+    {combine_us, combined} = timed(fn -> state.combine_votes.(votes, state) end)
+    {deliver_us, delivery} = timed(fn -> deliver_votes(state, combined) end)
 
-    {state, goals} = State.step_attention(state, propose_goals(state), propose_regions(state))
-    {state, vote_info, goals}
+    {goals_us, goals} = timed(fn -> propose_goals(state) end)
+    {regions_us, regions} = timed(fn -> propose_regions(state) end)
+    {attention_us, {state, goals}} =
+      timed(fn -> State.step_attention(state, goals, regions) end)
+
+    {state, vote_info, goals,
+     Map.merge(
+       %{
+         vote: vote_us,
+         combine: combine_us,
+         deliver: deliver_us,
+         goals: goals_us,
+         regions: regions_us,
+         attention: attention_us
+       },
+       delivery
+     )}
   end
 
   # Nothing precedes epoch 0, so the step that begins an episode integrates
@@ -741,6 +783,11 @@ defmodule Monty.Runtime.Step do
     %{sent: map_size(vote_matrix), used: map_size(votes), deadline_hit?: false, timed_out: []}
   end
 
+  # Delivery is two rounds, and which of them a run spends itself on is the
+  # question a step's own number cannot answer: the first hands every module the
+  # votes it heard, the second asks each of them what the round left it believing.
+  # Both are a round of blocking calls, so a module is waited for in either — the
+  # answer is *which* calls, and the two are kept apart here.
   defp deliver_votes(%State{model_id: model_id} = state, combined) do
     requests =
       Enum.map(combined, fn {receiver, payload} ->
@@ -748,7 +795,7 @@ defmodule Monty.Runtime.Step do
         {receiver, fn -> LearningModuleServer.receive_votes(server, payload) end}
       end)
 
-    Barrier.run(requests, state.call_timeout)
+    {receive_us, _received} = timed(fn -> Barrier.run(requests, state.call_timeout) end)
 
     # Then every module is asked what the round left it believing — not only the
     # ones that heard something: a module that heard nothing is exactly the one
@@ -761,7 +808,9 @@ defmodule Monty.Runtime.Step do
         {id, fn -> LearningModuleServer.update_stats_after_vote(server) end}
       end)
 
-    Barrier.run(settle, state.call_timeout)
+    {settle_us, _settled} = timed(fn -> Barrier.run(settle, state.call_timeout) end)
+
+    %{receive: receive_us, settle: settle_us}
   end
 
   defp propose_goals(%State{model_id: model_id} = state) do
