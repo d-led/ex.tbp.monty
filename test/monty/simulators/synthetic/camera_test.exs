@@ -91,16 +91,57 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     assert Camera.frame("patch", observation(), 3) == Camera.frame("patch", observation(), 3)
   end
 
+  test "a page's picture is the archive's picture, byte for byte" do
+    # A run walks a step's pixels once and shows a page the bytes it archived. A
+    # second walk of the same observation is what would let the two drift, so the
+    # pictures a walk makes and the pictures made from its planes are one thing.
+    walked = Camera.images(observation())
+
+    assert Camera.pictures(Camera.planes(observation())) == walked
+  end
+
+  test "a depth image and a colour image of different sizes are each drawn at their own" do
+    # A plane says how big it is, so a world whose two images disagree is drawn
+    # rather than read past its short one — which is how a step's pictures stopped
+    # a whole run's.
+    planes =
+      Camera.planes(%{"depth" => [[0.1, 0.2], [0.3, 0.4]], "rgba" => [[[1.0, 0.0, 0.0, 1.0]]]})
+
+    pictures = Camera.pictures(planes)
+
+    assert {planes.depth.width, planes.depth.height} == {2, 2}
+    assert {planes.colour.width, planes.colour.height} == {1, 1}
+
+    for picture <- [pictures.depth, pictures.colour] do
+      assert <<137, 80, 78, 71, _rest::binary>> = Base.decode64!(picture)
+    end
+  end
+
+  test "a recorded step's pictures are not re-encoded" do
+    # A replay hands over the names the run filed its pictures under, not the
+    # numbers behind them; there is nothing left to walk and nothing to replace.
+    recorded = %{
+      "images" => %{
+        "depth" => "0-1-depth.png",
+        "colour" => "0-1-colour.png",
+        "range" => [0.02, 0.04]
+      }
+    }
+
+    assert Camera.pictures(Camera.planes(recorded)) ==
+             %{depth: nil, colour: nil, range: nil}
+  end
+
   test "a picture's numbers are read in the range its own camera used" do
     # Monty's observations, and a MuJoCo camera, carry `rgba` as `0..255`; the
     # stand-in scene paints floats in `0..1`. Scaling a byte a second time does
     # not make a wrong colour, it makes a term that is not iodata at all — which
     # is how a recorded MuJoCo run died on its first frame.
     bytes = %{"depth" => [[0.5]], "rgba" => [[[181, 164, 146, 255]]]}
-    assert Camera.planes(bytes).colour == <<181, 164, 146>>
+    assert Camera.planes(bytes).colour.pixels == <<181, 164, 146>>
 
     painted = %{"depth" => [[0.5]], "rgba" => [[[1.0, 1.0, 1.0, 1.0]]]}
-    assert Camera.planes(painted).colour == <<255, 255, 255>>
+    assert Camera.planes(painted).colour.pixels == <<255, 255, 255>>
   end
 
   test "a camera that hands its colours back as floats in 0..255 is not scaled twice" do
@@ -109,7 +150,7 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     # iodata, which took the writer that archives a run's pictures down with it.
     floats = %{"depth" => [[0.5]], "rgba" => [[[220.0, 190.0, 12.0, 1.0]]]}
 
-    assert Camera.planes(floats).colour == <<220, 190, 12>>
+    assert Camera.planes(floats).colour.pixels == <<220, 190, 12>>
   end
 
   test "a channel outside 0..255 is clamped into a byte rather than raising" do
@@ -117,7 +158,7 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     # reason a process stops.
     wild = %{"depth" => [[0.5]], "rgba" => [[[56_100, -4.0, 300, 255]]]}
 
-    assert Camera.planes(wild).colour == <<255, 0, 255>>
+    assert Camera.planes(wild).colour.pixels == <<255, 0, 255>>
   end
 
   defp markup(frame), do: Phoenix.HTML.safe_to_string(frame.data)

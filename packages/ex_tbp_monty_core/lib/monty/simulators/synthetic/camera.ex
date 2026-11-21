@@ -79,21 +79,26 @@ defmodule Monty.Simulators.Synthetic.Camera do
         }
 
       nil ->
-        drawn(Map.get(observation, "depth"), Map.get(observation, "rgba"))
+        observation |> planes() |> pictures()
     end
   end
 
-  defp drawn(nil, nil), do: %{depth: nil, colour: nil, range: nil}
+  @doc """
+  The pictures `planes/1` makes, base64 PNGs and the depth range.
 
-  defp drawn(depth, rgba) do
-    # One walk of the frame answers both the picture and the range printed on it.
-    # Asking `depth_view/1` twice, as this did, walked every pixel twice for the
-    # same two numbers.
-    {rows, range} = if depth, do: depth_view(depth), else: {nil, nil}
-
+  The shape a step's record keeps, and what a page is handed: the same bytes a
+  run's video is written from, encoded once. A caller that walked the pixels for
+  itself would keep a second, slightly different picture of the same step.
+  """
+  @spec pictures(map()) :: %{
+          depth: binary() | nil,
+          colour: binary() | nil,
+          range: {float(), float()} | nil
+        }
+  def pictures(%{depth: depth, colour: colour, range: range}) do
     %{
-      depth: rows && rows |> Png.greyscale() |> Base.encode64(),
-      colour: rgba && colour_picture(rgba),
+      depth: depth && depth.pixels |> Png.greyscale_bytes(depth.width, depth.height) |> Base.encode64(),
+      colour: colour && colour.pixels |> Png.rgb_bytes(colour.width, colour.height) |> Base.encode64(),
       range: range
     }
   end
@@ -106,51 +111,54 @@ defmodule Monty.Simulators.Synthetic.Camera do
   `images/1`'s — a caller that showed one and archived the other would keep two
   slightly different pictures of the same step.
 
-  `width` and `height` are the shape the pixels are in, so a writer needs no
-  second opinion about how big a sensor's picture is.
+  `range` is the depth picture's own, answered here because the walk that makes
+  the pixels is the same walk that finds it: a caller that shows the picture and
+  files it pays for one walk rather than two.
+
+  A plane says how big it is — `%{pixels: binary, width: w, height: h}` — rather
+  than leaving a writer to infer it from the other plane: a world whose depth
+  image and colour image are not the same size is a world to draw anyway, and a
+  size that travelled apart from the bytes was a crash waiting for one.
 
   Answers `%{depth: nil, colour: nil}` for an observation that carries a
   *recorded* picture rather than the numbers behind it: a replayed step's
   pictures are already files, and there is nothing left to encode.
   """
+  @type plane :: %{pixels: binary(), width: pos_integer(), height: pos_integer()}
+
   @spec planes(map()) :: %{
-          depth: binary() | nil,
-          colour: binary() | nil,
-          width: pos_integer() | nil,
-          height: pos_integer() | nil
+          depth: plane() | nil,
+          colour: plane() | nil,
+          range: {float(), float()} | nil
         }
   def planes(observation) do
     case Map.get(observation, "images") do
-      %{} -> %{depth: nil, colour: nil, width: nil, height: nil}
+      %{} -> empty_planes()
       nil -> planes_of(Map.get(observation, "depth"), Map.get(observation, "rgba"))
     end
   end
 
-  defp planes_of(nil, nil), do: %{depth: nil, colour: nil, width: nil, height: nil}
+  defp empty_planes, do: %{depth: nil, colour: nil, range: nil}
+
+  defp planes_of(nil, nil), do: empty_planes()
 
   defp planes_of(depth, rgba) do
-    rows = depth || rgba
+    {depth_pixels, range} = if depth, do: depth_view(depth), else: {nil, nil}
 
     %{
-      depth: depth && depth |> depth_view() |> elem(0) |> IO.iodata_to_binary(),
-      colour: rgba && rgba |> colour_rows() |> IO.iodata_to_binary(),
-      width: rows |> hd() |> length(),
-      height: length(rows)
+      depth: depth_pixels && plane(IO.iodata_to_binary(depth_pixels), depth),
+      colour: rgba && plane(rgba |> colour_rows() |> IO.iodata_to_binary(), rgba),
+      range: range
     }
   end
+
+  defp plane(pixels, rows), do: %{pixels: pixels, width: rows |> hd() |> length(), height: length(rows)}
 
   defp colour_rows(rgba) do
     # The range is the whole frame's, not each value's: read per value, the black
     # part of a `0..1` picture would be the only part taken for one.
     scale = if painted?(rgba), do: 255, else: nil
     Enum.map(rgba, fn row -> Enum.map(row, &colour_byte(&1, scale)) end)
-  end
-
-  defp colour_picture(rgba) do
-    rgba
-    |> colour_rows()
-    |> Png.rgb()
-    |> Base.encode64()
   end
 
   @doc """

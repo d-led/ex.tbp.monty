@@ -212,8 +212,9 @@ defmodule Monty.Studio.RunLog do
   `Camera.frame/3` draws without encoding anything, which is how a step that both
   records its pictures and shows them pays for one encoding rather than two.
 
-  `images` is what `Camera.images/1` answered for the observation; `nil` draws
-  them here.
+  `images` is what `Camera.images/1` answered for the observation, or what
+  `Camera.pictures/1` answered for planes a walk already made; `nil` draws them
+  here.
   """
   @spec drawn(map(), map() | nil) :: map()
   def drawn(observation, images), do: drawn(nil, observation, images, nil)

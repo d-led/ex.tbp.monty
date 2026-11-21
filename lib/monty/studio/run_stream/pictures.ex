@@ -36,11 +36,11 @@ defmodule Monty.Studio.RunStream.Pictures do
   A step's pictures are archived for **every** step — the video's places are the
   step numbers — but the page is handed one at a rate of its own
   (`:studio_frames_interval`, ten a second by default), because a page draws the
-  newest picture and a run steps tens of times a second. Drawing a step's two
-  PNGs a sensor and base64ing them costs about as much again as the archive's own
-  planes — tens of milliseconds a sensor at a view finder's size — so doing it a
-  step is the largest thing in this process, and this process sits between a run
-  and its pages. At a rate, that cost is a page's refresh instead of a step's.
+  newest picture and a run steps tens of times a second. A page's picture is
+  encoded from the same pixels the video took, so a step is walked once; walking
+  the observation a second time for the page was most of what a page's step cost.
+  Even then it is tens of milliseconds a sensor at a view finder's size, which is
+  why it is a page's refresh rather than a step's.
 
   ## Why a process of its own
 
@@ -263,8 +263,9 @@ defmodule Monty.Studio.RunStream.Pictures do
   # same step until it gave up, and the application would go with it, which is how
   # a MuJoCo run's wrong-sized channel ended a whole node.
   defp draw(step, pictures_in, frame, announce?, interval, state) do
-    state = write(step, pictures_in, frame, state) |> schedule_flush()
-    {frames, state} = page_frames(step, pictures_in, interval, state)
+    planes = planes_of(step)
+    state = write(step, pictures_in, frame, planes, state) |> schedule_flush()
+    {frames, state} = page_frames(step, planes, pictures_in, interval, state)
 
     # What a page draws a step from: its line, the pictures, and what the learning
     # modules concluded. The observations themselves stay in `RunStream.steps/1`,
@@ -342,13 +343,13 @@ defmodule Monty.Studio.RunStream.Pictures do
   # the archive still has every step's frame, because the video is written above,
   # before this is asked. A writer this far behind is drawing steps nobody looks
   # at, and answering with no frames leaves the page's pictures where they are.
-  defp page_frames(step, run, interval, state) do
+  defp page_frames(step, planes, run, interval, state) do
     cond do
       behind?() ->
         {[], state}
 
       due?(Map.get(state.frames_at, run), Map.get(state.frames_cost, run, 0), interval) ->
-        {microseconds, frames} = :timer.tc(fn -> frames_of(step, images_of(step)) end)
+        {microseconds, frames} = :timer.tc(fn -> frames_of(step, planes) end)
 
         {frames,
          %{
@@ -364,8 +365,17 @@ defmodule Monty.Studio.RunStream.Pictures do
 
   defp now, do: System.monotonic_time(:millisecond)
 
+  # One walk a sensor a step, however many pictures are made of it: the video takes
+  # the planes and the page's pictures are encoded from the same bytes. Walking the
+  # observation again for the page was most of a page's step.
+  defp planes_of(step) do
+    step.observations
+    |> RunLog.sensors_of()
+    |> Map.new(fn {sensor_id, observation} -> {sensor_id, Camera.planes(observation || %{})} end)
+  end
+
   # One picture a step a sensor a kind, in the order the steps were taken.
-  defp write(step, pictures_in, frame, state) do
+  defp write(step, pictures_in, frame, planes, state) do
     place = %{
       run: pictures_in,
       part: Artifacts.part_of(frame),
@@ -373,35 +383,31 @@ defmodule Monty.Studio.RunStream.Pictures do
       episode: Map.get(step, :episode)
     }
 
-    seen = RunLog.sensors_of(step.observations)
-
-    Enum.reduce(seen, state, fn {sensor_id, observation}, state ->
-      write_sensor(state, sensor_id, observation, Map.put(place, :sensor, sensor_id))
+    Enum.reduce(planes, state, fn {sensor_id, sensor_planes}, state ->
+      write_sensor(state, sensor_id, sensor_planes, Map.put(place, :sensor, sensor_id))
     end)
   end
 
   defp position_of(frame), do: frame |> String.split("-") |> List.last() |> String.to_integer()
 
-  defp write_sensor(state, _sensor_id, observation, place) do
-    planes = Camera.planes(observation || %{})
-
+  defp write_sensor(state, _sensor_id, planes, place) do
     Enum.reduce(
       [{"depth", :grey, planes.depth}, {"colour", :rgb, planes.colour}],
       state,
-      fn {named, kind, pixels}, state ->
-        write_picture(state, pixels, place, {named, kind}, planes)
+      fn {named, kind, plane}, state ->
+        write_picture(state, plane, place, {named, kind})
       end
     )
   end
 
-  defp write_picture(state, nil, _place, _kind, _planes), do: state
+  defp write_picture(state, nil, _place, _kind), do: state
 
-  defp write_picture(state, pixels, place, {named, kind}, planes) do
+  defp write_picture(state, plane, place, {named, kind}) do
     key = {place.run, place.part, place.sensor, named}
 
     with false <- MapSet.member?(state.stalled, key),
-         {:ok, state} <- ensure_video(state, key, pixels, place, planes, {named, kind}) do
-      append(state, key, pixels, place)
+         {:ok, state} <- ensure_video(state, key, plane, place, {named, kind}) do
+      append(state, key, plane.pixels, place)
     else
       true -> state
       {:error, state} -> state
@@ -411,7 +417,7 @@ defmodule Monty.Studio.RunStream.Pictures do
   # A video opens where the run's places are, not where the writer happens to
   # start: a sensor that first sees something at step 40 gets 40 frames of that
   # picture before the real one, so frame 40 is step 40.
-  defp ensure_video(state, key, pixels, place, planes, {named, kind}) do
+  defp ensure_video(state, key, plane, place, {named, kind}) do
     case Map.fetch(state.videos, key) do
       {:ok, _video} ->
         {:ok, state}
@@ -420,8 +426,8 @@ defmodule Monty.Studio.RunStream.Pictures do
         path = Artifacts.video_path(place.run, place.part, place.sensor, named)
 
         with {:ok, video} <-
-               FrameVideo.open(path, width: planes.width, height: planes.height, kind: kind),
-             :ok <- fill_to(video, pixels, FrameVideo.frames(video), place.position) do
+               FrameVideo.open(path, width: plane.width, height: plane.height, kind: kind),
+             :ok <- fill_to(video, plane.pixels, FrameVideo.frames(video), place.position) do
           {:ok, %{state | videos: Map.put(state.videos, key, video)}}
         else
           {:error, reason} -> {:error, refuse(state, key, path, reason)}
@@ -491,14 +497,6 @@ defmodule Monty.Studio.RunStream.Pictures do
     %{state | videos: Map.delete(state.videos, key), stalled: MapSet.put(state.stalled, key)}
   end
 
-  # Every sensor, every step: the four pixel arrays become two pictures a sensor,
-  # and the range the depth one is drawn over.
-  defp images_of(step) do
-    step.observations
-    |> RunLog.sensors_of()
-    |> Map.new(fn {sensor_id, observation} -> {sensor_id, Camera.images(observation)} end)
-  end
-
   defp announcement(step, frames) do
     %{
       line: step.line,
@@ -510,14 +508,20 @@ defmodule Monty.Studio.RunStream.Pictures do
     }
   end
 
-  # Every sensor, every step. The observation carries the pictures this step
-  # already encoded, so `Camera.frame/3` draws them rather than making its own.
-  defp frames_of(step, images) do
+  # Every sensor, every step — from the pixels the archive already walked. The
+  # pictures are the video's own bytes, encoded once, and the range on the note is
+  # the range that same walk found.
+  defp frames_of(step, planes) do
     seen = RunLog.sensors_of(step.observations)
 
     step.sensor_ids
-    |> Enum.filter(&Map.has_key?(seen, &1))
-    |> Enum.map(&Camera.frame(&1, RunLog.drawn(seen[&1], Map.get(images, &1)), step.number))
+    |> Enum.filter(&Map.has_key?(planes, &1))
+    |> Enum.map(fn sensor_id ->
+      observation = Map.get(seen, sensor_id) || %{}
+      pictures = Camera.pictures(planes[sensor_id])
+
+      Camera.frame(sensor_id, RunLog.drawn(observation, pictures), step.number)
+    end)
     |> Enum.map(&Map.take(&1, [:sensor_id, :media_type, :data, :note]))
   end
 

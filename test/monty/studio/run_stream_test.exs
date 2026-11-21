@@ -241,6 +241,18 @@ defmodule Monty.Studio.RunStreamTest do
       assert png |> binary_part(0, 8) == <<137, 80, 78, 71, 13, 10, 26, 10>>
     end
 
+    # The page's picture is the archive's pixels, not a second walk of the same
+    # observation: the note on a frame says how far the surface was, and it is
+    # the range the video's own walk found.
+    test "are the archive's pixels, with the range that walk found", %{run_id: run_id} do
+      Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Studio.Jobs.Run.topic(run_id))
+
+      Pictures.drawn(step(depth: [[0.05, 0.07], [0.05, 0.07]]), run_id, "0")
+
+      assert_receive {:studio, ^run_id, {:step, %{frames: [frame]}}}, 5_000
+      assert frame.note == "step 1 · depth 0.050–0.070 m"
+    end
+
     # Drawing two PNGs a sensor and base64ing them costs about as much again as
     # the archive's own planes, and it used to happen on every step — in the
     # process that stands between a run and its pages. The page is a player: it is
