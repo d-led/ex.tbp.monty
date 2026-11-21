@@ -40,10 +40,29 @@ defmodule Monty.Studio.LocalClock do
   between a container that can tell the time and one that cannot start.
   """
   @spec offset() :: integer()
-  def offset do
-    :calendar.datetime_to_gregorian_seconds(:calendar.local_time()) -
-      :calendar.datetime_to_gregorian_seconds(:calendar.universal_time())
+  def offset, do: offset(&:calendar.local_time/0, &:calendar.universal_time/0)
+
+  # The offset is the distance between two *different* clocks, so the second one
+  # is read twice and the answer is only used when it did not move: a machine
+  # busy enough to delay this process between the reads answered an offset a
+  # second wrong, and two lines about the same instant carried clocks a second
+  # apart — which is how a CI suite came to fail on a step whose line did not
+  # begin with its own timestamp.
+  #
+  # The pair is a parameter so a test can hand in clocks that straddle a second.
+  @doc false
+  @spec offset((-> :calendar.datetime()), (-> :calendar.datetime())) :: integer()
+  def offset(local, utc) do
+    before = utc.()
+    here = local.()
+
+    case utc.() do
+      ^before -> seconds(here) - seconds(before)
+      _ticked -> offset(local, utc)
+    end
   end
+
+  defp seconds(moment), do: :calendar.datetime_to_gregorian_seconds(moment)
 
   # Three digits, because a step is a few milliseconds and a log of a run is read
   # to see how long one took: seconds alone round every step in a run to the same
