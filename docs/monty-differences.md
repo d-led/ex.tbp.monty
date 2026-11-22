@@ -2665,3 +2665,11 @@ config's values with `value = Map.get(config, key)` as a comprehension filter,
 which is false for `false`, so every switch a config turned _off_ was dropped
 without a word and the module ran its default. `use_multithreading` is read
 through the same table, which is how the round could be measured at all.
+
+**The vote round stays a loop.** Monty threads `update_evidence_with_vote` per
+object as well, and the same gate covers it — but it was built and measured on the
+ten-object library with a round's 162 votes (this Mac): 5.5–8.2 ms one object at a
+time against 16–44 ms in a round. A vote update is one batched index query and one
+walk over the object's hypotheses, about half a millisecond; starting and joining a
+process costs more than that, and a round of ten pays it ten times. So the loop is
+kept, and this is a deviation with a number rather than a preference.
