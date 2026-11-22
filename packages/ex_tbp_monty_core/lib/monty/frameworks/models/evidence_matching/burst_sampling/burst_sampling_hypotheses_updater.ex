@@ -423,8 +423,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
-  # The kernel's choice in Elixir, over the same answers.
-  defp reference_top_indices(node_evidence, count) do
+  @doc """
+  The kernel's choice in Elixir, over the same answers.
+
+  The kernel partitions the column at the boundary of the last `count` and sorts
+  only that tail; this sorts everything and takes the end. Both are the order
+  `Enum.sort_by(&{evidence, index})` defines, so the two answer the same list —
+  which is what the parity test holds them to, and what a run with
+  `config :ex_tbp_monty, native_kernels?: false` reads.
+  """
+  @spec reference_top_indices(binary() | [float()], non_neg_integer()) :: [non_neg_integer()]
+  def reference_top_indices(node_evidence, count) do
     node_evidence
     |> evidence_column()
     |> Enum.with_index()

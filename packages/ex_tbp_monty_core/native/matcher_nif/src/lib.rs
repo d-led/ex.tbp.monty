@@ -831,26 +831,43 @@ fn top_indices<'a>(env: Env<'a>, evidence: Binary, count: u32) -> Binary<'a> {
     let total = evidence.len() / 8;
     let count = (count as usize).min(total);
 
-    let mut order: Vec<usize> = (0..total).collect();
-    let value = |index: usize| f64_at(evidence.as_slice(), index * 8);
-
     // `f64::total_cmp` is not the reference's order (it separates zeroes and
-    // sorts infinities differently); the key is what Elixir compares.
-    let key = |index: usize| {
-        let answer = value(index);
+    // sorts infinities differently); the key is what Elixir compares, built once
+    // so that the comparator neither re-reads the column nor re-tests for NaN.
+    let mut order: Vec<(u8, f64, usize)> = (0..total)
+        .map(|index| {
+            let answer = f64_at(evidence.as_slice(), index * 8);
 
-        if answer.is_nan() {
-            (1u8, 0.0)
-        } else {
-            (0u8, answer)
-        }
+            if answer.is_nan() {
+                (1u8, 0.0, index)
+            } else {
+                (0u8, answer, index)
+            }
+        })
+        .collect();
+
+    let compare = |left: &(u8, f64, usize), right: &(u8, f64, usize)| {
+        left.0
+            .cmp(&right.0)
+            .then(left.1.partial_cmp(&right.1).unwrap())
+            .then(left.2.cmp(&right.2))
     };
 
-    order.sort_by(|left, right| key(*left).partial_cmp(&key(*right)).unwrap().then(left.cmp(right)));
+    // Only the boundary of the last `count` has to be found: one partition puts
+    // every chosen answer after it, and the tail alone is sorted. A full sort
+    // orders the thousands of nodes that are never chosen, which is most of a
+    // graph a step looks at.
+    let from = total - count;
+
+    if from > 0 && from < total {
+        order.select_nth_unstable_by(from, compare);
+    }
+
+    order[from..].sort_by(compare);
 
     let mut output = NewBinary::new(env, count * 4);
 
-    for (position, index) in order[total - count..].iter().enumerate() {
+    for (position, (_, _, index)) in order[from..].iter().enumerate() {
         let bytes = (*index as u32).to_le_bytes();
         output[position * 4..(position + 1) * 4].copy_from_slice(&bytes);
     }

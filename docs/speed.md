@@ -109,6 +109,12 @@ parity test that compares the new path with the Elixir reference **exactly**:
 - **The slope tracker slid lists.** Every window of every hypothesis moved one
   slot per update, which was the single largest allocation in the module. It is
   a ring of floats with one shared cursor now.
+- **A burst sorted the whole graph to keep a few hundred nodes.** `top_indices/2`
+  now partitions the column at the boundary of the last `count` and sorts only
+  that tail: 2 000 nodes 94 → 13 µs, 10 000 nodes 726 → 84 µs, 40 000 nodes
+  4 007 → 306 µs on a column of f64 (this Mac). The answer is the same list, and
+  `top_indices_native_parity_test.exs` holds it there over ties, both zeroes, a
+  node with no answer and more nodes than the burst keeps.
 - **A burst recomputed what it had already made**: its rotations, its on-object
   pixels, its alignment and its node block. Each is kept or taken in one pass.
 - **The evidence column decoded per value.** Holding it as bytes was _worse_
@@ -265,9 +271,6 @@ the code.
   which copies the remaining tail at every row — quadratic in the hypotheses. It
   cost more than the list shifting it replaced until the pieces were gathered and
   joined once with `IO.iodata_to_binary/1`, which is when the win appeared.
-- **A full sort of the graph to take a few hundred nodes** (`top_indices/2`) is
-  still there. A bounded selection returns the same indices and is worth trying
-  when it can be measured on its own.
 - **A per-episode copy of the model's state**, kept only as long as it is the
   thing being measured; a training phase would pay it per epoch.
 - **A per-object pass over a memory's graphs**, measured rather than argued
@@ -304,12 +307,15 @@ the code.
    table the writer reads.
 4. **Measure before moving anything off the step.** What is neither model nor
    world has to be split per piece before it is queued or made asynchronous.
-5. **The world has been re-measured on the compiled binding** (`ex_mujoco`): of
-   a 33 ms world step, ~19 ms is the MuJoCo render through the Python half, 0.1 ms
-   an image is the answer's decode and ~1.1 ms an image is the unprojection
-   (`probe_world_crossing` and `tmp/probe_world_profile.exs`; this Mac,
-   `randrot_noise_10distinctobj_5lms_dist_agent`, six 64×64 images a step). The
-   crossing on this side is therefore a few per cent of a step, not the five
-   milliseconds an earlier reading suggested, and a native unprojection would buy
-   that few per cent at the price of changing the shape every reader of
-   `semantic_3d` sees.
+5. **The world has been re-measured, and the two worlds are not one number.** A
+   step of the Python world (`world_simulator: :mujoco`, the interpreter's own
+   `world.py`) costs ~33 ms of world time, of which ~19 ms is MuJoCo rendering
+   through `Pythonx` — the interpreter is most of that crossing, and nothing on
+   this side of it changes that. A step of the compiled world
+   (`world_simulator: :ex_mujoco`, what the page offers first) costs ~9 ms. On
+   either, this side of the crossing is small: 0.1 ms an image for the answer's
+   decode and ~1.1 ms an image for the unprojection (`tmp/probe_world_crossing.exs`
+   measures the two on a 64×64 image; `tmp/probe_world_profile.exs` splits the
+   world step with tprof, which is honest there because no task is started in it).
+   A native unprojection would buy a millisecond or two a step at the price of
+   changing the shape every reader of `semantic_3d` sees, so it is not taken.
