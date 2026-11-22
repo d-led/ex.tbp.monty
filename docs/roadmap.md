@@ -263,13 +263,16 @@ loop, and its step count is Monty's for every episode of the epoch.
   crossing, and one sensor's step, in place).
 
 - **Settled by measurement, with the numbers in [`speed.md`](speed.md)**: the
-  sensors step in Monty's order, because a round of them costs more; the objects
-  of a step are a loop unless a run asks for a round (`round_objects`), because a
-  round measured 4 % more reductions; a module's vote is a loop, because a vote
-  is half a millisecond of work; a graph's top nodes are partitioned rather than
-  sorted; the episodes of a run divide across parts (1.7× and 2.07× on two
-  measurements); a shared hypothesis space, a crate behind it, an ETS table and
-  the pictures as binaries were each priced and rejected.
+  sensors step in Monty's order, because a round of them costs more; a module's
+  vote is a loop, because a vote is half a millisecond of work; a graph's top
+  nodes are partitioned rather than sorted; the episodes of a run divide across
+  parts (1.7× and 2.07× on two measurements); a shared hypothesis space, a crate
+  behind it, an ETS table and the pictures as binaries were each priced and
+  rejected. The objects of a step are a loop unless a run asks for a round
+  (`round_objects`): in reductions a round is 4 % more work, and in the clock it
+  is **3.4× less** on the seventy-seven-object library once a task is handed one
+  object rather than the library (this Mac, eight steps, the stand-in scene,
+  interleaved arms: 337–345 ms a step against 95–103).
 
 - **Next, in the order the measurements put them.** (1) ~~The salience step~~ —
   done, and the measurements above are what it cost and what it left: one pass
@@ -278,7 +281,11 @@ loop, and its step count is Monty's for every episode of the epoch.
   dither was the whole of the sensor's cost). (2) The one crossing: a kernel that
   takes a burst's whole non-RNG path and reads the columns as bytes, which is the
   only place an encoding pays (`speed.md` §"The open decision: one crossing").
-  (3) The cost of a step on the 77-object library, above.
+  (3) The cost of a step on the 77-object library, above — **337 ms of model time
+  a step is 95 ms with the objects in a round** (`round_objects`; this Mac,
+  eight steps, the stand-in scene, interleaved arms), so what is left there is
+  the same crossing as (2) and the choice of shape as the default, which an
+  episode-long comparison decides.
 
 - **Several viewpoints at once, and whether it is worth it.** A run can already
   put a ring of patch cameras on one agent and give each its own learning module

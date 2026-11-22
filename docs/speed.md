@@ -303,6 +303,14 @@ Against the stand-in the _results_ are not the experiment's, which is what the
 run says in its own header; the number worth having is that the run starts and
 steps at all, and what a matching step costs on seventy-seven objects.
 
+**And what it costs once the per-object updates are a round:** the same eight
+steps, interleaved pairs, `--no-record`, this Mac — loop **337–345 ms a step**,
+round **95–103 ms a step**, the same steps and the same goal count (15 065). The
+round was three to four times _worse_ than the loop until a task stopped being
+handed the whole updater; seventy-seven copies of 3 048 µs is what it was paying
+(`monty-differences.md` §2.45). It is a lever a run asks for (`round_objects`),
+not the default: the loop is Monty's own shape for a step.
+
 ## A page watching a run
 
 Measured 2026-11-17 on the dev cluster (node1, `dogs/surf_unsupervised`, 7 800
@@ -342,22 +350,24 @@ Three places in this port do work in a round instead of in a loop. Each was
 measured on both sides, and each answers a different way — which is the reason
 the measurements are here rather than a rule about rounds:
 
-| round                | loop                               | in a round   | verdict                                                        |
-| -------------------- | ---------------------------------- | ------------ | -------------------------------------------------------------- |
-| an object's evidence | 4 857 k reductions a step          | 5 058 k      | **not taken**: the fan-out costs more than the objects (§2.45) |
-| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work             |
-| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it           |
+| round                | loop                               | in a round   | verdict                                                              |
+| -------------------- | ---------------------------------- | ------------ | -------------------------------------------------------------------- |
+| an object's evidence | 337–345 ms a step, 77 objects      | 95–103 ms    | **pays**: a task is handed one object (`monty-differences.md` §2.45) |
+| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work                   |
+| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it                 |
 
 The numbers are from this Mac (Apple Silicon, macOS 26), the MuJoCo world
 through `ex_mujoco`, and two runs per arm of `base_10simobj_surf_agent` started
 from the studio's run form (eight episodes of 32 steps, seed 42) for the
-sensors, the ten-object library for the vote, and the five-module
-`randrot_noise_10distinctobj_5lms_dist_agent` episode for the objects — counted
-over the model's own work after warm-up, because a whole run's wall clock hides
-the difference behind its setup (`§2.45` has both counts). The
+sensors, and the ten-object library for the vote. The objects' row is a wall
+clock: `mix monty.run --no-record` in the stand-in scene, eight steps an arm,
+interleaved, `base_77obj_dist_agent`. In reductions that round is **not** ahead
+of the loop (5 058–5 072 k a step against 4 857–4 860 k on the five-module
+episode), which is why what decides a round is the clock and not the work. The
 lesson they share is the one worth keeping: **a round pays only where the work it
 spreads out is bigger than the process it starts**, so measure the per-object
-loop before fanning it out.
+loop before fanning it out — and count what a task is handed, not what it
+computes, because a task copies its closure.
 
 ## Episodes in parallel, measured
 
@@ -520,6 +530,21 @@ when the values stay bytes on both sides of it.
     slice and the parent concatenates them in graph order — so the work is a
     slice-and-merge refactor of the tracker, with the evidence ladder as its
     referee, and it is worth starting only from the held-library case above.
+
+  **That refactor is built** (`HypothesesUpdater.narrow/2`, `§2.45`): a task is
+  handed one object's memory and one object's tracker, and the round went from
+  three to four times **worse** than the loop on seventy-seven objects to
+  **3.4× better** (337–345 ms a step against 95–103).
+
+- **One pass a point over the return inhibitor's kernels**
+  (`DecayField.weights/2`, four kernels over 1 870 on-object points). Written as
+  one walk carrying the maximum of each kernel, it allocates less and counts
+  fewer reductions — but the clock disagreed, and the clock is what a step pays:
+  `Enum.map` + `Enum.zip_with(max)` over the four kernels 1 645 µs, 174 150
+  reductions, 457 524 words, against one pass 1 957 µs, 128 153 reductions,
+  384 110 words, the same numbers either way (interleaved arms, one run, this
+  Mac). Not implemented: the C-optimised pair wins on the clock although it
+  allocates more.
 
 ## The budget, as rules
 

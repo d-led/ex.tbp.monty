@@ -2635,9 +2635,10 @@ share nothing, so this port's loop has always been a deviation nobody could see:
 the numbers came out the same.
 
 **Built.** `EvidenceGraphLM.update_possible_matches/2` has both paths now. The
-round is `Task.async_stream/3`, one process an object, each handed only that
-object's space and the step's threshold rule — never the module, because a task
-is handed a copy of what its closure holds (`§2.44`). The updater state is put
+round is `Task.async_stream/3`, one process an object, each handed that object's
+space, the step's threshold rule and the updater **narrowed to that object**
+(`HypothesesUpdater.narrow/2`) — never the module, because a task is handed a copy
+of what its closure holds (`§2.44`). The updater state is put
 back together afterwards by `HypothesesUpdater.merge_step/3`, which is given the
 state both halves started from: every half carries the base's copy of the objects
 it did not touch, so merging whole maps would let a later half put a stale copy
@@ -2654,12 +2655,12 @@ the arms, beliefs and goal counts included. The same memory built in-process is
 the opposite case: one step takes 1.8 s in a round against 33 ms in the loop,
 which is the library being copied into every task (`§2.44`).
 
-**And then measured properly, which is why no run takes it.** Those first numbers
-are a wall clock of a whole run: they include the setup, the episode boundary and
-whatever else the box was doing, and the loop's own readings swung 1.49–1.85 s
-across three pairs while the round's stayed at 1.53–1.72 s. Counting only
-`Model.step/4`, after six warm-up steps, in reductions — which do not move with
-the load — the round is not ahead:
+**And then measured properly.** Those first numbers are a wall clock of a whole
+run: they include the setup, the episode boundary and whatever else the box was
+doing, and the loop's own readings swung 1.49–1.85 s across three pairs while the
+round's stayed at 1.53–1.72 s. Counting only `Model.step/4`, after six warm-up
+steps, in reductions — which do not move with the load — the round is not ahead
+on the _work_:
 
 | episode                                                 | round                | loop                 |
 | ------------------------------------------------------- | -------------------- | -------------------- |
@@ -2667,35 +2668,74 @@ the load — the round is not ahead:
 | `base_config_10distinctobj_dist_agent`, 60 steps        | 1 275 k a step       | 1 278 k a step       |
 
 Three readings each, and the first row is the five-module episode: the round
-costs about **4 % more** BEAM work than the loop, because a task copies the
-object's space in and its answer out, and what the objects save by running at
-once is smaller than those copies. So the round needs three things and has them
-all false by default: the config's `use_multithreading`, a memory a task can hold
-without copying (`memory_shared?`, set for the studio's cached library), and a
-run asking for it (`round_objects?`). Nothing asks; the loop is Monty's shape and
-the cheaper one on every config measured. A run that measures its own workload
-and finds otherwise can set the third.
+costs about **4 % more** BEAM work than the loop. Read as "the round does not
+pay", that closed the question for a year of this port's notes. It is the wrong
+conclusion from the right measurement: a step is not BEAM work. Measured on the
+clock, the same eight steps of `base_config_10distinctobj_dist_agent` took
+**282–295 ms a step in the loop and 149–186 ms in the round**, three pairs each
+(`mix monty.run --no-record`, the stand-in world, so the model's own numbers).
+
+**What a round was really paying: what it handed each task.** A task is handed a
+copy of what its closure holds, and the closure held `{module, updater}` — the
+updater carries `graph_memory` (the whole library), and a slope tracker an
+object. After four steps of the seventy-seven-object config that state costs
+**3 048 µs** to hand to a task; narrowed to the object the task updates it costs
+**73 µs**. Seventy-seven of those copies a step, in and out, is where a
+seventy-seven-object step went from 341 ms to 965–1 346 ms — the round was three
+to four times _worse_ there, which is the number the earlier reading of this
+section reported as "the round does not pay".
+
+`HypothesesUpdater.narrow/2` is the fix: a task is handed one object
+(`GraphMemory.narrow/2`, the displacer and scorer narrowed with it, and that
+object's tracker alone). The same eight steps, interleaved pairs, this Mac,
+`mix monty.run --no-record`:
+
+| config                                 | loop              | round          | goals  |
+| -------------------------------------- | ----------------- | -------------- | ------ |
+| `base_config_10distinctobj_dist_agent` | 283–293 ms a step | **149–154 ms** | 15 066 |
+| `base_77obj_dist_agent`                | 337–345 ms a step | **95–103 ms**  | 15 065 |
+
+Every field of every step is identical between the arms. So the round is now the
+faster path on both configs and the smaller library is not the interesting one:
+3.4× on the seventy-seven-object library, which is the workload whose cost was
+the open question (`docs/roadmap.md`).
+
+**What still gates it.** Three switches, and two of them are the port's own
+conditions rather than a preference: the config's `use_multithreading`
+(`concurrent_objects?`), a memory a task can be handed without copying
+(`memory_shared?`, set for the studio's cached library, which loads from
+`:persistent_term`), and `round_objects?`, which is a run asking. The third
+defaults to `false` on purpose: Monty's `use_multithreading` says _threads_, this
+port's round is a different shape with its own merge, and a run that switches
+shapes should say so. A run's goals are drawn from the episode's one stream, so
+two arms that differ in shape are worth comparing step by step before a shape
+becomes the default — the eight steps here agree to the goal, and an episode-long
+comparison is what would make either shape the default.
 
 A training phase keeps the loop for the older reason — its memory is on the
-module's heap, and a round over it copies the library into every task (`§2.44`).
+module's heap and is not a memory a task may be handed (`§2.44`).
 
 **What the 4 % is, and what it is not.** A task is handed a copy of what its
 closure holds: the object's four columns, the space's structure and the module's
 updater state. Shrinking a column does not touch it — the mask was turned into one
 byte a hypothesis, and the count did not move: the loop 4 869 k → 4 872 k
 reductions a step and the round's excess unchanged, so the change was reverted
-rather than kept for its shape. Nor is the copy the excess: measured on this Mac
+rather than kept for its shape. Nor is the _space_ the copy: measured on this Mac
 (`scripts/probe_resource_transport.exs`), one object's space at 2 000
 hypotheses — 4 038 words, 220 KB in flight, columns as binaries — costs a task
 **20 reductions** more than a bare `{:nif, reference()}`, because binaries travel by
-reference and only the list of booleans copies. The excess the round costs over
-the loop is 201 k reductions a step across five modules and ten objects — about
-**4 000 an object** — so the copy is under half a percent of it, and moving the
-space off the heap (ETS, or a `ResourceArc` handed to the task) would leave the
-rest standing. The rest is the fan-out: a process a task, the results coming back,
-the merge. Only more work a step for the same process, or one NIF call that takes
-a burst's whole path so there is nothing to send and nothing to merge, changes the
-balance.
+reference and only the list of booleans copies. Moving the space off the heap (ETS,
+or a `ResourceArc` handed to the task) would leave that standing.
+
+The piece that is neither the space nor the fan-out is the **updater state**, and
+it is the whole of what the round used to lose: the library and a slope tracker an
+object, 3 048 µs to hand to a task once four steps of the seventy-seven-object
+config had filled it. Narrowed to the object being updated it is 73 µs, and the
+round then wins on both configs. What is left of the 201 k reductions a step across
+five modules and ten objects — about 4 000 an object — _is_ the fan-out: a process
+a task, the results coming back, the merge. Only more work a step for the same
+process, or one NIF call that takes a burst's whole path so there is nothing to
+send and nothing to merge, changes that.
 
 **The draw, which chose per-module streams.** The goal generator flips a coin when
 one object is left (`decide_between_objects/6`), and it used to draw from the
