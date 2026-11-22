@@ -42,6 +42,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   defp updater(options \\ []), do: updater_for(memory(), options)
 
   defp updater_for(graph_memory, options) do
+    # The cases in this file read the whole hypothesis-space telemetry — the
+    # added and removed ids, the ages, the slopes — which Monty's updater only
+    # assembles when it is built with `include_telemetry`. They ask for it here;
+    # the shape of an updater that does not is its own case below.
+    options = Keyword.put_new(options, :include_telemetry, true)
+
     {stalled, options} = Keyword.pop(options, :stalled_tracker, false)
     {tracker, options} = Keyword.pop(options, :tracker)
 
@@ -210,6 +216,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   # One step of a burst, against `memory/0`, with the observation `features/0`
   # reads: 0.2 of `rgba` at every node that stored any.
+  defp update(updater) do
+    BurstSamplingHypothesesUpdater.update_evidence(updater, hypotheses(), features(), "mug", 0.0)
+  end
+
+  # One step of a burst, against `memory/0`, with the observation `features/0`
+  # reads: 0.2 of `rgba` at every node that stored any.
   defp sample(options) do
     updater =
       memory()
@@ -250,6 +262,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         end)
 
       assert counted.sampling_burst_steps == 0
+    end
+  end
+
+  describe "what a step reports" do
+    test "the prediction error, and nothing else, unless the updater was built to report more" do
+      # Translated from Monty's `include_telemetry` branch: ages, slopes and the
+      # added and removed ids are a number per hypothesis per object, and nothing
+      # a step decides, so they are assembled only when an experiment asks.
+      {_updater, _updated, telemetry} = update(updater(include_telemetry: false))
+
+      assert Map.keys(telemetry) == [:mlh_prediction_error]
+    end
+
+    test "the whole hypothesis space when it was built to" do
+      {_updater, updated, telemetry} = update(updater(include_telemetry: true))
+
+      assert telemetry |> Map.keys() |> Enum.sort() ==
+               [
+                 :added_ids,
+                 :ages,
+                 :evidence_slopes,
+                 :max_slope,
+                 :mlh_prediction_error,
+                 :removed_ids
+               ]
+
+      assert length(telemetry.ages) == Hypotheses.count(updated)
+      assert length(telemetry.evidence_slopes) == Hypotheses.count(updated)
     end
   end
 

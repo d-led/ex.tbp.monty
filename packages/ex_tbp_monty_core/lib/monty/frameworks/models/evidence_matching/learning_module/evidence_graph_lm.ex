@@ -444,7 +444,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     {"sampling_multiplier", :sampling_multiplier},
     {"sampling_burst_duration", :sampling_burst_duration},
     {"burst_trigger_slope", :burst_trigger_slope},
-    {"deletion_trigger_slope", :deletion_trigger_slope}
+    {"deletion_trigger_slope", :deletion_trigger_slope},
+    {"include_telemetry", :include_telemetry}
   ]
 
   # The poses a run starts from are an updater argument too, and the one that
@@ -1154,9 +1155,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   # The round's way: every update started from the same state, so what comes back
   # is one graph's share of it and the shares are put together.
-  defp merge_graph_updater(%__MODULE__{hypotheses_updater: {module, updater}} = lm, module, base, %{
-         updater: {module, update}
-       }),
+  defp merge_graph_updater(
+         %__MODULE__{hypotheses_updater: {module, updater}} = lm,
+         module,
+         base,
+         %{
+           updater: {module, update}
+         }
+       ),
        do: %{lm | hypotheses_updater: {module, module.merge_step(base, updater, update)}}
 
   defp put_telemetry(telemetry_by_graph, _graph_id, telemetry) when telemetry == %{},
@@ -2074,7 +2080,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # so asking it per hypothesis was the vote round's whole cost. A machine whose
   # index is the Elixir tree has no batch to ask for, and answers one at a time.
   defp nearest_votes(tree, hypotheses, neighbours) do
-    case KdTree.nearest_many_with_distances(tree, Hypotheses.locations_bytes(hypotheses), neighbours) do
+    case KdTree.nearest_many_with_distances(
+           tree,
+           Hypotheses.locations_bytes(hypotheses),
+           neighbours
+         ) do
       nil ->
         hypotheses
         |> Hypotheses.locations()

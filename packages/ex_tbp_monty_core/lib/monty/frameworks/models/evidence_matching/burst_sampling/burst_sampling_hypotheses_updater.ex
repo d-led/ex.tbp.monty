@@ -52,6 +52,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
             burst_trigger_slope: 1.0,
             sampling_burst_duration: 5,
             deletion_trigger_slope: 0.5,
+            # Monty's `include_telemetry`, `False`: the whole hypothesis space
+            # of every object — ages, slopes, added and removed ids — is one
+            # number per hypothesis and nothing a step decides, so it is only
+            # assembled when an experiment asks for it.
+            include_telemetry: false,
             sampling_burst_steps: 0,
             evidence_slope_trackers: %{},
             # `nil` until a step has measured one; Monty's -inf, which no BEAM
@@ -66,7 +71,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   `:sampling_multiplier` is how many hypotheses per node a burst draws.
   `:initial_possible_poses` is `nil` for informed sampling — align each node's
   stored pose with what was sensed — or a list of 3×3 pose matrices for fixed
-  poses.
+  poses. `:include_telemetry` is Monty's flag and Monty's default: `false`,
+  because the whole hypothesis space of every object is what an analysis asks
+  for, not what a step needs.
   """
   @spec new(GraphMemory.t(), keyword()) :: t()
   def new(%GraphMemory{} = memory, options) do
@@ -88,7 +95,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       sampling_multiplier: multiplier,
       burst_trigger_slope: Keyword.get(options, :burst_trigger_slope, 1.0),
       sampling_burst_duration: Keyword.get(options, :sampling_burst_duration, 5),
-      deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.5)
+      deletion_trigger_slope: Keyword.get(options, :deletion_trigger_slope, 0.5),
+      include_telemetry: Keyword.get(options, :include_telemetry, false)
     }
   end
 
@@ -317,6 +325,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     end
   end
 
+  # Monty's two shapes, and only one of them is a step's own work. The
+  # prediction error is what every step costs; the rest — one number per
+  # hypothesis per object, plus a decode of every graph's slope column — is what
+  # an analysis asks for with `include_telemetry`.
+  defp telemetry(
+         %__MODULE__{include_telemetry: false},
+         _combined,
+         _new_hypotheses,
+         _selection,
+         _tracker,
+         prediction_error
+       ),
+       do: %{mlh_prediction_error: prediction_error}
+
   defp telemetry(updater, combined, new_hypotheses, selection, tracker, prediction_error) do
     count = Hypotheses.count(combined)
     first_new = count - Hypotheses.count(new_hypotheses)
@@ -536,7 +558,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   defp max_global_slope(updater) do
     updater.evidence_slope_trackers
     |> Map.values()
-    |> Enum.flat_map(&EvidenceSlopeTracker.calculate_slopes/1)
+    |> Enum.reject(&(EvidenceSlopeTracker.total_size(&1) == 0))
+    |> Enum.map(&EvidenceSlopeTracker.max_slope/1)
     |> Enum.reject(&is_nil/1)
     |> case do
       [] -> nil
