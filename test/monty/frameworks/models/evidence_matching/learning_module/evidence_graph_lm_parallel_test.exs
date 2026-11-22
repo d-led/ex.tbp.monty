@@ -100,11 +100,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     end
 
     # Monty's threads share the memory and its `use_multithreading` is all it
-    # needs. A BEAM task is handed a copy of what its closure holds, so the round
-    # needs a memory other processes can hold without copying it *and* a run that
-    # asks: measured, the round is equal on a big memory and about 4 % more work
-    # on the five-module episode (`docs/monty-differences.md` §2.45).
-    test "a round is taken only when the config, the memory and the run all ask", %{
+    # needs, so the round is what an experiment gets. A BEAM task is handed a copy
+    # of what its closure holds, so two things take it away: a memory the module
+    # holds on its own heap, and a config that asks for the loop to compare the
+    # two shapes (`docs/monty-differences.md` §2.45).
+    test "the round is taken unless the config or the memory says otherwise", %{
       memory: memory
     } do
       shared = module(memory, DefaultHypothesesUpdater, true)
@@ -167,9 +167,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         concurrent_objects?: concurrent_objects?,
         # The fixture's memory is small enough to be held by a task whatever it
         # is; the flag stands for the studio's cached library, which is the case
-        # the round exists for.
-        memory_shared?: true,
-        round_objects?: true
+        # the round exists for. `round_objects?` is left at its default, so these
+        # cases compare the two paths as a run meets them.
+        memory_shared?: true
       )
 
     lm

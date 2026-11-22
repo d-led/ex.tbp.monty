@@ -100,17 +100,15 @@ defmodule Monty.Runtime.LearningModuleServerTest do
     # `:persistent_term` — a term shared with every process it is sent to, and
     # what lets a step hand one object to a task without copying the library into
     # it. A state the caller built is a memory the run itself wrote, which a task
-    # would copy. The fact is recorded, and it is not enough on its own: the round
-    # is taken only when a run asks for it too, so neither state takes one
-    # (`docs/monty-differences.md` §2.45).
-    test "a state read from the library is told its memory is shared, and neither takes a round",
+    # would copy, so it keeps the loop (`docs/monty-differences.md` §2.45).
+    test "a state read from the library is told its memory is shared, and only it takes a round",
          %{model_id: model_id} do
       {:ok, lm} =
         EvidenceGraphLM.new(EvidenceGraphMemory.new(), max_match_distance: 0.01)
 
-      for {id, state, shared?} <- [
-            {:lm_from_library, {:lazy, fn -> lm end}, true},
-            {:lm_handed_over, lm, false}
+      for {id, state, shared?, in_a_round?} <- [
+            {:lm_from_library, {:lazy, fn -> lm end}, true, true},
+            {:lm_handed_over, lm, false, false}
           ] do
         start_supervised!(
           Supervisor.child_spec(
@@ -123,7 +121,7 @@ defmodule Monty.Runtime.LearningModuleServerTest do
         started = LearningModuleServer.state(Registry.via({:learning_module, model_id, id}))
 
         assert started.memory_shared? == shared?
-        refute EvidenceGraphLM.graph_round?(started)
+        assert EvidenceGraphLM.graph_round?(started) == in_a_round?
       end
     end
   end

@@ -125,7 +125,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             # carries the memory its own last episode wrote, which is a heap term
             # and keeps the loop (`docs/monty-differences.md` §2.45).
             memory_shared?: false,
-            round_objects?: false,
+            # The round is Monty's own answer and the faster one, so it is what
+            # an experiment gets unless it asks for the loop: `round_objects:
+            # false` in a config is that request, and it is how the two shapes
+            # are compared on one config (`graph_round?/1`).
+            round_objects?: true,
             has_detailed_logger: false,
             hypotheses_updater_module: DefaultHypothesesUpdater,
             hypotheses_updater_options: [],
@@ -259,7 +263,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         learning_module_id: Keyword.get(options, :learning_module_id, "LM_0"),
         concurrent_objects?: Keyword.get(options, :concurrent_objects?, true),
         memory_shared?: Keyword.get(options, :memory_shared?, false),
-        round_objects?: Keyword.get(options, :round_objects?, false),
+        round_objects?: Keyword.get(options, :round_objects?, true),
         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
         hypotheses_updater_module:
           Keyword.get(options, :hypotheses_updater, DefaultHypothesesUpdater),
@@ -401,11 +405,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     # Monty's key names a Python thread; a BEAM process is not one, so the
     # option it arrives as says what it is — concurrency.
     {"use_multithreading", :concurrent_objects?},
-    # This port's own key, and the only way a run asks for the object round: an
-    # experiment's YAML may write it beside `use_multithreading`. Nothing in a
-    # shipped config does: the round is a different shape from Monty's own, and
-    # it is a lever a run takes when it has measured its own workload
-    # (`graph_round?/1`).
+    # This port's own key, and the only way a run asks for the *loop*: an
+    # experiment's YAML may write `round_objects: false` beside
+    # `use_multithreading`. No shipped config does — the round is Monty's own
+    # answer and the faster one, so a run measures this port's loop shape only
+    # when it says so (`graph_round?/1`).
     {"round_objects", :round_objects?},
     {"feature_evidence_increment", :feature_evidence_increment},
     {"vote_evidence_threshold", :vote_evidence_threshold},
@@ -954,28 +958,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   Whether a step's per-object updates are taken in a round.
 
   Monty's answer is its `use_multithreading`, and Monty's threads share the
-  memory for free. A BEAM process is not a thread: it is handed a copy of what
-  its closure holds, so a round needs a state a task can be handed — which is
-  `HypothesesUpdater.narrow/2`, one object instead of the library — and a memory
-  a run holds once rather than per module (`memory_shared?`). So the three
-  switches are the config's `concurrent_objects?`, the memory's shareability, and
-  `round_objects?`: a run asking, which defaults to `false` because the round is
-  a different shape from Monty's own and a run that wants it should say so.
+  memory for free, so the round is what an experiment gets. Two things can take
+  it away. A BEAM process is not a thread: it is handed a copy of what its
+  closure holds, so the state must be one a task can be handed — which is
+  `HypothesesUpdater.narrow/2`, one object instead of the library — and the
+  memory must be one a run holds once rather than per module (`memory_shared?`,
+  set for the studio's cached library; a training phase carries a heap term and
+  keeps the loop). And a config may ask for the loop outright with
+  `round_objects: false`, which is how the two shapes are compared on one config.
 
-  What a round pays and what it buys, this Mac, `mix monty.run --no-record`,
-  eight steps an arm, interleaved, the stand-in world (so these are the model's
-  own numbers and not the experiment's):
+  What a round is worth, this Mac, `mix monty.run --no-record`, eight steps an
+  arm, interleaved, the stand-in world (so these are the model's own numbers and
+  not the experiment's):
 
-  | config                               | loop                 | round                 |
-  | ------------------------------------ | -------------------- | --------------------- |
-  | `base_config_10distinctobj_dist_agent` | 282–295 ms a step    | **149–186 ms**        |
-  | `base_77obj_dist_agent`                | 337–345 ms a step    | **95–103 ms**         |
+  | config                                 | loop              | round          |
+  | -------------------------------------- | ----------------- | -------------- |
+  | `base_config_10distinctobj_dist_agent` | 282–295 ms a step | **149–186 ms** |
+  | `base_77obj_dist_agent`                | 337–345 ms a step | **95–103 ms**  |
 
-  Every field of every step is identical between the arms, goal counts included
-  (15 066 and 15 065). The round costs about 4 % more BEAM work (measured in
-  reductions on the five-module episode: 5 058–5 072 k against 4 857–4 860 k) and
-  wins the wall clock anyway, because a step's time is the k-d tree queries of
-  seventy-seven objects and those run at once.
+  Three whole episodes of the ten-object config — 108 steps — are the same step
+  for step in both shapes, goal counts included (123 524 each), and the model
+  took 3.60 s in the loop against 1.77 s in the round. The round costs about 4 %
+  more BEAM work (5 058–5 072 k reductions a step against 4 857–4 860 k on the
+  five-module episode) and wins the wall clock anyway, because a step's time is
+  the native work of seventy-seven objects and that runs at once.
 
   That was not true before the state was narrowed: handed the whole updater — the
   library and a slope tracker an object, 3 048 µs to copy against 73 µs narrowed
