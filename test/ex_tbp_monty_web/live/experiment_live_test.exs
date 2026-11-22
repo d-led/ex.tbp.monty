@@ -475,22 +475,22 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     test "a run says the scheduling Monty's order implies when nobody chose", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
 
-      assert has_element?(view, "#run-scheduling option[value=barrier][selected]")
+      assert has_element?(view, "#run-scheduling option[value=wait_for_all][selected]")
 
       view |> element("#step") |> render_click()
 
       assert [run] = RunHistory.list_for(@tutorial)
-      assert run.inputs["scheduling"] == "barrier"
+      assert run.inputs["scheduling"] == "wait_for_all"
     end
 
     test "and the mode chosen on the page is the one the run records", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
 
-      view |> element("#run-budget") |> render_change(%{"scheduling" => "lagged"})
+      view |> element("#run-budget") |> render_change(%{"scheduling" => "one_step_behind"})
       view |> element("#step") |> render_click()
 
       assert [run] = RunHistory.list_for(@tutorial)
-      assert run.inputs["scheduling"] == "lagged"
+      assert run.inputs["scheduling"] == "one_step_behind"
     end
 
     # How a step serves its sensors is the other thing two runs of one seed may
@@ -520,7 +520,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
 
     # The levers decide what a step's numbers will mean, so what they do to the
     # numbers is said beside them: a round of sensors served at once costs the
-    # slowest of them, and a lagged run applies the epoch before. Five sensors is
+    # slowest of them, and a run one step behind applies the epoch before. Five sensors is
     # the experiment where the first sentence has something to say.
     test "the page says what those choices do to a step's numbers", %{conn: conn} do
       {:ok, view, _html} =
@@ -535,7 +535,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       view |> element("#run-budget") |> render_change(%{"sensors" => "serial"})
       assert view |> element("#step-shape") |> render() =~ "one after another"
 
-      view |> element("#run-budget") |> render_change(%{"scheduling" => "lagged"})
+      view |> element("#run-budget") |> render_change(%{"scheduling" => "one_step_behind"})
       assert view |> element("#step-shape") |> render() =~ "a step behind"
     end
 

@@ -589,8 +589,8 @@ defmodule Monty.Studio.RunLog do
     end
   end
 
-  # How this run's steps are scheduled, when the caller chose: `:barrier` is
-  # Monty's own order and `:lagged` a deployment's measurement
+  # How this run's steps are scheduled, when the caller chose: `:wait_for_all` is
+  # Monty's own order and `:one_step_behind` a deployment's measurement
   # (`docs/monty-differences.md` §2.30). A run started from the command line says
   # nothing here, and the deployment's own setting answers.
   defp scheduling_input(%{scheduling: scheduling}), do: %{"scheduling" => to_string(scheduling)}

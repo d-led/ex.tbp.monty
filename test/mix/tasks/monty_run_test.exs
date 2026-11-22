@@ -170,14 +170,14 @@ defmodule Mix.Tasks.Monty.RunTest do
         "--sensors",
         "concurrent",
         "--scheduling",
-        "lagged",
+        "one_step_behind",
         "--settle",
         "4"
       ])
 
       run = recorded_run()
       assert run.inputs["sensors_step"] == "concurrent"
-      assert run.inputs["scheduling"] == "lagged"
+      assert run.inputs["scheduling"] == "one_step_behind"
       assert run.inputs["settle"] == 4
     end
 

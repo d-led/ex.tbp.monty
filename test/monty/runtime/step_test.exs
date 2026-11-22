@@ -137,8 +137,8 @@ defmodule Monty.Runtime.StepTest do
     end
   end
 
-  describe "the beliefs a lagged coordinator reads" do
-    test "a barrier run keeps none" do
+  describe "the beliefs a one-step-behind coordinator reads" do
+    test "a run that waits for all its modules keeps none" do
       model_id = start_model()
 
       assert {:ok, _actions, _info} = step(model_id)
@@ -147,8 +147,8 @@ defmodule Monty.Runtime.StepTest do
       assert Step.state(Registry.via({:step, model_id})).reports == %{}
     end
 
-    test "a lagged run keeps each module's belief, with the epoch it belongs to" do
-      model_id = start_model(scheduling: :lagged)
+    test "a run one step behind keeps each module's belief, with the epoch it belongs to" do
+      model_id = start_model(scheduling: :one_step_behind)
 
       assert {:ok, _actions, _info} = step(model_id)
       # The report travels as a message, so the coordinator is given the chance
@@ -159,12 +159,12 @@ defmodule Monty.Runtime.StepTest do
                Step.state(Registry.via({:step, model_id})).reports
     end
 
-    test "a lagged step routes the epoch before's outputs, and does not read them" do
+    test "a step behind routes the epoch before's outputs, and does not read them" do
       output = Messages.percept()
 
       model_id =
         start_model(
-          scheduling: :lagged,
+          scheduling: :one_step_behind,
           sensor_modules: [sensor_module(:patch)],
           learning_modules: [learning_module(:lm_0, output: output), learning_module(:lm_1)],
           sm_to_lm: %{lm_0: [:patch], lm_1: [:patch]},
@@ -186,10 +186,10 @@ defmodule Monty.Runtime.StepTest do
       assert relayed == output
     end
 
-    test "a lagged round hands the motor one list of goals, sensors' included" do
+    test "a step-behind round hands the motor one list of goals, sensors' included" do
       model_id =
         start_model(
-          scheduling: :lagged,
+          scheduling: :one_step_behind,
           sensor_modules: [sensor_module(:patch, goals: [goal_from(:patch)])],
           learning_modules: [learning_module(:lm_0, goals: [goal_from(:lm_0)])]
         )
@@ -207,10 +207,10 @@ defmodule Monty.Runtime.StepTest do
       assert_receive {:motor, _percept, [%Cmp.Goal{sender_id: "lm_0"}, %Cmp.Goal{}]}
     end
 
-    test "a lagged step integrates the epoch before, from the report it was given" do
+    test "a step behind integrates the epoch before, from the report it was given" do
       model_id =
         start_model(
-          scheduling: :lagged,
+          scheduling: :one_step_behind,
           lm_to_lm_vote: %{lm_0: [:lm_0]},
           combine_votes: fn votes, _state ->
             Map.new(votes, fn {id, _vote} -> {id, {:combined, id}} end)

@@ -275,10 +275,10 @@ defmodule Monty.Runtime.Step do
       # reading while it is inside a call. So the step parks here — after its
       # sensors, which is the half that needs nothing from the modules — and the
       # rest runs when the last report has been handled.
-      :lagged ->
+      :one_step_behind ->
         park_step(state, from, pending)
 
-      :barrier ->
+      :wait_for_all ->
         # The previous hand-off's answers, read: already there, because the step
         # that handed the work over waited for them (`await_us` below).
         {modules_us, {outputs, _output_timeouts}} = timed(fn -> gather_outputs(state) end)
@@ -631,12 +631,12 @@ defmodule Monty.Runtime.Step do
       end)
 
     case state.scheduling do
-      :barrier ->
+      :wait_for_all ->
         Enum.each(servers, fn {_lm_id, server} ->
           LearningModuleServer.await(server, state.step, timeout)
         end)
 
-      :lagged ->
+      :one_step_behind ->
         :ok
     end
 
@@ -661,7 +661,7 @@ defmodule Monty.Runtime.Step do
   # asking one of them anything here would queue behind that work and the lag
   # would buy nothing. What a module would have been asked — its vote, its goals,
   # its region — travelled with its report for that reason.
-  defp round_and_goals(%State{scheduling: :lagged, step: step} = state, %{reports: reports}) do
+  defp round_and_goals(%State{scheduling: :one_step_behind, step: step} = state, %{reports: reports}) do
     epoch = step - 1
 
     {deliver_epoch_us, vote_info} = timed(fn -> deliver_lagged_votes(state, epoch, reports) end)

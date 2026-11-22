@@ -178,7 +178,7 @@ defmodule Monty.Runtime.Model do
           {Monty.Runtime.LearningModuleServer,
            spec
            |> Map.put(:model_id, model_id)
-           |> Map.put(:report_votes, Map.get(options, :scheduling, :barrier) == :lagged)}
+           |> Map.put(:report_votes, Map.get(options, :scheduling, :wait_for_all) == :one_step_behind)}
         end) ++
         [{Step, Map.put(options, :model_id, model_id)}]
 

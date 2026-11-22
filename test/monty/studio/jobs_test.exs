@@ -52,13 +52,21 @@ defmodule Monty.Studio.JobsTest do
 
   describe "how a step is scheduled" do
     test "Monty's order is what a deployment that says nothing gets" do
-      assert Jobs.scheduling(nil) == :barrier
-      assert Jobs.scheduling("") == :barrier
+      assert Jobs.scheduling(nil) == :wait_for_all
+      assert Jobs.scheduling("") == :wait_for_all
     end
 
     test "is the mode the deployment named" do
-      assert Jobs.scheduling("barrier") == :barrier
-      assert Jobs.scheduling("lagged") == :lagged
+      assert Jobs.scheduling("wait_for_all") == :wait_for_all
+      assert Jobs.scheduling("one_step_behind") == :one_step_behind
+    end
+
+    # The spellings before the rename, which a script or a recorded run still
+    # says: `barrier` was what a step that waits for all its modules was called,
+    # and `lagged` what one that runs a step behind was.
+    test "reads the older spellings too" do
+      assert Jobs.scheduling("barrier") == :wait_for_all
+      assert Jobs.scheduling("lagged") == :one_step_behind
     end
 
     test "refuses a mode no run has, naming the variable" do

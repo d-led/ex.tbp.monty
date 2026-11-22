@@ -1283,8 +1283,14 @@ defmodule Monty.Studio.Jobs.Run do
   # from a page says its mode on the page, and a second worker with a different
   # environment must not change what it was asked for. A run that says nothing
   # takes the deployment's own setting (`Monty.Studio.Jobs.scheduling/0`).
-  defp scheduling_of(%{inputs: %{"scheduling" => "lagged"}}), do: :lagged
-  defp scheduling_of(%{inputs: %{"scheduling" => "barrier"}}), do: :barrier
+  defp scheduling_of(%{inputs: %{"scheduling" => setting}})
+       when setting in ["one_step_behind", "lagged"],
+       do: :one_step_behind
+
+  defp scheduling_of(%{inputs: %{"scheduling" => setting}})
+       when setting in ["wait_for_all", "barrier"],
+       do: :wait_for_all
+
   defp scheduling_of(_record), do: Monty.Studio.Jobs.scheduling()
 
   # How many steps an episode keeps stepping after its criterion is satisfied, so

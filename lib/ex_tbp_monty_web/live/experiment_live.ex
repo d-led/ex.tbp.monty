@@ -568,21 +568,23 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="input input-xs w-24"
               aria-label="The most steps one episode may take"
             />
-            <%!-- Monty's order, or the lagged round this port added. Said here
-            because it changes what the run decides, not only what it costs
-            (`docs/monty-differences.md` §2.30), and because a comparison is two
-            runs of this page rather than a script beside it. --%>
-            <label for="run-scheduling" class="ms-2">scheduling</label>
+            <%!-- Monty's order, or the step-a-behind round this port added. Named
+            by what the step does rather than by the mechanism: a person choosing
+            here is deciding whether a step waits for the modules it handed work
+            to (`docs/monty-differences.md` §2.30). --%>
+            <label for="run-scheduling" class="ms-2">a step</label>
             <select
               id="run-scheduling"
               name="scheduling"
-              class="select select-xs w-28"
-              aria-label="Whether a step waits for the modules it handed work to"
+              class="select select-xs w-40"
+              aria-label="Whether a step waits for every module it handed work to"
             >
-              <option value="barrier" selected={@scheduling == :barrier}>
-                barrier
+              <option value="wait_for_all" selected={@scheduling == :wait_for_all}>
+                waits for all its modules
               </option>
-              <option value="lagged" selected={@scheduling == :lagged}>lagged</option>
+              <option value="one_step_behind" selected={@scheduling == :one_step_behind}>
+                runs one step behind
+              </option>
             </select>
             <%!-- The time a module still computing is given after another one has
             already concluded: Monty ends the episode on the first conclusion and
@@ -1466,8 +1468,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
 
   # A mode this page cannot read is not a mode: the choice stays as it was, and
   # the run keeps the one shown beside the button it was started with.
-  defp scheduling_of("lagged", _shown), do: :lagged
-  defp scheduling_of("barrier", _shown), do: :barrier
+  defp scheduling_of(setting, _shown) when setting in ["one_step_behind", "lagged"],
+    do: :one_step_behind
+
+  defp scheduling_of(setting, _shown) when setting in ["wait_for_all", "barrier"],
+    do: :wait_for_all
+
   defp scheduling_of(_unreadable, shown), do: shown
 
   # One chart at a time, drawn for the box it has: the size measured for the

@@ -464,8 +464,10 @@ defmodule Mix.Tasks.Monty.Run do
   end
 
   defp scheduling_of(nil), do: Monty.Studio.Jobs.scheduling()
-  defp scheduling_of("barrier"), do: :barrier
-  defp scheduling_of("lagged"), do: :lagged
+  defp scheduling_of(setting) when setting in ["wait_for_all", "barrier"], do: :wait_for_all
+
+  defp scheduling_of(setting) when setting in ["one_step_behind", "lagged"],
+    do: :one_step_behind
 
   defp scheduling_of(other),
     do: Mix.raise("scheduling is `barrier` or `lagged`, got: #{inspect(other)}")

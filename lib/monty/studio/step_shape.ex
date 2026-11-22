@@ -65,7 +65,7 @@ defmodule Monty.Studio.StepShape do
   # a barrier run's is comparing two different questions.
   defp modules_sentence(inputs) do
     case Map.get(inputs, "scheduling") do
-      "lagged" ->
+      setting when setting in ["one_step_behind", "lagged"] ->
         [
           "Modules: a step behind — a step's `receive` and `settle` belong to the epoch " <>
             "before it, and `await` is not waited for at all."

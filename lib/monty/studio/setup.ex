@@ -565,7 +565,7 @@ defmodule Monty.Studio.Setup do
         call_timeout: :infinity,
         sensors_step: Keyword.get(opts, :sensors_step, :auto),
         settle_steps: Keyword.get(opts, :settle_steps, 0),
-        scheduling: Keyword.get(opts, :scheduling, :barrier)
+        scheduling: Keyword.get(opts, :scheduling, :wait_for_all)
       },
       Map.merge(criterion_spec(setup.match_criterion), monty_args(setup))
     )

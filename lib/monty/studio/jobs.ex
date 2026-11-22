@@ -138,27 +138,31 @@ defmodule Monty.Studio.Jobs do
   @doc """
   How a step is scheduled, from `MONTY_STUDIO_SCHEDULING`.
 
-  `:barrier` — the default, and Monty's own order — waits for the modules a step
-  handed work to. `:lagged` does not: it integrates the epoch before, from the
-  report each module sends, so a module is never held to the coordinator's pace.
-  It is faster and it is a different trajectory (its goals are one step older),
-  so it is a knob a deployment sets to measure, never a default anything is
-  compared against. `docs/monty-differences.md` §2.30.
+  `:wait_for_all` — the default, and Monty's own order — waits for every module a
+  step handed work to before the step ends. `:one_step_behind` does not: a step
+  applies the epoch *before* it, from the report each module sends, so a module
+  is never held to the coordinator's pace. It is faster and it is a different
+  trajectory (its goals are one step older), so it is a knob a deployment sets to
+  measure, never a default anything is compared against.
+  `docs/monty-differences.md` §2.30.
+
+  The two older spellings — `barrier` and `lagged` — are still read, because a
+  recorded run and a script written against it say those.
   """
-  @spec scheduling(String.t() | nil) :: :barrier | :lagged
-  def scheduling(setting) when setting in [nil, ""], do: :barrier
-  def scheduling("barrier"), do: :barrier
-  def scheduling("lagged"), do: :lagged
+  @spec scheduling(String.t() | nil) :: :wait_for_all | :one_step_behind
+  def scheduling(setting) when setting in [nil, ""], do: :wait_for_all
+  def scheduling(setting) when setting in ["wait_for_all", "barrier"], do: :wait_for_all
+  def scheduling(setting) when setting in ["one_step_behind", "lagged"], do: :one_step_behind
 
   def scheduling(setting) do
-    raise "MONTY_STUDIO_SCHEDULING must be `barrier` or `lagged`, and it is " <>
+    raise "MONTY_STUDIO_SCHEDULING must be `wait_for_all` or `one_step_behind`, and it is " <>
             inspect(setting)
   end
 
   @doc "The same, for a caller that has no environment value of its own."
-  @spec scheduling() :: :barrier | :lagged
+  @spec scheduling() :: :wait_for_all | :one_step_behind
   def scheduling,
-    do: Application.get_env(:ex_tbp_monty, :monty_studio, [])[:scheduling] || :barrier
+    do: Application.get_env(:ex_tbp_monty, :monty_studio, [])[:scheduling] || :wait_for_all
 
   @doc """
   The latest job of each of `run_ids`, keyed by run id — absent where a run has
