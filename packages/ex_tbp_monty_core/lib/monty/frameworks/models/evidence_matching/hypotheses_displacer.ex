@@ -82,6 +82,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   end
 
   @doc """
+  The same displacer over one object of the memory, and the scorer with it.
+
+  A round of per-object updates hands each task its own object: the memory is
+  most of what it would otherwise copy (`GraphMemory.narrow/2`), and the scorer
+  holds the memory too.
+  """
+  @spec narrow(t(), GraphMemory.graph_id()) :: t()
+  def narrow(%__MODULE__{} = displacer, graph_id) do
+    %{
+      displacer
+      | graph_memory: GraphMemory.narrow(displacer.graph_memory, graph_id),
+        feature_evidence_scorer: narrow_scorer(displacer.feature_evidence_scorer, graph_id)
+    }
+  end
+
+  defp narrow_scorer(nil, _graph_id), do: nil
+
+  defp narrow_scorer(scorer, graph_id),
+    do: DefaultFeatureEvidenceScorer.narrow(scorer, graph_id)
+
+  @doc """
   Move every hypothesis by `displacement`, as its own object orientation sees it.
 
   The locations stay in the form they are held in: a kernel writes the moved

@@ -106,4 +106,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater do
     end)
     |> then(&Map.merge(left, &1))
   end
+
+  @doc """
+  The state one object's update needs, and nothing of the other objects'.
+
+  A round runs a task an object, and a task is handed a copy of everything its
+  closure holds — which, in the state as it is, is the library and a slope
+  tracker an object. Narrowed, a task is handed its own object:
+  `GraphMemory.narrow/2` and, where the strategy keeps one, that object's tracker
+  alone. What a strategy returns must update that object exactly as the whole
+  state would, which is what the parity between a round and the loop holds it to.
+  """
+  @callback narrow(state, Monty.Frameworks.Models.GraphMatching.GraphMemory.graph_id()) ::
+              state
 end

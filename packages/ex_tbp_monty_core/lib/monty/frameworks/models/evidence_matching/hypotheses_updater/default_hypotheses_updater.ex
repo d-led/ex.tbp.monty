@@ -80,6 +80,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   def reset(%__MODULE__{} = updater), do: %{updater | initialised_channels: %{}}
 
   @doc """
+  This updater as one object of the memory it was built over.
+
+  What a round of per-object updates hands a task: the library narrowed to the
+  object the task updates (`GraphMemory.narrow/2`), the displacer and the scorer
+  narrowed with it, and that object's `initialised_channels` alone.
+  """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  @spec narrow(t(), GraphMemory.graph_id()) :: t()
+  def narrow(%__MODULE__{} = updater, graph_id) do
+    %{
+      updater
+      | graph_memory: GraphMemory.narrow(updater.graph_memory, graph_id),
+        displacer: HypothesesDisplacer.narrow(updater.displacer, graph_id),
+        scorer: DefaultFeatureEvidenceScorer.narrow(updater.scorer, graph_id),
+        initialised_channels: Map.take(updater.initialised_channels, [graph_id])
+    }
+  end
+
+  @doc """
   Nothing to prepare: this updater keeps every hypothesis it has and spends no
   step sampling new ones, so each step looks like every other.
   """

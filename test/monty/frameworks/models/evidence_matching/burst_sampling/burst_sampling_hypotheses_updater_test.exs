@@ -114,6 +114,46 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   defp dot(left, right), do: Enum.zip_with(left, right, &(&1 * &2)) |> Enum.sum()
 
+  # A memory of two objects, so a state narrowed to one of them can be told from
+  # the whole: the other object's nodes are there to be read by mistake.
+  defp two_object_memory do
+    GraphMemory.new(features_to_use: %{"patch" => ["rgba", "pose_fully_defined", "pose_vectors"]})
+    |> GraphMemory.add_graph_to_memory(%{"patch" => graph_model("mug", 4)}, "mug")
+    |> GraphMemory.add_graph_to_memory(%{"patch" => graph_model("cup", 6)}, "cup")
+    |> GraphMemory.initialize_feature_arrays()
+  end
+
+  # `count` nodes a decimetre apart, all facing the same way.
+  defp graph_model(object_id, count) do
+    locations = for index <- 0..(count - 1)//1, do: [index / 10, 0.0, 0.0]
+
+    features = %{
+      "rgba" => Enum.map(locations, fn [x | _] -> [x] end),
+      "pose_fully_defined" => List.duplicate(true, count),
+      "pose_vectors" => List.duplicate(@pose, count)
+    }
+
+    GraphObjectModel.new(object_id)
+    |> GraphObjectModel.build_model(locations, features, nil, nil)
+  end
+
+  # One burst step of one object: the hypotheses it proposes, as the updater
+  # answers them.
+  defp burst(updater, graph_id) do
+    updater = Map.put(updater, :sampling_burst_steps, 5)
+
+    {_updater, sampled, _telemetry} =
+      BurstSamplingHypothesesUpdater.update_evidence(
+        updater,
+        Hypotheses.empty(),
+        features(),
+        graph_id,
+        0.0
+      )
+
+    sampled
+  end
+
   defp features(pose_fully_defined \\ true) do
     %{
       "patch" => %{
@@ -767,6 +807,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       assert Enum.all?(Hypotheses.poses(sampled), fn pose ->
                Geometry.apply(pose, sensed_normal) == stored_normal
              end)
+    end
+  end
+
+  describe "the state one object's update needs" do
+    test "a burst over one object earns it what the whole memory's burst would" do
+      whole = updater_for(two_object_memory(), initial_possible_poses: two_poses())
+      one = BurstSamplingHypothesesUpdater.narrow(whole, "mug")
+
+      from_whole = burst(whole, "mug")
+      from_one = burst(one, "mug")
+
+      assert from_one == from_whole
+    end
+
+    test "what it keeps is that object's tracker, and the memory is one object's" do
+      both_objects = %{"mug" => stalled_tracker(), "cup" => stalled_tracker()}
+
+      whole =
+        updater_for(two_object_memory(), initial_possible_poses: two_poses())
+        |> Map.put(:evidence_slope_trackers, both_objects)
+
+      one = BurstSamplingHypothesesUpdater.narrow(whole, "mug")
+
+      assert Map.keys(one.evidence_slope_trackers) == ["mug"]
+      assert GraphMemory.get_memory_ids(one.graph_memory) == ["mug"]
     end
   end
 end

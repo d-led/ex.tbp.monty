@@ -403,9 +403,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     {"use_multithreading", :concurrent_objects?},
     # This port's own key, and the only way a run asks for the object round: an
     # experiment's YAML may write it beside `use_multithreading`. Nothing in a
-    # shipped config does, because the round measured no faster than the loop
-    # (`graph_round?/1`); it is here so that a run measuring its own workload can
-    # ask, and so that a probe can compare the two paths on a real episode.
+    # shipped config does: the round is a different shape from Monty's own, and
+    # it is a lever a run takes when it has measured its own workload
+    # (`graph_round?/1`).
     {"round_objects", :round_objects?},
     {"feature_evidence_increment", :feature_evidence_increment},
     {"vote_evidence_threshold", :vote_evidence_threshold},
@@ -955,24 +955,34 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   Monty's answer is its `use_multithreading`, and Monty's threads share the
   memory for free. A BEAM process is not a thread: it is handed a copy of what
-  its closure holds. So the config's switch arrives here as
-  `concurrent_objects?`, and a round needs three things: that, a memory a task
-  can hold without copying, and a run that asks — because measured, the round
-  does not pay:
+  its closure holds, so a round needs a state a task can be handed — which is
+  `HypothesesUpdater.narrow/2`, one object instead of the library — and a memory
+  a run holds once rather than per module (`memory_shared?`). So the three
+  switches are the config's `concurrent_objects?`, the memory's shareability, and
+  `round_objects?`: a run asking, which defaults to `false` because the round is
+  a different shape from Monty's own and a run that wants it should say so.
 
-  - the five-module `randrot_noise_10distinctobj_5lms_dist_agent` episode, the
-    model's own work only and after warm-up: 5 058–5 072 k reductions a step in a
-    round against 4 857–4 860 k in the loop, three readings each, so the round
-    costs about 4 % more;
-  - the ten-distinct-object `base_config_10distinctobj_dist_agent` episode over
-    sixty steps: 1 275 k against 1 278 k — equal.
+  What a round pays and what it buys, this Mac, `mix monty.run --no-record`,
+  eight steps an arm, interleaved, the stand-in world (so these are the model's
+  own numbers and not the experiment's):
 
-  The first measurements of this were wall clocks of a whole run, which include
-  the setup, the episode boundary and the box; the round looked 10–16 % ahead on
-  them and is not ahead on the work. So `:round_objects?` is what a run says when
-  it has measured its own workload, and it defaults to `false`: the loop is
-  Monty's shape and, on every config measured, the cheaper one. See
-  `docs/monty-differences.md` §2.45.
+  | config                               | loop                 | round                 |
+  | ------------------------------------ | -------------------- | --------------------- |
+  | `base_config_10distinctobj_dist_agent` | 282–295 ms a step    | **149–186 ms**        |
+  | `base_77obj_dist_agent`                | 337–345 ms a step    | **95–103 ms**         |
+
+  Every field of every step is identical between the arms, goal counts included
+  (15 066 and 15 065). The round costs about 4 % more BEAM work (measured in
+  reductions on the five-module episode: 5 058–5 072 k against 4 857–4 860 k) and
+  wins the wall clock anyway, because a step's time is the k-d tree queries of
+  seventy-seven objects and those run at once.
+
+  That was not true before the state was narrowed: handed the whole updater — the
+  library and a slope tracker an object, 3 048 µs to copy against 73 µs narrowed
+  after four steps of the seventy-seven-object config — the round took 965–1 346
+  ms a step against the loop's 341, three to four times worse, and it is *that*
+  number the earlier version of this comment reported as "the round does not
+  pay". See `docs/monty-differences.md` §2.45.
   """
   @spec graph_round?(t()) :: boolean()
 
@@ -1007,11 +1017,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp in_a_round(graph_ids, %__MODULE__{} = lm, features, displacement) do
     view = graph_view(lm)
+    {module, updater} = view.hypotheses_updater
 
     graph_ids
-    |> Enum.map(&{&1, space_of(lm, &1)})
+    |> Enum.map(fn graph_id ->
+      # Each task is handed its own object rather than the library: a task copies
+      # what its closure holds, and the state as it is holds every object's data
+      # and every object's tracker (`HypothesesUpdater.narrow/2`).
+      {graph_id, space_of(lm, graph_id),
+       %{view | hypotheses_updater: {module, module.narrow(updater, graph_id)}}}
+    end)
     |> Task.async_stream(
-      fn {graph_id, hypotheses} -> update_one(view, features, displacement, graph_id, hypotheses) end,
+      fn {graph_id, hypotheses, view} ->
+        update_one(view, features, displacement, graph_id, hypotheses)
+      end,
       ordered: false,
       timeout: :infinity
     )

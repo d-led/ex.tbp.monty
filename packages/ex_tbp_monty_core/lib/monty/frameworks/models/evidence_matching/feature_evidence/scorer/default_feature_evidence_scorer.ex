@@ -64,6 +64,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
     }
   end
 
+  @doc """
+  The same scorer over one object of the memory.
+
+  A round of per-object updates hands each task its own object, and the memory is
+  most of what it would otherwise copy (`GraphMemory.narrow/2`).
+  """
+  @spec narrow(t(), GraphMemory.graph_id()) :: t()
+  def narrow(%__MODULE__{} = scorer, graph_id),
+    do: %{scorer | graph_memory: GraphMemory.narrow(scorer.graph_memory, graph_id)}
+
   @impl true
   def evidence(%__MODULE__{} = scorer, graph_id, input_channel, query_features) do
     if matched_on_features?(scorer, input_channel) do
