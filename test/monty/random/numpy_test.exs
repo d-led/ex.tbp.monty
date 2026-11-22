@@ -71,6 +71,41 @@ defmodule Monty.Random.NumpyTest do
                Fixtures.samples() ++ Fixtures.more_samples()
     end
 
+    # A twist rewrites the whole 624-word key, and `random_sample` spends two
+    # words a draw: draws 312, 624 and 1 248 are the first of the second, third
+    # and fifth blocks. A rewritten word is read back 227 words later (and the
+    # last word reads the first), so a twist can be wrong only after its first
+    # block — which is why these are pinned and the first three draws are not
+    # enough.
+    test "is still NumPy's after the key has been rewritten" do
+      {draws, _state} = draw(2500, &Numpy.random_sample/1)
+
+      assert Enum.slice(draws, 312..314) == [
+               0.5403256292032145,
+               0.5746142391457688,
+               0.2471429003582687
+             ]
+
+      assert Enum.slice(draws, 624..626) == [
+               0.9367202840501805,
+               0.93811258261549,
+               0.42525326093193183
+             ]
+
+      assert Enum.slice(draws, 1248..1250) == [
+               0.20959356033371446,
+               0.22235320755186327,
+               0.5360711226277084
+             ]
+
+      assert Enum.slice(draws, 2496..2499) == [
+               0.8615868189381486,
+               0.3301196817616159,
+               0.9568217628647141,
+               0.1320386801284662
+             ]
+    end
+
     test "gives the same numbers again from the same seed, which is the whole point" do
       {first, _state} = draw(5, &Numpy.random_sample/1)
       {second, _state} = draw(5, &Numpy.random_sample/1)

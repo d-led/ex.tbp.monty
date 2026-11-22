@@ -206,35 +206,51 @@ defmodule Monty.Random.Numpy do
     {temper(elem(key, pos)), %{state | pos: pos + 1}}
   end
 
-  # The whole block at once: entry `i` takes its low bits from the entry after it
-  # and its high bits from the entry `@m` further on, which for the tail is one
-  # this pass has already rewritten — so the new values have to be readable as
-  # they are made, and a map is the plain way to say that.
+  # The whole block at once, in one pass. NumPy twists in place, so a word is
+  # made from `old[i]`, `old[i + 1]` and `old[i + 397]`, and past index 226 that
+  # third word is one this pass has already rewritten — 227 back from where it
+  # is read — and the last word's successor is the new first one. The cursor
+  # over the old words therefore gives the word and the one after it, and a
+  # queue of the new ones answers `new[index - 227]` from index 227 on: only the
+  # oldest new word is ever read back, so a queue is the whole of what the map
+  # of every index used to be.
   defp twist(key) do
-    updated =
-      Enum.reduce(0..(@n - 1), %{}, fn index, updated -> twist_one(key, updated, index) end)
-
-    List.to_tuple(for index <- 0..(@n - 1), do: Map.fetch!(updated, index))
+    old = Tuple.to_list(key)
+    {_first, _queue, new} = twist(old, Enum.drop(old, @m), {[], []}, [], nil)
+    List.to_tuple(Enum.reverse(new))
   end
 
-  defp twist_one(key, updated, index) do
-    y =
-      (word_at(key, updated, index) &&& @upper_mask) |||
-        (word_at(key, updated, rem(index + 1, @n)) &&& @lower_mask)
-
-    value =
-      key
-      |> word_at(updated, rem(index + @m, @n))
-      |> bxor(y >>> 1)
-      |> bxor(if (y &&& 1) == 1, do: @matrix_a, else: 0)
-
-    Map.put(updated, index, value)
+  defp twist([a], _cursor, queue, new, first) do
+    {c, queue} = pop(queue)
+    value = twist_word(a, first, c)
+    {first, push(queue, value), [value | new]}
   end
 
-  defp word_at(_key, updated, index) when is_map_key(updated, index),
-    do: Map.fetch!(updated, index)
+  defp twist([a, b | rest], cursor, queue, new, first) do
+    {c, cursor, queue} =
+      case cursor do
+        [c | cursor] -> {c, cursor, queue}
+        [] -> pop(queue) |> then(fn {c, queue} -> {c, [], queue} end)
+      end
 
-  defp word_at(key, _updated, index), do: elem(key, index)
+    value = twist_word(a, b, c)
+    first = first || value
+    twist([b | rest], cursor, push(queue, value), [value | new], first)
+  end
+
+  defp twist_word(a, b, c) do
+    y = (a &&& @upper_mask) ||| (b &&& @lower_mask)
+    bxor(c, bxor(y >>> 1, if((y &&& 1) == 1, do: @matrix_a, else: 0)))
+  end
+
+  defp push({front, back}, value), do: {front, [value | back]}
+
+  defp pop({[head | front], back}), do: {head, {front, back}}
+
+  defp pop({[], back}) do
+    [head | front] = Enum.reverse(back)
+    {head, {front, []}}
+  end
 
   defp temper(word) do
     word
