@@ -389,17 +389,44 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # four thousand pixels, so one image was sixteen thousand lists a step, and each
   # of those lists was walked again by the stage after it.
   defp place_points(depth, semantic, intrinsic, frame, index, transform) do
-    context = %{
-      frame: if(transform.world_coord, do: geometry_of(frame), else: nil),
-      intrinsic: intrinsic,
-      rule: mask_rule(depth, semantic, index, transform),
-      all?: transform.get_all_points
-    }
+    rule = mask_rule(depth, semantic, index, transform)
+    world = if(transform.world_coord, do: geometry_of(frame), else: nil)
 
-    {tagged, sensor} = place_rows(depth, semantic, 0, context, {[], []})
+    if ExTbpMonty.Core.MatcherNif.loaded?() do
+      ExTbpMonty.Core.MatcherNif.depth_to_3d(
+        depth,
+        semantic,
+        intrinsic.fx,
+        intrinsic.fy,
+        frame_numbers(world),
+        transform.get_all_points,
+        rule_numbers(rule)
+      )
+    else
+      context = %{
+        frame: world,
+        intrinsic: intrinsic,
+        rule: rule,
+        all?: transform.get_all_points
+      }
 
-    {Enum.reverse(tagged), if(context.all?, do: Enum.reverse(sensor), else: nil)}
+      {tagged, sensor} = place_rows(depth, semantic, 0, context, {[], []})
+
+      {Enum.reverse(tagged), if(context.all?, do: Enum.reverse(sensor), else: nil)}
+    end
   end
+
+  # The frame as the kernel's twelve numbers: the rotation's three rows, then the
+  # position. `nil` keeps the points in the sensor's own frame.
+  defp frame_numbers(nil), do: nil
+
+  defp frame_numbers({[a1, a2, a3], [b1, b2, b3], [c1, c2, c3], [x0, y0, z0]}),
+    do: [a1, a2, a3, b1, b2, b3, c1, c2, c3, x0, y0, z0]
+
+  # Which of the mask's three rules the kernel applies to each pixel.
+  defp rule_numbers(:semantic), do: {0, 0.0, false}
+  defp rule_numbers(:nothing_nearer_than_a_metre), do: {1, 0.0, false}
+  defp rule_numbers({threshold, flip?}), do: {2, threshold, flip?}
 
   # The frame as the walk needs it: its three rows and the offset, destructured
   # once for the whole image rather than applied and added again per pixel. `nil`

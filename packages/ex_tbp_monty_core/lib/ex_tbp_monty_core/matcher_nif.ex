@@ -102,6 +102,33 @@ defmodule ExTbpMonty.Core.MatcherNif do
   end
 
   @doc """
+  A depth image unprojected into the points a sensor module reads.
+
+  `depth` and `semantic` are the image and the on-object mask, row by row; `fx`
+  and `fy` are the camera's half-extents at unit distance; `frame` is the
+  twelve numbers of the camera's place in the world (three rotation rows, then
+  the position) or `nil` for the sensor's own frame; `all_points` keeps the
+  pixels the mask would drop, and `rule` says which of the mask's three rules
+  applies — `{0, _, _}` the semantic sensor's own, `{1, _, _}` no surface in
+  view, `{2, threshold, flip?}` the pixels on one side of a depth.
+
+  The answer is `{tagged, sensor}`: the rows `semantic_3d` keeps and the rows
+  `sensor_frame_data` keeps (`nil` unless `all_points`). The reference is
+  `DepthTo3DLocations`' own walk, which is what runs when the kernels are off.
+  """
+  @spec depth_to_3d(
+          [[float()]],
+          [[float()]],
+          float(),
+          float(),
+          [float()] | nil,
+          boolean(),
+          {0..2, float(), boolean()}
+        ) :: {[[float()]], [[float()]] | nil}
+  def depth_to_3d(_depth, _semantic, _fx, _fy, _frame, _all_points, _rule),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The feature evidence of every row, computed natively.
 
   `rows` is `n * width` little-endian f64 with NaN where a node has no value;

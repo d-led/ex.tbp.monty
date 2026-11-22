@@ -1592,4 +1592,130 @@ fn decode_native(column: Binary) -> Vec<Option<f64>> {
         .collect()
 }
 
+/// A depth image becomes the points a sensor module reads, pixel by pixel.
+///
+/// Every step of every experiment that unprojects a depth image pays this loop:
+/// a ray through each pixel times its depth, into the world through the
+/// camera's frame, with the on-surface mask beside it. In Elixir each pixel is
+/// a `[x, y, z, mask]` list and a handful of calls, and the image has thousands
+/// of them, twice a step — measured at 4.2 ms and 383 k words on one 64×64 pair
+/// on a quiet Mac.
+///
+/// The mask *rule* is decided in Elixir, because it is a threshold over the
+/// image (`DepthTo3DLocations` reads the depths' histogram once); this takes the
+/// rule's answer and applies it per pixel.
+///
+/// * `depth` — the image, row by row, in metres.
+/// * `semantic` — the on-object mask, the same shape; a pixel is on the object
+///   where its value is above zero.
+/// * `fx`, `fy` — the camera's half-extents at unit distance, already divided by
+///   the zoom.
+/// * `frame` — 12 numbers when the points are wanted in the world: the
+///   rotation's three rows and then the position; `nil` keeps them in the
+///   sensor's own frame.
+/// * `all_points` — keep every pixel of `semantic_3d` rather than only the ones
+///   on the surface, which is what a sensor module reads when it wants the whole
+///   image.
+/// * `rule` — `{0, _, _}` is the semantic sensor's own mask, `{1, _, _}` is
+///   "nothing in view is nearer than a metre" (no pixel is on the surface), and
+///   `{2, threshold, flip?}` keeps the pixels on the near side of `threshold`
+///   (`flip?` says the middle of the view is on the far one).
+///
+/// The answer is `{tagged, sensor}`: the rows `semantic_3d` keeps, and the rows
+/// `sensor_frame_data` keeps (`nil` unless `all_points`).
+///
+/// This is `DepthTo3DLocations`' own walk — `place_pixel/6` with `place_in/5`,
+/// `across/2`, `down/2` and `mask_value/3` — with the same operations in the
+/// same order, so a parity test can hold the two answers equal rather than
+/// close.
+#[rustler::nif]
+fn depth_to_3d(
+    depth: Vec<Vec<f64>>,
+    semantic: Vec<Vec<f64>>,
+    fx: f64,
+    fy: f64,
+    frame: Option<Vec<f64>>,
+    all_points: bool,
+    rule: (u32, f64, bool),
+) -> (Vec<Vec<f64>>, Option<Vec<Vec<f64>>>) {
+    let height = depth.len();
+    let width = depth.first().map_or(0, |row| row.len());
+
+    // One ray a column and one a row, as `across/2` and `down/2` compute them.
+    let across: Vec<f64> = (0..width).map(|column| grid(column, width) * fx).collect();
+    let down: Vec<f64> = (0..height).map(|row| -grid(row, height) * fy).collect();
+
+    let mut tagged = Vec::with_capacity(height * width);
+    let mut sensor = if all_points {
+        Some(Vec::with_capacity(height * width))
+    } else {
+        None
+    };
+
+    for (row, depth_row) in depth.iter().enumerate().take(semantic.len()) {
+        let semantic_row = &semantic[row];
+
+        for (column, &pixel) in depth_row.iter().enumerate().take(semantic_row.len()) {
+            let x = across[column] * pixel;
+            let y = down[row] * pixel;
+            let z = -pixel;
+            let on_object = semantic_row[column];
+            let on_surface = mask_value(rule, pixel, on_object);
+            let placed = place_in(frame.as_deref(), x, y, z, on_surface);
+
+            if all_points || on_surface != 0.0 {
+                tagged.push(placed);
+            }
+
+            if let Some(rows) = sensor.as_mut() {
+                rows.push(vec![x, y, z, on_surface]);
+            }
+        }
+    }
+
+    (tagged, sensor)
+}
+
+/// `DepthTo3DLocations`' normalised grid: the edges of the image, not its pixel
+/// centres, and nothing to spread over a one-pixel axis.
+fn grid(index: usize, count: usize) -> f64 {
+    if count == 1 {
+        0.0
+    } else {
+        -1.0 + 2.0 * (index as f64) / ((count - 1) as f64)
+    }
+}
+
+/// The rule's answer for one pixel, as `mask_value/3` gives it.
+fn mask_value(rule: (u32, f64, bool), pixel: f64, on_object: f64) -> f64 {
+    match rule {
+        (0, _, _) => on_object,
+        (1, _, _) => 0.0,
+        (2, threshold, flip) => {
+            let on_surface = if flip { pixel > threshold } else { pixel < threshold };
+
+            if on_surface && on_object > 0.0 {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        _ => 0.0,
+    }
+}
+
+/// A pixel's place, in the world when a frame is given.
+fn place_in(frame: Option<&[f64]>, x: f64, y: f64, z: f64, on_surface: f64) -> Vec<f64> {
+    match frame {
+        None => vec![x, y, z, on_surface],
+        Some([a1, a2, a3, b1, b2, b3, c1, c2, c3, x0, y0, z0]) => vec![
+            a1 * x + a2 * y + a3 * z + x0,
+            b1 * x + b2 * y + b3 * z + y0,
+            c1 * x + c2 * y + c3 * z + z0,
+            on_surface,
+        ],
+        Some(_) => vec![x, y, z, on_surface],
+    }
+}
+
 rustler::init!("Elixir.ExTbpMonty.Core.MatcherNif");
