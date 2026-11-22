@@ -2673,3 +2673,18 @@ time against 16–44 ms in a round. A vote update is one batched index query and
 walk over the object's hypotheses, about half a millisecond; starting and joining a
 process costs more than that, and a round of ten pays it ten times. So the loop is
 kept, and this is a deviation with a number rather than a preference.
+
+**The sensor phase cannot be pre-drawn either.** A sensor that draws pins its phase
+to Monty's order (`§2.28`), and the obvious way out is to take a sensor's draws up
+front, in order, and then run the sensors together. It does not work, and the reason
+is in the noise layer rather than in the scheduler:
+`DefaultMessageNoise` noises a feature per named feature the percept carries —
+features at all only when `process_features_in_lm` is set — turns a `pose_vectors`
+by a sampled rotation rather than by three numbers, and adds a three-component
+location offset whatever the percept holds. How many values a sensor consumes on a
+step is therefore decided by the percept that sensor is in the middle of producing,
+so a coordinator cannot take them before the work it would be freeing. Each
+sensor's own stream would lift it, at the price `§2.28` names: every noised percept
+would be a different patch, and no episode of this port would be the episode Monty
+ran. That is a decision about what the instrument measures, not a refactor, so it is
+left where it is.
