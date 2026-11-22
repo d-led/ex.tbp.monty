@@ -457,6 +457,20 @@ the code.
   which copies the remaining tail at every row — quadratic in the hypotheses. It
   cost more than the list shifting it replaced until the pieces were gathered and
   joined once with `IO.iodata_to_binary/1`, which is when the win appeared.
+- **The pictures as bytes.** A step's observations are nested lists — 377 811
+  words for two 64×64 sensors — and a process is handed a copy of every term it
+  is sent, where a binary over 64 bytes is shared
+  (`scripts/probe_copy_cost.exs`: 1 679 µs a copy as lists, 2 µs as bytes). So
+  the world answered arrays of bytes, the two transforms wrote bytes, and every
+  reader decoded them at its own boundary. Measured over the same episode
+  (`scripts/probe_sensor_cost.exs`, interleaved arms, reductions a step): plain
+  1 237 728 → **1 489 206**, processed 1 659 082 → **1 936 586**, the patch
+  sensor 157 847 → 280 267. Reverted. The copies it removes are real, but every
+  reader decodes the bytes back, and a decode allocates a boxed float where
+  walking a list allocates nothing — one decode per reader costs more than the
+  one copy it saves. The encoding earns its keep only where the reader reads the
+  bytes, which is a kernel's job and not a transform's (the same lesson as the
+  four column changes, and the reason `Hypotheses` reads through kernels).
 - **A per-episode copy of the model's state**, kept only as long as it is the
   thing being measured; a training phase would pay it per epoch.
 - **A per-object pass over a memory's graphs**, measured rather than argued
