@@ -375,6 +375,60 @@ Two vehicles, both keeping the Elixir reference and its parity tests:
   Nx is for. Costs: a compiler dependency, a large addition to the release, an
   EXLA build in CI, and a `defn` boundary per stage.
 
+### Where the space itself would live
+
+The tempting story is that a round pays for the copy: a task is handed the
+object's four columns and the structure around them, so put the space in the crate
+and hand over a four-word `{:nif, reference()}`, the way `kd_tree_nif` already
+does. Measured, that story is wrong, and it is worth saying so because it decides
+a design.
+
+One object's space at 2 000 hypotheses is 4 038 words on the BEAM heap — three
+refc binaries and a list of booleans — and 220 KB in flight. Handing it to eight
+tasks, fifty rounds, each task reading nothing:
+
+| what a task is handed          |  words | reductions a task | ms an 8-task round |
+| ------------------------------ | -----: | ----------------: | -----------------: |
+| nothing                        |      0 |               204 |               0.03 |
+| a `{:nif, ref}` resource       |      4 |               253 |               0.13 |
+| the space, columns as binaries |  4 038 |               273 |          0.17–0.25 |
+| the same space as float lists  | 80 012 |             2 219 |            4.8–5.2 |
+
+(`scripts/probe_resource_transport.exs`, this Mac; the reductions repeat to a
+couple, the wall clock does not.) The binaries travel by reference — only the list
+of booleans copies — so the whole space costs **20 reductions** more than a bare
+pointer, and a process about 204 on its own.
+
+Set that against the round it would be asked to rescue: 201 k reductions a step
+over the loop across five modules and ten objects, which is about **4 000 an
+object**. The copy is under half a percent of that, and the rest is the round's own
+machinery — a process a task, ten results coming back, the merge that folds them
+in. None of it is the columns, which is also why the mask experiment moved nothing
+(`monty-differences.md` §2.45).
+
+So sharing the space would not make the round pay:
+
+- **It removes 20 of about 4 000 reductions an object**, and the 4 % is the
+  fan-out itself: the processes, the returns, the merge.
+- **A crate buys structure sharing over keys we already have.** The space is an
+  index-addressed vector of about ten objects with exactly one version alive,
+  which is `Arc<Vec<Arc<Slice>>>`; `im` and `rpds` earn their keep on map-keyed
+  data with many retained versions, and `left-right` and `concread` on many
+  readers against one writer — a live reader is a problem this does not have.
+- **The versioned-handle idiom puts the garbage out of reach.** Every write would
+  return a new resource, and the BEAM cannot see off-heap allocations, so nothing
+  collects them early (`report_resource_usage` is the only signal); a lock in the
+  crate would also have to be a dirty NIF.
+- **The float-list row is the one that matters.** Eight times the words and
+  twenty-eight times the round — what a boxed-float port would pay, and what this
+  port already does not. The columns being binaries is the win; keeping the
+  arithmetic on them is the rest.
+
+That leaves two levers, both already on record: make a step's per-object work large
+enough that the round's own machinery is a rounding error, or take a burst's whole
+path into one call so there is nothing to spawn and nothing to merge. Sharing the
+space is neither.
+
 **This is an open decision.** It is written down here rather than half-made in
 the code.
 

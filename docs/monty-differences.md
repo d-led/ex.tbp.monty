@@ -2682,15 +2682,20 @@ module's heap, and a round over it copies the library into every task (`§2.44`)
 **What the 4 % is, and what it is not.** A task is handed a copy of what its
 closure holds: the object's four columns, the space's structure and the module's
 updater state. Shrinking a column does not touch it — the mask was turned into one
-byte a hypothesis, which is the largest term a space carries (two words a
-hypothesis as a list of booleans), and the count did not move: the loop 4 869 k →
-4 872 k reductions a step and the round's excess unchanged, so the change was
-reverted rather than kept for its shape. The columns are already binaries, which
-a task holds by reference; what copies is the structure around them. Not sending
-that structure at all — sharing the spaces and the updater through ETS, or taking
-a burst's whole path in one NIF call over the columns — is the change that would
-make a round pay, and it is the one `speed.md` has on record as
-"The open decision: one crossing".
+byte a hypothesis, and the count did not move: the loop 4 869 k → 4 872 k
+reductions a step and the round's excess unchanged, so the change was reverted
+rather than kept for its shape. Nor is the copy the excess: measured on this Mac
+(`scripts/probe_resource_transport.exs`), one object's space at 2 000
+hypotheses — 4 038 words, 220 KB in flight, columns as binaries — costs a task
+**20 reductions** more than a bare `{:nif, reference()}`, because binaries travel by
+reference and only the list of booleans copies. The excess the round costs over
+the loop is 201 k reductions a step across five modules and ten objects — about
+**4 000 an object** — so the copy is under half a percent of it, and moving the
+space off the heap (ETS, or a `ResourceArc` handed to the task) would leave the
+rest standing. The rest is the fan-out: a process a task, the results coming back,
+the merge. Only more work a step for the same process, or one NIF call that takes
+a burst's whole path so there is nothing to send and nothing to merge, changes the
+balance.
 
 **The draw, which chose per-module streams.** The goal generator flips a coin when
 one object is left (`decide_between_objects/6`), and it used to draw from the
