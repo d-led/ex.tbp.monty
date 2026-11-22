@@ -87,10 +87,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
   # sensor's frame and added to what this receiver has already heard about that
   # object, so two sources agree on the same object rather than replacing each
   # other.
+  #
+  # The turn from one sensor's frame into the other's, and the distance between
+  # the two sensors, belong to the pair and not to the message: Monty recomputes
+  # both inside its message loop, and a step of the ten-object memory pays for
+  # the same product of two 3×3 matrices a few thousand times over. Taking them
+  # once here is the same arithmetic in the same order, so every moved vote is
+  # the same float as before.
   defp merge_vote(vote, receiving_pose, heard) do
+    [sending_location | sending_frame] = vote.sensed_pose_rel_body
+    [receiving_location | receiving_frame] = receiving_pose
+
+    alignment =
+      SpatialArithmetics.align_orthonormal_vectors_as_matrix(sending_frame, receiving_frame)
+
+    offset = Geometry.subtract(receiving_location, sending_location)
+
     vote.possible_states
     |> Enum.map(fn {graph_id, messages} ->
-      {graph_id, Enum.map(messages, &move(&1, vote.sensed_pose_rel_body, receiving_pose))}
+      {graph_id, Enum.map(messages, &move(&1, alignment, offset))}
     end)
     |> Enum.reduce(heard, fn {graph_id, moved}, acc ->
       Map.update(acc, graph_id, moved, &(&1 ++ moved))
@@ -99,19 +114,14 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
 
   # Monty copies a vote before moving it, because one vote can reach several
   # receivers and be moved differently in each; a value that cannot change
-  # gives that for free.
-  defp move(%Message{} = message, sending_pose, receiving_pose) do
-    [sending_location | sending_frame] = sending_pose
-    [receiving_location | receiving_frame] = receiving_pose
-
+  # gives that for free. The turn and the offset are the pair's, taken once by
+  # `merge_vote/3`; only the vote's own frame is applied per message.
+  defp move(%Message{} = message, alignment, offset) do
     {:ok, moved} =
       Message.transform_morphological_features(
         message,
-        Geometry.apply(
-          vote_frame(message),
-          Geometry.subtract(receiving_location, sending_location)
-        ),
-        SpatialArithmetics.align_orthonormal_vectors_as_matrix(sending_frame, receiving_frame)
+        Geometry.apply(vote_frame(message), offset),
+        alignment
       )
 
     moved

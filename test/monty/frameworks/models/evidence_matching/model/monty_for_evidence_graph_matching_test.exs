@@ -17,12 +17,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
 
   # What a learning module says it can see: a place on the object, the frame it
   # believes that place is seen from, and how strongly.
-  defp vote_for(
-         location,
-         confidence,
-         sensed_pose,
-         pose_vectors \\ %OrientationMatrix{value: @identity}
-       ) do
+  defp message(location, confidence \\ 0.7, pose_vectors \\ %OrientationMatrix{value: @identity}) do
     {:ok, message} =
       Message.new(
         location: location,
@@ -38,7 +33,16 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
         sender_type: :lm
       )
 
-    vote(%{"mug" => [message]}, sensed_pose)
+    message
+  end
+
+  defp vote_for(
+         location,
+         confidence,
+         sensed_pose,
+         pose_vectors \\ %OrientationMatrix{value: @identity}
+       ) do
+    vote(%{"mug" => [message(location, confidence, pose_vectors)]}, sensed_pose)
   end
 
   describe "combine_votes/2" do
@@ -83,6 +87,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.Model.MontyForEvidenceGraphMa
       assert heard_frame == [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
       assert [x, _y, _z] = heard.location
       assert_in_delta x, 0.1, 1.0e-12
+    end
+
+    test "every place one source votes for arrives moved" do
+      # The turn and the distance belong to the pair of sensors and not to the
+      # message, so they are taken once for the pair — and every place the
+      # source names still has to come out described from the receiver's sensor.
+      sender =
+        vote(
+          %{"mug" => [message([0.0, 0.0, 0.5]), message([0.0, 0.0, 0.3])]},
+          pose([0.0, 0.0, 0.0])
+        )
+
+      receiver = vote_for([0.0, 0.0, 0.0], 0.7, pose([0.1, 0.0, 0.0]))
+
+      combined =
+        MontyForEvidenceGraphMatching.combine_votes(
+          %{sender: sender, receiver: receiver},
+          %{receiver: [:sender]}
+        )
+
+      assert %{receiver: %{"mug" => heard}} = combined
+      assert [first, second] = Enum.map(heard, & &1.location)
+
+      assert_in_delta Enum.at(first, 0), 0.1, 1.0e-12
+      assert_in_delta Enum.at(first, 2), 0.5, 1.0e-12
+      assert_in_delta Enum.at(second, 0), 0.1, 1.0e-12
+      assert_in_delta Enum.at(second, 2), 0.3, 1.0e-12
     end
 
     test "one vote reaches each receiver in that receiver's own frame" do
