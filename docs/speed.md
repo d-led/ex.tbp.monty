@@ -257,6 +257,18 @@ parity test that compares the new path with the Elixir reference **exactly**:
 - **The transcript was rewritten whole.** A step appended its row by rewriting
   every row before it, which made the cost of a step grow with the length of the
   run. Now the row is left alone and the two arrays are appended.
+- **The depth unprojection is a kernel.** Every step pays the per-pixel loop
+  that turns a depth image into `semantic_3d`: a ray times a depth, into the
+  world through the camera's frame, with the on-surface mask beside it. It is a
+  native loop now (`MatcherNif.depth_to_3d/7`, the mask's rule decided in
+  Elixir). Measured in one run on this Mac, `ex_mujoco`, the two 64×64 images of
+  a step's view finder and patch: **4 485 → 3 378 µs, 226 919 → 83 055
+  reductions, 344 k → 111 k words**. The wall clock falls a quarter and not
+  more, and the reason is the crossing itself: the rows go in and out as nested
+  lists, so the kernel's arithmetic is no longer the cost — the marshalling is.
+  The next step on this path, if it is taken, is bytes to bytes (the world's
+  answer already carries the arrays as binaries), which is the same lesson as
+  the pictures below.
 - **A salience step paid for NumPy's generator.** The view finder dithers one
   number per on-object pixel, and the Mersenne Twister was twisted into a map of
   the block — a hash and a lookup per word — so the dither was most of the
@@ -443,7 +455,11 @@ path into one call so there is nothing to spawn and nothing to merge. Sharing th
 space is neither.
 
 **This is an open decision.** It is written down here rather than half-made in
-the code.
+the code. The world's own crossing has since been tried one way and measured: a
+native `depth_to_3d` over nested lists cut the transform's reductions by 63 % and
+its wall clock by a quarter, and the rest of its time is the marshalling of the
+rows in and out (`What a step was paying for` above). A crossing pays whole only
+when the values stay bytes on both sides of it.
 
 ## Acceptance for any speed change
 
