@@ -439,7 +439,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   # A pixel's place is `(x d fx, y d fy, -d)`, and in the world when the
   # experiment reads world coordinates; the row is built once, at its final
   # width, rather than as a point that is then extended.
-  defp place_pixel(pixel, on_object, row, column, context, {tagged, sensor} = acc) do
+  defp place_pixel(pixel, on_object, row, column, context, {tagged, sensor}) do
     x = across(column, context.intrinsic) * pixel
     y = down(row, context.intrinsic) * pixel
     z = -pixel
@@ -452,7 +452,10 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
         do: [placed | tagged],
         else: tagged
 
-    if context.all?, do: {tagged, [[x, y, z, on_surface] | sensor]}, else: acc
+    # Only the sensor's own frame is conditional on asking for every point; the
+    # tagged rows are filtered by the mask and always handed back. Returning
+    # `acc` here dropped every point of a view that asked for its surface only.
+    if context.all?, do: {tagged, [[x, y, z, on_surface] | sensor]}, else: {tagged, sensor}
   end
 
   defp place_in(nil, x, y, z, on_surface), do: [x, y, z, on_surface]

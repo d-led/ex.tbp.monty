@@ -74,6 +74,22 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
 
       refute Map.has_key?(get_in(observations, ["agent_id_0", "patch"]), "sensor_frame_data")
     end
+
+    test "and the points of a view asked for its surface only are the surface's" do
+      # Monty's `get_all_points: false` is what a patch asks for: the points of
+      # the object under it, not of the whole image. A metre away is not the
+      # object (`MissingToMaxDepth` has already turned "no return" into one).
+      depth = [[0.5, 1.0, 0.5], [1.0, 0.5, 1.0], [0.5, 1.0, 0.5]]
+
+      %{observations: observations} =
+        observe_in_world(%{"patch" => %{"depth" => depth}}, get_all_points: false)
+
+      points = points(observations, "patch")
+
+      assert length(points) == 5
+
+      assert points |> Enum.map(&List.last/1) == List.duplicate(1.0, 5)
+    end
   end
 
   describe "which pixels are on the object" do
