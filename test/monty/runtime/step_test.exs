@@ -276,20 +276,30 @@ defmodule Monty.Runtime.StepTest do
       assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :serial
     end
 
-    test "sensors that draw nothing are asked together" do
+    test "sensors that draw nothing are still asked one at a time unless the run says otherwise" do
+      # Monty's order is the default: the round is this port's addition, and a
+      # step of `base_10simobj_surf_agent` measured it slower than the loop.
       {model_id, _info} = step_two_sensors([], [])
 
-      assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :concurrent
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :serial
     end
 
     test "a run may name the round it wants, and gets it" do
       {named_serial, _} = step_two_sensors([], sensors_step: :serial)
-      {named_concurrent, _} = step_two_sensors([draws?: true], sensors_step: :concurrent)
+      {named_concurrent, _} = step_two_sensors([], sensors_step: :concurrent)
 
       assert Step.State.sensors_step(Step.state(Registry.via({:step, named_serial}))) == :serial
 
       assert Step.State.sensors_step(Step.state(Registry.via({:step, named_concurrent}))) ==
                :concurrent
+    end
+
+    test "but a round is refused over a sensor that draws" do
+      # The draws would come out in the order the scheduler reached them, which
+      # is a different episode — so naming the round does not override it.
+      {model_id, _info} = step_two_sensors([draws?: true], sensors_step: :concurrent)
+
+      assert Step.State.sensors_step(Step.state(Registry.via({:step, model_id}))) == :serial
     end
   end
 

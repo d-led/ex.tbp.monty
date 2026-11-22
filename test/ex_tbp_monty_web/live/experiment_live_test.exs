@@ -526,8 +526,8 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       {:ok, view, _html} =
         live(conn, ~p"/experiments/randrot_noise_10distinctobj_5lms_dist_agent")
 
-      # The port's own rule, stated as the rule it is.
-      assert view |> element("#step-shape") |> render() =~ "`auto`"
+      # Nobody chose, so the page says which order a step takes: Monty's.
+      assert view |> element("#step-shape") |> render() =~ "as Monty steps them"
 
       view |> element("#run-budget") |> render_change(%{"sensors" => "concurrent"})
       assert view |> element("#step-shape") |> render() =~ "slowest of them, not their sum"

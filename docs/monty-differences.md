@@ -1794,22 +1794,38 @@ when their config gave them `noise_params`, and `SalienceSM` answers `true`
 always, because it dithers every informative step.
 
 Around the callback the port also has `Monty.Runtime.Step.State.sensors_step/1`
-— `:concurrent` for a set of sensors that draw nothing, `:serial` for a set in
-which one does — and a run option of the same name (`:auto`, the default,
-`:serial` or `:concurrent`) so the two rounds can be run against each other.
-Neither exists in Monty: it has no such question, and the option is a run's, not
-a config's — Monty's Hydra YAML has no key for it and this port added none.
+and a run option of the same name (`:auto`, the default, `:serial` or
+`:concurrent`), so the two rounds can be run against each other. Neither exists
+in Monty: it has no such question, and the option is a run's, not a config's —
+Monty's Hydra YAML has no key for it and this port added none. `:auto` answers
+**Monty's own order**: a step asks its sensors in turn, and the round is taken
+only when a run names `:concurrent`. A named round is still refused over a
+sensor that draws, and then the phase is serial again.
 
-**Why.** Stepping sensors concurrently is where this port's speed comes from on
-a config with several of them, and a concurrent step of a module that draws would
-order its draws by completion rather than by position — a different episode, not
-a faster one. The callback keeps that decision with the module that knows the
-answer, instead of a list of "noisy sensors" kept somewhere in the runtime and
-wrong the first time a sensor gains noise.
+**Why.** Stepping sensors concurrently is a deviation, and a deviation has to
+pay for itself on the configs this port runs. It does not:
 
-**What is therefore not compared.** Nothing: a sensor that does not draw answers
-`false` and the phase steps it exactly as Monty's loop does. A sensor that draws
-keeps the serial order, so its numbers are Monty's too.
+- `base_10simobj_surf_agent` — a camera and the view finder, neither drawing —
+  served its sensors in 3.43–3.53 ms a step one at a time against 4.30–4.50 ms
+  in a round (this Mac, macOS 26, `ex_mujoco`, eight episodes of 32 steps, the
+  studio's own run form, two pairs). The phase costs its slowest sensor either
+  way; what the round added was a task to start and join, because the second
+  sensor costs nothing.
+- `tutorial/dist_agent_5lm_2obj_eval` — six sensors, none drawing — measured
+  1793 / 110 / 456 ms serially against 1266 / 109 / 512 ms concurrently over its
+  three epochs (`scripts/probe_sensor_rounds.exs`): ahead on one epoch, behind
+  on another.
+
+So the default is Monty's order, and a run that knows it has several expensive
+sensors names the round and measures it. The callback keeps that decision with
+the module that knows the answer — a concurrent step of a module that draws would
+order its draws by completion rather than by position, a different episode and
+not a faster one — instead of a list of "noisy sensors" kept somewhere in the
+runtime and wrong the first time a sensor gains noise.
+
+**What is therefore not compared.** Nothing: with `:auto` a run steps its sensors
+exactly as Monty's loop does. A sensor that draws keeps the serial order even
+when a run names the round, so its numbers are Monty's too.
 
 **What it bought, measured.** `scripts/probe_sensor_rounds.exs` steps the same
 episode twice, once with each round, and compares every step's percepts, actions

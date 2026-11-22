@@ -32,11 +32,9 @@ defmodule Monty.Studio.StepShape do
     sensors_sentence(inputs) ++ modules_sentence(inputs)
   end
 
-  # `sensors_step` is only recorded when the caller *chose* it: the deployment's
-  # own rule (`:auto`) is that a round of sensors which draws nothing from the
-  # episode's stream is served at once, and which of the two a run got cannot be
-  # read off the record. So `:auto` is stated as the rule it is rather than as an
-  # answer.
+  # `sensors_step` is only recorded when the caller *chose* it, so `:auto` is
+  # stated as the rule it is rather than as an answer. The rule is Monty's: a
+  # step asks its sensors in turn, and the round this port offers is named.
   defp sensors_sentence(inputs) do
     if sensor_count(inputs) > 1, do: served_sensor_sentence(inputs), else: []
   end
@@ -44,15 +42,19 @@ defmodule Monty.Studio.StepShape do
   defp served_sensor_sentence(inputs) do
     case Map.get(inputs, "sensors_step") do
       "concurrent" ->
-        ["Sensors: at the same time — `sensors` is the slowest of them, not their sum."]
+        [
+          "Sensors: all at once — `sensors` is the slowest of them, not their sum. " <>
+            "A round is not taken over a sensor that draws from the episode's stream, " <>
+            "which steps them one at a time again."
+        ]
 
       "serial" ->
         ["Sensors: one after another — `sensors` is their sum."]
 
       _auto ->
         [
-          "Sensors: `auto` — at the same time unless one of them draws from the " <>
-            "episode's stream, so `sensors` is the slowest of them, not their sum."
+          "Sensors: one after another, as Monty steps them — `sensors` is their sum. " <>
+            "`concurrent` asks them all at once instead."
         ]
     end
   end

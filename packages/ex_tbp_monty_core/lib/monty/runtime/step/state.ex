@@ -121,26 +121,26 @@ defmodule Monty.Runtime.Step.State do
   turn and the order is the answer (`docs/monty-differences.md` §2.28).
 
   `:concurrent` asks every sensor in one round, so the phase costs its slowest
-  sensor instead of the sum — see `step_sensor_modules/4`. It is only safe while
-  none of them draws from the episode's stream, which is why `:auto` (the
-  default) answers `:concurrent` for a set of sensors that draw nothing and
-  `:serial` for a set in which one does. A run that wants Monty's round either
-  way asks for `:serial`; a run that wants the round and knows its sensors do
-  not draw asks for `:concurrent`, and gets it even then.
+  sensor instead of the sum — see `step_sensor_modules/4`. Monty's order is
+  `:serial`, and that is what `:auto` (the default) answers: the round is a
+  deviation this port offers, and a step of `base_10simobj_surf_agent` measured
+  3.4–3.5 ms served one at a time against 4.3–4.5 ms served together (this Mac,
+  `ex_mujoco`, 8 episodes of 32 steps, two pairs) — one of its two sensors reads
+  the view finder and costs nothing, so the round bought a task and no work.
 
-  `:auto` is the interesting one: every `raw0` camera — the presets the shipped
-  experiments run — holds `NoMessageNoise`, so a five-camera experiment is
-  concurrent by construction and its numbers cannot move, because nothing in the
-  phase reads the stream it would have shared.
+  A round is never taken over a sensor that draws, whichever mode is named: the
+  draws would come out in the order the scheduler reached them, which is a
+  different episode and not a faster one. `:concurrent` therefore answers
+  `:serial` for a set of sensors in which one draws.
   """
   @spec sensors_step(t()) :: :serial | :concurrent
   def sensors_step(%__MODULE__{sensors_step: :serial}), do: :serial
 
-  def sensors_step(%__MODULE__{sensors_step: :concurrent}), do: :concurrent
-
-  def sensors_step(%__MODULE__{sensor_modules: modules}) do
+  def sensors_step(%__MODULE__{sensors_step: :concurrent, sensor_modules: modules}) do
     if Enum.any?(modules, &draws?/1), do: :serial, else: :concurrent
   end
+
+  def sensors_step(%__MODULE__{}), do: :serial
 
   # A module that does not implement the callback was written before it existed;
   # a sensor nobody has described is assumed to draw, which costs its run the

@@ -5,7 +5,10 @@ Where a step's time goes, what was fixed, and what is still open.
 **No figures on this page, on purpose.** A wall clock on a busy machine moves by
 several times over one afternoon, and a number written down here would be quoted
 long after the machine that produced it is gone. The commands below print the
-numbers; run them on the box you care about.
+numbers; run them on the box you care about. The one exception is a measurement
+that says which box, which world and which workload it came from, because a
+comparison between two rounds is worth nothing without them — those are marked
+"measured" and are the only numbers here.
 
 ## The honest position
 
@@ -172,6 +175,45 @@ A stopped 14 360-step page held 56 MB before the change (the record 29, the
 catalog 10, the series 7, the chart 6) and one refresh of it cost 90 ms of
 recomputation plus 0.43 s of render.
 
+## What a round is worth
+
+Three places in this port do work in a round instead of in a loop. Each was
+measured on both sides, and each answers a different way — which is the reason
+the measurements are here rather than a rule about rounds:
+
+| round                | loop                               | in a round                     | verdict                                              |
+| -------------------- | ---------------------------------- | ------------------------------ | ---------------------------------------------------- |
+| an object's evidence | 1.61–1.70 s model, 26-step episode | 1.42–1.51 s, every field equal | **taken** for a run that reads a library (§2.45)     |
+| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms                       | **rejected**: a vote is half a millisecond of work   |
+| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms                   | **rejected as the default**; a run may still name it |
+
+The numbers are from this Mac (Apple Silicon, macOS 26), the MuJoCo world
+through `ex_mujoco`, and two runs per arm of `base_10simobj_surf_agent` started
+from the studio's run form (eight episodes of 32 steps, seed 42) for the
+sensors, the ten-object library for the vote, and the 26-step
+`randrot_noise_10distinctobj_5lms_dist_agent` episode for the objects. The
+lesson they share is the one worth keeping: **a round pays only where the work it
+spreads out is bigger than the process it starts**, so measure the per-object
+loop before fanning it out.
+
+## Episodes in parallel, measured
+
+Monty's `run_parallel.py` divides an experiment between processes. Here a run's
+episodes are divided between parts and performed at once (`Partition`,
+`Jobs.Run.run_wave`), and the division is only admissible because two runs of it
+must take the same steps as one — which is checked in
+`test/monty/studio/jobs/run_test.exs` and was what found a renderer bug in
+`ex_mujoco` (`parallel-and-live.md` §5).
+
+**Measured**, this Mac, `ex_mujoco`, `base_10simobj_surf_agent`, seed 42, eight
+episodes (498 steps) started from the studio's run form: **one part 12.4 s,
+two parts 7.3 s — 1.7×** with the same steps per episode. The earlier pair on
+the same box and world — eight episodes of the stand-in scene, 256 steps — was
+**63.2 s in one part against 30.5 s in four, 2.07×**. The ratio follows the
+episodes, not the parts: a divided run is a quarter of the clock at four parts
+only while there are episodes enough to fill them, and a single expensive episode
+divides not at all.
+
 ## The open decision: one crossing
 
 A matching burst walks the hypothesis set many times: with an index, through
@@ -251,17 +293,23 @@ the code.
 
 1. **The maths first.** Fewer steps than Monty for the same episodes is the
    target, and it is met on the configs that have been compared.
-2. **No partitioning to go faster.** Concurrency worth spending effort on is
-   inside a step — sensors already run behind a barrier, learning modules are the
-   next candidates. A config that is parallel by design (Monty's
-   `run_parallel.py`: N workers, own subsets and seeds) is a shape the studio
-   should honour; it is a gap, not a lever. The shape the step should end up with,
-   and the number that decides whether it was worth it, are in
-   [theories.md](theories.md).
+2. **No partitioning inside a step to go faster.** Concurrency worth spending
+   effort on is inside a step, and only where a measurement says so: the objects
+   of a graph update pay for a round (`§2.45`), the vote does not, and a phase of
+   two sensors does not (`What a round is worth` above). Between episodes it is
+   different — the division is exactly as parallel as the episodes are
+   independent, and it is measured there too.
 3. **A queue, not a call.** A step publishes; I/O, PNG encoding and the page
    consume and may lag. `RunStream` is that shape already — a cast plus an ETS
    table the writer reads.
 4. **Measure before moving anything off the step.** What is neither model nor
    world has to be split per piece before it is queued or made asynchronous.
-5. **Re-measure the world on the compiled binding** (`ex_mujoco`), because the
-   last split of render, decode and transform predates it.
+5. **The world has been re-measured on the compiled binding** (`ex_mujoco`): of
+   a 33 ms world step, ~19 ms is the MuJoCo render through the Python half, 0.1 ms
+   an image is the answer's decode and ~1.1 ms an image is the unprojection
+   (`probe_world_crossing` and `tmp/probe_world_profile.exs`; this Mac,
+   `randrot_noise_10distinctobj_5lms_dist_agent`, six 64×64 images a step). The
+   crossing on this side is therefore a few per cent of a step, not the five
+   milliseconds an earlier reading suggested, and a native unprojection would buy
+   that few per cent at the price of changing the shape every reader of
+   `semantic_3d` sees.

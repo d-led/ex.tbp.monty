@@ -33,8 +33,9 @@ defmodule Monty.Studio.StepShapeTest do
     assert [sentence] =
              StepShape.sentences(%{"sensors_step" => "concurrent", "sensors" => @five_sensors})
 
-    assert sentence =~ "at the same time"
+    assert sentence =~ "all at once"
     assert sentence =~ "slowest of them, not their sum"
+    assert sentence =~ "draws from the episode's stream"
   end
 
   test "says a serial round costs the sum" do
@@ -45,13 +46,13 @@ defmodule Monty.Studio.StepShapeTest do
     assert sentence =~ "their sum"
   end
 
-  # The deployment's rule is not a choice, so it is stated as the rule it is: a
-  # run that recorded nothing chose nothing, and may still have gone concurrent.
+  # A run that recorded no choice followed the default, and the default is
+  # Monty's order — so the sentence says which way the sensors are asked.
   test "states the rule a run that chose nothing followed" do
     assert [sentence] = StepShape.sentences(%{"sensors" => @five_sensors})
 
-    assert sentence =~ "`auto`"
-    assert sentence =~ "unless one of them draws"
+    assert sentence =~ "one after another"
+    assert sentence =~ "as Monty steps them"
   end
 
   test "says a lagged run's deliveries belong to the epoch before" do
