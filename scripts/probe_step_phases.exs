@@ -1,6 +1,6 @@
 # Where a step's time goes, phase by phase and process by process.
 #
-#   MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]
+#   MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps] [world]
 #
 # `probe_step_cost.exs` answers what a whole step costs; this one answers where
 # it is, which is the question that decides what to optimise. Two splits:
@@ -34,9 +34,15 @@ Code.require_file("scripts/probe_support.exs", ".")
 experiment = System.argv() |> List.first() || "base_10simobj_surf_agent"
 steps = System.argv() |> Enum.at(1) |> then(&(&1 && String.to_integer(&1))) || 40
 
-opened = ProbeSupport.setup(experiment)
+# The third argument names the world: `MIX_ENV=test` steps the synthetic
+# stand-in unless told otherwise, and its numbers describe no MuJoCo run.
+world = System.argv() |> Enum.at(2) |> then(&(&1 && String.to_existing_atom(&1)))
+
+opened = ProbeSupport.setup(experiment, if(world, do: [world_simulator: world], else: []))
 {:ok, run} = Studio.Run.start(opened.setup, steps: steps * 10)
 :ok = Studio.Run.set_ground_truth(run)
+
+IO.puts("#{experiment}: #{steps} steps, world #{world || :synthetic}")
 
 :erlang.system_flag(:scheduler_wall_time, true)
 

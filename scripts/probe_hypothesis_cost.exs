@@ -13,7 +13,7 @@
 # are quoted beside each measurement so a stale one is visible. That profile ran
 # three steps, so its counts are divided by three here.
 
-alias ExTbpMonty.MatcherNif
+alias ExTbpMonty.Core.MatcherNif
 alias Monty.Geometry
 
 defmodule ProbeHypothesisCost do
@@ -51,14 +51,14 @@ window = <<1.5::float-64-little, 2.5::float-64-little, 3.5::float-64-little>>
 
 dot = ProbeHypothesisCost.per_call(200_000, fn -> Geometry.dot(a, b) end)
 transpose = ProbeHypothesisCost.per_call(100_000, fn -> Geometry.transpose(pose) end)
-decode = ProbeHypothesisCost.per_call(100_000, fn -> MatcherNif.decode(window) end)
+decode = ProbeHypothesisCost.per_call(100_000, fn -> MatcherNif.decode_native(window) end)
 
 IO.puts("reductions per call, and the share of a 7.1 M-reduction step they are")
 
 rows = [
   {"Geometry.dot/2", dot, 19_296},
   {"Geometry.transpose/1", transpose, 4_325},
-  {"MatcherNif.decode/1 (3 values)", decode, 27_902}
+  {"MatcherNif.decode_native/1 (3 values)", decode, 27_902}
 ]
 
 Enum.each(rows, fn {label, per_call, calls} ->

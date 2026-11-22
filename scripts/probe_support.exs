@@ -17,10 +17,16 @@ defmodule ProbeSupport do
   @model "surf_agent_1lm_10distinctobj"
   @release "pretrained_ycb_v10"
 
-  @doc "Opens an experiment, with `model_name_or_path` naming the recorded release."
-  @spec setup(String.t()) :: Monty.Studio.opened()
-  def setup(experiment) do
-    {:ok, opened} = Monty.Studio.open(experiment)
+  @doc """
+  Opens an experiment, with `model_name_or_path` naming the recorded release.
+
+  `open_options` is passed to `Monty.Studio.open/2`, which is how a probe names
+  the world it measures: `MIX_ENV=test` otherwise steps the synthetic stand-in,
+  and a number from that world is not a number about MuJoCo.
+  """
+  @spec setup(String.t(), keyword()) :: Monty.Studio.opened()
+  def setup(experiment, open_options \\ []) do
+    {:ok, opened} = Monty.Studio.open(experiment, open_options)
     %{opened | setup: %{opened.setup | model_name_or_path: model_path()}}
   end
 

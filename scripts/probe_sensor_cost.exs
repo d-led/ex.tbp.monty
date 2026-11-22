@@ -1,6 +1,6 @@
 # What each sensor costs in a step, and what a concurrent sensor phase would save.
 #
-#   MIX_ENV=test mix run scripts/probe_sensor_cost.exs [experiment] [steps]
+#   MIX_ENV=test mix run scripts/probe_sensor_cost.exs [experiment] [steps] [world]
 #
 # `probe_step_phases.exs` splits a step into world / model and by kind of
 # process. This one splits the model by *sensor*, because `Step.step_sensor_modules/4`
@@ -36,7 +36,11 @@ alias Monty.Studio
 experiment = System.argv() |> List.first() || "base_10simobj_surf_agent"
 steps = System.argv() |> Enum.at(1) |> then(&(&1 && String.to_integer(&1))) || 24
 
-{:ok, opened} = Studio.open(experiment)
+# The third argument names the world: `MIX_ENV=test` steps the synthetic
+# stand-in unless told otherwise, and its numbers describe no MuJoCo run.
+world = System.argv() |> Enum.at(2) |> then(&(&1 && String.to_existing_atom(&1)))
+
+{:ok, opened} = Studio.open(experiment, if(world, do: [world_simulator: world], else: []))
 {:ok, run} = Studio.Run.start(opened.setup, steps: steps * 10)
 :ok = Studio.Run.set_ground_truth(run)
 
@@ -59,14 +63,19 @@ end
 
 reductions = fn pid -> Process.info(pid, :reductions) |> elem(1) end
 
-# A sensor's state says what its step is made of: a camera module's `noise` is
-# the only thing it draws for, and the salience module is the one that dithers.
+# A sensor's state says what its step is made of, and the module itself says
+# whether its step draws: asking it is what the step coordinator asks, rather
+# than a rule kept here that could drift from the module's own answer (`§2.28`).
 describe = fn model_id, id ->
   state = SensorModuleServer.state(Registry.via({:sensor_module, model_id, id}))
-  %{module: state.__struct__ |> Module.split() |> List.last(), noise: Map.get(state, :noise)}
+
+  %{
+    module: state.__struct__ |> Module.split() |> List.last(),
+    draws?: state.__struct__.draws_from_stream?(state)
+  }
 end
 
-IO.puts("#{experiment}: #{steps} steps, #{budget} schedulers online")
+IO.puts("#{experiment}: #{steps} steps, world #{world || :synthetic}, #{budget} schedulers online")
 
 shapes =
   parties.(run.model_id)
@@ -136,10 +145,7 @@ report = fn label, rows ->
       modules = by_kind.(:learning_module)
       total = Enum.reduce(rows, 0, fn row, sum -> sum + Enum.sum(Map.values(row.work)) end)
 
-      drawing =
-        rows
-        |> Enum.flat_map(fn row -> for {id, true} <- row.draws, do: [id] end)
-        |> Enum.frequencies()
+      drawing = for {id, %{draws?: true}} <- shapes, do: id
 
       IO.puts(
         "\n#{label}: #{n} steps\n" <>
@@ -150,7 +156,7 @@ report = fn label, rows ->
       )
 
       Enum.each(sensors, fn {id, delta} ->
-        IO.puts("  sensor #{id}: #{delta} reductions/step")
+        IO.puts("  sensor #{id} (#{shapes[id].module}): #{delta} reductions/step")
       end)
 
       Enum.each(modules, fn {id, delta} ->
@@ -168,14 +174,14 @@ report = fn label, rows ->
           "a saving of #{percent.(sensor_sum - sensor_max)} % of the step"
       )
 
-      case Map.keys(drawing) do
+      case drawing do
         [] ->
           IO.puts("  no sensor drew from the stream: the phase may run in one round")
 
         ids ->
           IO.puts(
-            "  drew from the stream on these steps: #{ids |> Enum.sort() |> Enum.join(", ")} " <>
-              "— the phase is ordered until a sensor stops drawing"
+            "  these sensors draw: #{ids |> Enum.sort() |> Enum.join(", ")} " <>
+              "— the phase is ordered until every one of them stops drawing"
           )
       end
   end
