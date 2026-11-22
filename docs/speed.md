@@ -496,6 +496,32 @@ its wall clock by a quarter, and the rest of its time is the marshalling of the
 rows in and out (`What a step was paying for` above). A crossing pays whole only
 when the values stay bytes on both sides of it.
 
+**Measured, and it is structural rather than a speed win.** `scripts/probe_crossing_cost.exs`
+prices each of a graph's crossings at the size a step hands it and again at one
+row, then multiplies by the calls a step makes; the reading below is this Mac,
+the stand-in world, `base_77obj_dist_agent` after four steps — 77 graphs, a
+median 2 848 hypotheses and 1 779 nodes a graph. The part that does not grow with
+the rows — the call, the arguments decoded, the answer's allocation — comes to
+under 2 % of the step across all of them; the arithmetic the kernels keep either
+way is nearly all of it. So a merged path would remove a couple of per cent and
+buy its real worth in shape: one place that knows a burst's whole non-RNG path.
+
+## What the ledger found instead: the slope column, twice a step
+
+The same ledger priced work nobody had asked about. `begin_step` read every
+graph's slope column out as Elixir terms to take one maximum from it — on the
+seventy-seven-object step, 251 488 floats decoded, concatenated and rejected to
+answer a single number — and `telemetry/6` decoded the same columns again.
+
+Measured on that state, in one process: **11.7 ms a step for the maximum against
+3.0 ms when a kernel answers it** (`MatcherNif.max_slope/4`, which reads the bytes
+and skips a slope that is not finite exactly as `np.isfinite` does). The
+telemetry half was not Monty's work at all: `BurstSamplingHypothesesUpdater`
+assembles the whole hypothesis-space report only when it is built with
+`include_telemetry`, whose Monty default is `False` and which no config sets, so
+the port was alone in paying for it. Both are in now; the step reads 80–86 ms
+before and 69–71 ms after, three readings each.
+
 ## Acceptance for any speed change
 
 1. Save the ladder before the change and print it after:
