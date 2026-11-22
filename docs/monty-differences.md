@@ -1874,7 +1874,8 @@ module's pace is its own. It is also the precondition for a continuous pipeline 
 modules that keep working while their siblings do, with the epoch as the only
 place the coordinator says "not before step n" — which is where this port means
 to go (`docs/monty-differences.md` §2.28 already made the sensor phase a round
-the sensors themselves permit).
+the sensors themselves permit). The two steps side by side, with what each
+difference was measured to be worth, are in [`speed.md`](speed.md).
 
 **What is therefore not compared.** Nothing, yet: the vote round still begins
 after every module has finished its step, because a vote is the module's state

@@ -97,6 +97,142 @@ Five things, and only two of them are the port's arithmetic:
 The model and the world are inside `Run.step`, so they are the two that can be
 attributed exactly. The rest sit around it.
 
+## What is different from Monty, and what each difference bought
+
+Monty steps one thread and calls everything from it. This port hands the same
+calls to processes, and the decisions are Monty's: the differences are where the
+work runs, and how much of one step's work is taken at once. Each one carries the
+measurement that decided whether it is on.
+
+| what differs          | Monty                         | here                                           | measured                                         | on?                    |
+| --------------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------ | ---------------------- |
+| asking the sensors    | in turn, one thread           | in turn; a round only if a run names one       | a round of two costs 0.8–1 ms a step more        | **no**, by default     |
+| a module's step       | a call on the caller's stack  | handed to the module's process, awaited        | the precondition for the rest                    | yes                    |
+| the objects of a step | a fold in the caller's thread | a round, one process an object                 | 1.61–1.70 s → 1.42–1.51 s (26-step episode)      | **library runs only**  |
+| a module's vote       | in the coordinator            | a loop, as Monty's                             | 5.5–8.2 ms loop against 16–44 ms in a round      | **no** — a round loses |
+| the episodes          | a process each, memory copied | parts of one run, one library                  | 1.7×, and 2.07× on an earlier pair               | yes                    |
+| a graph's top nodes   | a full sort                   | partition, then sort the tail                  | 94 → 13 µs at 2 000 nodes, 4 007 → 306 at 40 000 | yes                    |
+| the world             | MuJoCo in the same process    | `ex_mujoco`'s NIF, or the embedded interpreter | ~9 ms a step compiled against ~33 through it     | compiled by default    |
+
+The diagrams below are the four that are structural. The message-level sequence
+diagram of a step is in [`architecture.md`](architecture.md); these are the
+shapes that changed, with the boxes a comparison needs and no more.
+
+### Monty's step, and this port's
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as step — one thread
+    participant S as sensor module
+    participant L as learning module
+    participant M as motor system
+
+    C->>S: observe — in turn, one sensor after another
+    S-->>C: percept
+    C->>L: matching_step — in turn, one module after another
+    L-->>C: vote, goals, region
+    C->>C: _combine_votes, after every module has stepped
+    C->>M: actions
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Step — coordinator
+    participant S as sensor process
+    participant L as learning module process
+    participant M as motor system
+
+    C->>S: observe — one message a sensor (a round only if a run names one)
+    S-->>C: percept
+    C->>L: hand_off(epoch) — every module at once, not waited for
+    C->>C: await(epoch) — only where the answer is needed, the vote round
+    L-->>C: vote, goals, region (at the module's own boundary)
+    C->>C: combine_votes, then deliver_votes
+    C->>M: actions
+```
+
+The boxes are the same four because the _decisions_ are the same four; what moved
+is that a module's step is no longer on the coordinator's stack (§2.29), and the
+vote round is the only place the coordinator waits (§2.30). Sensors are asked in
+turn by default — Monty's order — because a round of two measured 0.8–1 ms a step
+_slower_ here (`What a round is worth`).
+
+### Inside one graph update: a loop, or a round
+
+Monty folds over the objects of a memory in the caller's thread. A run that reads
+its memory from the library takes them in a round, one process an object, and
+merges what each half changed; a memory the run built itself keeps the loop,
+because a task is handed a copy of what its closure holds (§2.44, §2.45).
+
+```mermaid
+flowchart LR
+    subgraph loop["Monty — one thread"]
+        direction LR
+        A1["object 1"] --> A2["object 2"] --> A3["…"]
+    end
+    subgraph round["this port — library runs"]
+        direction LR
+        B1["object 1"] --> B4["merge what changed"]
+        B2["object 2"] --> B4
+        B3["…"] --> B4
+    end
+```
+
+Measured on one 26-step episode: 1.61–1.70 s of model time as a loop against
+1.42–1.51 s as a round, every field of every step equal. Both paths stay
+callable and are compared exactly (`evidence_graph_lm_parallel_test.exs`).
+
+### Episodes: processes with a copy, or parts of one library
+
+```mermaid
+flowchart LR
+    subgraph monty["Monty — run_parallel.py"]
+        direction LR
+        P1["a process an episode<br/>its own copy of the memory"]
+        P2["a process an episode<br/>its own copy of the memory"]
+        P3["…"]
+    end
+    subgraph port["this port — a wave of parts"]
+        direction LR
+        W["wave"] --> T1["part<br/>its episodes"]
+        W --> T2["part<br/>its episodes"]
+        W --> T3["…"]
+        D[("library<br/>read once, read-only")] -.-> T1
+        D -.-> T2
+        D -.-> T3
+    end
+```
+
+Monty's workers cannot share a mutable object graph, so each re-reads the memory
+and the results are files concatenated afterwards. Here the library is immutable
+data a task reads without a copy, and the parts are the run's own record — which
+is why the division is a speed-up and not a change of experiment (`Episodes in
+parallel, measured`, `parallel-and-live.md`).
+
+### The world: a call in the process, or a crossing
+
+```mermaid
+flowchart LR
+    subgraph monty["Monty"]
+        direction LR
+        M1["model"] --> M2["MuJoCo, in the process"]
+    end
+    subgraph port["this port — a run names one of the two"]
+        direction LR
+        P1["model"] --> P2["ex_mujoco<br/>MuJoCo through its own NIF"]
+        P1 -.-> P3["world.py<br/>in the embedded interpreter"]
+    end
+```
+
+Both crossings are honest ones — the compiled world steps a scene MuJoCo renders
+from the same config, the interpreter runs Monty's own `world.py` — and they are
+different sizes: a step costs ~9 ms of world time compiled and ~33 ms through the
+interpreter, of which ~19 ms is the render itself. Nothing this side of either
+crossing is a large share any more: 0.1 ms an image for the decode, ~1.1 ms an
+image for the unprojection (`The budget, as rules`, rule 5).
+
 ## What a step was paying for, and what changed
 
 Each of these is a defect that was found by measuring, fixed, and pinned by a
