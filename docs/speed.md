@@ -104,15 +104,15 @@ calls to processes, and the decisions are Monty's: the differences are where the
 work runs, and how much of one step's work is taken at once. Each one carries the
 measurement that decided whether it is on.
 
-| what differs          | Monty                         | here                                           | measured                                         | on?                    |
-| --------------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------ | ---------------------- |
-| asking the sensors    | in turn, one thread           | in turn; a round only if a run names one       | a round of two costs 0.8–1 ms a step more        | **no**, by default     |
-| a module's step       | a call on the caller's stack  | handed to the module's process, awaited        | the precondition for the rest                    | yes                    |
-| the objects of a step | a fold in the caller's thread | a round, one process an object                 | 1.61–1.70 s → 1.42–1.51 s (26-step episode)      | **library runs only**  |
-| a module's vote       | in the coordinator            | a loop, as Monty's                             | 5.5–8.2 ms loop against 16–44 ms in a round      | **no** — a round loses |
-| the episodes          | a process each, memory copied | parts of one run, one library                  | 1.7×, and 2.07× on an earlier pair               | yes                    |
-| a graph's top nodes   | a full sort                   | partition, then sort the tail                  | 94 → 13 µs at 2 000 nodes, 4 007 → 306 at 40 000 | yes                    |
-| the world             | MuJoCo in the same process    | `ex_mujoco`'s NIF, or the embedded interpreter | ~9 ms a step compiled against ~33 through it     | compiled by default    |
+| what differs          | Monty                         | here                                           | measured                                          | on?                      |
+| --------------------- | ----------------------------- | ---------------------------------------------- | ------------------------------------------------- | ------------------------ |
+| asking the sensors    | in turn, one thread           | in turn; a round only if a run names one       | a round of two costs 0.8–1 ms a step more         | **no**, by default       |
+| a module's step       | a call on the caller's stack  | handed to the module's process, awaited        | the precondition for the rest                     | yes                      |
+| the objects of a step | a fold in the caller's thread | a loop, as Monty's; a round on request         | 4 % more reductions in a round (5-module episode) | **no** — measured a loss |
+| a module's vote       | in the coordinator            | a loop, as Monty's                             | 5.5–8.2 ms loop against 16–44 ms in a round       | **no** — a round loses   |
+| the episodes          | a process each, memory copied | parts of one run, one library                  | 1.7×, and 2.07× on an earlier pair                | yes                      |
+| a graph's top nodes   | a full sort                   | partition, then sort the tail                  | 94 → 13 µs at 2 000 nodes, 4 007 → 306 at 40 000  | yes                      |
+| the world             | MuJoCo in the same process    | `ex_mujoco`'s NIF, or the embedded interpreter | ~9 ms a step compiled against ~33 through it      | compiled by default      |
 
 The diagrams below are the four that are structural. The message-level sequence
 diagram of a step is in [`architecture.md`](architecture.md); these are the
@@ -317,17 +317,19 @@ Three places in this port do work in a round instead of in a loop. Each was
 measured on both sides, and each answers a different way — which is the reason
 the measurements are here rather than a rule about rounds:
 
-| round                | loop                               | in a round                     | verdict                                              |
-| -------------------- | ---------------------------------- | ------------------------------ | ---------------------------------------------------- |
-| an object's evidence | 1.61–1.70 s model, 26-step episode | 1.42–1.51 s, every field equal | **taken** for a run that reads a library (§2.45)     |
-| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms                       | **rejected**: a vote is half a millisecond of work   |
-| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms                   | **rejected as the default**; a run may still name it |
+| round                | loop                               | in a round   | verdict                                                      |
+| -------------------- | ---------------------------------- | ------------ | ------------------------------------------------------------ |
+| an object's evidence | 4 857 k reductions a step          | 5 058 k      | **not taken**: the copies cost more than the fan-out (§2.45) |
+| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work           |
+| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it         |
 
 The numbers are from this Mac (Apple Silicon, macOS 26), the MuJoCo world
 through `ex_mujoco`, and two runs per arm of `base_10simobj_surf_agent` started
 from the studio's run form (eight episodes of 32 steps, seed 42) for the
-sensors, the ten-object library for the vote, and the 26-step
-`randrot_noise_10distinctobj_5lms_dist_agent` episode for the objects. The
+sensors, the ten-object library for the vote, and the five-module
+`randrot_noise_10distinctobj_5lms_dist_agent` episode for the objects — counted
+over the model's own work after warm-up, because a whole run's wall clock hides
+the difference behind its setup (`§2.45` has both counts). The
 lesson they share is the one worth keeping: **a round pays only where the work it
 spreads out is bigger than the process it starts**, so measure the per-object
 loop before fanning it out.

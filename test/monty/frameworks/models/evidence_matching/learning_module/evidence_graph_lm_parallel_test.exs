@@ -101,11 +101,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
     # Monty's threads share the memory and its `use_multithreading` is all it
     # needs. A BEAM task is handed a copy of what its closure holds, so the round
-    # is taken only for a memory other processes can hold without copying it: a
-    # memory the run itself wrote is on the module's heap, and a round over it was
-    # fifty times slower than the loop (measured on the ten-object library,
-    # `docs/monty-differences.md` §2.45).
-    test "a round is taken only when the config asks and the memory can be shared", %{
+    # needs a memory other processes can hold without copying it *and* a run that
+    # asks: measured, the round is equal on a big memory and about 4 % more work
+    # on the five-module episode (`docs/monty-differences.md` §2.45).
+    test "a round is taken only when the config, the memory and the run all ask", %{
       memory: memory
     } do
       shared = module(memory, DefaultHypothesesUpdater, true)
@@ -113,6 +112,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert EvidenceGraphLM.graph_round?(shared)
       refute EvidenceGraphLM.graph_round?(%{shared | memory_shared?: false})
       refute EvidenceGraphLM.graph_round?(%{shared | use_multithreading: false})
+      refute EvidenceGraphLM.graph_round?(%{shared | round_objects?: false})
     end
   end
 
@@ -168,7 +168,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         # The fixture's memory is small enough to be held by a task whatever it
         # is; the flag stands for the studio's cached library, which is the case
         # the round exists for.
-        memory_shared?: true
+        memory_shared?: true,
+        round_objects?: true
       )
 
     lm

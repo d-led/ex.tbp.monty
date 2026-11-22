@@ -2652,11 +2652,32 @@ one episode of 26 steps, `ex_mujoco`, `--no-record`: the loop took 1.61–1.70 s
 model time, the round 1.42–1.51 s. Every field of every step is identical between
 the arms, beliefs and goal counts included. The same memory built in-process is
 the opposite case: one step takes 1.8 s in a round against 33 ms in the loop,
-which is the library being copied into every task (`§2.44`). So the round is taken
-only when the config asks _and_ the module knows its memory is a term a task can
-hold without copying: `memory_shared?`, which the shell sets for the studio's
-cached library and never for a memory the run itself wrote. A run that reads a
-library takes the round; a training phase keeps the loop.
+which is the library being copied into every task (`§2.44`).
+
+**And then measured properly, which is why no run takes it.** Those first numbers
+are a wall clock of a whole run: they include the setup, the episode boundary and
+whatever else the box was doing, and the loop's own readings swung 1.49–1.85 s
+across three pairs while the round's stayed at 1.53–1.72 s. Counting only
+`Model.step/4`, after six warm-up steps, in reductions — which do not move with
+the load — the round is not ahead:
+
+| episode                                                 | round                | loop                 |
+| ------------------------------------------------------- | -------------------- | -------------------- |
+| `randrot_noise_10distinctobj_5lms_dist_agent`, 20 steps | 5 058–5 072 k a step | 4 857–4 860 k a step |
+| `base_config_10distinctobj_dist_agent`, 60 steps        | 1 275 k a step       | 1 278 k a step       |
+
+Three readings each, and the first row is the five-module episode: the round
+costs about **4 % more** BEAM work than the loop, because a task copies the
+object's space in and its answer out, and what the objects save by running at
+once is smaller than those copies. So the round needs three things and has them
+all false by default: the config's `use_multithreading`, a memory a task can hold
+without copying (`memory_shared?`, set for the studio's cached library), and a
+run asking for it (`round_objects?`). Nothing asks; the loop is Monty's shape and
+the cheaper one on every config measured. A run that measures its own workload
+and finds otherwise can set the third.
+
+A training phase keeps the loop for the older reason — its memory is on the
+module's heap, and a round over it copies the library into every task (`§2.44`).
 
 **The draw, which chose per-module streams.** The goal generator flips a coin when
 one object is left (`decide_between_objects/6`), and it used to draw from the

@@ -121,6 +121,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             # carries the memory its own last episode wrote, which is a heap term
             # and keeps the loop (`docs/monty-differences.md` §2.45).
             memory_shared?: false,
+            round_objects?: false,
             has_detailed_logger: false,
             hypotheses_updater_module: DefaultHypothesesUpdater,
             hypotheses_updater_options: [],
@@ -204,10 +205,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   are passed to it; `:displacer` and `:scorer` are built here from the
   configuration above, so that every strategy sees the same comparison.
 
-  `:use_multithreading` decides whether one step's per-object updates run in
+  `:use_multithreading` decides whether one step's per-object updates may run in
   parallel, as Monty's does by default; `:memory_shared?` says the memory is the
-  kind a task can hold without copying it (`Monty.Studio.Memory`), and only then
-  is the parallel round taken — the numbers are the same either way.
+  kind a task can hold without copying it (`Monty.Studio.Memory`), and
+  `:round_objects?` is a run asking for the round — all three are needed,
+  because the round measured no faster than the loop (`graph_round?/1`).
 
   `:gsg` is the goal generator this module will drive, and is `nil` unless an
   experiment supplies one — the same default Monty's evidence learning module
@@ -252,6 +254,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         learning_module_id: Keyword.get(options, :learning_module_id, "LM_0"),
         use_multithreading: Keyword.get(options, :use_multithreading, true),
         memory_shared?: Keyword.get(options, :memory_shared?, false),
+        round_objects?: Keyword.get(options, :round_objects?, false),
         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
         hypotheses_updater_module:
           Keyword.get(options, :hypotheses_updater, DefaultHypothesesUpdater),
@@ -939,20 +942,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   Monty's answer is its `use_multithreading`, and Monty's threads share the
   memory for free. A BEAM process hands a task a copy of what its closure holds,
-  so the round is taken only when both are true: the config asks for it, and the
-  memory is one a task can hold without copying — the studio's cached library,
-  which lives in `:persistent_term` and is shared with every process it is sent
-  to. A memory the run itself built is on the module's heap: measured on the
-  ten-object `pretrained_ycb_v10` library built in-process, one step took 1.8 s
-  in a round against 33 ms one at a time, which is the copy and not the work.
+  so a round needs three things here: the config asking for it, a memory a task
+  can hold without copying, and a run that asks — because measured, the round
+  does not pay:
 
-  `memory_shared?` is said by the shell that builds the module from the studio's
-  cached library, so a run that reads a library takes the round and a training
-  phase, whose memory the run wrote, keeps the loop — see
-  `docs/monty-differences.md` §2.45 for what it measured.
+  - the five-module `randrot_noise_10distinctobj_5lms_dist_agent` episode, the
+    model's own work only and after warm-up: 5 058–5 072 k reductions a step in a
+    round against 4 857–4 860 k in the loop, three readings each, so the round
+    costs about 4 % more;
+  - the ten-distinct-object `base_config_10distinctobj_dist_agent` episode over
+    sixty steps: 1 275 k against 1 278 k — equal.
+
+  The first measurements of this were wall clocks of a whole run, which include
+  the setup, the episode boundary and the box; the round looked 10–16 % ahead on
+  them and is not ahead on the work. So `:round_objects?` is what a run says when
+  it has measured its own workload, and it defaults to `false`: the loop is
+  Monty's shape and, on every config measured, the cheaper one. See
+  `docs/monty-differences.md` §2.45.
   """
   @spec graph_round?(t()) :: boolean()
-  def graph_round?(%__MODULE__{use_multithreading: true, memory_shared?: true}), do: true
+
+  def graph_round?(%__MODULE__{
+        use_multithreading: true,
+        round_objects?: true,
+        memory_shared?: true
+      }),
+      do: true
+
   def graph_round?(%__MODULE__{}), do: false
 
   # Monty's `_update_possible_matches`: one update a graph, and — under
