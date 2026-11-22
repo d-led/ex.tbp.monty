@@ -132,7 +132,7 @@ sequenceDiagram
     S-->>C: percept
     C->>L: matching_step — in turn, one module after another
     L-->>C: vote, goals, region
-    C->>C: _combine_votes, after every module has stepped
+    Note over C: _combine_votes, after every module has stepped
     C->>M: actions
 ```
 
@@ -147,9 +147,9 @@ sequenceDiagram
     C->>S: observe — one message a sensor (a round only if a run names one)
     S-->>C: percept
     C->>L: hand_off(epoch) — every module at once, not waited for
-    C->>C: await(epoch) — only where the answer is needed, the vote round
+    Note over C: await(epoch) — only where the answer is needed
     L-->>C: vote, goals, region (at the module's own boundary)
-    C->>C: combine_votes, then deliver_votes
+    Note over C: combine_votes, then deliver_votes
     C->>M: actions
 ```
 
@@ -189,19 +189,13 @@ callable and are compared exactly (`evidence_graph_lm_parallel_test.exs`).
 ```mermaid
 flowchart LR
     subgraph monty["Monty — run_parallel.py"]
-        direction LR
-        P1["a process an episode<br/>its own copy of the memory"]
-        P2["a process an episode<br/>its own copy of the memory"]
-        P3["…"]
+        P["a process an episode<br/>each holding its own copy of the memory"]
     end
     subgraph port["this port — a wave of parts"]
-        direction LR
         W["wave"] --> T1["part<br/>its episodes"]
         W --> T2["part<br/>its episodes"]
-        W --> T3["…"]
         D[("library<br/>read once, read-only")] -.-> T1
         D -.-> T2
-        D -.-> T3
     end
 ```
 
