@@ -1882,12 +1882,12 @@ after every module has finished its step, because a vote is the module's state
 _after_ its step. So the decisions are Monty's, and the suite that pins them
 passes unchanged; what moved is where the work runs, not what it computes.
 
-## 2.30 A step can be scheduled a lagged epoch behind
+## 2.30 A step can be scheduled an epoch behind
 
-**In one line:** a barrier step — Monty's order, and this port's default — waits
-for the modules it just handed work to before its vote round; a lagged step does
-not, and integrates the epoch _before_ instead, from the report each module sent
-when it finished it.
+**In one line:** a step that waits for all its modules — Monty's order, and this
+port's default — ends only once the modules it just handed work to have answered;
+a step that runs one behind does not wait, and integrates the epoch _before_
+instead, from the report each module sent when it finished it.
 
 **What Monty does.** `MontyBase.step` hands each module its percepts and waits for
 the answer inside the loop (`_step_learning_modules`), so the vote round — the one
@@ -1896,15 +1896,17 @@ step it is voting on. Goals and regions are then asked of the modules in a secon
 round, after their steps. One step's work cannot overlap with the next step's
 sensors, because there is one thread and it is the step's.
 
-**What this port does.** `Monty.Runtime.Step.State.scheduling/1` is `:barrier` or
-`:lagged`. A run chooses it on the experiment page — the `scheduling` box beside
-its episode count, recorded on the run as `inputs["scheduling"]`, so the worker
-takes the mode from the record — and `MONTY_STUDIO_SCHEDULING` answers for a run
-started from the command line (`Monty.Studio.Jobs.scheduling/1`). Two runs of one
+**What this port does.** `Monty.Runtime.Step.State.scheduling/1` is
+`:wait_for_all` or `:one_step_behind`; the values were spelled `barrier` and
+`lagged` until they were named for what they do, and a recorded run of the older
+kind still reads. A run chooses it on the experiment page — the box beside its
+episode count, recorded on the run as `inputs["scheduling"]`, so the worker takes
+the mode from the record — and `MONTY_STUDIO_SCHEDULING` answers for a run started
+from the command line (`Monty.Studio.Jobs.scheduling/1`). Two runs of one
 experiment, one `scheduling` apart, are read side by side on the studio's
 `/compare` page: the numbers, each module's conclusions and how many episodes
 reached each state, with the inputs that differ named above the table
-(`Monty.Studio.Comparison`). A lagged step:
+(`Monty.Studio.Comparison`). A step that runs one behind:
 
 - hands epoch _n_ to every module and does not wait for it (`hand_off/5`, no
   `await/3`);
@@ -1928,10 +1930,10 @@ and the coordinator waits only for the report it genuinely cannot do without. Th
 world and the sensors of step _n + 1_ overlap with the modules still working on
 step _n_.
 
-**What is therefore not compared.** The trajectory. A lagged step's goals are one
-epoch older than the percepts they move on, so a lagged run is a different episode
-from Monty's, and no parity is claimed for it — which is why `:barrier` stays the
-default and the mode is a run's own choice. Two properties are kept
+**What is therefore not compared.** The trajectory. A step-behind module's goals
+are one epoch older than the percepts they move on, so such a run is a different
+episode from Monty's, and no parity is claimed for it — which is why
+`:wait_for_all` stays the default and the mode is a run's own choice. Two properties are kept
 inside the mode, and both are tested: the lag is exactly one epoch (never "as far
 behind as the module happens to be"), so the same episode run twice is the same
 trajectory; and the votes of epoch _e_ apply at the boundary of _e + 1_, so a
@@ -1942,19 +1944,20 @@ faster module cannot compute a different answer from a slower one.
 page, episodes = 1, seed 42, six sensors and five learning modules, the MuJoCo
 world through `ex_mujoco`, on this machine (Apple Silicon, macOS 26):
 
-| mode    | steps | model time  | wall clock | what the modules concluded    |
-| ------- | ----- | ----------- | ---------- | ----------------------------- |
-| barrier | 34    | 61 253.9 ms | 1 min 11 s | all five `match`              |
-| lagged  | 39    | 9 825.3 ms  | 14.6 s     | three `match`, two `time_out` |
+| mode              | steps | model time  | wall clock | what the modules concluded    |
+| ----------------- | ----- | ----------- | ---------- | ----------------------------- |
+| `wait_for_all`    | 34    | 61 253.9 ms | 1 min 11 s | all five `match`              |
+| `one_step_behind` | 39    | 9 825.3 ms  | 14.6 s     | three `match`, two `time_out` |
 
 The round is what the lag removes, and on this config it is most of a step: 6.2×
 less model time, 4.9× less wall clock. It is also a different episode — the
-trajectory parts at step 6 — and on this one it is a worse one: a lagged step's
+trajectory parts at step 6 — and on this one it is a worse one: a step-behind module's
 goals are an epoch older than the percepts they move on, and two of the five
-modules ran out of steps without concluding, where the barrier run's five all
-recognised the mug. **So "lagged is faster" is true and is not an argument for
-using it.** It is a scheduling option whose price is measured on the same page,
-and `barrier` is the default for exactly that reason.
+modules ran out of steps without concluding, where the run that waited for all of
+them recognised the mug five times. **So "one step behind is faster" is true and
+is not an argument for using it.** It is a scheduling option whose price is
+measured on the same page, and `wait_for_all` is the default for exactly that
+reason.
 
 An earlier read of this came from `scripts/probe_lagged_steps.exs` — kept, because
 it is what found the goal-list crash, but not for numbers: on a machine shared

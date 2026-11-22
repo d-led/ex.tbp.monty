@@ -49,6 +49,28 @@ measure; a wall clock is the machine's.
 | the split inside one run's log   | `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — a step's own `duration_us` against the wall between lines                           |
 | the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                         |
 | Monty's own share of its step    | `cProfile` inside Monty's venv, one epoch                                                                                                       |
+| **inside a NIF**                 | `/usr/bin/sample <beam pid> 5 -file out.txt` on this Mac — no Xcode needed, and the leaf frames name the Rust (`Rust` below)                    |
+
+**What a native sampler can and cannot tell you here.** `perf` and OTP's
+`+JPperf` are Linux; on macOS `sample` (or `xctrace`) attaches to `beam.smp` and
+survives nothing about the BEAM: every Elixir frame is an unnamed JIT block
+(`??? (in <unknown binary>)`), so the Elixir half stays with reductions, tprof and
+the step split above. What it does answer is _which Rust function_ is hot — and it
+does so on the release build we ship: the `.so` files keep Rust's v0-mangled
+names, so a leaf reads
+`_RINvMNtNtNt…5kiddo5float5query9nearest_n…` and `matcher_nif::slope_at`. `nm` is
+a poor probe for the same reason — `lto = true` inlines the small functions into
+the NIF entry, so `grep nearest_many` finds nothing while the tree shows
+`nearest_n_recurse`. A build with `CARGO_PROFILE_RELEASE_DEBUG=1
+CARGO_PROFILE_RELEASE_LTO=false` adds line numbers and splits more functions out,
+which is worth it only when a frame is still a mystery.
+
+Measured that way on the ten-object config, five seconds of matching steps: the
+k-d tree's own search (`kiddo`, `nearest_n_recurse`) is 634 samples, **`acos` 173**,
+BEAM's heap sweep and GC 284 together, and the matcher's entry points a few dozen
+each. The `acos` is `angle/2` in `matcher_nif` — Monty's own
+`SpatialArithmetics.get_angle/2`, one or two a node — so it is the price of the
+arithmetic and not a defect; it is also the ceiling of any future micro-work there.
 
 - **Wall clock is not usable here.** The same step has measured several times
   longer in one afternoon than in another, following whatever else the machine
@@ -539,6 +561,15 @@ when the values stay bytes on both sides of it.
   three to four times **worse** than the loop on seventy-seven objects to
   **3.4× better** (337–345 ms a step against 95–103).
 
+- **A dirty CPU scheduler for the matcher's hot kernels.** The sampler above
+  showed `neighbour_evidence` holding a _normal_ scheduler for about half a
+  millisecond a call (77 calls a step), so `neighbour_evidence` and
+  `feature_evidence` were moved to `schedule = "DirtyCpu"` the way the k-d tree's
+  two queries already are. Measured, this Mac, eight steps, `--no-record`, against
+  the plain build of the same tree: 77 objects **795–861 ms** against 757, ten
+  objects **154–155 ms** against 151. Reverted — the queue hop costs more than the
+  hold it removes, at this call size. The numbers are the reason to leave the
+  matcher plain until a call is an order of magnitude longer.
 - **One pass a point over the return inhibitor's kernels**
   (`DecayField.weights/2`, four kernels over 1 870 on-object points). Written as
   one walk carrying the maximum of each kernel, it allocates less and counts
