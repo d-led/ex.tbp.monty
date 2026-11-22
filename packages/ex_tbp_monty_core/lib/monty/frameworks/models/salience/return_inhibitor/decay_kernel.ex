@@ -19,8 +19,6 @@ defmodule Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel do
   field drops it.
   """
 
-  alias Monty.Frameworks.Utils.SpatialArithmetics
-
   @type location :: [float()]
   @type points :: [[float()]]
 
@@ -60,26 +58,30 @@ defmodule Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel do
   than merely weaker in the distance.
   """
   @spec space_weight(t(), points()) :: [float()]
-  def space_weight(%__MODULE__{} = kernel, points) do
-    half_life = half_life(kernel.tau_s)
-
-    Enum.map(points, fn point ->
-      distance =
-        kernel.location
-        |> SpatialArithmetics.subtract(point)
-        |> SpatialArithmetics.magnitude()
-
-      if kernel.spatial_cutoff != nil and distance > kernel.spatial_cutoff,
-        do: 0.0,
-        else: :math.exp(-distance / half_life)
-    end)
-  end
+  def space_weight(%__MODULE__{} = kernel, points), do: weight(kernel, points, 1.0)
 
   @doc "The kernel's weight at each point: its age and its distance together."
   @spec weights(t(), points()) :: [float()]
-  def weights(%__MODULE__{} = kernel, points) do
-    time = time_weight(kernel)
-    Enum.map(space_weight(kernel, points), &(time * &1))
+  def weights(%__MODULE__{} = kernel, points), do: weight(kernel, points, time_weight(kernel))
+
+  # The distance and the decay in one pass over the points: a kernel's place is
+  # read once, and the subtraction and the magnitude are written out, because a
+  # point of the view pays for a list and a walk of three numbers otherwise.
+  defp weight(%__MODULE__{} = kernel, points, time) do
+    [ox, oy, oz] = kernel.location
+    half_life = half_life(kernel.tau_s)
+    cutoff = kernel.spatial_cutoff
+
+    Enum.map(points, fn [x, y, z] ->
+      dx = ox - x
+      dy = oy - y
+      dz = oz - z
+      distance = :math.sqrt(dx * dx + dy * dy + dz * dz)
+
+      if cutoff != nil and distance > cutoff,
+        do: 0.0,
+        else: time * :math.exp(-distance / half_life)
+    end)
   end
 
   @doc """

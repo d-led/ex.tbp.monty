@@ -56,6 +56,12 @@ defmodule Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayField do
   @spec weights(t(), [[float()]]) :: [float()]
   def weights(%__MODULE__{kernels: []}, points), do: Enum.map(points, fn _point -> 0.0 end)
 
+  # One visit, and the field's answer is that kernel's answer: `np.max` over a
+  # single row is the row, so the walk that would take it is not taken.
+  def weights(%__MODULE__{kernels: [kernel]}, points),
+    do: DecayKernel.weights(kernel, points)
+
+  # Overlapping visits do not add up: the strongest kernel at each point wins.
   def weights(%__MODULE__{} = field, points) do
     field.kernels
     |> Enum.map(&DecayKernel.weights(&1, points))
