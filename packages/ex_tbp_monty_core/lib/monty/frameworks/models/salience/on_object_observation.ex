@@ -49,27 +49,13 @@ defmodule Monty.Frameworks.Models.Salience.OnObjectObservation do
   def from(observation, salience_map) do
     {rows, columns} = shape(observation)
     points = Map.fetch!(observation, "semantic_3d")
+    centre_index = div(rows, 2) * columns + div(columns, 2)
 
-    location_map =
-      points
-      |> Enum.map(fn [x, y, z, _semantic_id] -> [x, y, z] end)
-      |> Enum.chunk_every(columns)
-
-    on_object_map =
-      points
-      |> Enum.map(fn [_x, _y, _z, semantic_id] -> semantic_id > 0.0 end)
-      |> Enum.chunk_every(columns)
-
-    half_row = div(rows, 2)
-    half_column = div(columns, 2)
-
-    {locations, salience} = on_object(on_object_map, location_map, salience_map)
+    {location_map, on_object_map, locations, salience, centre} =
+      walk(points, salience_map, centre_index)
 
     %__MODULE__{
-      centre_location:
-        if(Enum.at(Enum.at(on_object_map, half_row), half_column),
-          do: Enum.at(Enum.at(location_map, half_row), half_column)
-        ),
+      centre_location: centre,
       locations: locations,
       salience: salience,
       on_object_map: on_object_map,
@@ -77,33 +63,68 @@ defmodule Monty.Frameworks.Models.Salience.OnObjectObservation do
     }
   end
 
-  # Every on-object pixel's place and its salience, taken in the same walk as
-  # the mask that decides which pixels are on the object. Reading them out by
-  # index instead — `locations[row][column]` per pixel, which is how the point
-  # cloud reads in numpy — walks to the row and then to the column for every one
-  # of them: a thousand on-object pixels in a 64×64 view looked up their place
-  # eighteen hundred times a step, and the walks were most of this module's cost.
+  # One walk over the flat point cloud builds everything this view carries: each
+  # pixel's place, the on-object mask, and — for the pixels that are on the
+  # object — its place and its salience again, in Monty's order. A row of the
+  # salience map ends exactly where a row of the point cloud does, so the walk
+  # takes its row boundaries from the salience map and puts each finished row
+  # onto its grid as it finishes. The centre is the pixel the flat index names,
+  # so one walk answers it too instead of a second look at a grid.
   #
-  # The three grids are walked together, a row at a time: `Enum.zip/1` would put
-  # the same walk through a tuple per pixel first, and a view has four thousand.
-  defp on_object(mask, location_map, salience_map),
-    do: on_object(mask, location_map, salience_map, [], [])
+  # Building the two grids apart from the walk — `Enum.map` then
+  # `Enum.chunk_every`, twice, then a third pass to collect the on-object
+  # pixels — was four traversals of four thousand pixels a step, and the
+  # traversals were most of this module's cost.
+  defp walk([], _salience_map, _centre_index), do: {[], [], [], [], nil}
 
-  defp on_object([], [], [], locations, salience),
-    do: {Enum.reverse(locations), Enum.reverse(salience)}
+  defp walk(points, [row | values], centre_index) do
+    {_locations, _mask, location_rows, mask_rows, on_locations, on_salience, _index, centre} =
+      raster(points, values, row, {[], [], [], [], [], [], 0, nil}, centre_index)
 
-  defp on_object([mask_row | mask], [location_row | rows], [value_row | values], locations, salience) do
-    {locations, salience} = on_object_row(mask_row, location_row, value_row, locations, salience)
-    on_object(mask, rows, values, locations, salience)
+    {Enum.reverse(location_rows), Enum.reverse(mask_rows), Enum.reverse(on_locations),
+     Enum.reverse(on_salience), centre}
   end
 
-  defp on_object_row([], [], [], locations, salience), do: {locations, salience}
+  defp raster([], _values, _row, acc, _centre_index), do: finish_row(acc)
 
-  defp on_object_row([true | mask], [location | rows], [value | values], locations, salience),
-    do: on_object_row(mask, rows, values, [location | locations], [value | salience])
+  defp raster(points, values, [], acc, centre_index) do
+    [row | values] = values
+    raster(points, values, row, finish_row(acc), centre_index)
+  end
 
-  defp on_object_row([_background | mask], [_location | rows], [_value | values], locations, salience),
-    do: on_object_row(mask, rows, values, locations, salience)
+  defp raster([point | points], values, [value | row], acc, centre_index) do
+    raster(points, values, row, pixel(point, value, acc, centre_index), centre_index)
+  end
+
+  # `[x, y, z, semantic_id]`: the place, whether it is on the object, and how
+  # interesting the view found the pixel.
+  defp pixel(
+         [x, y, z, semantic_id],
+         value,
+         {locations, mask, location_rows, mask_rows, on_locations, on_salience, index, centre},
+         centre_index
+       ) do
+    location = [x, y, z]
+    on_object? = semantic_id > 0.0
+
+    centre =
+      if index == centre_index and on_object?,
+        do: location,
+        else: centre
+
+    if on_object? do
+      {[location | locations], [true | mask], location_rows, mask_rows,
+       [location | on_locations], [value | on_salience], index + 1, centre}
+    else
+      {[location | locations], [false | mask], location_rows, mask_rows, on_locations,
+       on_salience, index + 1, centre}
+    end
+  end
+
+  defp finish_row({locations, mask, location_rows, mask_rows, on_locations, on_salience, index, centre}) do
+    {[], [], [Enum.reverse(locations) | location_rows], [Enum.reverse(mask) | mask_rows],
+     on_locations, on_salience, index, centre}
+  end
 
   # The image the observation was taken through: its rows and columns are the
   # grid every other array is reshaped to.
