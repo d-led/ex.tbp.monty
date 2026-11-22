@@ -2,6 +2,8 @@ defmodule Monty.Runtime.LearningModuleServerTest do
   use ExUnit.Case, async: true
 
   alias Monty.Context
+  alias Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory
+  alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Runtime.{LearningModuleServer, Registry}
   alias Monty.Simulators.Synthetic.LearningModule
   alias Monty.Test.{Messages, MinimalLearningModule}
@@ -92,6 +94,36 @@ defmodule Monty.Runtime.LearningModuleServerTest do
       assert_receive {:built_in, builder}
       assert builder == GenServer.whereis(server)
       assert LearningModuleServer.state(server) == LearningModule.new(:lm_0)
+    end
+
+    # A spec carried lazily is the studio's library, which lives in
+    # `:persistent_term` — a term shared with every process it is sent to, and
+    # what lets a step hand one object to a task without copying the library into
+    # it. A state the caller built is a memory the run itself wrote, which a task
+    # would copy, so the round is taken for the first and not the second
+    # (`docs/monty-differences.md` §2.45).
+    test "a state read from the library is told its memory is shared, and one handed over is not",
+         %{model_id: model_id} do
+      {:ok, lm} =
+        EvidenceGraphLM.new(EvidenceGraphMemory.new(), max_match_distance: 0.01)
+
+      for {id, state, shared?} <- [
+            {:lm_from_library, {:lazy, fn -> lm end}, true},
+            {:lm_handed_over, lm, false}
+          ] do
+        start_supervised!(
+          Supervisor.child_spec(
+            {LearningModuleServer,
+             %{id: id, model_id: model_id, module: EvidenceGraphLM, state: state}},
+            id: {:learning, id}
+          )
+        )
+
+        started = LearningModuleServer.state(Registry.via({:learning_module, model_id, id}))
+
+        assert started.memory_shared? == shared?
+        assert EvidenceGraphLM.graph_round?(started) == shared?
+      end
     end
   end
 

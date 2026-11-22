@@ -254,9 +254,12 @@ defmodule Monty.Studio.Memory do
 
     case :persistent_term.get(key, nil) do
       nil ->
-        built = read!(path, module_index)
-        :persistent_term.put(key, built)
-        built
+        :persistent_term.put(key, read!(path, module_index))
+        # Read back, so the caller holds the term the cache holds: a term in
+        # `:persistent_term` is shared with every process it is sent to, where
+        # the heap copy just written would be copied again onto every task that
+        # asked for it — which is what a step's round of per-object tasks does.
+        :persistent_term.get(key)
 
       built ->
         built

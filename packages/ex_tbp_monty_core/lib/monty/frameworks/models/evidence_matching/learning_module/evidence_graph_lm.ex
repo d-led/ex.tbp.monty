@@ -116,15 +116,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             # this process's heap and would be copied once per task. The round
             # is only taken when both this and `use_multithreading` are true.
             #
-            # **No run sets this yet.** The round is built, measured and equal to
-            # the loop (`docs/monty-differences.md` §2.45, ~8–16 % of the model
-            # time), and it waits on a step's random draws: the goal generator
-            # takes its coin from the episode's one stream, which the modules
-            # reach in scheduler order, so a round — like any change in how long
-            # a module's step takes — can change which module drew first. One
-            # stream a module decides it either way, and that moves the port's
-            # goal sequence, which is Monty's; that is the user's call, not a
-            # quiet default.
+            # A run that reads a library says so from the shell it builds its
+            # modules in (`Monty.Runtime.LearningModuleServer`); a training phase
+            # carries the memory its own last episode wrote, which is a heap term
+            # and keeps the loop (`docs/monty-differences.md` §2.45).
             memory_shared?: false,
             has_detailed_logger: false,
             hypotheses_updater_module: DefaultHypothesesUpdater,
@@ -951,9 +946,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   ten-object `pretrained_ycb_v10` library built in-process, one step took 1.8 s
   in a round against 33 ms one at a time, which is the copy and not the work.
 
-  `memory_shared?` is not set by any run yet — see the field's comment, and
-  `docs/monty-differences.md` §2.45 for what the round measured and what it
-  waits on.
+  `memory_shared?` is said by the shell that builds the module from the studio's
+  cached library, so a run that reads a library takes the round and a training
+  phase, whose memory the run wrote, keeps the loop — see
+  `docs/monty-differences.md` §2.45 for what it measured.
   """
   @spec graph_round?(t()) :: boolean()
   def graph_round?(%__MODULE__{use_multithreading: true, memory_shared?: true}), do: true

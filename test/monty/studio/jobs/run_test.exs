@@ -767,7 +767,13 @@ defmodule Monty.Studio.Jobs.RunTest do
       plan = Partition.plan(opened.setup, 2, 4)
       parts = Enum.map(Partition.parts(plan), &Map.put(&1, :stream, Ecto.UUID.generate()))
 
-      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 40, 0, 2, 4, %{parts: parts}))
+      # Eighty steps an episode, not forty: a patch has to find a view it can
+      # recognise, and which walk the goal generator sends it on decides how
+      # quickly it does — at forty, with the goal draws coming from a module's
+      # own stream (`docs/monty-differences.md` §2.45), two of the four ran out of
+      # steps. What this case measures is the tally, so the fixture gives the
+      # walk room to finish rather than pinning the outcome of a short one.
+      {:ok, record} = RunHistory.start(RunLog.attributes(opened, 80, 0, 2, 4, %{parts: parts}))
 
       assert {:ok, closed} = perform(record)
 

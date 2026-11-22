@@ -54,7 +54,7 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
   alias Monty.Frameworks.Models.GoalGeneration.GraphGoalGenerator
   alias Monty.Frameworks.Utils.{CommunicationUtils, SpatialArithmetics}
   alias Monty.Geometry.{GazeDirection, Rotation}
-  alias Monty.Random.Stream
+  alias Monty.Random.Numpy
 
   # Monty's constructor defaults.
   @default_elapsed_steps_factor 10
@@ -78,7 +78,10 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
             min_post_goal_success_steps: :infinity,
             x_percent_scale_factor: @default_x_percent_scale_factor,
             desired_object_distance: @default_desired_object_distance,
-            wait_growth_multiplier: @default_wait_growth_multiplier
+            wait_growth_multiplier: @default_wait_growth_multiplier,
+            # This module's own draw stream: the episode's seed it was made from,
+            # and the state. Not the episode's shared stream — see `coin_flip/2`.
+            rng: nil
 
   @typedoc """
   The most likely hypothesis of an object, or of everything: what
@@ -307,11 +310,15 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
     smaller_threshold =
       EvidenceGraphLM.threshold_possible_matches(lm, generator.x_percent_scale_factor)
 
+    # Monty's condition is `length(smaller_threshold) == 1 and coin_flip() <= p`,
+    # so the coin is drawn only when one object is left — and where it is drawn
+    # from is `coin_flip/2`'s business.
+    {pose_focus?, generator} = coin_for_pose(generator, ctx, smaller_threshold)
+
     cond do
       # One object is certain, or nearly so and the coin came up pose: stop
       # collecting identity evidence and pin the pose down.
-      (length(smaller_threshold) == 1 and coin_flip(ctx) <= @pose_focus_probability) or
-          length(base_threshold) == 1 ->
+      pose_focus? or length(base_threshold) == 1 ->
         focus_on_pose_if_poses_remain(generator, lm, top_id)
 
       top_two_changed?(generator.prev_top_mlhs, top_id, second_id) ->
@@ -326,6 +333,15 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
 
       true ->
         {false, generator}
+    end
+  end
+
+  defp coin_for_pose(generator, ctx, smaller_threshold) do
+    with 1 <- length(smaller_threshold),
+         {flip, generator} <- coin_flip(generator, ctx) do
+      {flip <= @pose_focus_probability, generator}
+    else
+      _not_one_object -> {false, generator}
     end
   end
 
@@ -359,7 +375,34 @@ defmodule Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator do
     |> Enum.all?(fn {now, before} -> now != before end)
   end
 
-  defp coin_flip(%Context{} = ctx), do: Stream.random(ctx.rng)
+  # This module's own stream, not the episode's shared one.
+  #
+  # Monty draws from the episode's one mutable `RandomState`, and its learning
+  # modules step one at a time, so what a module draws depends on how many draws
+  # the modules before it made — an order its loop decides. The port steps its
+  # modules in parallel, so a draw from the shared stream would reach it in
+  # whichever order the scheduler ran the calls: two runs of one seed then came
+  # out with a different goal count (`docs/monty-differences.md` §2.45). A stream
+  # a module, seeded from the episode's seed and the module's own name, is the
+  # same numbers however the modules are scheduled.
+  defp coin_flip(%__MODULE__{} = generator, %Context{} = ctx) do
+    {draw, state} = Numpy.random_sample(module_stream(generator, ctx))
+    {draw, %{generator | rng: {ctx.episode_seed, state}}}
+  end
+
+  defp module_stream(%__MODULE__{rng: {seed, state}}, %Context{episode_seed: seed}), do: state
+
+  defp module_stream(%__MODULE__{} = generator, %Context{episode_seed: seed}),
+    do: Numpy.new(module_seed(seed, parent_lm(generator).learning_module_id))
+
+  # FNV-1a over the seed and the module's name, written out rather than reached
+  # for: `:erlang.phash2/1` is only stable within a VM release, and a run recorded
+  # today should draw the same numbers from a later one.
+  defp module_seed(seed, module_id) do
+    Enum.reduce(:binary.bin_to_list("#{seed}/#{module_id}"), 2_166_136_261, fn byte, hash ->
+      rem(Bitwise.bxor(hash, byte) * 16_777_619, 0x100000000)
+    end)
+  end
 
   # -- generating ----------------------------------------------------------
 

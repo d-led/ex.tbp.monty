@@ -285,7 +285,19 @@ defmodule Monty.Runtime.LearningModuleServer do
   # happens once, in the process that uses it, and a load that answers from
   # `:persistent_term` hands the term over instead of copying it
   # (`Monty.Studio.Memory.load/3`).
-  defp build_state({:lazy, build}) when is_function(build, 0), do: build.()
+  #
+  # That is also what a step's round of per-object tasks needs, so it is stated
+  # rather than assumed: a module whose state carries the switch is told its
+  # memory is one a task can hold without copying. A state built any other way is
+  # a memory the run itself wrote, which every task would copy — and there the
+  # module keeps its loop (`docs/monty-differences.md` §2.45).
+  defp build_state({:lazy, build}) when is_function(build, 0) do
+    case build.() do
+      %{memory_shared?: _} = state -> %{state | memory_shared?: true}
+      state -> state
+    end
+  end
+
   defp build_state(state), do: state
 
   # A step handed over: the same three things `learn/4` in `Monty.Runtime.Step`

@@ -2609,7 +2609,7 @@ graphs was 27× **slower** than doing the work serially
 captured, so every task copied the library. A library that no longer travels in
 the spec is the precondition for that pass, not the pass itself.
 
-## 2.45 A step's objects in a round, and the draw that decides it is off
+## 2.45 A step's objects in a round, and a draw a module calls its own
 
 Monty updates the hypotheses of every object in its memory once a step, and with
 `use_multithreading` — its constructor's default, and what its own configs leave
@@ -2635,28 +2635,30 @@ one episode of 26 steps, `ex_mujoco`, `--no-record`: the loop took 1.61–1.70 s
 model time, the round 1.42–1.51 s. Every field of every step is identical between
 the arms, beliefs and goal counts included. The same memory built in-process is
 the opposite case: one step takes 1.8 s in a round against 33 ms in the loop,
-which is the library being copied into every task (`§2.44`).
+which is the library being copied into every task (`§2.44`). So the round is taken
+only when the config asks _and_ the module knows its memory is a term a task can
+hold without copying: `memory_shared?`, which the shell sets for the studio's
+cached library and never for a memory the run itself wrote. A run that reads a
+library takes the round; a training phase keeps the loop.
 
-**Why it is off.** The round is taken only when the config asks _and_ the module
-knows its memory is a term a task can hold without copying (`memory_shared?`),
-and no run sets that flag. A step's random draws are why. The goal generator
-flips a coin when one object is left (`decide_between_objects/6`), and it draws
-from the episode's one stream — `Monty.Random.Stream`, one process a model,
-which is Monty's single mutable `RandomState`. Monty's learning modules step one
-at a time, so its draw order is its loop's. This port steps them in parallel, so
-the order is whichever call reached the stream first, and a run's goal count then
-flaps by one between two runs of the same seed (observed: `goals 31 580` against
-`31 630`, the beliefs equal up to the step that differs). That is not the round's
-fault — it is a race the concurrency always had — but a round changes how long a
-module's step takes, which changes how often it shows.
+**The draw, which chose per-module streams.** The goal generator flips a coin when
+one object is left (`decide_between_objects/6`), and it used to draw from the
+episode's one stream — `Monty.Random.Stream`, one process a model, which is
+Monty's single mutable `RandomState`. Monty's learning modules step one at a time,
+so its draw order is its loop's; this port steps them in parallel, so the order was
+whichever call reached the stream first, and one seed's goal count flapped between
+runs (`goals 31 580` against `31 630`, the beliefs equal up to the step that
+differs). A run that cannot answer the same seed twice is not an instrument.
 
-One stream a module, seeded from the episode's seed and the module's name, is
-deterministic under any scheduling, and it was tried: the goals stopped flapping
-in eight runs of two arms. It also moved the goal sequence off Monty's, and with
-it some episodes of the divided-run test stopped concluding — the port's
-recognition on the reference config got _worse_, not merely different. Which of
-the two matters more is a decision about what this port is for, so the round is
-built, tested and waiting rather than switched on.
+So the coin comes from a stream the module calls its own, seeded from the episode's
+seed and the module's name (FNV-1a written out, because `:erlang.phash2/1` is only
+stable within a VM release). The port's goal sequence is therefore no longer
+Monty's interleaved one, and that is the price: a walk the goal generator sends a
+sensor on decides how quickly it finds a view, so some fixtures needed more steps
+before they concluded (`RunTest`'s divided-run case went from forty to eighty).
+Against the alternative — one stream, Monty's order — the port keeps stepping its
+five modules in parallel, which is what makes this port usable at all, and the
+draw order across module steps is no longer something the scheduler can decide.
 
 `present_options/2` is fixed on the way past, and that is not a detail: it read a
 config's values with `value = Map.get(config, key)` as a comprehension filter,
