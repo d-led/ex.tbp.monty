@@ -257,6 +257,19 @@ parity test that compares the new path with the Elixir reference **exactly**:
 - **The transcript was rewritten whole.** A step appended its row by rewriting
   every row before it, which made the cost of a step grow with the length of the
   run. Now the row is left alone and the two arrays are appended.
+- **A salience step paid for NumPy's generator.** The view finder dithers one
+  number per on-object pixel, and the Mersenne Twister was twisted into a map of
+  the block — a hash and a lookup per word — so the dither was most of the
+  sensor's cost: twelve twists, a 64×64 view. The twist is one pass now (a queue
+  of the new words, because NumPy twists in place and a word reads the one 227
+  back, and the last reads the new first), and the rest of the step came with
+  it: the view is one walk rather than two grids and a third pass, a kernel's
+  distance is three numbers rather than a list and a walk, and a goal is built as
+  its struct rather than through `Goal.new` per pixel. Measured on one 64×64 view
+  of `base_config_10distinctobj_dist_agent` (this Mac, `ex_mujoco`, seed 42):
+  **3.3 ms and 483 k reductions a salience step → 1.95 ms and 282 k**, and a
+  plain step's **1.24 M reductions → 0.78 M**. The acceptance ladder is digit for
+  digit, and the numpy suite pins the twist's draws across the block boundaries.
 
 ### What the native kernels cover
 
@@ -317,11 +330,11 @@ Three places in this port do work in a round instead of in a loop. Each was
 measured on both sides, and each answers a different way — which is the reason
 the measurements are here rather than a rule about rounds:
 
-| round                | loop                               | in a round   | verdict                                                      |
-| -------------------- | ---------------------------------- | ------------ | ------------------------------------------------------------ |
+| round                | loop                               | in a round   | verdict                                                        |
+| -------------------- | ---------------------------------- | ------------ | -------------------------------------------------------------- |
 | an object's evidence | 4 857 k reductions a step          | 5 058 k      | **not taken**: the fan-out costs more than the objects (§2.45) |
-| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work           |
-| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it         |
+| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work             |
+| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it           |
 
 The numbers are from this Mac (Apple Silicon, macOS 26), the MuJoCo world
 through `ex_mujoco`, and two runs per arm of `base_10simobj_surf_agent` started

@@ -249,12 +249,15 @@ loop, and its step count is Monty's for every episode of the epoch.
 
 - **Where a step's time stands now** (2026-11-22, this Mac, `ex_mujoco`, 24 steps
   of `base_config_10distinctobj_dist_agent`). A plain — location only — step is
-  about 18 ms of world and model together and 1.24 M reductions, and **the view
-  finder's salience step is 852 k of that**: a score over every pixel of the
-  view, with a goal and a normal draw per on-object pixel. The patch sensor is
-  158 k, the render is Rust and about 7 % of the step, and the picture pipeline
-  (decode, the two transforms, the copies into each sensor process) is under
-  10 %. The instruments are `scripts/probe_step_phases.exs`,
+  about 17 ms of world and model together and 0.78 M reductions, and **the view
+  finder is 428 k of that**, its salience step 1.95 ms in isolation: a score over
+  every pixel of the view, with a goal and a normal draw per on-object pixel. What
+  a salience step still pays, in the order the measurement puts it: a goal per
+  on-object pixel (~0.7 ms), the dither's draw (~0.5 ms, most of it NumPy's own
+  generator), the view's walk (~0.5 ms) and the return inhibitor (~0.33 ms). The
+  patch sensor is 158 k, the render is Rust and about 7 % of the step, and the
+  picture pipeline (decode, the two transforms, the copies into each sensor
+  process) is under 10 %. The instruments are `scripts/probe_step_phases.exs`,
   `probe_sensor_cost.exs` (per sensor), `probe_patch_cost.exs` (function by
   function, either world) and `probe_world_crossing.exs` (the world's own
   crossing, and one sensor's step, in place).
@@ -268,12 +271,14 @@ loop, and its step count is Monty's for every episode of the epoch.
   measurements); a shared hypothesis space, a crate behind it, an ETS table and
   the pictures as binaries were each priced and rejected.
 
-- **Next, in the order the measurements put them.** (1) The salience step: one
-  pass instead of two grids, goals built where they are read, and Monty's numbers
-  unchanged — the existing parity tests are the referee. (2) The one crossing: a
-  kernel that takes a burst's whole non-RNG path and reads the columns as bytes,
-  which is the only place an encoding pays (`speed.md` §"The open decision: one
-  crossing"). (3) The cost of a step on the 77-object library, above.
+- **Next, in the order the measurements put them.** (1) ~~The salience step~~ —
+  done, and the measurements above are what it cost and what it left: one pass
+  over the view rather than four, a goal built as its struct, a kernel's distance
+  in one pass, and NumPy's twist as one pass instead of a map of the block (the
+  dither was the whole of the sensor's cost). (2) The one crossing: a kernel that
+  takes a burst's whole non-RNG path and reads the columns as bytes, which is the
+  only place an encoding pays (`speed.md` §"The open decision: one crossing").
+  (3) The cost of a step on the 77-object library, above.
 
 - **Several viewpoints at once, and whether it is worth it.** A run can already
   put a ring of patch cameras on one agent and give each its own learning module
