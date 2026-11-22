@@ -111,6 +111,31 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerTest do
     end
   end
 
+  describe "the largest slope" do
+    test "is the fastest-rising hypothesis, not the sum or the mean of them" do
+      # Three hypotheses learning at one, two and nought units a step: a burst
+      # starts or does not on the largest of these alone.
+      tracker =
+        tracker()
+        |> EvidenceSlopeTracker.add_hyp(3)
+        |> update!([1.0, 2.0, 5.0])
+        |> update!([2.0, 4.0, 5.0])
+        |> update!([3.0, 6.0, 5.0])
+
+      assert EvidenceSlopeTracker.max_slope(tracker) == 2.0
+    end
+
+    test "is nothing at all when no window holds a pair of observations" do
+      tracker = EvidenceSlopeTracker.add_hyp(tracker(), 2)
+
+      assert EvidenceSlopeTracker.max_slope(tracker) == nil
+    end
+
+    test "is nothing for a tracker with no hypotheses" do
+      assert EvidenceSlopeTracker.max_slope(tracker()) == nil
+    end
+  end
+
   describe "removing hypotheses" do
     test "removes exactly the named ones, keeping the rest in order" do
       # Three hypotheses learning at one, two and three units a step, so which

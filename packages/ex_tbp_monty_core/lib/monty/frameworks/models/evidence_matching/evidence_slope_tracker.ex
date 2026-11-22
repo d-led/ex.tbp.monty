@@ -134,8 +134,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
 
       %{
         tracker
-        | evidence:
-            write_slot(tracker.evidence, values, tracker.cursor * 8, tracker.window_size * 8),          # Every window shifts by one slot, so the oldest channel count is the
+        | # Every window shifts by one slot, so the oldest channel count is the
+          evidence:
+            write_slot(tracker.evidence, values, tracker.cursor * 8, tracker.window_size * 8),
           # one whose evidence the update just overwrote.
           channels: tl(tracker.channels) ++ [channels],
           ages: Enum.map(tracker.ages, &(&1 + 1)),
@@ -176,6 +177,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
 
     tracker
     |> keep_where(fn index, _hypothesis -> not MapSet.member?(remove, index) end)
+  end
+
+  @doc """
+  The largest finite slope any hypothesis has, or `nil`.
+
+  A burst starts when evidence stops moving, so this is the one question a step
+  asks of every tracker it holds — Monty's `_max_global_slope` asks each for
+  `np.max(slopes[np.isfinite(slopes)])`. The kernel answers it out of the bytes,
+  because the largest of a few thousand numbers is not worth making them all
+  terms. `nil` when no window holds a pair of finite slopes.
+  """
+  @spec max_slope(t()) :: float() | nil
+  def max_slope(%__MODULE__{} = tracker) do
+    if MatcherNif.loaded?() do
+      MatcherNif.max_slope(
+        tracker.evidence,
+        channels_bytes(tl(tracker.channels)),
+        tracker.window_size,
+        tracker.cursor
+      )
+    else
+      reference_max_slope(tracker)
+    end
   end
 
   @doc "Forgets every hypothesis, keeping the window size and minimum age."
@@ -223,7 +247,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   # The kernel's answer in Elixir, over the same numbers: a hypothesis may be
   # removed only once it is old enough, and a kept one must be rising.
   defp reference_keep_mask(%__MODULE__{} = tracker, slope_threshold) do
-    slopes = reference_slopes(tracker.evidence, tl(tracker.channels), tracker.window_size, tracker.cursor)
+    slopes =
+      reference_slopes(
+        tracker.evidence,
+        tl(tracker.channels),
+        tracker.window_size,
+        tracker.cursor
+      )
 
     [slopes, removable_indices_mask(tracker)]
     |> Enum.zip()
@@ -234,6 +264,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
 
   defp ages_bytes(ages),
     do: for(age <- ages, into: <<>>, do: <<age::unsigned-32-little>>)
+
+  # The kernel's answer in Elixir, over the same numbers: every window's slope,
+  # and the largest of the ones that are numbers at all.
+  defp reference_max_slope(%__MODULE__{} = tracker) do
+    tracker.evidence
+    |> reference_slopes(tl(tracker.channels), tracker.window_size, tracker.cursor)
+    |> Enum.filter(&is_float/1)
+    |> case do
+      [] -> nil
+      slopes -> Enum.max(slopes)
+    end
+  end
 
   defp keep_where(%__MODULE__{} = tracker, predicate) do
     row_size = tracker.window_size * 8
@@ -268,7 +310,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker do
   defp reference_write_slot(rest, <<>>, _offset, _stride, parts),
     do: IO.iodata_to_binary([parts, rest])
 
-  defp reference_write_slot(evidence, <<value::binary-size(8), values::binary>>, offset, stride, parts) do
+  defp reference_write_slot(
+         evidence,
+         <<value::binary-size(8), values::binary>>,
+         offset,
+         stride,
+         parts
+       ) do
     <<skipped::binary-size(^offset), _slot::binary-size(8), rest::binary>> = evidence
 
     reference_write_slot(rest, values, stride - 8, stride, [parts, skipped, value])

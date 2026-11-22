@@ -121,6 +121,33 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTrackerNativePar
     assert native.cursor == reference.cursor
   end
 
+  test "the largest slope is the same number either way" do
+    tracker =
+      EvidenceSlopeTracker.new(window_size: 4, min_age: 2)
+      |> EvidenceSlopeTracker.add_hyp(3)
+      |> update!([0.0, 5.0, 2.0], num_channels: 1)
+      |> update!([1.0, 4.0, 2.0], num_channels: 2)
+      |> update!([2.0, 3.0, 2.0], num_channels: 3)
+      |> update!([3.0, 2.0, 4.0], num_channels: 1)
+
+    native = EvidenceSlopeTracker.max_slope(tracker)
+    reference = with_reference(fn -> EvidenceSlopeTracker.max_slope(tracker) end)
+
+    assert native == reference
+    assert is_float(native)
+  end
+
+  test "no window with a filled pair has no largest slope either way" do
+    tracker =
+      EvidenceSlopeTracker.new(window_size: 3, min_age: 2)
+      |> EvidenceSlopeTracker.add_hyp(2)
+      |> update!([1.0, 2.0])
+
+    assert EvidenceSlopeTracker.max_slope(tracker) == nil
+
+    assert with_reference(fn -> EvidenceSlopeTracker.max_slope(tracker) end) == nil
+  end
+
   defp update!(tracker, values, opts \\ []) do
     assert {:ok, tracker} = EvidenceSlopeTracker.update(tracker, values, opts)
     tracker

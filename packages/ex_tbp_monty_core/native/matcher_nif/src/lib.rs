@@ -1023,6 +1023,44 @@ fn slope_at(
     }
 }
 
+/// The largest finite slope any hypothesis has, or `nil`.
+///
+/// A burst starts when evidence stops moving, so a step asks every object it
+/// knows for its largest slope and for nothing else. Monty reads
+/// `np.max(slopes[np.isfinite(slopes)])` — one number out of a column of
+/// thousands, the same question `min_value` answers — but here the column is
+/// bytes, and decoding it into terms to compare them made every graph's slopes a
+/// list of floats on every step: a quarter of a million of them on a
+/// seventy-seven-object step.
+///
+/// * `evidence`, `channels`, `window`, `cursor` — as `window_slopes` takes them.
+///
+/// A slope that is not finite is skipped, exactly as `np.isfinite` never lets
+/// one into the maximum; the answer is `nil` when no hypothesis has one.
+#[rustler::nif]
+fn max_slope(evidence: Binary, channels: Binary, window: u32, cursor: u32) -> Option<f64> {
+    let window = window as usize;
+    let cursor = cursor as usize;
+    let count = if window == 0 { 0 } else { evidence.len() / (window * 8) };
+
+    let mut largest: Option<f64> = None;
+
+    for hypothesis in 0..count {
+        let slope = slope_at(evidence.as_slice(), channels.as_slice(), window, cursor, hypothesis);
+
+        if !slope.is_finite() {
+            continue;
+        }
+
+        largest = Some(match largest {
+            Some(best) if best >= slope => best,
+            _ => slope,
+        });
+    }
+
+    largest
+}
+
 /// Which hypotheses a slope threshold keeps, one byte each: `1` kept, `0` not.
 ///
 /// The question a module asks of its slopes is almost always this one, and

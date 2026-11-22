@@ -199,6 +199,20 @@ defmodule ExTbpMonty.Core.MatcherNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The largest finite slope any hypothesis has, or `nil`.
+
+  `evidence`, `channels`, `window` and `cursor` are as `window_slopes/4` takes
+  them. A burst starts when evidence stops moving, and that is one number out of
+  every hypothesis' slope, so it is read out of the bytes rather than out of a
+  decoded column — the same reason `min_value/1` exists. A slope that is not
+  finite is skipped, as `np.isfinite` skips it, and the answer is `nil` when no
+  hypothesis has a finite slope.
+  """
+  @spec max_slope(binary(), binary(), non_neg_integer(), non_neg_integer()) :: float() | nil
+  def max_slope(_evidence, _channels, _window, _cursor),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   Which hypotheses a slope threshold keeps, one byte each: `1` kept, `0` not.
 
   The question a module asks of its slopes is nearly always this one, and asking
