@@ -50,9 +50,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       a step is a value: a test can hold two versions of the same module and see
       what one step changed.
     * **Evidence updates run for one graph at a time.** Monty's
-      `use_multithreading` switch threads the per-object updates; each is
-      independent, so the result is identical either way, and parallelism
-      belongs to whoever calls the steps rather than to the algorithm.
+      `use_multithreading` switch threads the per-object updates; here a round of
+      them is a request (`concurrent_objects?`), because a BEAM process is not a
+      thread and a task is handed a copy of what its closure holds. Each update is
+      independent, so the result is identical either way, and concurrency belongs
+      to whoever calls the steps rather than to the algorithm.
     * **Object ids come back sorted** (`GraphMemory`'s map order) rather than in
       the order models were learned. Only exact ties can tell the difference,
       and a tie is broken by id, which is at least stable across runs.
@@ -104,17 +106,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             required_symmetry_evidence: 5,
             max_nneighbors: 3,
             learning_module_id: "LM_0",
-            # Whether the per-object evidence updates run in parallel — Monty's
-            # `use_multithreading`, which its own configs leave at the
-            # constructor's default and which its docstring recommends. Its
-            # false is a debugging switch: same numbers, one update at a time.
-            use_multithreading: true,
+            # Whether the per-object evidence updates may run concurrently —
+            # Monty's `use_multithreading`, which its own configs leave at the
+            # constructor's default. The name here says concurrency because a
+            # BEAM process is not a thread; Monty's `false` is a debugging switch
+            # there and the same numbers here, one update at a time.
+            concurrent_objects?: true,
             # Whether the memory this module reads is a term other processes can
             # hold without copying it: the studio's cached library lives in
             # `:persistent_term`, and a term from there is shared with every
             # process it is sent to, while a memory the run itself built is on
             # this process's heap and would be copied once per task. The round
-            # is only taken when both this and `use_multithreading` are true.
+            # is only taken when this, `concurrent_objects?` and a run's request
+            # are all true.
             #
             # A run that reads a library says so from the shell it builds its
             # modules in (`Monty.Runtime.LearningModuleServer`); a training phase
@@ -205,11 +209,12 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   are passed to it; `:displacer` and `:scorer` are built here from the
   configuration above, so that every strategy sees the same comparison.
 
-  `:use_multithreading` decides whether one step's per-object updates may run in
-  parallel, as Monty's does by default; `:memory_shared?` says the memory is the
-  kind a task can hold without copying it (`Monty.Studio.Memory`), and
-  `:round_objects?` is a run asking for the round — all three are needed,
-  because the round measured no faster than the loop (`graph_round?/1`).
+  `:concurrent_objects?` says whether one step's per-object updates may run at
+  once, which is what Monty's `use_multithreading` asks for; `:memory_shared?`
+  says the memory is the kind a task can hold without copying it
+  (`Monty.Studio.Memory`), and `:round_objects?` is a run asking for the round —
+  all three are needed, because the round measured no faster than the loop
+  (`graph_round?/1`).
 
   `:gsg` is the goal generator this module will drive, and is `nil` unless an
   experiment supplies one — the same default Monty's evidence learning module
@@ -252,7 +257,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         required_symmetry_evidence: Keyword.get(options, :required_symmetry_evidence, 5),
         max_nneighbors: Keyword.get(options, :max_nneighbors, 3),
         learning_module_id: Keyword.get(options, :learning_module_id, "LM_0"),
-        use_multithreading: Keyword.get(options, :use_multithreading, true),
+        concurrent_objects?: Keyword.get(options, :concurrent_objects?, true),
         memory_shared?: Keyword.get(options, :memory_shared?, false),
         round_objects?: Keyword.get(options, :round_objects?, false),
         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
@@ -393,7 +398,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # keeps `new/2`'s default, which is Monty's own.
   @module_options [
     {"evidence_threshold_config", :evidence_threshold_config},
-    {"use_multithreading", :use_multithreading},
+    # Monty's key names a Python thread; a BEAM process is not one, so the
+    # option it arrives as says what it is — concurrency.
+    {"use_multithreading", :concurrent_objects?},
+    # This port's own key, and the only way a run asks for the object round: an
+    # experiment's YAML may write it beside `use_multithreading`. Nothing in a
+    # shipped config does, because the round measured no faster than the loop
+    # (`graph_round?/1`); it is here so that a run measuring its own workload can
+    # ask, and so that a probe can compare the two paths on a real episode.
+    {"round_objects", :round_objects?},
     {"feature_evidence_increment", :feature_evidence_increment},
     {"vote_evidence_threshold", :vote_evidence_threshold},
     {"past_weight", :past_weight},
@@ -941,8 +954,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   Whether a step's per-object updates are taken in a round.
 
   Monty's answer is its `use_multithreading`, and Monty's threads share the
-  memory for free. A BEAM process hands a task a copy of what its closure holds,
-  so a round needs three things here: the config asking for it, a memory a task
+  memory for free. A BEAM process is not a thread: it is handed a copy of what
+  its closure holds. So the config's switch arrives here as
+  `concurrent_objects?`, and a round needs three things: that, a memory a task
   can hold without copying, and a run that asks — because measured, the round
   does not pay:
 
@@ -963,7 +977,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   @spec graph_round?(t()) :: boolean()
 
   def graph_round?(%__MODULE__{
-        use_multithreading: true,
+        concurrent_objects?: true,
         round_objects?: true,
         memory_shared?: true
       }),
@@ -972,7 +986,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   def graph_round?(%__MODULE__{}), do: false
 
   # Monty's `_update_possible_matches`: one update a graph, and — under
-  # `use_multithreading`, which is Monty's default — one process a graph, because
+  # `concurrent_objects?`, which is Monty's own default outcome — one process a
+  # graph, because
   # the objects share nothing. Monty says so in a comment ("the updates of
   # different objects are independent of each other"); here the independence is
   # in the data: an update reads its own graph's space and the step's threshold,

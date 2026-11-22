@@ -111,7 +111,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
       assert EvidenceGraphLM.graph_round?(shared)
       refute EvidenceGraphLM.graph_round?(%{shared | memory_shared?: false})
-      refute EvidenceGraphLM.graph_round?(%{shared | use_multithreading: false})
+      refute EvidenceGraphLM.graph_round?(%{shared | concurrent_objects?: false})
       refute EvidenceGraphLM.graph_round?(%{shared | round_objects?: false})
     end
   end
@@ -158,13 +158,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   # One memory for both paths: they answer questions about the same objects, and a
   # memory holds its index as a native reference, so two separately built memories
   # would differ by identity in the very state being compared.
-  defp module(memory, updater, use_multithreading) do
+  defp module(memory, updater, concurrent_objects?) do
     {:ok, lm} =
       EvidenceGraphLM.new(memory,
         max_match_distance: 0.01,
         tolerances: %{@channel => %{"principal_curvatures_log" => [1.0, 1.0]}},
         hypotheses_updater: updater,
-        use_multithreading: use_multithreading,
+        concurrent_objects?: concurrent_objects?,
         # The fixture's memory is small enough to be held by a task whatever it
         # is; the flag stands for the studio's cached library, which is the case
         # the round exists for.

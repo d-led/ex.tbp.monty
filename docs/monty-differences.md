@@ -2679,6 +2679,19 @@ and finds otherwise can set the third.
 A training phase keeps the loop for the older reason — its memory is on the
 module's heap, and a round over it copies the library into every task (`§2.44`).
 
+**What the 4 % is, and what it is not.** A task is handed a copy of what its
+closure holds: the object's four columns, the space's structure and the module's
+updater state. Shrinking a column does not touch it — the mask was turned into one
+byte a hypothesis, which is the largest term a space carries (two words a
+hypothesis as a list of booleans), and the count did not move: the loop 4 869 k →
+4 872 k reductions a step and the round's excess unchanged, so the change was
+reverted rather than kept for its shape. The columns are already binaries, which
+a task holds by reference; what copies is the structure around them. Not sending
+that structure at all — sharing the spaces and the updater through ETS, or taking
+a burst's whole path in one NIF call over the columns — is the change that would
+make a round pay, and it is the one `speed.md` has on record as
+"The open decision: one crossing".
+
 **The draw, which chose per-module streams.** The goal generator flips a coin when
 one object is left (`decide_between_objects/6`), and it used to draw from the
 episode's one stream — `Monty.Random.Stream`, one process a model, which is

@@ -44,7 +44,7 @@ module = fn parallel? ->
       max_match_distance: 0.01,
       tolerances: %{channel => %{"principal_curvatures_log" => [1.0, 1.0]}},
       hypotheses_updater: BurstSamplingHypothesesUpdater,
-      use_multithreading: parallel?,
+      concurrent_objects?: parallel?,
       # The fixture's memory is tiny, so it can be held by a task whatever it is;
       # the flag stands for the studio's cached library.
       memory_shared?: true

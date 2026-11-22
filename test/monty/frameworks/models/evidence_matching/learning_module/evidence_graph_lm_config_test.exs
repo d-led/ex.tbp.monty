@@ -121,8 +121,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       {:ok, in_a_round} = EvidenceGraphLM.from_config(config())
       {:ok, one_at_a_time} = EvidenceGraphLM.from_config(config(%{"use_multithreading" => false}))
 
-      assert in_a_round.use_multithreading == true
-      assert one_at_a_time.use_multithreading == false
+      assert in_a_round.concurrent_objects? == true
+      assert one_at_a_time.concurrent_objects? == false
     end
 
     test "decides the poses a run starts from, out of the updater's own arguments" do
