@@ -89,6 +89,31 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
       assert Enum.sort(Map.keys(candidates)) == ["cup", "mug"]
       assert paths == %{}
     end
+
+    test "the memory as one object answers for that object as the whole library does" do
+      memory = loaded(%{"mug" => model("mug", 2), "cup" => model("cup", 3)})
+
+      one_object = GraphMemory.narrow(memory, "cup")
+
+      assert GraphMemory.get_memory_ids(one_object) == ["cup"]
+
+      assert GraphMemory.get_locations_in_graph(one_object, "cup", "patch") ==
+               GraphMemory.get_locations_in_graph(memory, "cup", "patch")
+
+      assert GraphMemory.get_feature_array(one_object, "cup", "patch") ==
+               GraphMemory.get_feature_array(memory, "cup", "patch")
+    end
+
+    test "narrowing keeps what the memory itself is configured with" do
+      memory = loaded(%{"mug" => model("mug", 2), "cup" => model("cup", 2)})
+
+      one_object = GraphMemory.narrow(memory, "mug")
+
+      # Which features a channel is matched on is the memory's, not an object's:
+      # narrowed by object, an update would have nothing to compare against.
+      assert one_object.features_to_use == memory.features_to_use
+      assert one_object.object_model == memory.object_model
+    end
   end
 
   describe "the feature rows matching compares against" do
