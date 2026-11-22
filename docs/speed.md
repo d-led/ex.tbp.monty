@@ -303,13 +303,16 @@ Against the stand-in the _results_ are not the experiment's, which is what the
 run says in its own header; the number worth having is that the run starts and
 steps at all, and what a matching step costs on seventy-seven objects.
 
-**And what it costs once the per-object updates are a round:** the same eight
-steps, interleaved pairs, `--no-record`, this Mac — loop **337–345 ms a step**,
-round **95–103 ms a step**, the same steps and the same goal count (15 065). The
-round was three to four times _worse_ than the loop until a task stopped being
-handed the whole updater; seventy-seven copies of 3 048 µs is what it was paying
-(`monty-differences.md` §2.45). It is a lever a run asks for (`round_objects`),
-not the default: the loop is Monty's own shape for a step.
+**And what it costs once the per-object updates are a round, which is what a run
+does now:** the same eight steps, `--no-record`, this Mac — loop **337–345 ms a
+step**, round **95–103 ms a step**, the same steps and the same goal count
+(15 065). The round was three to four times _worse_ than the loop until a task
+stopped being handed the whole updater; seventy-seven copies of 3 048 µs is what
+it was paying (`monty-differences.md` §2.45). Three whole episodes of the
+ten-object config — 108 steps — are identical step for step in both shapes, and
+that is what made the round the default: a config asks for the loop with
+`round_objects: false`, and a training phase keeps it because its memory is on
+the module's heap.
 
 ## A page watching a run
 
@@ -350,11 +353,11 @@ Three places in this port do work in a round instead of in a loop. Each was
 measured on both sides, and each answers a different way — which is the reason
 the measurements are here rather than a rule about rounds:
 
-| round                | loop                               | in a round   | verdict                                                              |
-| -------------------- | ---------------------------------- | ------------ | -------------------------------------------------------------------- |
-| an object's evidence | 337–345 ms a step, 77 objects      | 95–103 ms    | **pays**: a task is handed one object (`monty-differences.md` §2.45) |
-| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work                   |
-| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it                 |
+| round                | loop                               | in a round   | verdict                                                                                 |
+| -------------------- | ---------------------------------- | ------------ | --------------------------------------------------------------------------------------- |
+| an object's evidence | 337–345 ms a step, 77 objects      | 95–103 ms    | **pays and is the default**: a task is handed one object (`monty-differences.md` §2.45) |
+| a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work                                      |
+| a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it                                    |
 
 The numbers are from this Mac (Apple Silicon, macOS 26), the MuJoCo world
 through `ex_mujoco`, and two runs per arm of `base_10simobj_surf_agent` started

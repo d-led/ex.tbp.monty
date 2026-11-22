@@ -2700,20 +2700,20 @@ faster path on both configs and the smaller library is not the interesting one:
 3.4× on the seventy-seven-object library, which is the workload whose cost was
 the open question (`docs/roadmap.md`).
 
-**What still gates it.** Three switches, and two of them are the port's own
-conditions rather than a preference: the config's `use_multithreading`
-(`concurrent_objects?`), a memory a task can be handed without copying
-(`memory_shared?`, set for the studio's cached library, which loads from
-`:persistent_term`), and `round_objects?`, which is a run asking. The third
-defaults to `false` on purpose: Monty's `use_multithreading` says _threads_, this
-port's round is a different shape with its own merge, and a run that switches
-shapes should say so. A run's goals are drawn from the episode's one stream, so
-two arms that differ in shape are worth comparing step by step before a shape
-becomes the default — the eight steps here agree to the goal, and an episode-long
-comparison is what would make either shape the default.
+**Which shape a run takes.** The round now, because it is Monty's own answer and
+the faster one. Two things take it away, and neither is a preference: a memory the
+module holds on its own heap (`memory_shared?` is false — a training phase carries
+the term its last episode wrote, `§2.44`), and a config that asks for the loop with
+`round_objects: false`, which is how the two shapes are compared on one config.
+Monty's `use_multithreading: false` takes it away too, as it does there.
 
-A training phase keeps the loop for the older reason — its memory is on the
-module's heap and is not a memory a task may be handed (`§2.44`).
+The comparison that made it the default: **three whole episodes of
+`base_config_10distinctobj_dist_agent`, 108 steps, identical step for step** in
+both shapes — the timings aside, not one field differs, and the goal count is
+123 524 either way — with the model taking 3.60 s in the loop against **1.77 s** in
+the round. So the round is now what a run does, and `mix monty.run
+base_77obj_dist_agent --steps 8 --no-record` prints **756 ms of model time** where
+it printed 2.70 s.
 
 **What the 4 % is, and what it is not.** A task is handed a copy of what its
 closure holds: the object's four columns, the space's structure and the module's

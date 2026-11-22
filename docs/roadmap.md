@@ -268,11 +268,14 @@ loop, and its step count is Monty's for every episode of the epoch.
   nodes are partitioned rather than sorted; the episodes of a run divide across
   parts (1.7× and 2.07× on two measurements); a shared hypothesis space, a crate
   behind it, an ETS table and the pictures as binaries were each priced and
-  rejected. The objects of a step are a loop unless a run asks for a round
-  (`round_objects`): in reductions a round is 4 % more work, and in the clock it
-  is **3.4× less** on the seventy-seven-object library once a task is handed one
-  object rather than the library (this Mac, eight steps, the stand-in scene,
-  interleaved arms: 337–345 ms a step against 95–103).
+  rejected. The objects of a step are taken in a round, which is Monty's own
+  answer: three episodes of `base_config_10distinctobj_dist_agent` are identical
+  step for step in both shapes and the model takes 1.77 s in the round against
+  3.60 s in the loop; a config asks for the loop with `round_objects: false`. In
+  reductions the round is still 4 % more work, and on the clock it is **3.4×
+  less** on the seventy-seven-object library once a task is handed one object
+  rather than the library (this Mac, eight steps, the stand-in scene,
+  337–345 ms a step against 95–103, now the default).
 
 - **Next, in the order the measurements put them.** (1) ~~The salience step~~ —
   done, and the measurements above are what it cost and what it left: one pass
