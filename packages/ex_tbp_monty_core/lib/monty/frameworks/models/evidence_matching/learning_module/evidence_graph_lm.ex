@@ -104,6 +104,28 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
             required_symmetry_evidence: 5,
             max_nneighbors: 3,
             learning_module_id: "LM_0",
+            # Whether the per-object evidence updates run in parallel — Monty's
+            # `use_multithreading`, which its own configs leave at the
+            # constructor's default and which its docstring recommends. Its
+            # false is a debugging switch: same numbers, one update at a time.
+            use_multithreading: true,
+            # Whether the memory this module reads is a term other processes can
+            # hold without copying it: the studio's cached library lives in
+            # `:persistent_term`, and a term from there is shared with every
+            # process it is sent to, while a memory the run itself built is on
+            # this process's heap and would be copied once per task. The round
+            # is only taken when both this and `use_multithreading` are true.
+            #
+            # **No run sets this yet.** The round is built, measured and equal to
+            # the loop (`docs/monty-differences.md` §2.45, ~8–16 % of the model
+            # time), and it waits on a step's random draws: the goal generator
+            # takes its coin from the episode's one stream, which the modules
+            # reach in scheduler order, so a round — like any change in how long
+            # a module's step takes — can change which module drew first. One
+            # stream a module decides it either way, and that moves the port's
+            # goal sequence, which is Monty's; that is the user's call, not a
+            # quiet default.
+            memory_shared?: false,
             has_detailed_logger: false,
             hypotheses_updater_module: DefaultHypothesesUpdater,
             hypotheses_updater_options: [],
@@ -187,6 +209,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   are passed to it; `:displacer` and `:scorer` are built here from the
   configuration above, so that every strategy sees the same comparison.
 
+  `:use_multithreading` decides whether one step's per-object updates run in
+  parallel, as Monty's does by default; `:memory_shared?` says the memory is the
+  kind a task can hold without copying it (`Monty.Studio.Memory`), and only then
+  is the parallel round taken — the numbers are the same either way.
+
   `:gsg` is the goal generator this module will drive, and is `nil` unless an
   experiment supplies one — the same default Monty's evidence learning module
   has, which takes a generator as an argument rather than creating one.
@@ -228,6 +255,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
         required_symmetry_evidence: Keyword.get(options, :required_symmetry_evidence, 5),
         max_nneighbors: Keyword.get(options, :max_nneighbors, 3),
         learning_module_id: Keyword.get(options, :learning_module_id, "LM_0"),
+        use_multithreading: Keyword.get(options, :use_multithreading, true),
+        memory_shared?: Keyword.get(options, :memory_shared?, false),
         has_detailed_logger: Keyword.get(options, :has_detailed_logger, false),
         hypotheses_updater_module:
           Keyword.get(options, :hypotheses_updater, DefaultHypothesesUpdater),
@@ -362,10 +391,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   # Monty instantiates the module by handing its config to `__init__`, so every
   # constructor parameter a config names decides what runs. These are the ones
-  # that arrive as a number or a string; a key the config does not name keeps
-  # `new/2`'s default, which is Monty's own.
+  # that arrive as a number, a string or a switch; a key the config does not name
+  # keeps `new/2`'s default, which is Monty's own.
   @module_options [
     {"evidence_threshold_config", :evidence_threshold_config},
+    {"use_multithreading", :use_multithreading},
     {"feature_evidence_increment", :feature_evidence_increment},
     {"vote_evidence_threshold", :vote_evidence_threshold},
     {"past_weight", :past_weight},
@@ -424,12 +454,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   end
 
   # A key a config does not name is absent, not `nil`: `nil` written into a
-  # number's place fails a comparison much later, in the middle of a step.
+  # number's place fails a comparison much later, in the middle of a step. `false`
+  # is a value a config can name — a switch — so what is asked is whether the key
+  # is there, never whether its value is truthy: `value = Map.get(...)` as a
+  # comprehension filter drops every switch a config turned off, silently.
   defp present_options(pairs, config) do
     for {key, option} <- pairs,
-        value = Map.get(config, key),
-        not is_nil(value),
-        do: {option, value}
+        Map.has_key?(config, key),
+        not is_nil(Map.get(config, key)),
+        do: {option, Map.get(config, key)}
   end
 
   defp threshold_config(options) do
@@ -895,12 +928,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp update_possible_matches(%__MODULE__{} = lm, {features, displacement}) do
     lm = begin_step(lm)
-
-    lm =
-      lm
-      |> get_all_known_object_ids()
-      |> Enum.reduce(lm, &update_evidence(&2, features, displacement, &1))
-
+    lm = lm |> get_all_known_object_ids() |> update_every_graph(lm, features, displacement)
     lm = end_step(lm)
 
     %{
@@ -911,9 +939,100 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     }
   end
 
-  defp update_evidence(%__MODULE__{} = lm, features, displacement, graph_id) do
-    hypotheses = Map.get(lm.hypotheses, graph_id, Hypotheses.empty())
+  @doc """
+  Whether a step's per-object updates are taken in a round.
 
+  Monty's answer is its `use_multithreading`, and Monty's threads share the
+  memory for free. A BEAM process hands a task a copy of what its closure holds,
+  so the round is taken only when both are true: the config asks for it, and the
+  memory is one a task can hold without copying — the studio's cached library,
+  which lives in `:persistent_term` and is shared with every process it is sent
+  to. A memory the run itself built is on the module's heap: measured on the
+  ten-object `pretrained_ycb_v10` library built in-process, one step took 1.8 s
+  in a round against 33 ms one at a time, which is the copy and not the work.
+
+  `memory_shared?` is not set by any run yet — see the field's comment, and
+  `docs/monty-differences.md` §2.45 for what the round measured and what it
+  waits on.
+  """
+  @spec graph_round?(t()) :: boolean()
+  def graph_round?(%__MODULE__{use_multithreading: true, memory_shared?: true}), do: true
+  def graph_round?(%__MODULE__{}), do: false
+
+  # Monty's `_update_possible_matches`: one update a graph, and — under
+  # `use_multithreading`, which is Monty's default — one process a graph, because
+  # the objects share nothing. Monty says so in a comment ("the updates of
+  # different objects are independent of each other"); here the independence is
+  # in the data: an update reads its own graph's space and the step's threshold,
+  # writes its own graph's space and tracker, and the only thing the round shares
+  # is the updater state, which `merge_step/2` puts back together by graph.
+  #
+  # The loop is Monty's debugging path, kept for the same reason it is kept
+  # there — and it is also what proves the round: both branches run the same
+  # per-graph update, in the same graph order, and answer the same numbers; the
+  # loop threads the updater forward and the round merges it back, so a merge
+  # that dropped one object's state would show up as a difference between them.
+  defp update_every_graph(graph_ids, %__MODULE__{} = lm, features, displacement) do
+    if graph_round?(lm),
+      do: in_a_round(graph_ids, lm, features, displacement),
+      else: one_at_a_time(graph_ids, lm, features, displacement)
+  end
+
+  defp in_a_round(graph_ids, %__MODULE__{} = lm, features, displacement) do
+    view = graph_view(lm)
+
+    graph_ids
+    |> Enum.map(&{&1, space_of(lm, &1)})
+    |> Task.async_stream(
+      fn {graph_id, hypotheses} -> update_one(view, features, displacement, graph_id, hypotheses) end,
+      ordered: false,
+      timeout: :infinity
+    )
+    |> Enum.map(fn
+      {:ok, update} ->
+        update
+
+      {:exit, reason} ->
+        raise RuntimeError, "a graph's evidence update stopped: #{inspect(reason)}"
+    end)
+    |> merge_updates(lm)
+  end
+
+  # Monty's loop, one update after another, each handed what the one before it
+  # left — which is what mutating `self` in place is. There is no merge here on
+  # purpose: a loop that merged its own steps could agree with a round that
+  # merged wrongly, and the comparison in the tests is only worth making if the
+  # two paths get to the same answer for different reasons.
+  defp one_at_a_time(graph_ids, %__MODULE__{} = lm, features, displacement) do
+    Enum.reduce(graph_ids, lm, fn graph_id, lm ->
+      update =
+        update_one(graph_view(lm), features, displacement, graph_id, space_of(lm, graph_id))
+
+      lm
+      |> put_graph_hypotheses(update)
+      |> put_graph_telemetry(update)
+      |> put_graph_updater(update)
+    end)
+  end
+
+  defp space_of(%__MODULE__{hypotheses: hypotheses}, graph_id),
+    do: Map.get(hypotheses, graph_id, Hypotheses.empty())
+
+  # What one graph's update reads of the module: the step's evidence threshold
+  # rule and the updater. Not the module — its memory and the other graphs'
+  # spaces are not this update's business, and a process is handed a copy of what
+  # its closure holds.
+  defp graph_view(%__MODULE__{} = lm) do
+    %{
+      mlh_evidence: lm.current_mlh.evidence,
+      threshold_config: lm.threshold_config,
+      hypotheses_updater: lm.hypotheses_updater
+    }
+  end
+
+  # Monty's `_update_evidence(feature, displacement, graph_id)`: one object's
+  # space, from the graph's hypotheses to the updater's answer for them.
+  defp update_one(view, features, displacement, graph_id, hypotheses) do
     # The stored evidence, not `get_current_mlh/1`: that one refreshes the MLH's
     # location by indexing its graph's space, and this loop replaces those
     # spaces one object at a time — so an object already behind us has been
@@ -925,30 +1044,68 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
     # meant decoding all of them first, once per graph per step.
     update_threshold =
       LearningModule.evidence_update_threshold(
-        lm.threshold_config,
-        lm.current_mlh.evidence,
+        view.threshold_config,
+        view.mlh_evidence,
         hypotheses
       )
 
-    {lm, displaced} = displace(lm, hypotheses, displacement)
+    {module, updater} = view.hypotheses_updater
+    displaced = module.displace_hypotheses(updater, hypotheses, displacement)
 
-    {lm, updated, telemetry} =
-      update_with_updater(lm, displaced, features, graph_id, update_threshold)
+    {updater, updated, telemetry} =
+      module.update_evidence(updater, displaced, features, graph_id, update_threshold)
 
-    lm = %{
+    # Monty keeps the hypotheses it had when the updater had nothing to do with
+    # them: a graph whose channel this observation does not carry learns nothing
+    # from it, and its (undisplaced) space says as much — which is why a `nil`
+    # here is carried as "no answer", never as an empty space.
+    %{
+      graph_id: graph_id,
+      hypotheses: updated,
+      telemetry: telemetry,
+      updater: {module, updater}
+    }
+  end
+
+  # The round's answers, put back into the module in one order whichever order
+  # they were produced in: each update owns one graph, so sorting by graph id
+  # makes the merge independent of how many processes answered, and of when.
+  # `base` is the state they all started from, which is what tells the merge
+  # which keys a half changed.
+  defp merge_updates(updates, %__MODULE__{hypotheses_updater: {module, base}} = lm) do
+    updates
+    |> Enum.sort_by(& &1.graph_id)
+    |> Enum.reduce(lm, fn update, lm ->
+      lm
+      |> put_graph_hypotheses(update)
+      |> put_graph_telemetry(update)
+      |> merge_graph_updater(module, base, update)
+    end)
+  end
+
+  defp put_graph_hypotheses(lm, %{graph_id: _graph_id, hypotheses: nil}), do: lm
+
+  defp put_graph_hypotheses(lm, %{graph_id: graph_id, hypotheses: updated}),
+    do: %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, updated)}
+
+  defp put_graph_telemetry(lm, %{graph_id: graph_id, telemetry: telemetry}),
+    do: %{
       lm
       | hypotheses_updater_telemetry:
           put_telemetry(lm.hypotheses_updater_telemetry, graph_id, telemetry)
     }
 
-    # Monty keeps the hypotheses it had when the updater had nothing to do with
-    # them: a graph whose channel this observation does not carry learns
-    # nothing from it, and its (undisplaced) space says as much.
-    case updated do
-      nil -> lm
-      updated -> %{lm | hypotheses: Map.put(lm.hypotheses, graph_id, updated)}
-    end
-  end
+  # The loop's way: the update was handed the state it started from and answers
+  # with the next one, so its answer is the state — nothing to merge.
+  defp put_graph_updater(%__MODULE__{} = lm, %{updater: updater}),
+    do: %{lm | hypotheses_updater: updater}
+
+  # The round's way: every update started from the same state, so what comes back
+  # is one graph's share of it and the shares are put together.
+  defp merge_graph_updater(%__MODULE__{hypotheses_updater: {module, updater}} = lm, module, base, %{
+         updater: {module, update}
+       }),
+       do: %{lm | hypotheses_updater: {module, module.merge_step(base, updater, update)}}
 
   defp put_telemetry(telemetry_by_graph, _graph_id, telemetry) when telemetry == %{},
     do: telemetry_by_graph
@@ -962,24 +1119,6 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   defp end_step(%__MODULE__{hypotheses_updater: {module, updater}} = lm) do
     %{lm | hypotheses_updater: {module, module.end_step(updater)}}
-  end
-
-  defp displace(%__MODULE__{hypotheses_updater: {module, updater}} = lm, hypotheses, displacement) do
-    displaced = module.displace_hypotheses(updater, hypotheses, displacement)
-    {lm, displaced}
-  end
-
-  defp update_with_updater(
-         %__MODULE__{hypotheses_updater: {module, updater}} = lm,
-         hypotheses,
-         features,
-         graph_id,
-         threshold
-       ) do
-    {updater, updated, telemetry} =
-      module.update_evidence(updater, hypotheses, features, graph_id, threshold)
-
-    {%{lm | hypotheses_updater: {module, updater}}, updated, telemetry}
   end
 
   @doc """
@@ -1020,8 +1159,8 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
         hypotheses =
           Map.new(lm.hypotheses, fn {graph_id, hypotheses} ->
-            {_lm, displaced} = displace(lm, hypotheses, displacement)
-            {graph_id, displaced}
+            {module, updater} = lm.hypotheses_updater
+            {graph_id, module.displace_hypotheses(updater, hypotheses, displacement)}
           end)
 
         %{lm | hypotheses: hypotheses, buffer: %{lm.buffer | last_location: location}}

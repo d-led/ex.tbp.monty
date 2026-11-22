@@ -113,6 +113,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
       assert updater.displacer.max_nneighbors == 5
     end
 
+    # A switch a config turned off is a value, not an absence. The reader that
+    # turns the mapping into options filtered on `value = Map.get(config, key)`,
+    # which is false for `false` — so every switch written as `false` in Monty's
+    # tree was silently dropped, and the module ran Monty's default instead.
+    test "decides whether one step's objects are updated in a round, off as well as on" do
+      {:ok, in_a_round} = EvidenceGraphLM.from_config(config())
+      {:ok, one_at_a_time} = EvidenceGraphLM.from_config(config(%{"use_multithreading" => false}))
+
+      assert in_a_round.use_multithreading == true
+      assert one_at_a_time.use_multithreading == false
+    end
+
     test "decides the poses a run starts from, out of the updater's own arguments" do
       # Monty's Hydra instantiates the updater with `**hypotheses_updater_args`,
       # and `learning_module/evidence_omniglot_tutorial.yaml` pins

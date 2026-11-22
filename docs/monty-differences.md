@@ -2608,3 +2608,58 @@ graphs was 27× **slower** than doing the work serially
 (`scripts/probe_lm_graph_split.exs`) is that a task receives the term its closure
 captured, so every task copied the library. A library that no longer travels in
 the spec is the precondition for that pass, not the pass itself.
+
+## 2.45 A step's objects in a round, and the draw that decides it is off
+
+Monty updates the hypotheses of every object in its memory once a step, and with
+`use_multithreading` — its constructor's default, and what its own configs leave
+alone — it gives each object a thread (`_update_possible_matches`). The objects
+share nothing, so this port's loop has always been a deviation nobody could see:
+the numbers came out the same.
+
+**Built.** `EvidenceGraphLM.update_possible_matches/2` has both paths now. The
+round is `Task.async_stream/3`, one process an object, each handed only that
+object's space and the step's threshold rule — never the module, because a task
+is handed a copy of what its closure holds (`§2.44`). The updater state is put
+back together afterwards by `HypothesesUpdater.merge_step/3`, which is given the
+state both halves started from: every half carries the base's copy of the objects
+it did not touch, so merging whole maps would let a later half put a stale copy
+back for an object an earlier half had just refreshed. `merge_changed/3` is that
+rule, and the equality case failed on exactly that mistake before it was right.
+The loop threads the updater forward instead, as mutating `self` in place is, so
+the two paths reach the same answer for different reasons — which is what makes
+comparing them worth anything.
+
+**Measured**, this Mac, `randrot_noise_10distinctobj_5lms_dist_agent`, seed 42,
+one episode of 26 steps, `ex_mujoco`, `--no-record`: the loop took 1.61–1.70 s of
+model time, the round 1.42–1.51 s. Every field of every step is identical between
+the arms, beliefs and goal counts included. The same memory built in-process is
+the opposite case: one step takes 1.8 s in a round against 33 ms in the loop,
+which is the library being copied into every task (`§2.44`).
+
+**Why it is off.** The round is taken only when the config asks _and_ the module
+knows its memory is a term a task can hold without copying (`memory_shared?`),
+and no run sets that flag. A step's random draws are why. The goal generator
+flips a coin when one object is left (`decide_between_objects/6`), and it draws
+from the episode's one stream — `Monty.Random.Stream`, one process a model,
+which is Monty's single mutable `RandomState`. Monty's learning modules step one
+at a time, so its draw order is its loop's. This port steps them in parallel, so
+the order is whichever call reached the stream first, and a run's goal count then
+flaps by one between two runs of the same seed (observed: `goals 31 580` against
+`31 630`, the beliefs equal up to the step that differs). That is not the round's
+fault — it is a race the concurrency always had — but a round changes how long a
+module's step takes, which changes how often it shows.
+
+One stream a module, seeded from the episode's seed and the module's name, is
+deterministic under any scheduling, and it was tried: the goals stopped flapping
+in eight runs of two arms. It also moved the goal sequence off Monty's, and with
+it some episodes of the divided-run test stopped concluding — the port's
+recognition on the reference config got _worse_, not merely different. Which of
+the two matters more is a decision about what this port is for, so the round is
+built, tested and waiting rather than switched on.
+
+`present_options/2` is fixed on the way past, and that is not a detail: it read a
+config's values with `value = Map.get(config, key)` as a comprehension filter,
+which is false for `false`, so every switch a config turned _off_ was dropped
+without a word and the module ran its default. `use_multithreading` is read
+through the same table, which is how the round could be measured at all.

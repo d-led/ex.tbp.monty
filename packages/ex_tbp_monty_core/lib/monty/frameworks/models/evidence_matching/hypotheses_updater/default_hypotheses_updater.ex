@@ -42,6 +42,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
+  alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -90,6 +91,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   @spec end_step(t()) :: t()
   def end_step(%__MODULE__{} = updater), do: updater
+
+  @doc """
+  Two halves of one step, each having updated different graphs.
+
+  The only state a graph's update touches is which of its channels this episode
+  has started, and a graph belongs to one half, so the union is the whole step.
+  """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  @spec merge_step(t(), t(), t()) :: t()
+  def merge_step(%__MODULE__{} = base, %__MODULE__{} = left, %__MODULE__{} = right),
+    do: %{
+      left
+      | initialised_channels:
+          HypothesesUpdater.merge_changed(
+            base.initialised_channels,
+            left.initialised_channels,
+            right.initialised_channels
+          )
+    }
 
   @doc """
   Move every hypothesis by `displacement`, as its own orientation sees it.

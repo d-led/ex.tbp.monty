@@ -72,4 +72,38 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater do
               String.t(),
               float()
             ) :: {state, Hypotheses.t() | nil, telemetry()}
+
+  @doc """
+  Combine two updaters that updated **different** graphs of one step.
+
+  Monty runs the per-object updates in parallel (`use_multithreading`), and each
+  update touches only its own object's state, so the step's updater is the union
+  of what the rounds produced. Both `left` and `right` are the whole state with
+  one graph's entries changed relative to `base` — the state `begin_step/1`
+  returned, which every update was handed — so the merge is
+  `merge_changed/3`, not a pair of whole maps: a plain `Map.merge/2` would let a
+  later half put a *stale* copy back for a graph an earlier half had refreshed.
+
+  Two halves that changed the same graph is a caller's bug: whichever half won
+  would silently drop the other's history for that object.
+  """
+  @callback merge_step(state, state, state) :: state
+
+  @doc """
+  Two halves of one state, each having changed some of its keys.
+
+  A key takes the value of the half that changed it, and keeps `base`'s value
+  where neither half touched it. With the two halves changing disjoint keys, the
+  answer is the same whichever way round they arrive — which is what lets a round
+  of processes put its work back together in a fixed order and get what a loop
+  would have.
+  """
+  @spec merge_changed(map(), map(), map()) :: map()
+  def merge_changed(base, left, right) do
+    right
+    |> Enum.reduce(%{}, fn {key, value}, changed ->
+      if Map.get(base, key) == value, do: changed, else: Map.put(changed, key, value)
+    end)
+    |> then(&Map.merge(left, &1))
+  end
 end

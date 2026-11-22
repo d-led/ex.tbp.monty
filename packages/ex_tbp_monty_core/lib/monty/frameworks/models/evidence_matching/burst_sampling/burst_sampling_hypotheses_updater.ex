@@ -34,6 +34,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   alias Monty.Frameworks.Models.EvidenceMatching.EvidenceSlopeTracker.HypothesesSelection
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
+  alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -142,6 +143,27 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     do: %{updater | sampling_burst_steps: steps - 1}
 
   def end_step(%__MODULE__{} = updater), do: updater
+
+  @doc """
+  Two halves of one step, each having updated different graphs.
+
+  A graph's update writes that graph's slope tracker and nothing else — whether
+  a burst is running and the step's largest slope were decided once, in
+  `begin_step/1`, before either half existed, so both sides already agree on
+  them. What is merged is the trackers: one half per graph.
+  """
+  @impl Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  @spec merge_step(t(), t(), t()) :: t()
+  def merge_step(%__MODULE__{} = base, %__MODULE__{} = left, %__MODULE__{} = right),
+    do: %{
+      left
+      | evidence_slope_trackers:
+          HypothesesUpdater.merge_changed(
+            base.evidence_slope_trackers,
+            left.evidence_slope_trackers,
+            right.evidence_slope_trackers
+          )
+    }
 
   @doc """
   Move every hypothesis by `displacement`, as its own orientation sees it.
