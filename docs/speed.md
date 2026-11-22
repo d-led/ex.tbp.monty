@@ -319,7 +319,7 @@ the measurements are here rather than a rule about rounds:
 
 | round                | loop                               | in a round   | verdict                                                      |
 | -------------------- | ---------------------------------- | ------------ | ------------------------------------------------------------ |
-| an object's evidence | 4 857 k reductions a step          | 5 058 k      | **not taken**: the copies cost more than the fan-out (§2.45) |
+| an object's evidence | 4 857 k reductions a step          | 5 058 k      | **not taken**: the fan-out costs more than the objects (§2.45) |
 | a module's vote      | 5.5–8.2 ms, ten objects, 162 votes | 16–44 ms     | **rejected**: a vote is half a millisecond of work           |
 | a step's sensors     | 3.43–3.53 ms a step                | 4.30–4.50 ms | **rejected as the default**; a run may still name it         |
 
