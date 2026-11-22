@@ -453,8 +453,8 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   defp normalize([]), do: []
 
   defp normalize(scores) do
-    lowest = Enum.min(scores)
-    scale = Enum.max(scores) - lowest
+    {lowest, highest} = Enum.min_max(scores)
+    scale = highest - lowest
 
     if scale < @flat_range,
       do: Enum.map(scores, fn score -> score |> max(0.0) |> min(1.0) end),
@@ -463,21 +463,22 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
 
   # One goal per on-object pixel: the motor system may look at it, and the
   # learning modules must not learn from it — a salience module says where, not
-  # what. A confidence outside `[0, 1]` would be a fault in the rescaling above,
-  # so it raises here rather than being dropped.
+  # what. A goal is built as its struct rather than through `Goal.new/1`: its
+  # fields are this module's own — the place is a point of the view, three
+  # numbers by the walk that collected it, and the confidence is the rescale
+  # above, which cannot leave `[0, 1]` — and `SalienceSMTest` holds those two
+  # facts at the output. A view carries a goal per on-object pixel, so a call
+  # and a validation per goal was most of a salience step.
   defp goals_for(%__MODULE__{} = sm, locations, salience) do
     Enum.zip_with([locations, salience], fn [location, confidence] ->
-      {:ok, goal} =
-        Goal.new(
-          location: location,
-          confidence: confidence,
-          pass_message: false,
-          process_features_in_lm: false,
-          sender_id: to_string(sm.sensor_module_id),
-          sender_type: :sm
-        )
-
-      goal
+      %Goal{
+        location: location,
+        confidence: confidence,
+        pass_message: false,
+        process_features_in_lm: false,
+        sender_id: to_string(sm.sensor_module_id),
+        sender_type: :sm
+      }
     end)
   end
 
