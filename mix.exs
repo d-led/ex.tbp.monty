@@ -238,8 +238,8 @@ defmodule ExTbpMonty.MixProject do
       # assigns, streams) across files. It is five days old and says of itself
       # that it may break, so it is not in the quality gate — the standalone task
       # is how it is run, and `docs/developers.md` says what came of the trial.
-      {:soundcheck, "~> 0.2.1", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.38", only: :dev, runtime: false}
+      {:soundcheck, "~> 0.3", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
   end
 
