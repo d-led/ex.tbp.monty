@@ -1,9 +1,9 @@
 # Several nodes
 
 One studio is one node. This page is about running more than one, on one machine
-or on several, and about the two things that make a cluster of this application
-different from a cluster of a stateless web app: **what each node keeps to itself**
-and **what each node can do**.
+or on several. Two things make a cluster of this application different from a
+cluster of a stateless web app: **what each node keeps to itself** and **what each
+node can do**.
 
 Clustering is off unless it is asked for. A `mix phx.server` with no variables
 set, a release with no node name and the desktop window all start exactly the
@@ -96,35 +96,32 @@ one machine and wrong for several machines.
 ## The desktop's name
 
 The window's sidecar is a named node, `monty-studio-<instance id>@127.0.0.1`, and
-it starts the tree that joins a cluster by default — the sample plugin nodes are
-meant to find it, and gossip needs a name that two launches on one machine do not
-share. A long name on the loopback, because a short one is resolved through DNS
-by whoever dials it and a stale record there is a cluster that silently never
-forms. The instance id is generated per launch in `rel/env.sh.eex`;
-`MONTY_STUDIO_INSTANCE_ID` overrides it, `NODE_NAME`/`RELEASE_NODE` overrides the
-whole name, and `MONTY_STUDIO_CLUSTER=0` is the way back to one undistributed
-node. Its data stays in the folder a single node uses — a name that changes per
-launch must not take the runs with it — unless `MONTY_NODE_FOLDER` names one.
+it joins a cluster by default: the sample plugin nodes are meant to find it, and
+gossip needs a name that two launches on one machine do not share. Its data stays
+in the folder a single node uses, because a name that changes per launch must not
+take the runs with it; `MONTY_NODE_FOLDER` names a folder for a worker that wants
+its own. The name, the loopback and `MONTY_STUDIO_CLUSTER=0` are in
+[desktop.md](desktop.md#the-node-name-and-the-cluster).
 
 Peers gossip, so two nodes on one machine find each other with nothing set. What
 gossip cannot reach — a scaled worker behind another network — is dialled from
-**Settings → Cluster → Connect to a node**, which takes `name@host` and reports
-per name whether it connected, whether it is this node, or whether nobody
-answered. It is not remembered: a peer list that survives a restart is
-`MONTY_SEEDS`. The same page starts the two bundled sample plugin nodes and stops
-them again when the window closes — see [desktop.md](desktop.md) for what they
-are.
+**Settings → Cluster → Connect to a node**. It takes `name@host` and reports per
+name whether it connected, whether it is this node, or whether nobody answered.
+It is not remembered: a peer list that survives a restart is `MONTY_SEEDS`. The
+same page starts the two bundled sample plugin nodes — see
+[desktop.md](desktop.md) for what they are.
 
 ## What the pages say
 
-The footer of every page carries the count — `2 nodes` — and links to
-Settings → Nodes, which names them, their build, and what each can do. Both
-follow the cluster: a peer joining or leaving moves the count and the list
-without anybody reloading. `ExTbpMonty.Cluster.Nodes` polls every three seconds
-(asking a peer for its build is an `:rpc`, and a peer that has just died answers
-nothing for a while, so no page ever waits behind one) and announces the list on
-`"cluster:nodes"` when it changes — only when it changes, because a page that
-re-renders every three seconds for nothing is a page that never stops working.
+The footer of every page carries the count (`2 nodes`) and links to Settings →
+Nodes, which names them, their build, and what each can do. Both follow the
+cluster: a peer joining or leaving moves the count and the list without anybody
+reloading. `ExTbpMonty.Cluster.Nodes` polls every three seconds and announces the
+list on `"cluster:nodes"` when it changes — only when it changes, because a page
+that re-renders every three seconds for nothing is a page that never stops
+working. The poll is an `:rpc` to each peer, so it happens on a timer rather than
+in a page render: a peer that has just died answers nothing for a while, and no
+page ever waits behind one.
 
 A peer's name is a link, because a node name is not a URL and "the run is on
 node2" is not something a reader can click. The address comes from the node

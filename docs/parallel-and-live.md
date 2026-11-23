@@ -1,17 +1,17 @@
 # Parallel episodes, and an experiment that never stops
 
-Two things Monty does that this port has not needed yet, and that the BEAM makes
-cheap enough to be a reason to be here rather than an afterthought:
+Two things Monty does, and the BEAM makes both cheap enough to be a reason to be
+here:
 
 1. **Running episodes in parallel** — Monty's `run_parallel.py`, one process per
-   episode.
+   episode. Built; see [§5](#5-where-this-sits-in-the-plan).
 2. **Running an episode against a live world** — a camera, a robot, anything that
-   produces observations on its own clock.
+   produces observations on its own clock. Not built.
 
-The first is nearly free here, because an episode is already a function of its
-inputs. The second needs two new pieces and no change to the model. What follows
-is what each one is, what it costs, and what has to be built — so the order the
-work arrives in stays a decision rather than a discovery.
+An episode was already a function of its inputs, so the first is nearly free. The
+second needs two new pieces and no change to the model. What follows is what each
+one is, what it costs, and what has to be built, so the order the work arrives in
+stays a decision rather than a discovery.
 
 ## 1. What Monty's parallel mode is
 
@@ -61,16 +61,15 @@ library is immutable data handed in (see the decision at the end of
 | One object per episode, asserted                      | Same, but as a _consequence_                                          | Per-module derived streams mean an episode cannot see another's draws           |
 
 The last row is the one worth arguing. Monty's restriction exists because mutable
-state leaks between episodes. Here determinism is per episode by construction —
+state leaks between episodes. Here determinism is per episode by construction:
 `Context.rng_for/2` derives every module's stream from the episode seed, the
-module and the step ([`monty-differences.md`](monty-differences.md) §2.1) — so two episodes
-cannot
-influence each other even if they run in the same process. **`num_parallel` is
-therefore a performance knob and can never be a correctness one**, which is a
-statement Monty cannot make about its own pool without auditing every global.
-A divided run is held to it: `test/monty/studio/jobs/run_test.exs` walks the same
-episodes whole and in parts and demands the same steps, and a world that draws is
-held to the same check.
+module and the step ([`monty-differences.md`](monty-differences.md) §2.1). Two
+episodes therefore cannot influence each other, even in the same process.
+**`num_parallel` is a performance knob and can never be a correctness one**,
+which is a statement Monty cannot make about its own pool without auditing every
+global. A divided run is held to it: `test/monty/studio/jobs/run_test.exs` walks
+the same episodes whole and in parts and demands the same steps, and a world that
+draws is held to the same check.
 
 ## 3. What is not free
 
@@ -97,17 +96,16 @@ Said plainly, because these are the numbers that decide the design:
   ten-distinct-objects evidence experiment
   (`randrot_noise_10distinctobj_5lms_dist_agent`, seed 42, 26 steps, world
   `ex_mujoco`, on the Mac this was measured on) the model took 121 s and the
-  world 3.5 s. The log's own split put nine tenths of that in the vote round and
-  nearly all of the round in `receive` — the modules applying the votes they
-  heard. A round carries about 160 votes for one object and a module holds
-  thirteen thousand hypotheses, and each hypothesis sorted the whole vote list to
-  find its three nearest: O(H·V log V) in Elixir for what Monty asks a KD-tree,
-  O(H log V). `EvidenceGraphLM` now builds that index — `KdTree`, native when
-  this machine has it — and asks it for the three nearest of each hypothesis. The
-  same episode then takes **18 s** in the model, with the same steps, the same
-  votes and the same beliefs, and a step is ~700 ms of which the world is ~80 ms.
-  So before deciding what to fan out, read the split: the biggest term here was a
-  loop that had no business being in a step at all.
+  world 3.5 s. The log's own split put nine tenths of that in the vote round, and
+  nearly all of the round in `receive`: the modules applying the votes they heard.
+  A round carries about 160 votes for one object, a module holds thirteen thousand
+  hypotheses, and each hypothesis sorted the whole vote list to find its three
+  nearest — O(H·V log V) in Elixir for what Monty asks a KD-tree, O(H log V).
+  `EvidenceGraphLM` now builds that index (`KdTree`, native when the machine has
+  it) and asks it for the three nearest of each hypothesis. The same episode then
+  takes **18 s** in the model, with the same steps, votes and beliefs, and a step
+  is ~700 ms of which the world is ~80 ms. Before fanning anything out, read the
+  split: the biggest term here had no business being in a step at all.
 - **A page says what its numbers measured.** A step's `sensors` is a round's wall
   clock, not the sum of what ran inside it, and the same is true of `await` and of
   the round's parts — so the same line means two different things depending on how

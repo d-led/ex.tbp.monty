@@ -1,26 +1,38 @@
 # The desktop deployment
 
-Where this stands: **the window builds, and it serves the studio unchanged.** The
-chain is `src-tauri` → `_build/desktop/rel/ex_tbp_monty/bin/server` → the
-endpoint on a loopback port → a webview. `scripts/start-desktop.sh` builds both
-halves and opens it; `--in-browser` serves the same release in a terminal and
-`--where` prints the folder it keeps its data in.
+The window is the studio unchanged. The chain is `src-tauri` →
+`_build/desktop/rel/ex_tbp_monty/bin/server` → the endpoint on a loopback port →
+a webview. `scripts/start-desktop.sh` builds both halves and opens it;
+`--in-browser` serves the same release in a terminal, and `--where` prints the
+folder it keeps its data in.
 
-No screen was added or rewritten. Every page the window shows is the page the
-server serves, because a page that needed a second version for the desktop would
-be a page that had stopped being the same application.
+No page has a second version. Every page the window shows is the page the server
+serves, because a desktop copy would be a second application.
+
+## The short version
+
+- **Get it**: `scripts/run-desktop.sh`, or the one-liner in the
+  [README](../README.md). `scripts/package.sh` builds what a person downloads.
+- **Its data** goes under the OS's application-data folder for `ex-tbp-monty`:
+  the database, the run records, and Monty's data under `tbp/`.
+- **It answers on** 42_800, so a client pasted `/mcp/config` once keeps working.
+  `MONTY_DESKTOP_PORT`, or one line in `desktop_port`, moves it.
+- **It is a cluster node**, named `monty-studio-<id>@127.0.0.1`.
+  `MONTY_STUDIO_CLUSTER=0` starts it alone; `MONTY_STUDIO_INSTANCE_ID` names it
+  for good.
+- **Why it is built this way** begins at
+  [Why it is possible now](#why-it-is-possible-now).
 
 ## Why it is possible now
 
-The application used to need a database server to boot. A desktop app cannot ask
-that of a user.
+The application used to need a database server to boot, and a desktop app cannot
+ask that of a user. The database is now a file by default.
 
-The database is now a file by default. Trust that only after one fix:
-`repo_module/0` used to answer a written-in default of Postgres. `runtime.exs` then
-set `:repo` from `repo_module/0`, so the default echoed itself. A release with no
-`DATABASE_URL` started Postgres against a file path.
-
-The symptom: a migration that never ran, and an image that never became healthy.
+The fix that made it true is worth knowing, because the bug looked like nothing:
+`repo_module/0` answered a written-in default of Postgres, `runtime.exs` set
+`:repo` from `repo_module/0`, and the default echoed itself. A release with no
+`DATABASE_URL` started Postgres against a file path. The symptom was a migration
+that never ran and an image that never became healthy.
 
 | piece                                                                                                                                                | where                                                                  |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -175,15 +187,13 @@ it runs as, whether it is running, which window it joined, and where its log is,
 with **Open Monty Studio** and **Stop node**. Closing the window stops the node,
 and so does Quit.
 
-The node a companion starts has a name of its own, `<node>_app@127.0.0.1`, and
-both halves are deliberate. `epmd` keys on the bare name, so a checkout that runs
-the same plugin as `example_plugin@127.0.0.1` would keep the app from booting at
-all with _the name … seems to be in use by another Erlang node_; and the name is
-long on the loopback because a short one is resolved through DNS by whoever dials
-it, which on a machine whose hostname answers with an address its interface no
-longer has is a cluster that silently never forms. A name `epmd` already holds
-that does not answer the launcher's `rpc` shows as _not running_ in the window,
-and the release's own refusal is in the log the window names.
+The node a companion starts is named `<node>_app@127.0.0.1`. Both halves are
+deliberate. `epmd` keys on the bare name, so a checkout running the same plugin as
+`example_plugin@127.0.0.1` would stop the app from booting at all (_the name …
+seems to be in use by another Erlang node_). The long name on loopback is the
+same rule as [the window's](#the-node-name-and-the-cluster): a short name goes
+through DNS. A name `epmd` holds that does not answer the launcher's `rpc` shows
+as _not running_, and the release's own refusal is in the log the window names.
 
 The window needs no plugins and starts none by itself — it is the cluster, not
 their keeper; all it can do is offer to start the two that a checkout keeps beside
@@ -242,8 +252,7 @@ own release from `Contents/Resources/<node>`. The node's own output goes to
 `${TMPDIR%/}/monty-studio-<node>.log`, which the window names. `MONTY_STUDIO_APP`
 points one at a window somewhere else, which is how a checkout tries them without
 installing anything. Pressing it twice is not an error: a node that is already up
-answers, and the window says it is running instead of starting a second one. Each
-app is about 19 MB, most of it its own runtime.
+answers, and the window says it is running instead of starting a second one.
 
 **A plugin is told where the window is; it does not discover it.** The two
 example nodes do not use libcluster: each runs a `Join` process that dials the

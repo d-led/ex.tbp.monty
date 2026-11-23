@@ -34,6 +34,15 @@ py
 uid
 tmpfs
 mujoco
+NSIS
+AppImage
+gtk
+linuxdeploy
+sha256
+PNGs
+dmg
+pkg
+deb
 Omniglot
 Saccade
 Saccades

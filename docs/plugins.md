@@ -68,18 +68,18 @@ therefore namespaces its names, as the example's do.
    cannot serve, and `lookup/2` will hand out exactly such a copy. The caller is
    expected to know; a cluster should not depend on that.
 3. **`needs` is checked by the caller, and answered by the host.** A plugin says
-   what it calls while it answers (`:quiddity` for the geometry, `:monty` for
-   the framework), and a host publishes what it carries — the packages on its
-   code path, by the name `needs` uses, plus the machine tags in
-   `MONTY_CAPABILITIES` (`MontyPlugin.Capabilities.carried/0`, `ex_monty_plugin`
-   0.1.2). `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the
-   host's tags beside the answer, and treats a node that does not offer what the
-   plugin declares as no candidate — so the refusal says "offered, but by no node
+   what it calls while it answers (`:quiddity` for the geometry, `:monty` for the
+   framework), and a host publishes what it carries: the packages on its code
+   path, by the name `needs` uses, plus the machine tags in `MONTY_CAPABILITIES`
+   (`MontyPlugin.Capabilities.carried/0`, `ex_monty_plugin` 0.1.2).
+   `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the host's
+   tags beside the answer, and treats a node that does not offer what the plugin
+   declares as no candidate. The refusal therefore reads "offered, but by no node
    that can serve it: … does not offer :quiddity" instead of a step failing
-   inside a plugin. The check belongs in `route/4` so that the next caller does
-   not have to write it again. Until 0.1.2 the host's tags came only from the
+   inside a plugin. The check belongs in `route/4`, so that the next caller does
+   not have to write it again. Before 0.1.2 the host's tags came only from the
    plugins it registered, so no `needs` could be satisfied and the honest value
-   was `[]`; a host on an older lock still answers that way, and a plugin asking
+   was `[]`. A host on an older lock still answers that way, and a plugin asking
    for the framework is refused rather than called where the framework is not.
 4. **No answer discipline.** Nothing says whether a request is idempotent, how long
    it may take, or what a call in flight does when the peer dies
@@ -98,9 +98,9 @@ What used to be "a description a page can read" is now a run:
 `Monty.Studio.PluginExperiment` asks the plugin for its definition (`run/0`, once),
 composes the config it names here, and resolves the modules it asks for against
 what this cluster can serve. `Monty.Studio.open/2` falls through to it, so the
-`experiment page <http://localhost:4001/experiments>`_, its Run button, the queue
-and the run page are the ones that already exist — a name this node cannot
-compose is a question for the cluster.
+[experiment page](http://localhost:4001/experiments), its Run button, the queue
+and the run page are the ones that already exist. A name this node cannot compose
+is a question for the cluster.
 
 The record keeps both halves: `defined_by` (which plugin, which version, which
 node answered the definition) and `motor_policy` (which policy was called). Run on
@@ -145,9 +145,10 @@ Elixir one would be a fourth _world_ (`Monty.Studio.Setup.world/4` is where a wo
 is added) rather than a fourth variation. `ex_monty_plugin` is the contract all
 three hosts answer and `fine` is the FFI under `ex_mujoco`: neither is a thing a
 run can swap. `ex_quiddity`, `ex_cadmpeg` and `ex_monty_cad` are the geometry and
-the memory, not decisions: what they are for is [a CAD part in a run](cad.html).
+the memory, not decisions: what they are for is
+[a CAD part in a run](cad.md).
 
-A comparison is what the runs are, not what this page says they are: every record
+A comparison is what the runs are, not what this page says they are. Every record
 keeps `defined_by` (plugin, version, node) and `motor_policy` (policy, version,
 node), which is what makes two rows comparable after the fact.
 
