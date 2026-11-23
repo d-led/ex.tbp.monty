@@ -206,10 +206,11 @@ drawn nothing from one that has drawn a whole block.
 The four angle helpers (`theta_change`, `enforce_pi_bounds`, and the two
 projections between an angle and a vector) and `pc_moving_average` are identical to
 Monty's, line for line. `Context.rng_for/2`, which seeds Erlang's `:exsss` per
-module and per step, is still the draw site for `ActionSampler.stream/3` and for a
-transform's noise; `Monty.Random.Numpy` has `randint`/`choice`, so those draws can
-move onto the episode's one `Monty.Random.Stream` — and until they do, a config
-whose sampler draws is not walking Monty's walk (§2.1).
+module and per step, is still the draw site for a transform's noise;
+`Monty.Random.Numpy` has `randint`/`choice`, so those draws can move onto the
+episode's one `Monty.Random.Stream` — and until they do, a config whose noise
+parameters draw is not using Monty's numbers (§2.1). The action samplers were the
+other site and draw from the episode's stream as of 2026-11-23 (§2.5).
 
 **Done when**: `mix monty.run base_config_10distinctobj_dist_agent` runs an
 episode **against Monty's own world through the studio**, with no probe in the

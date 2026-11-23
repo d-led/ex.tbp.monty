@@ -15,7 +15,7 @@ been reported upstream.
 
 1. [**§2.1 Random streams**](#21-random-streams-one-stream-per-episode-numpys-numbers)
    — the one that bites.
-2. [**§2.5 A sampler answers the stream it leaves behind**](#25-a-sampler-answers-the-stream-it-leaves-behind)
+2. [**§2.5 A sampler draws from the episode's one stream**](#25-a-sampler-draws-from-the-episodes-one-stream)
    — the same stream, one layer down.
 
 Everything else changes where code lives, what an error looks like, or what
@@ -825,9 +825,9 @@ draws to different features and — because `rk_gauss` keeps one spare value —
 changes which `random_sample` calls interleave with it. Carrying the YAML's key
 order into the composed config is the work that would close it.
 
-Draw sites still on a per-module stream: `DepthTo3DLocations` noise,
-`Monty.SensorModules.SensorModule`'s transform pipeline, and
-`ActionSampler.stream/3`.
+Draw sites still on a per-module stream: `DepthTo3DLocations` noise and
+`Monty.SensorModules.SensorModule`'s transform pipeline. The action samplers
+were the third, and they draw from the episode's stream now (§2.5).
 
 ## 2.2 `motor_only_step` travels in the result
 
@@ -893,16 +893,25 @@ steps does not need to remember which ones answer bare values.
 `elem(result, 0).confidence`. See
 [`EvidenceGraphLM.get_output/1`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
-## 2.5 A sampler answers the stream it leaves behind
+## 2.5 A sampler draws from the episode's one stream
 
-**In one line:** `{action, rng}` — the caller threads the stream, so several
-draws in one step get different answers.
+**In one line:** `ActionSampler.sample/3` takes the context and spends `ctx.rng`,
+as Monty does; a policy holds no stream of its own.
 
-**The difference.** Monty writes `self.action_sampler.sample(self.agent_id,
-ctx.rng)` and mutates `ctx.rng` in place, so one stream advances across the
-episode. Here `ActionSampler.sample/3` answers `{action, rng}` and the caller
-threads it; a policy starts its stream from the context on the first draw and
-`reset/1` forgets it.
+**Closed on 2026-11-23.** This used to be a deviation: a sampler answered
+`{action, rng}`, every policy threaded the stream, and the thread began at
+`Context.rng_for/2` — an Erlang `:exsss` stream per module per step — so a config
+whose sampler drew was not walking Monty's walk (§2.1). Now the choice is
+`rng.choice(count)` read off the episode's `Monty.Random.Stream`, the parameter
+draws of `UniformlyDistributedSampler` are numpy's `uniform` and `random(3)`,
+and `sample/3` answers the action. The stream advances in the process that holds
+it, which is what Monty's in-place `RandomState` does.
+
+**Why the stream is a process and not a value threaded by hand.** A policy draws
+more than once in a step: `SurfacePolicy` samples a tangential direction and a
+distance, and the search draws a random angle. All of those draws belong to one
+advancing stream, and the module that keeps it is `Monty.Random.Stream` (§2.1),
+not the policy.
 
 **The code.** Monty:
 [`action_samplers.py:61-71`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/actions/action_samplers.py#L61-L71).
@@ -910,18 +919,8 @@ Ours: [`action_sampler.ex`](../lib/monty/frameworks/actions/action_samplers/acti
 used by [`base_policy.ex`](../lib/monty/frameworks/models/motor_policies/base_policy.ex),
 [`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
 and [`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_policy.ex).
-
-**Why it is deliberate — and why it is not about speed.** A policy draws more
-than once in a step: `SurfacePolicy` samples a tangential direction and a
-distance, and the search draws a random angle. A stream keyed to the step alone
-would answer all of those draws with the same action, which is wrong rather than
-slow. [`scripts/bench_samplers.exs`](../scripts/bench_samplers.exs) records that
-threading is also the cheaper
-option (1.0 µs against 1.4 µs per draw, in a ~39 ms step), but that is a
-tie-breaker, not the reason.
-
-**What it costs.** The same as §2.1: the numbers a draw produces are Monty's for
-a given stream, but the stream is not Monty's.
+The numbers a drawn walk consists of are pinned against
+`numpy.random.RandomState` in `action_sampler_test.exs`.
 
 ## 2.6 `get_top_two_pose_hypotheses_for_graph_id/2` answers `{best, nil}`
 
