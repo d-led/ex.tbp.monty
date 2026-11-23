@@ -40,16 +40,18 @@ measure; a wall clock is the machine's.
 
 ## How to measure, and what lies
 
-| what                             | how                                                                                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| work and garbage per step        | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                                                                         |
-| where in a step it is            | `MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]` — the world against the model, a processed step and a plain one apart |
-| who did the work                 | the same script — reductions per process, labelled by callback module                                                                           |
-| allocation per function          | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)                                                             |
-| the split inside one run's log   | `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — a step's own `duration_us` against the wall between lines                           |
-| the whole run, as a user sees it | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                         |
-| Monty's own share of its step    | `cProfile` inside Monty's venv, one epoch                                                                                                       |
-| **inside a NIF**                 | `/usr/bin/sample <beam pid> 5 -file out.txt` on this Mac — no Xcode needed, and the leaf frames name the Rust (`Rust` below)                    |
+| what                                | how                                                                                                                                             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| work and garbage per step           | `MIX_ENV=test mix run scripts/probe_step_cost.exs [experiment] [steps]`                                                                         |
+| where in a step it is               | `MIX_ENV=test mix run scripts/probe_step_phases.exs [experiment] [steps]` — the world against the model, a processed step and a plain one apart |
+| who did the work                    | the same script — reductions per process, labelled by callback module                                                                           |
+| allocation per function             | `MIX_ENV=test mix run scripts/probe_step_profile.exs` (tprof over one `Model.step`)                                                             |
+| the split inside one run's log      | `mix run scripts/probe_run_log.exs priv/studio_runs/<id>` — a step's own `duration_us` against the wall between lines                           |
+| the whole run, as a user sees it    | `mix monty.run <experiment> --episodes 1 --steps 8 --no-record` — the acceptance ladder                                                         |
+| how much of the machine a step uses | `MIX_ENV=test mix run scripts/probe_step_busy.exs [experiment] [steps]` — `:msacc` per scheduler: running, GC, idle, and the dirty-CPU share    |
+| one graph's k-nearest search        | `MIX_ENV=test mix run scripts/probe_nearest_cost.exs [experiment]` — a live graph's positions and its real query rows                           |
+| Monty's own share of its step       | `cProfile` inside Monty's venv, one epoch                                                                                                       |
+| **inside a NIF**                    | `/usr/bin/sample <beam pid> 5 -file out.txt` on this Mac — no Xcode needed, and the leaf frames name the Rust (`Rust` below)                    |
 
 **What a native sampler can and cannot tell you here.** `perf` and OTP's
 `+JPperf` are Linux; on macOS `sample` (or `xctrace`) attaches to `beam.smp` and
@@ -98,6 +100,15 @@ arithmetic and not a defect; it is also the ceiling of any future micro-work the
   `Process.info(pid, :current_stacktrace)` sampling reports "waiting" for every
   module held at a barrier: a sample answers "who is not running", never "who is
   not the cost".
+- **A module's state cannot be rewound to give two arms the same work.** Restoring
+  a learning module with `:sys.replace_state/2` before the second arm leaves the
+  coordinator's own expectations (`still_believing`, `pending_step`) disagreeing
+  with what the module holds, and the step that follows skips the module: both
+  arms read 13 ms steps that did nothing. Two shapes are compared by stepping two
+  runs, or by one run whose module flag is turned between steps.
+- `:msacc` counts microseconds, not milliseconds, and reports per _thread_: the
+  eight schedulers and the eight dirty-CPU schedulers share the same cores, so a
+  step's utilisation is the two shares summed, not either one.
 
 ## What a step is made of
 
@@ -521,6 +532,29 @@ assembles the whole hypothesis-space report only when it is built with
 `include_telemetry`, whose Monty default is `False` and which no config sets, so
 the port was alone in paying for it. Both are in now; the step reads 80–86 ms
 before and 69–71 ms after, three readings each.
+
+## What a step's cores are doing
+
+`scripts/probe_step_busy.exs` sums `:msacc` over the schedulers while warm steps
+run. On this Mac, the stand-in world, `base_77obj_dist_agent` with thousands of
+hypotheses in play: a step of 72–84 ms carries 93–115 ms of ordinary-scheduler
+work — a seventh of it garbage collection — and 120–125 ms of dirty-CPU work over
+the eight cores, so **2.9–4.4 of 8 cores are busy**. The step is not
+machine-bound, and the round's remaining gap is not task machinery; one scheduler
+carries the largest single slice, because the serial parts of a step (the
+sensors, the module's own bookkeeping before and after the round) live in one
+process.
+
+The dirty-CPU share is one k-nearest search per hypothesis: `/usr/bin/sample` on
+a stepping beam puts kiddo's `nearest_n_recurse` ahead of everything else in the
+step together, and every hypothesis's search location is distinct, so a step asks
+one question a hypothesis and none of them twice.
+`scripts/probe_nearest_cost.exs` prices it at 10.6 ms for 10 065 queries over a
+6 258-node graph — about a microsecond a query. Two cheap changes were measured
+and rejected: dropping the per-query answer copy (inside the noise, so the cost
+is the traversal and not the allocations) and kiddo's leaf bucket at 16 (worse)
+and 64 (level). What is left there is a hand-written allocation-free traversal or
+a newer kiddo; neither is measured.
 
 ## Acceptance for any speed change
 
