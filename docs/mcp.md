@@ -36,11 +36,11 @@ The server does not keep a copy of anything it talks about.
 Documentation answers carry the page's `slug` and a link to its published
 address (`https://docs.thousandbrains.org/docs/<slug>`), so a claim can be
 checked instead of believed. A page is named by its slug because that is how the
-site addresses it — `learning-modules`, not a path in a repository — and the
-same slug is what `monty_read_doc` and `monty_code_in_doc` take.
+site addresses it: `learning-modules`, not a path in a repository. The same slug
+is what `monty_read_doc` and `monty_code_in_doc` take.
 
-Nothing here reads a Monty checkout: a neighbouring checkout is a _development_
-input (`mix monty.inputs` copies its configs in), and the image has none. A site
+Nothing here reads a Monty checkout. A neighbouring checkout is a _development_
+input, and `mix monty.inputs` copies its configs in; the image has none. A site
 that cannot be reached is reported in words with what to try next, because a
 tool that cannot answer still answers.
 
@@ -53,9 +53,9 @@ guessed at.
 
 **The deployment** — `monty_studio`: how many experiments are preconfigured, how
 many runs there are of each state, how many episodes run at once, which world a
-run steps, and which data and model bundles are present. The answer to "can we
-run experiments in parallel", and to every other question about _this_ instance
-rather than about a config — an assistant does not need a shell to ask it.
+run steps, and which data and model bundles are present. It answers "can we run
+experiments in parallel", and every other question about _this_ instance rather
+than about a config. An assistant does not need a shell to ask it.
 
 **Documentation** — `monty_search_docs` (the site's own search), `monty_read_doc`
 (a page whole), `monty_docs_index` (the pages as slugs to choose from), and
@@ -81,10 +81,9 @@ of theory to source).
 one runs, and what each one can do. A node that runs alone answers with one
 entry, because clustering being off is not the same answer as a cluster of one.
 
-Every tool has an `inputSchema` and honest annotations: the ones that only read
-say `readOnlyHint`; the ones that write — a draft, an imported file, a queued
-run — say that too; and `monty_delete_runs` says `destructiveHint`, because it
-is.
+Every tool has an `inputSchema` and honest annotations. The ones that only read
+say `readOnlyHint`. The ones that write (a draft, an imported file, a queued run)
+say so too. `monty_delete_runs` says `destructiveHint`, because it is.
 
 ### Asking about this deployment
 
@@ -120,17 +119,17 @@ through the CAD application, which needs `MONTY_CAD_PART` to name the part
 refusal, not the schema, says what this node carries — a schema that hid a world
 would be a tool no validating client could ask.
 
-The limit is read from the running queue, not from the config: the run page
-changes it while the queue drains, so the config value is where it started.
+The limit is read from the running queue, not from the config. The run page
+changes it while the queue drains, so the config value is only where it started.
 A process with no queue up (a Mix task, a test run) says so and reports the
 configured limit, rather than claiming a number it cannot see.
 
-Storage is the _device's_ own answer — `df -kP` for the volume behind a path on
-unix, the drive table on Windows, where there is no `df` — rather than this
-application's share of it, and is reported per place because a checkout keeps
-`priv/` and Monty's data roots on disks that need not be one. A machine the
-operating system will not answer for says so (`device: null`) rather than
-reporting zeros that read as a full disk.
+Storage is the _device's_ own answer, not this application's share of it: `df -kP`
+for the volume behind a path on unix, the drive table on Windows, where there is
+no `df`. It is reported per place because a checkout keeps `priv/` and Monty's
+data roots on disks that need not be one. A machine the operating system will not
+answer for says so (`device: null`), rather than reporting zeros that read as a
+full disk.
 
 ### Asking "how many experiments?"
 
@@ -158,10 +157,10 @@ Learning modules: 1 18
 ...
 ```
 
-`ready` is the one to ask first when the question is "what can I run?": `yes`
+`ready` is the one to ask first when the question is "what can I run?". `yes`
 keeps the experiments this deployment runs, `no` the ones `Setup`'s findings
 refuse, and `not_planned` the ones whose world this build does not carry (Monty's
-Habitat configs). `world` keeps the configs written for one simulator —
+Habitat configs). `world` keeps the configs written for one simulator:
 `mujoco`, `habitat`, or `other`. Both are the same answers the experiments page
 filters on and [`docs/readiness.md`](readiness.md) counts.
 
@@ -213,10 +212,10 @@ new draft.
 counts by state plus each run with a link. `monty_run_report` is one run in
 detail; `monty_run_experiment` returns the link of the run it queued.
 
-`monty_delete_runs` deletes nothing unless `confirm` is true: the first call
+`monty_delete_runs` deletes nothing unless `confirm` is true. The first call
 answers exactly what would go, by id and experiment. It takes `run_ids`, or a
-`state`/`query` filter (at most 50 runs a call — a filter nobody narrowed is not
-a decision), and it never deletes a run that is still running: that run is the
+`state`/`query` filter, at most 50 runs a call: a filter nobody narrowed is not a
+decision. It never deletes a run that is still running, because that run is the
 only thing that can record what it did.
 
 ## Defining and running an experiment

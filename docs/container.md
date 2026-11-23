@@ -1,10 +1,9 @@
 # Running the container image
 
-One OTP release, built once and shipped as an image: the studio, the port, the
-worlds and — embedded — the Python that Monty's loggers call. It runs as an
-unprivileged user, with one writable directory, and it reports nothing to
-anybody: what it did is in its own database, on its own volume, and on its own
-pages.
+One OTP release, built once and shipped as an image. It carries the studio, the
+port, the worlds, and the embedded Python that Monty's loggers call. It runs as
+an unprivileged user and has one writable directory. It reports to nobody: what
+it did is in its own database, on its own volume and on its own pages.
 
 ```bash
 docker pull ghcr.io/d-led/ex.tbp.monty:latest
@@ -15,24 +14,24 @@ docker run --rm -p 6401:4000 \
   ghcr.io/d-led/ex.tbp.monty:latest
 ```
 
-Then <http://localhost:6401>. The release migrates itself as it boots, so there
-is no migration step in front of the server — `/app/bin/migrate` is there for an
-operator who wants to migrate without starting one.
+Then <http://localhost:6401>. The release migrates itself as it boots, so nothing
+has to run before the server. `/app/bin/migrate` exists for an operator who wants
+to migrate without starting one.
 
-`docker compose -f docker-compose.quickstart.yml up` in this repository runs
-that same thing with the database in a file on a volume.
-[`docker-compose.postgres.yml`](../docker-compose.postgres.yml) beside it is the
-same stack with a Postgres service of its own: same image, same port, same
-volumes, and `DATABASE_URL` the only difference between them. Both were checked
-by starting them: the file shape writes `ex_tbp_monty.db` on the volume, and the
-server shape puts `studio_runs`, `schema_migrations` and Oban's two tables in
-Postgres with no file in the container at all.
+`docker compose -f docker-compose.quickstart.yml up` runs the same thing with the
+database in a file on a volume.
+[`docker-compose.postgres.yml`](../docker-compose.postgres.yml) is that stack plus
+a Postgres service: same image, same port, same volumes. `DATABASE_URL` is the
+only difference. Both were checked by starting them. The file shape writes
+`ex_tbp_monty.db` on the volume; the server shape puts `studio_runs`,
+`schema_migrations` and Oban's two tables in Postgres and leaves no file in the
+container.
 
 ## The script, if you have the checkout
 
-[`scripts/image.sh`](../scripts/image.sh) is the same thing under the same image
-name, for a local tree: it builds with the build arguments CI passes, runs the
-shape this page describes, and can publish both architectures.
+[`scripts/image.sh`](../scripts/image.sh) does the same for a local tree, under
+the same image name. It builds with the build arguments CI passes, runs the shape
+this page describes, and can publish both architectures.
 
 ```bash
 scripts/image.sh build              # ghcr.io/d-led/ex.tbp.monty:local, from this tree
@@ -57,19 +56,20 @@ CI publishes. `--arch amd64|arm64` cross-builds one platform the same way.
 | a push to any other branch | `:<branch>` — `feature/x` becomes `:feature-x` |
 | a tag `v1.2.3`             | `:v1.2.3`                                      |
 
-Every published tag carries amd64 **and** arm64, each compiled on a runner of
-its own architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`), so neither half is
-emulated. Both are needed: the amd64 release does not boot under emulation on
+Every published tag carries amd64 **and** arm64, each compiled on a runner of its
+own architecture (`ubuntu-24.04`, `ubuntu-24.04-arm`), so neither half is
+emulated. Both are needed. The amd64 release does not boot under emulation on
 Apple Silicon (`{failed_to_start_child, user,nouser}` from the kernel), so an
-amd64-only tag is an image an arm64 laptop cannot run. There are no commit-hash
-tags: the image carries its commit instead, in `priv/build_info.json`, and the
-footer of every page shows it.
+amd64-only tag is an image an arm64 laptop cannot run.
+
+There are no commit-hash tags. The image carries its commit in
+`priv/build_info.json`, and the footer of every page shows it.
 
 ## What it reports about itself
 
-**Observability is the application's own.** The image does not talk to wandb:
-`WANDB_MODE=disabled` is baked in, which is wandb's own no-op mode, so a Monty
-config that names wandb loggers still runs and nothing is uploaded, written or
+**Observability is the application's own.** The image does not talk to wandb.
+`WANDB_MODE=disabled` is baked in, and that is wandb's own no-op mode: a Monty
+config that names wandb loggers still runs, and nothing is uploaded, written or
 awaited. What a deployment can look at instead:
 
 | Where                           | What                                                                                    |
@@ -81,9 +81,9 @@ awaited. What a deployment can look at instead:
 | `/app/priv/studio_runs/<uuid>/` | the same run's files as text a `grep` or `tail -f` can read                             |
 | the footer                      | the build the page came from: `main+3f2a1c9`, with the whole build in its tooltip       |
 
-To send runs to wandb anyway, `-e WANDB_MODE=online -e WANDB_API_KEY=...`: the
-client forwards every `WANDB_*` variable into the interpreter on each init, and
-writes under `WANDB_DIR` (below).
+To send runs to wandb anyway, add `-e WANDB_MODE=online -e WANDB_API_KEY=...`.
+The client forwards every `WANDB_*` variable into the interpreter on each init,
+and writes under `WANDB_DIR` (below).
 
 ## Environment
 
@@ -107,16 +107,17 @@ running `/app/bin/migrate` — or by booting, which migrates first.
 ### The memory
 
 The memory a run recognises with is an export of the pretrained pickles, written
-at run time, so it is kept beside the data rather than inside the release:
+at run time. It is kept beside the data rather than inside the release:
 `MONTY_LIBRARIES`, which defaults to `$MONTY_DATA/libraries`. On a volume the
-first fetch exports it once; inside the image's own filesystem it is thrown away
+first fetch exports it once. Inside the image's own filesystem it is thrown away
 with the container, and every start reads every model again.
 
-Nothing blocks on any of this. Every prerequisite with work left in it — the ones
-that are absent _and_ the ones that arrived without the memory a run reads — is
-fetched in the background as the server starts (`PREFETCH=0` turns that off),
-`/prerequisites` shows each download as it happens, and a run whose data has not
-arrived yet says so — rather than failing inside the simulator.
+Nothing blocks on any of this. Every prerequisite with work left in it is
+fetched in the background as the server starts. That includes the ones that are
+absent and the ones that arrived without the memory a run reads. `PREFETCH=0`
+turns the background fetch off. `/prerequisites` shows each download as it
+happens, and a run whose data has not arrived yet says so instead of failing
+inside the simulator.
 
 ### Required
 
@@ -178,70 +179,94 @@ other choice is this port's stand-in scene, which the setup page names.
 
 Not used by the image: `MONTY_SOURCE` and `TELEOP_SOURCE` (only the tasks that
 regenerate from upstream read a checkout), `PYTHON` (one Mix task),
-`MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI). The configs and snapshots the
-studio reads are **inside** the image — `/app/lib/ex_tbp_monty-*/priv/monty` for
-the release's own copy and `/app/priv/monty` for the one `HOME` and the `bin/priv`
-symlink point at; they need no checkout and take no volume.
+`MIX_TEST_PARTITION` and `COVERAGE_THRESHOLD` (CI). The configs and snapshots the studio reads are **inside** the image: at
+`/app/lib/ex_tbp_monty-*/priv/monty` (the release's own copy) and at
+`/app/priv/monty` (the one `HOME` and the `bin/priv` symlink point at). They need
+no checkout and take no volume.
 
 The MCP server's documentation and roadmap tools read no filesystem at all:
 they ask `docs.thousandbrains.org` and the project's roadmap data, so they answer
-the same here as on a laptop. They are the one part of the server that needs
-outbound HTTPS; every other tool answers from the image or the database, and a
-site that cannot be reached is reported in words rather than failing a call.
+the same here as on a laptop. They are the one part of the server that needs outbound HTTPS. Every other tool
+answers from the image or the database. A site that cannot be reached comes back
+as words, not as a failed call.
 
 ## Data and models: the prerequisites
 
-The image carries the software and Monty's own config tree — every config it
-ships, the snapshots they are held to, the worlds and the Python that steps
-them. What it does not carry is the memory those configs read: it is derived
-data, exported from the pretrained model bundle, so it lives on the data volume
-(`MONTY_LIBRARIES`, `<data>/libraries`) and the image built from a checkout has
-none of it until the first `/prerequisites` download writes it (that fetch ends
-by exporting the libraries, and a later visit exports nothing). The datasets and the model
-bundles themselves are not in it either: they are big, they change on their own
-schedule, and a pull that shipped them would be a pull nobody wants.
+The image carries the software and Monty's own config tree: every config it
+ships, the snapshots they are held to, the worlds and the Python that steps them.
+
+What it does not carry is the memory those configs read. That memory is derived
+data, exported from the pretrained model bundle. It lives on the data volume
+(`MONTY_LIBRARIES`, `<data>/libraries`), and an image built from a checkout has
+none of it until the first `/prerequisites` download writes it. That fetch ends by
+exporting the libraries; a later visit exports nothing.
+
+The datasets and model bundles are not in it either. They are big, they change on
+their own schedule, and a pull that shipped them would be a pull nobody wants.
 `/prerequisites` lists what an experiment needs, the path each file goes to, and
 which of them are already there.
 
-Three ways to have them:
+Four ways to have them:
 
-| Where they come from          | How                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| fetched from a terminal       | `docker run --rm -e SECRET_KEY_BASE="$(openssl rand -base64 48)" -v ex-tbp-monty-local-priv:/app/priv ghcr.io/d-led/ex.tbp.monty:latest /app/bin/prerequisites` — the page's fetch, for a deployment that would rather script it. It applies the schema, fetches what is missing, waits, exports the libraries and exits; on a volume that has them it does nothing. The secret is the release's own requirement (nothing is signed by it here) and the volume is the one `scripts/image.sh run` serves from — `VOLUME=…` renames both. A compose stack mounts its own `prerequisites` volume at `/app/priv/tbp` instead, so there the same command takes `-v <project>_prerequisites:/app/priv/tbp` |
-| downloaded by the running app | open `/prerequisites` in the UI and press download per entry. Each file streams to a `.part` name on the volume and is moved into place only when its size and checksum match                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| a Monty tree you already have | `-v /path/to/tbp:/app/priv/tbp:ro` — the defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is the one those defaults already point at. `scripts/image.sh run --data /path/to/tbp` is this row with the flag spelled out                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| anywhere else                 | `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…` — the variables Monty's own documentation uses — each pointing at a mounted path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+- **Fetched from a terminal.**
 
-The volume to mount for downloads is `/app/priv/tbp`, and that is what
-[`docker-compose.quickstart.yml`](../docker-compose.quickstart.yml) names —
-beside a second one for Postgres, so `docker compose down` keeps both the
-database and the downloaded bundles (`down -v` deletes them). Mounting
-`/app/priv` itself also works but hides the prerequisites the image carries;
-mounting `/app/priv/tbp` leaves them alone.
+  ```bash
+  docker run --rm -e SECRET_KEY_BASE="$(openssl rand -base64 48)" \
+    -v ex-tbp-monty-local-priv:/app/priv \
+    ghcr.io/d-led/ex.tbp.monty:latest /app/bin/prerequisites
+  ```
+
+  This is the page's fetch for a deployment that would rather script it. It
+  applies the schema, fetches what is missing, waits, exports the libraries and
+  exits. On a volume that has them it does nothing. The secret is a release
+  requirement and signs nothing here. The volume is the one `scripts/image.sh
+run` serves from; `VOLUME=…` renames both. A compose stack mounts its own
+  `prerequisites` volume at `/app/priv/tbp`, so there the same command takes
+  `-v <project>_prerequisites:/app/priv/tbp`.
+
+- **Downloaded by the running app.** Open `/prerequisites` and press download
+  per entry. Each file streams to a `.part` name on the volume and moves into
+  place only when its size and checksum match.
+
+- **A Monty tree you already have.** `-v /path/to/tbp:/app/priv/tbp:ro`. The
+  defaults hang off `HOME`, which is `/app/priv`, so the directory you mount is
+  the one those defaults already point at. `scripts/image.sh run --data
+/path/to/tbp` is this row with the flag spelled out.
+
+- **Anywhere else.** `-e MONTY_DATA=… -e MONTY_MODELS=… -e MONTY_LOGS=…`, the
+  variables Monty's own documentation uses, each pointing at a mounted path.
+
+Mount `/app/priv/tbp` for downloads. That is what
+[`docker-compose.quickstart.yml`](../docker-compose.quickstart.yml) names, beside
+a second volume for Postgres, so `docker compose down` keeps both the database
+and the downloaded bundles, and `down -v` deletes them. Mounting `/app/priv` also
+works, but it hides the prerequisites the image carries. Mounting
+`/app/priv/tbp` leaves them alone.
 
 A read-only mount is enough to _run_ against data you already have. Downloading
-into it needs write access, so leave the mount out (or make it writable) when the
-app should fetch them itself; either way they land on the volume and survive a
-restart.
+into it needs write access, so leave the mount out, or make it writable, when the
+app should fetch the data itself. Either way it lands on the volume and survives
+a restart.
 
-Nothing is fetched in front of the server: boot returns at once and what is
-missing arrives in the background — that is what the section above describes, and
-`PREFETCH=0` is how a deployment that would rather fetch deliberately turns it
-off. Either way an offline container runs any experiment whose files are in
-place, and `/prerequisites` is what says which ones are missing. From a
-fresh volume a MuJoCo run needs two downloads on that page — the YCB meshes it
-renders and the pretrained release its config names — after which the first
-experiment has its memory and starts. The third entry there, the older release
-the recorded parity episodes were made with, is not one of them.
+Nothing is fetched in front of the server. Boot returns at once and what is
+missing arrives in the background; `PREFETCH=0` turns that off for a deployment
+that would rather fetch deliberately. An offline container still runs any
+experiment whose files are in place, and `/prerequisites` says which ones are
+missing.
+
+From a fresh volume, a MuJoCo run needs two downloads on that page: the YCB
+meshes it renders, and the pretrained release its config names. After that the
+first experiment has its memory and starts. The older release the recorded parity
+episodes were made with is a third entry there; a run does not need it.
 
 ### The world needs nothing installed
 
 MuJoCo runs in the interpreter the release already carries. `pythonx` builds it
 at compile time and ships it under `/app/lib/pythonx-*/priv`, with `mujoco` and
 `numpy` in it; `priv/monty_py/world.py` is the scene, the agents and their
-cameras. So a MuJoCo run needs two things beyond the image, and neither is a
-package: the GL libraries MuJoCo's offscreen camera rendering uses (`libegl1`,
-`libgl1`, `libosmesa6`, installed by the Dockerfile) and the datasets below.
+cameras. A MuJoCo run needs two things beyond the image, and neither is a package: the GL
+libraries for MuJoCo's offscreen camera rendering (`libegl1`, `libgl1`,
+`libosmesa6`, installed by the Dockerfile), and the datasets below.
 
 **Habitat-Sim is not carried.** It exists only as a conda package for `linux-64`
 and `osx-64`, built against Python 3.9, and this application's world is MuJoCo.
@@ -250,13 +275,13 @@ being started and failing at its first step.
 
 ### The embedded Python is not one of them
 
-pythonx's environment — CPython and the packages named in
-[`config/pythonx.exs`](../config/pythonx.exs) —
-is built when the release is _compiled_: uv downloads and installs it then, which
-is most of the image's size. At run time nothing is downloaded and nothing is
-written; `pythonx` starts the interpreter from the release's `priv` on the boot
-path, so a run pays no first-use penalty for having Python at all — starting it
-measures in the low hundreds of milliseconds of boot.
+pythonx's environment is CPython plus the packages named in
+[`config/pythonx.exs`](../config/pythonx.exs). It is built when the release is
+_compiled_: uv downloads and installs it then, and that is most of the image's
+size. At run time nothing is downloaded and nothing is written. `pythonx` starts
+the interpreter from the release's `priv` on the boot path, so a run pays no
+first-use penalty for having Python at all. Starting it costs a few hundred
+milliseconds of boot.
 
 The one thing that _is_ lazy is `import wandb` inside that interpreter: about a
 second, once, on the first run that names a wandb logger. Paying it at boot for a
@@ -267,13 +292,14 @@ before a run.
 
 ## What is on the volume, and what owns it
 
-`/app/priv` is the only writable directory, and everything that writes is
-pointed at it — the studio's drafts, a run's files (`/app/bin/priv` is a symlink
-into it, because a release resolves those paths relative to its own `bin/`),
-Monty's downloads under `$HOME/tbp`, wandb's runs.
+`/app/priv` is the only writable directory, and everything that writes is pointed
+at it: the studio's drafts, a run's files, Monty's downloads under `$HOME/tbp`,
+and wandb's runs. (`/app/bin/priv` is a symlink into it, because a release
+resolves those paths relative to its own `bin/`.)
 
-That directory must belong to uid **10001**. The image cannot arrange it —
-giving ownership away needs the root it deliberately does not have:
+The directory must belong to uid **10001**. The image cannot arrange that: giving
+ownership away needs the root it deliberately does not have. What to do depends
+on the volume:
 
 | Volume                                          | What to do                                                        |
 | ----------------------------------------------- | ----------------------------------------------------------------- |
@@ -281,9 +307,9 @@ giving ownership away needs the root it deliberately does not have:
 | Kubernetes PVC                                  | `securityContext: { fsGroup: 10001 }` on the pod.                 |
 | Bind mount, tmpfs, Fly volume                   | `chown 10001:10001` the mount point once.                         |
 
-When it is wrong, the release says so at boot — `the release cannot write
-/app/priv/wandb (uid 10001); wandb will use the system temp directory` — and
-runs on, because a wrong volume is not a reason to refuse to serve.
+When it is wrong, the release says so at boot (`the release cannot write
+/app/priv/wandb (uid 10001); wandb will use the system temp directory`) and runs
+on. A wrong volume is not a reason to refuse to serve.
 
 ## Operating it
 
@@ -294,13 +320,13 @@ docker exec <container> /app/bin/ex_tbp_monty eval 'IO.inspect(Application.spec(
 docker exec <container> /app/bin/ex_tbp_monty remote     # a shell on the node
 ```
 
-A healthcheck that means something: `GET /health` answers 200 when the
-database is reachable and 503 when it is not, so an orchestrator's HTTP probe
-covers it — Fly's `[[http_service.checks]]`, a Kubernetes `readinessProbe` on
-`/health`, or any uptime monitor pointed at it.
+A healthcheck that means something: `GET /health` answers 200 when the database
+is reachable and 503 when it is not. An orchestrator's HTTP probe can use it:
+Fly's `[[http_service.checks]]`, a Kubernetes `readinessProbe` on `/health`, or
+any uptime monitor pointed at it.
 
-The image carries no HTTP client of its own (no `curl`, no `wget`), so a
-`docker --health-cmd` needs one added first; a probe from outside the container
+The image carries no HTTP client of its own (no `curl`, no `wget`). A
+`docker --health-cmd` needs one added first. A probe from outside the container
 needs nothing.
 
 ## What is inside
@@ -308,9 +334,9 @@ needs nothing.
 - The release, at `/app`, owned by uid 10001, with `bin/migrate`, `bin/server`
   and the OTP tools above.
 - The embedded Python: `/app/lib/pythonx-*/priv` holds `libpythonx.so` and a uv
-  environment built from [`config/pythonx.exs`](../config/pythonx.exs). Most of the image is that
-  environment — and it is why nothing has to be installed on the host for
-  Monty's loggers to work.
+  environment built from [`config/pythonx.exs`](../config/pythonx.exs). That
+  environment is most of the image. It is also why nothing has to be installed on
+  the host for Monty's loggers to work.
 - No compiler, no Node, no git, no Hex cache: those live in the builder stage
   only.
 - Nothing writable but `/app/priv`, which is why `--read-only` works — and why
