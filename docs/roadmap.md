@@ -277,18 +277,20 @@ loop, and its step count is Monty's for every episode of the epoch.
   rather than the library (this Mac, eight steps, the stand-in scene,
   337–345 ms a step against 95–103, now the default).
 
-- **Next, in the order the measurements put them.** (1) ~~The salience step~~ —
-  done, and the measurements above are what it cost and what it left: one pass
-  over the view rather than four, a goal built as its struct, a kernel's distance
-  in one pass, and NumPy's twist as one pass instead of a map of the block (the
-  dither was the whole of the sensor's cost). (2) The one crossing: a kernel that
-  takes a burst's whole non-RNG path and reads the columns as bytes, which is the
-  only place an encoding pays (`speed.md` §"The open decision: one crossing").
-  (3) The cost of a step on the 77-object library, above — **337 ms of model time
-  a step is 95 ms with the objects in a round** (`round_objects`; this Mac,
-  eight steps, the stand-in scene, interleaved arms), so what is left there is
-  the same crossing as (2) and the choice of shape as the default, which an
-  episode-long comparison decides.
+- **Next, in the order the measurements put them.** The three speed items this
+  phase named are now priced, and each has an answer. (1) ~~The salience
+  step~~ — done, and the measurements above are what it cost and what it left:
+  one pass over the view rather than four, a goal built as its struct, a kernel's
+  distance in one pass, and NumPy's twist as one pass instead of a map of the
+  block (the dither was the whole of the sensor's cost). (2) ~~The one
+  crossing~~ — priced: the part that does not grow with the rows is under 2 % of
+  a 77-object step, so a merger is worth building for the shape of the code, not
+  for the clock (`speed.md`). (3) ~~The 77-object step~~ — the objects are taken
+  in a round, now the default, and what remains in the step is the k-nearest
+  search; kiddo 6 answers it, and a hand-written traversal measured level with it
+  (`speed.md`, "Tried and rejected"). What is left in this phase is its own
+  **done when**: the accuracy harness against Monty's benchmarks, and the bench
+  table as a CI trend.
 
 - **Several viewpoints at once, and whether it is worth it.** A run can already
   put a ring of patch cameras on one agent and give each its own learning module

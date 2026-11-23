@@ -553,8 +553,8 @@ one question a hypothesis and none of them twice.
 6 258-node graph — about a microsecond a query. Two cheap changes were measured
 and rejected: dropping the per-query answer copy (inside the noise, so the cost
 is the traversal and not the allocations) and kiddo's leaf bucket at 16 (worse)
-and 64 (level). What is left there is a hand-written allocation-free traversal or
-a newer kiddo; neither is measured.
+and 64 (level). What is left there is a newer kiddo: a hand-written traversal
+was measured and is level (below).
 
 ## Acceptance for any speed change
 
@@ -572,6 +572,20 @@ a newer kiddo; neither is measured.
    that are simply not covered by that run.
 
 ## Tried and rejected
+
+- **A hand-written k-nearest traversal beside kiddo's.** The step is one query a
+  hypothesis, so the walk was the last place a faster index could pay. Built as a
+  second engine over one live graph's positions — median split on the widest
+  axis, leaves walked linearly, a fixed array of neighbours, ids and distances
+  written straight into the answer binary, one comparison to reject a candidate
+  the query already beats — and asked the same questions as kiddo: **answers
+  identical id for id**, and 9.84 ms against kiddo's 9.8–10.1 ms for 10 065
+  queries over 6 258 nodes at k 5 (this Mac, `MIX_ENV=test`, stand-in world,
+  `base_77obj_dist_agent`, its largest graph, after six steps, three interleaved
+  readings an arm). Leaves of 8 read 11.9 ms, and scanning the kept list instead
+  of comparing once read 17.2 ms — so the walk is the cost, not the allocations,
+  and kiddo's is already at it. Reverted: a second engine that answers as fast is
+  code carried for nothing. The k-nearest change that remains is a newer kiddo.
 
 - **`Geometry.mul/2` and `Geometry.apply/2` written out as 3×3 formulas.** The
   arithmetic is identical and the change measured below the noise floor on this
