@@ -52,12 +52,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
     OrientVertical
   }
 
-  alias Monty.Frameworks.Actions.ActionSamplers
   alias Monty.Frameworks.Actions.ActionSamplers.ActionSampler
   alias Monty.Frameworks.Models.MotorPolicies
   alias Monty.Frameworks.Models.MotorPolicies.{InformedPolicy, MotorPolicyResult}
   alias Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTelemetry
   alias Monty.Geometry.Rotation
+  alias Monty.Random.Stream
 
   # Monty hardcodes the view finder as the sensor it searches with.
   @view_finder "view_finder"
@@ -84,7 +84,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   @enforce_keys [:action_sampler, :agent_id, :alpha]
   defstruct action_sampler: nil,
             agent_id: nil,
-            rng: nil,
             alpha: nil,
             desired_object_distance: 0.025,
             use_goal_driven_actions: false,
@@ -102,7 +101,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   @type t :: %__MODULE__{
           action_sampler: ActionSampler.t(),
           agent_id: atom() | String.t(),
-          rng: :rand.state() | nil,
           alpha: float(),
           desired_object_distance: float(),
           use_goal_driven_actions: boolean(),
@@ -126,7 +124,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   """
   @type surface_state :: %{
           required(:agent_id) => atom() | String.t(),
-          required(:rng) => :rand.state() | nil,
           required(:alpha) => float(),
           required(:desired_object_distance) => float(),
           required(:use_goal_driven_actions) => boolean(),
@@ -442,10 +439,10 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   defp search_step(policy, ctx) do
     cond do
       policy.touch_search_amount >= @search_random_from ->
-        {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), 0.0, 1.0)
-        {degrees, rng} = ActionSamplers.uniform(rng, -180.0, 180.0)
+        draw = Stream.uniform(Monty.Context.rng(ctx), 0.0, 1.0)
+        degrees = Stream.uniform(Monty.Context.rng(ctx), -180.0, 180.0)
         orientation = if draw < 0.5, do: :vertical, else: :horizontal
-        {orientation, degrees, %{policy | rng: rng}}
+        {orientation, degrees, policy}
 
       policy.touch_search_amount >= @search_vertical_from ->
         {:vertical, @search_step_degrees, policy}
@@ -503,7 +500,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   @spec tangential_direction(surface_state(), Monty.Context.t(), map(), Cmp.Message.t() | nil) ::
           {Rotation.vector(), surface_state()}
   def tangential_direction(policy, ctx, state, _percept) do
-    {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), 0.0, 1.0)
+    draw = Stream.uniform(Monty.Context.rng(ctx), 0.0, 1.0)
     new_target_direction = (draw - 0.5) * 2.0 * :math.pi()
 
     angle =
@@ -513,7 +510,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
     agent_rotation = state |> Map.fetch!(policy.agent_id) |> Map.fetch!(:rotation)
     direction = Rotation.apply(agent_rotation, MotorPolicies.projected_vec_from_angle(angle))
 
-    {direction, %{policy | rng: rng, tangential_angle: angle}}
+    {direction, %{policy | tangential_angle: angle}}
   end
 
   # -- reading the percept --------------------------------------------------
@@ -538,20 +535,15 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicy do
   end
 
   defp sample(policy, ctx, function) do
-    rng = stream(policy, ctx)
-
-    {action, rng} =
+    action =
       apply(policy.action_sampler.__struct__, function, [
         policy.action_sampler,
         policy.agent_id,
-        rng
+        Monty.Context.rng(ctx)
       ])
 
-    {action, %{policy | rng: rng}}
+    {action, policy}
   end
-
-  defp stream(policy, ctx),
-    do: ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
 
   defp radians(degrees), do: degrees * :math.pi() / 180.0
 

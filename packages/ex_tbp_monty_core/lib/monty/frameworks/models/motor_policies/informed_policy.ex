@@ -64,7 +64,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   @enforce_keys [:action_sampler, :agent_id]
   defstruct action_sampler: nil,
             agent_id: nil,
-            rng: nil,
             use_goal_driven_actions: false,
             undo_action: nil,
             is_jumping: false,
@@ -75,7 +74,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   @type t :: %__MODULE__{
           action_sampler: Monty.Frameworks.Actions.ActionSamplers.ActionSampler.t(),
           agent_id: atom() | String.t(),
-          rng: :rand.state() | nil,
           use_goal_driven_actions: boolean(),
           undo_action: Monty.Frameworks.Actions.Action.t() | nil,
           is_jumping: boolean(),
@@ -166,13 +164,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   defp on_object?(nil), do: true
   defp on_object?(%Cmp.Message{} = percept), do: Cmp.Message.on_object?(percept)
 
-  # The stream is threaded through the policy, as Monty threads it through the
-  # context (`docs/monty-differences.md` §2.5).
+  # The stream is the episode's, read off the context as Monty reads `ctx.rng`
+  # (`docs/monty-differences.md` §2.5).
   defp sample(%__MODULE__{} = policy, ctx) do
-    rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
-    {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)
+    action = ActionSampler.sample(policy.action_sampler, policy.agent_id, ctx)
 
-    {action, %{policy | rng: rng}}
+    {action, policy}
   end
 
   # -- jumping --------------------------------------------------------------
@@ -416,8 +413,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicy do
   def reset(%{} = policy) do
     %{
       policy
-      | rng: nil,
-        undo_action: nil,
+      | undo_action: nil,
         is_jumping: false,
         is_undoing_jump: false,
         pre_jump_state: nil,

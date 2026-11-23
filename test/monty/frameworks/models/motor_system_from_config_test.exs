@@ -10,7 +10,6 @@ defmodule Monty.Frameworks.Models.MotorSystemFromConfigTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{MoveForward, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed
@@ -149,7 +148,7 @@ defmodule Monty.Frameworks.Models.MotorSystemFromConfigTest do
       {actions, motor_system} =
         MotorSystem.call(
           motor_system,
-          Context.new(0),
+          Monty.EpisodeStream.context(0),
           nil,
           proprioceptive_state(),
           percept(),
@@ -167,7 +166,7 @@ defmodule Monty.Frameworks.Models.MotorSystemFromConfigTest do
       {actions, motor_system} =
         MotorSystem.call(
           MotorSystem.from_config(surf_agent_motor_config()),
-          Context.new(0),
+          Monty.EpisodeStream.context(0),
           nil,
           proprioceptive_state(),
           percept(),

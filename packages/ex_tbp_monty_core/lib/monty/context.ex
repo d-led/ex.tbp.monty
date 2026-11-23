@@ -46,6 +46,23 @@ defmodule Monty.Context do
   def next(%__MODULE__{} = ctx), do: %{ctx | step: ctx.step + 1}
 
   @doc """
+  The episode's one stream, which is what Monty's `ctx.rng` is.
+
+  A module that draws — a sampler choosing an action, a noise transform adding
+  a value — draws from this, in the order it is stepped. A context built by hand
+  for a unit test has none until the test gives it one (`Monty.EpisodeStream`),
+  and a draw asked of such a context says so rather than quietly answering a
+  second stream of its own.
+  """
+  @spec rng(t()) :: GenServer.server()
+  def rng(%__MODULE__{rng: nil}) do
+    raise ArgumentError,
+          "this context has no episode stream (ctx.rng); a module that draws needs one"
+  end
+
+  def rng(%__MODULE__{rng: server}), do: server
+
+  @doc """
   A deterministic random stream for one module at this step.
 
   Same episode seed, module id and step always give the same numbers; the

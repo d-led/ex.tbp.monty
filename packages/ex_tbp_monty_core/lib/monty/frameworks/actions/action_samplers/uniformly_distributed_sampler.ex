@@ -39,7 +39,7 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSampler do
     TurnRight
   }
 
-  alias Monty.Frameworks.Actions.ActionSamplers
+  alias Monty.Random.Stream
 
   defstruct actions: [],
             max_absolute_degrees: 360.0,
@@ -76,139 +76,121 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSampler do
   end
 
   # -- the draws ------------------------------------------------------------
+  #
+  # Each asks the episode's stream, in Monty's order: `rng.uniform(low, high)`
+  # is one `Stream.uniform`, and `rng.random(3)` is three `Stream.random` calls,
+  # because how many words the stream spends is what the next module draws.
 
-  defp rotation_degrees(%__MODULE__{} = s, rng),
-    do: ActionSamplers.uniform(rng, s.min_rotation_degrees, s.max_rotation_degrees)
+  defp rotation_degrees(%__MODULE__{} = s, stream),
+    do: Stream.uniform(stream, s.min_rotation_degrees, s.max_rotation_degrees)
 
-  defp absolute_degrees(%__MODULE__{} = s, rng),
-    do: ActionSamplers.uniform(rng, s.min_absolute_degrees, s.max_absolute_degrees)
+  defp absolute_degrees(%__MODULE__{} = s, stream),
+    do: Stream.uniform(stream, s.min_absolute_degrees, s.max_absolute_degrees)
 
-  defp translation(%__MODULE__{} = s, rng),
-    do: ActionSamplers.uniform(rng, s.min_translation, s.max_translation)
+  defp translation(%__MODULE__{} = s, stream),
+    do: Stream.uniform(stream, s.min_translation, s.max_translation)
 
   # Two half-angles from three draws: (w, x, y, z), as Monty arranges them.
-  defp random_quaternion_wxyz(rng) do
-    {[u, v, w], rng} = ActionSamplers.three(rng)
+  defp random_quaternion_wxyz(stream) do
+    [u, v, w] = three(stream)
 
-    quaternion =
-      {:math.sqrt(1 - u) * :math.sin(2 * :math.pi() * v),
-       :math.sqrt(1 - u) * :math.cos(2 * :math.pi() * v),
-       :math.sqrt(u) * :math.sin(2 * :math.pi() * w),
-       :math.sqrt(u) * :math.cos(2 * :math.pi() * w)}
-
-    {quaternion, rng}
+    {:math.sqrt(1 - u) * :math.sin(2 * :math.pi() * v),
+     :math.sqrt(1 - u) * :math.cos(2 * :math.pi() * v),
+     :math.sqrt(u) * :math.sin(2 * :math.pi() * w),
+     :math.sqrt(u) * :math.cos(2 * :math.pi() * w)}
   end
 
-  defp random_vector_xyz(rng) do
-    # Monty draws a tuple of three; the order matters to the stream, not the
-    # shape, so this keeps the draws in the same order.
-    {[x, y, z], rng} = ActionSamplers.three(rng)
-    {[x, y, z], rng}
-  end
+  defp random_vector_xyz(stream), do: three(stream)
+
+  # Monty draws a tuple of three from one `rng.random(3)`: three draws, in this
+  # order, which is what the stream remembers.
+  defp three(stream), do: [Stream.random(stream), Stream.random(stream), Stream.random(stream)]
 
   # -- the fourteen actions -------------------------------------------------
 
   @doc false
-  def sample_look_down(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {%LookDown{agent_id: agent_id, rotation_degrees: degrees}, rng}
+  def sample_look_down(%__MODULE__{} = s, agent_id, stream),
+    do: %LookDown{agent_id: agent_id, rotation_degrees: rotation_degrees(s, stream)}
+
+  @doc false
+  def sample_look_up(%__MODULE__{} = s, agent_id, stream),
+    do: %LookUp{agent_id: agent_id, rotation_degrees: rotation_degrees(s, stream)}
+
+  @doc false
+  def sample_move_forward(%__MODULE__{} = s, agent_id, stream),
+    do: %MoveForward{agent_id: agent_id, distance: translation(s, stream)}
+
+  @doc false
+  def sample_move_tangentially(%__MODULE__{} = s, agent_id, stream) do
+    distance = translation(s, stream)
+    direction = random_vector_xyz(stream)
+
+    %MoveTangentially{agent_id: agent_id, distance: distance, direction: direction}
   end
 
   @doc false
-  def sample_look_up(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {%LookUp{agent_id: agent_id, rotation_degrees: degrees}, rng}
+  def sample_orient_horizontal(%__MODULE__{} = s, agent_id, stream) do
+    degrees = rotation_degrees(s, stream)
+    left = translation(s, stream)
+    forward = translation(s, stream)
+
+    %OrientHorizontal{
+      agent_id: agent_id,
+      rotation_degrees: degrees,
+      left_distance: left,
+      forward_distance: forward
+    }
   end
 
   @doc false
-  def sample_move_forward(%__MODULE__{} = s, agent_id, rng) do
-    {distance, rng} = translation(s, rng)
-    {%MoveForward{agent_id: agent_id, distance: distance}, rng}
+  def sample_orient_vertical(%__MODULE__{} = s, agent_id, stream) do
+    degrees = rotation_degrees(s, stream)
+    down = translation(s, stream)
+    forward = translation(s, stream)
+
+    %OrientVertical{
+      agent_id: agent_id,
+      rotation_degrees: degrees,
+      down_distance: down,
+      forward_distance: forward
+    }
   end
 
   @doc false
-  def sample_move_tangentially(%__MODULE__{} = s, agent_id, rng) do
-    {distance, rng} = translation(s, rng)
-    {direction, rng} = random_vector_xyz(rng)
+  def sample_set_agent_pitch(%__MODULE__{} = s, agent_id, stream),
+    do: %SetAgentPitch{agent_id: agent_id, pitch_degrees: absolute_degrees(s, stream)}
 
-    {%MoveTangentially{agent_id: agent_id, distance: distance, direction: direction}, rng}
+  @doc false
+  def sample_set_agent_pose(%__MODULE__{} = _s, agent_id, stream) do
+    location = random_vector_xyz(stream)
+
+    %SetAgentPose{agent_id: agent_id, location: location, rotation_quat: random_quaternion_wxyz(stream)}
   end
 
   @doc false
-  def sample_orient_horizontal(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {left, rng} = translation(s, rng)
-    {forward, rng} = translation(s, rng)
+  def sample_set_sensor_pitch(%__MODULE__{} = s, agent_id, stream),
+    do: %SetSensorPitch{agent_id: agent_id, pitch_degrees: absolute_degrees(s, stream)}
 
-    {%OrientHorizontal{
-       agent_id: agent_id,
-       rotation_degrees: degrees,
-       left_distance: left,
-       forward_distance: forward
-     }, rng}
+  @doc false
+  def sample_set_sensor_pose(%__MODULE__{} = _s, agent_id, stream) do
+    location = random_vector_xyz(stream)
+
+    %SetSensorPose{agent_id: agent_id, location: location, rotation_quat: random_quaternion_wxyz(stream)}
   end
 
   @doc false
-  def sample_orient_vertical(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {down, rng} = translation(s, rng)
-    {forward, rng} = translation(s, rng)
-
-    {%OrientVertical{
-       agent_id: agent_id,
-       rotation_degrees: degrees,
-       down_distance: down,
-       forward_distance: forward
-     }, rng}
-  end
+  def sample_set_sensor_rotation(%__MODULE__{} = _s, agent_id, stream),
+    do: %SetSensorRotation{agent_id: agent_id, rotation_quat: random_quaternion_wxyz(stream)}
 
   @doc false
-  def sample_set_agent_pitch(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = absolute_degrees(s, rng)
-    {%SetAgentPitch{agent_id: agent_id, pitch_degrees: degrees}, rng}
-  end
+  def sample_set_yaw(%__MODULE__{} = s, agent_id, stream),
+    do: %SetYaw{agent_id: agent_id, rotation_degrees: absolute_degrees(s, stream)}
 
   @doc false
-  def sample_set_agent_pose(%__MODULE__{} = _s, agent_id, rng) do
-    {location, rng} = random_vector_xyz(rng)
-    {rotation_quat, rng} = random_quaternion_wxyz(rng)
-    {%SetAgentPose{agent_id: agent_id, location: location, rotation_quat: rotation_quat}, rng}
-  end
+  def sample_turn_left(%__MODULE__{} = s, agent_id, stream),
+    do: %TurnLeft{agent_id: agent_id, rotation_degrees: rotation_degrees(s, stream)}
 
   @doc false
-  def sample_set_sensor_pitch(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = absolute_degrees(s, rng)
-    {%SetSensorPitch{agent_id: agent_id, pitch_degrees: degrees}, rng}
-  end
-
-  @doc false
-  def sample_set_sensor_pose(%__MODULE__{} = _s, agent_id, rng) do
-    {location, rng} = random_vector_xyz(rng)
-    {rotation_quat, rng} = random_quaternion_wxyz(rng)
-    {%SetSensorPose{agent_id: agent_id, location: location, rotation_quat: rotation_quat}, rng}
-  end
-
-  @doc false
-  def sample_set_sensor_rotation(%__MODULE__{} = _s, agent_id, rng) do
-    {rotation_quat, rng} = random_quaternion_wxyz(rng)
-    {%SetSensorRotation{agent_id: agent_id, rotation_quat: rotation_quat}, rng}
-  end
-
-  @doc false
-  def sample_set_yaw(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = absolute_degrees(s, rng)
-    {%SetYaw{agent_id: agent_id, rotation_degrees: degrees}, rng}
-  end
-
-  @doc false
-  def sample_turn_left(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {%TurnLeft{agent_id: agent_id, rotation_degrees: degrees}, rng}
-  end
-
-  @doc false
-  def sample_turn_right(%__MODULE__{} = s, agent_id, rng) do
-    {degrees, rng} = rotation_degrees(s, rng)
-    {%TurnRight{agent_id: agent_id, rotation_degrees: degrees}, rng}
-  end
+  def sample_turn_right(%__MODULE__{} = s, agent_id, stream),
+    do: %TurnRight{agent_id: agent_id, rotation_degrees: rotation_degrees(s, stream)}
 end

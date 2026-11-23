@@ -38,22 +38,18 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSamplerTes
   end
 
   defp two_draws(kind) do
-    rng = :rand.seed_s(:exsss, {1, 2, 3})
-    {first, rng} = apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, rng])
+    stream = Monty.EpisodeStream.start(1)
 
-    {second, _rng} =
-      apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, rng])
+    first = apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, stream])
+    second = apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, stream])
 
     {first, second}
   end
 
   defp draw(kind) do
-    rng = :rand.seed_s(:exsss, {1, 2, 3})
+    stream = Monty.EpisodeStream.start(1)
 
-    {action, _rng} =
-      apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, rng])
-
-    action
+    apply(UniformlyDistributedSampler, :"sample_#{kind}", [sampler(), @agent, stream])
   end
 
   describe "the degrees a turn draws" do
@@ -149,10 +145,10 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.UniformlyDistributedSamplerTes
   describe "when both ends of a range are the same" do
     test "that parameter does not move, which is Monty's default for a translation" do
       default = UniformlyDistributedSampler.new()
-      rng = :rand.seed_s(:exsss, {1, 2, 3})
+      stream = Monty.EpisodeStream.start(1)
 
-      {first, rng} = UniformlyDistributedSampler.sample_move_forward(default, @agent, rng)
-      {second, _rng} = UniformlyDistributedSampler.sample_move_forward(default, @agent, rng)
+      first = UniformlyDistributedSampler.sample_move_forward(default, @agent, stream)
+      second = UniformlyDistributedSampler.sample_move_forward(default, @agent, stream)
 
       assert first.distance == second.distance
       assert first.distance == 0.05

@@ -1,7 +1,6 @@
 defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
   use ExUnit.Case, async: true
 
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{LookDown, MoveForward}
   alias Monty.Frameworks.Models.MotorPolicies.BasePolicy
@@ -27,14 +26,19 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
     )
   end
 
-  defp step(policy, goal \\ nil) do
-    BasePolicy.call(policy, Context.new(0), %{}, @state, nil, goal)
+  # A step is given the episode's stream; two steps of one episode share it, as
+  # they do in a run (`Runtime.Step` builds each step's context over the same
+  # stream).
+  defp step(policy, goal \\ nil, context \\ nil) do
+    BasePolicy.call(policy, context || Monty.EpisodeStream.context(0), %{}, @state, nil, goal)
   end
 
   defp actions_over(policy, steps) do
+    context = Monty.EpisodeStream.context(0)
+
     {actions, _policy} =
       Enum.map_reduce(1..steps, policy, fn _step, policy ->
-        {%{actions: [action]}, policy} = step(policy)
+        {%{actions: [action]}, policy} = step(policy, nil, context)
         {action, policy}
       end)
 
@@ -74,7 +78,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicyTest do
       assert actions_over(wandering_policy(), 10) == actions_over(wandering_policy(), 10)
     end
 
-    test "resetting starts a new stream, so it draws as a fresh policy does" do
+    test "resetting forgets nothing, because the stream is the episode's" do
       {_result, used} = step(wandering_policy())
 
       assert actions_over(BasePolicy.reset(used), 10) == actions_over(wandering_policy(), 10)

@@ -69,84 +69,77 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ConstantSampler do
 
   # -- the fourteen actions -------------------------------------------------
   #
-  # Each answers the action and the stream it was given, unchanged: a constant
-  # draws nothing, and pretending otherwise would make the caller's next draw
-  # depend on which action came before.
+  # Each draws nothing: a constant's parameters were set when it was made, which
+  # is the point of the sampler. The stream comes in because the sampler that
+  # chose this action spent a draw of it on the choice itself.
 
   @doc false
-  def sample_look_down(%__MODULE__{} = s, agent_id, rng),
-    do: {%LookDown{agent_id: agent_id, rotation_degrees: s.rotation_degrees}, rng}
+  def sample_look_down(%__MODULE__{} = s, agent_id, _stream),
+    do: %LookDown{agent_id: agent_id, rotation_degrees: s.rotation_degrees}
 
   @doc false
-  def sample_look_up(%__MODULE__{} = s, agent_id, rng),
-    do: {%LookUp{agent_id: agent_id, rotation_degrees: s.rotation_degrees}, rng}
+  def sample_look_up(%__MODULE__{} = s, agent_id, _stream),
+    do: %LookUp{agent_id: agent_id, rotation_degrees: s.rotation_degrees}
 
   @doc false
-  def sample_move_forward(%__MODULE__{} = s, agent_id, rng),
-    do: {%MoveForward{agent_id: agent_id, distance: s.translation_distance}, rng}
+  def sample_move_forward(%__MODULE__{} = s, agent_id, _stream),
+    do: %MoveForward{agent_id: agent_id, distance: s.translation_distance}
 
   @doc false
-  def sample_move_tangentially(%__MODULE__{} = s, agent_id, rng) do
-    {%MoveTangentially{
-       agent_id: agent_id,
-       distance: s.translation_distance,
-       direction: s.direction
-     }, rng}
-  end
+  def sample_move_tangentially(%__MODULE__{} = s, agent_id, _stream),
+    do: %MoveTangentially{
+      agent_id: agent_id,
+      distance: s.translation_distance,
+      direction: s.direction
+    }
 
   @doc false
-  def sample_orient_horizontal(%__MODULE__{} = s, agent_id, rng) do
-    {%OrientHorizontal{
-       agent_id: agent_id,
-       rotation_degrees: s.rotation_degrees,
-       left_distance: s.translation_distance,
-       forward_distance: s.translation_distance
-     }, rng}
-  end
+  def sample_orient_horizontal(%__MODULE__{} = s, agent_id, _stream),
+    do: %OrientHorizontal{
+      agent_id: agent_id,
+      rotation_degrees: s.rotation_degrees,
+      left_distance: s.translation_distance,
+      forward_distance: s.translation_distance
+    }
 
   @doc false
-  def sample_orient_vertical(%__MODULE__{} = s, agent_id, rng) do
-    {%OrientVertical{
-       agent_id: agent_id,
-       rotation_degrees: s.rotation_degrees,
-       down_distance: s.translation_distance,
-       forward_distance: s.translation_distance
-     }, rng}
-  end
+  def sample_orient_vertical(%__MODULE__{} = s, agent_id, _stream),
+    do: %OrientVertical{
+      agent_id: agent_id,
+      rotation_degrees: s.rotation_degrees,
+      down_distance: s.translation_distance,
+      forward_distance: s.translation_distance
+    }
 
   @doc false
-  def sample_set_agent_pitch(%__MODULE__{} = s, agent_id, rng),
-    do: {%SetAgentPitch{agent_id: agent_id, pitch_degrees: s.absolute_degrees}, rng}
+  def sample_set_agent_pitch(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetAgentPitch{agent_id: agent_id, pitch_degrees: s.absolute_degrees}
 
   @doc false
-  def sample_set_agent_pose(%__MODULE__{} = s, agent_id, rng),
-    do:
-      {%SetAgentPose{agent_id: agent_id, location: s.location, rotation_quat: s.rotation_quat},
-       rng}
+  def sample_set_agent_pose(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetAgentPose{agent_id: agent_id, location: s.location, rotation_quat: s.rotation_quat}
 
   @doc false
-  def sample_set_sensor_pitch(%__MODULE__{} = s, agent_id, rng),
-    do: {%SetSensorPitch{agent_id: agent_id, pitch_degrees: s.absolute_degrees}, rng}
+  def sample_set_sensor_pitch(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetSensorPitch{agent_id: agent_id, pitch_degrees: s.absolute_degrees}
 
   @doc false
-  def sample_set_sensor_pose(%__MODULE__{} = s, agent_id, rng),
-    do:
-      {%SetSensorPose{agent_id: agent_id, location: s.location, rotation_quat: s.rotation_quat},
-       rng}
+  def sample_set_sensor_pose(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetSensorPose{agent_id: agent_id, location: s.location, rotation_quat: s.rotation_quat}
 
   @doc false
-  def sample_set_sensor_rotation(%__MODULE__{} = s, agent_id, rng),
-    do: {%SetSensorRotation{agent_id: agent_id, rotation_quat: s.rotation_quat}, rng}
+  def sample_set_sensor_rotation(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetSensorRotation{agent_id: agent_id, rotation_quat: s.rotation_quat}
 
   @doc false
-  def sample_set_yaw(%__MODULE__{} = s, agent_id, rng),
-    do: {%SetYaw{agent_id: agent_id, rotation_degrees: s.absolute_degrees}, rng}
+  def sample_set_yaw(%__MODULE__{} = s, agent_id, _stream),
+    do: %SetYaw{agent_id: agent_id, rotation_degrees: s.absolute_degrees}
 
   @doc false
-  def sample_turn_left(%__MODULE__{} = s, agent_id, rng),
-    do: {%TurnLeft{agent_id: agent_id, rotation_degrees: s.rotation_degrees}, rng}
+  def sample_turn_left(%__MODULE__{} = s, agent_id, _stream),
+    do: %TurnLeft{agent_id: agent_id, rotation_degrees: s.rotation_degrees}
 
   @doc false
-  def sample_turn_right(%__MODULE__{} = s, agent_id, rng),
-    do: {%TurnRight{agent_id: agent_id, rotation_degrees: s.rotation_degrees}, rng}
+  def sample_turn_right(%__MODULE__{} = s, agent_id, _stream),
+    do: %TurnRight{agent_id: agent_id, rotation_degrees: s.rotation_degrees}
 end

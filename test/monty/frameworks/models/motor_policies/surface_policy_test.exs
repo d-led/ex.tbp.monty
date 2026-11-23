@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.Message
-  alias Monty.Context
 
   alias Monty.Frameworks.Actions.{
     MoveForward,
@@ -111,7 +110,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyTest do
   defp step(policy, options \\ []) do
     SurfacePolicy.call(
       policy,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       Keyword.get(options, :observations, observations(2.0)),
       Keyword.get(options, :state, state()),
       Keyword.get(options, :percept, percept()),

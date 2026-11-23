@@ -17,7 +17,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.{Goal, Message}
-  alias Monty.Context
   alias Monty.Frameworks.Actions.{ActionSamplers.ConstantSampler, LookUp, MoveForward, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies
 
@@ -75,7 +74,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
       goal = if label == "a hypothesis jump", do: goal, else: nil
 
       {result, policy} =
-        InformedPolicy.call(policy, Context.new(0), observations, state, percept(true), goal)
+        InformedPolicy.call(policy, context(), observations, state, percept(true), goal)
 
       assert_close_records(Enum.map(result.actions, &action_fields/1), expected, label)
       policy
@@ -101,7 +100,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
       {result, policy} =
         InformedPolicyRandomWalk.call(
           policy,
-          Context.new(0),
+          context(),
           nil,
           nil,
           percept(on_object),
@@ -176,7 +175,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
     {result, _selector} =
       SinglePolicySelector.call(
         single(),
-        Context.new(0),
+        context(),
         nil,
         pose(fixture, "looking straight ahead"),
         nil,
@@ -193,7 +192,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
     {result, selector} =
       DistantPolicySelector.call(
         distant(),
-        Context.new(0),
+        context(),
         nil,
         pose(fixture, "turned thirty degrees"),
         nil,
@@ -211,7 +210,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
     {result, selector} =
       DistantPolicySelector.call(
         distant(),
-        Context.new(0),
+        context(),
         nil,
         pose(fixture, "turned thirty degrees"),
         nil,
@@ -328,10 +327,14 @@ defmodule Monty.Frameworks.Models.MotorPolicies.MotorPolicyParityTest do
   defp undo_of(%InformedPolicyRandomWalk{undo_action: nil}), do: nil
   defp undo_of(%InformedPolicyRandomWalk{undo_action: action}), do: action_fields(action)
 
+  # These policies draw from the episode's stream, so every call is given a
+  # context that carries one — the same context a run gives them.
+  defp context, do: Monty.EpisodeStream.context(0)
+
   defp look_at(state, goal) do
     LookAtGoal.call(
       LookAtGoal.new(agent_id: @agent, sensor_id: @sensor),
-      Context.new(0),
+      context(),
       nil,
       state,
       nil,

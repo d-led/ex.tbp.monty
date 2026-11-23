@@ -9,11 +9,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicy do
   every other policy is built on.
 
   The sampler is a `Monty.Frameworks.Actions.ActionSamplers` struct, as Monty's
-  is, and the random stream it draws from lives on the policy: `nil` until the
-  first draw, then whatever that draw left behind. Monty reads the stream from
-  the runtime context and mutates it there; a struct cannot be mutated here, so
-  the policy owns it and `ActionSampler.stream/3` starts it from the context
-  (`docs/monty-differences.md` §2.5).
+  is, and the stream it draws from is the episode's one: `ctx.rng`, the same
+  stream every module draws from, read where Monty reads it. The policy holds
+  none of its own (`docs/monty-differences.md` §2.5).
   """
 
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
@@ -22,12 +20,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicy do
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
   @enforce_keys [:action_sampler, :agent_id]
-  defstruct action_sampler: nil, agent_id: nil, rng: nil
+  defstruct action_sampler: nil, agent_id: nil
 
   @type t :: %__MODULE__{
           action_sampler: ActionSampler.t(),
-          agent_id: atom() | String.t(),
-          rng: :rand.state() | nil
+          agent_id: atom() | String.t()
         }
 
   @doc """
@@ -57,21 +54,19 @@ defmodule Monty.Frameworks.Models.MotorPolicies.BasePolicy do
           Monty.Cmp.Goal.t() | nil
         ) :: {MotorPolicyResult.t(), t()}
   def call(%__MODULE__{} = policy, ctx, _observations, _state, _percept, _goal) do
-    rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
-    {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)
+    action = ActionSampler.sample(policy.action_sampler, policy.agent_id, ctx)
 
-    {%MotorPolicyResult{actions: [action]}, %{policy | rng: rng}}
+    {%MotorPolicyResult{actions: [action]}, policy}
   end
 
   @doc """
-  Forgets the stream, so the next step draws from the episode again.
+  Nothing to forget: the stream is the context's, not the policy's.
 
-  Monty's reset is a no-op because its stream belongs to the context rather
-  than to the policy.
+  Monty's reset is a no-op for the same reason.
   """
   @impl true
   @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = policy), do: %{policy | rng: nil}
+  def reset(%__MODULE__{} = policy), do: policy
 
   @doc "Nothing to report."
   @impl true

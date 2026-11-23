@@ -13,20 +13,15 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSampler do
   module is what gets called, so this works for any sampler that keeps that
   list, without a behaviour to satisfy.
 
-  ## The stream is threaded, not looked up
+  ## The stream is the episode's
 
-  Monty writes `self.action_sampler.sample(self.agent_id, ctx.rng)` and mutates
-  `ctx.rng` in place, so consecutive draws consume one advancing stream. Elixir
-  has no mutable state, so `sample/3` answers `{action, rng}` and the caller
-  threads it. `stream/3` is where that thread starts: a policy that has none
-  yet takes one from the context.
-
-  Answering the stream rather than reseeding it from the step is not a matter
-  of taste — a policy draws several times in a single step (`SurfacePolicy`
-  samples a direction, then a distance), and a per-step stream would answer
-  those draws with the same action every time. Neither is it a matter of cost:
-  see `scripts/bench_samplers.exs`. See `docs/monty-differences.md` §2.5 for the
-  deviation this leaves and §2.1 for the streams themselves.
+  Monty writes `self.action_sampler.sample(self.agent_id, ctx.rng)` and spends
+  the episode's one mutable `RandomState` in place. Here that stream is
+  `Monty.Random.Stream`, reached as `ctx.rng`, and `sample/3` takes the context
+  so the stream is read where Monty reads it. A policy therefore holds no
+  stream at all, and a second call in the same step draws the next number:
+  several draws a step arrive in Monty's order because the stream advances
+  itself (`docs/monty-differences.md` §2.5).
   """
 
   alias Monty.Context
@@ -39,17 +34,17 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSampler do
   @type t :: %{required(:actions) => [module()], optional(atom()) => term()}
 
   @doc """
-  One randomly chosen action, and the random stream after it.
+  One randomly chosen action, from the episode's stream.
 
   The choice is uniform over the configured actions — including over repeats,
   as numpy's `rng.choice` is, so a list naming an action twice makes it twice as
   likely.
   """
-  @spec sample(t(), atom() | String.t(), :rand.state()) ::
-          {Monty.Frameworks.Actions.Action.t(), :rand.state()}
-  def sample(%{actions: actions, __struct__: module} = sampler, agent_id, rng)
+  @spec sample(t(), atom() | String.t(), Context.t()) :: Monty.Frameworks.Actions.Action.t()
+  def sample(%{actions: actions, __struct__: module} = sampler, agent_id, %Context{} = ctx)
       when is_list(actions) and actions != [] do
-    {index, rng} = ActionSamplers.choose(rng, length(actions))
+    stream = Context.rng(ctx)
+    index = ActionSamplers.choose(stream, length(actions))
     action_name = actions |> Enum.at(index) |> then(& &1.name())
 
     # Monty builds this name with an f-string and `getattr`. Every sampler
@@ -57,21 +52,6 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSampler do
     # saying rather than minting one from a string.
     sample_function = String.to_existing_atom("sample_#{action_name}")
 
-    apply(module, sample_function, [sampler, agent_id, rng])
+    apply(module, sample_function, [sampler, agent_id, stream])
   end
-
-  @doc """
-  The stream to draw from: the one being threaded, or a new one from `ctx`.
-
-  A policy holds the stream it is threading; before its first draw it holds
-  `nil` and derives one here, from the episode seed, its own module and the
-  step. The sampler's module is what names the stream, so two kinds of sampler
-  working in the same step do not draw from the same one, and two samplers of
-  one kind deliberately do.
-  """
-  @spec stream(t(), :rand.state() | nil, Context.t()) :: :rand.state()
-  def stream(%{__struct__: module}, nil, %Context{} = ctx),
-    do: Context.rng_for(ctx, module)
-
-  def stream(%{}, rng, %Context{}), do: rng
 end

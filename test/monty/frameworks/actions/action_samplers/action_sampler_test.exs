@@ -1,15 +1,9 @@
 defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSamplerTest do
   use ExUnit.Case, async: true
 
-  alias Monty.Context
+  alias Monty.Frameworks.Actions.ActionSamplers.{ActionSampler, ConstantSampler}
 
-  alias Monty.Frameworks.Actions.ActionSamplers.{
-    ActionSampler,
-    ConstantSampler,
-    UniformlyDistributedSampler
-  }
-
-  alias Monty.Frameworks.Actions.{LookDown, MoveForward, TurnLeft}
+  alias Monty.Frameworks.Actions.{LookDown, LookUp, MoveForward, TurnLeft, TurnRight}
 
   @agent "agent_id_0"
 
@@ -23,98 +17,92 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ActionSamplerTest do
     )
   end
 
-  defp state, do: :rand.seed_s(:exsss, {1, 2, 3})
+  # The four actions `distant_5` gives its policy to choose between.
+  defp distant_sampler do
+    ConstantSampler.new(
+      actions: [LookUp, LookDown, TurnLeft, TurnRight],
+      rotation_degrees: 5.0
+    )
+  end
+
+  # The episode's own stream, which is what a policy draws from in a run.
+  defp context(seed), do: Monty.EpisodeStream.context(seed)
+
+  defp draw(ctx, sampler \\ nil) do
+    action = ActionSampler.sample(sampler || sampler(), @agent, ctx)
+    action.__struct__.name()
+  end
 
   describe "choosing which action to make" do
     test "draws more than one kind of action from a list of several" do
-      {actions, _state} =
-        Enum.map_reduce(1..100, state(), fn _step, rng ->
-          ActionSampler.sample(sampler(), @agent, rng)
-        end)
+      ctx = context(1)
+
+      actions = for _step <- 1..100, do: draw(ctx)
 
       # Monty's own test: 100 draws will not all be the same action.
-      assert actions |> Enum.map(& &1.__struct__) |> Enum.uniq() |> length() > 1
+      assert actions |> Enum.uniq() |> length() > 1
     end
 
     test "only ever makes the actions it was configured with" do
-      {actions, _state} =
-        Enum.map_reduce(1..50, state(), fn _step, rng ->
-          ActionSampler.sample(sampler(), @agent, rng)
-        end)
+      ctx = context(1)
 
-      assert Enum.all?(actions, &(&1.__struct__ in [LookDown, MoveForward, TurnLeft]))
+      names = for _step <- 1..50, do: draw(ctx)
+
+      assert Enum.all?(names, &(&1 in ~w(look_down move_forward turn_left)))
     end
 
     test "a drawn action is the one asking for its kind would have made" do
-      constant = sampler()
-      {action, _rng} = ActionSampler.sample(constant, @agent, state())
+      ctx = context(1)
+      action = ActionSampler.sample(sampler(), @agent, ctx)
 
-      {asked_directly, _rng} =
-        apply(ConstantSampler, :"sample_#{action.__struct__.name()}", [constant, @agent, state()])
+      asked_directly =
+        apply(ConstantSampler, :"sample_#{action.__struct__.name()}", [
+          sampler(),
+          @agent,
+          Monty.Context.rng(ctx)
+        ])
 
       assert action == asked_directly
     end
   end
 
-  describe "where the stream comes from" do
-    test "a sampler with no stream yet takes one from the context" do
-      context = Context.new(7)
+  describe "the episode's stream is where an action is chosen" do
+    # numpy.random.RandomState(42).choice(4), ten times: the walk a `distant_5`
+    # policy takes, one choice a step, over the four actions above in order.
+    @numpy_seed_42 ~w(turn_left turn_right look_up turn_left turn_left turn_right look_up look_up turn_left look_down)
 
-      assert ActionSampler.stream(sampler(), nil, context) ==
-               Context.rng_for(context, ConstantSampler)
+    test "a walk is numpy's choice series for the episode's seed" do
+      ctx = context(42)
+
+      walk = for _step <- 1..10, do: draw(ctx, distant_sampler())
+
+      assert walk == @numpy_seed_42
     end
 
-    test "a stream already in hand is the one used" do
-      in_hand = state()
-
-      assert ActionSampler.stream(sampler(), in_hand, Context.new(7)) == in_hand
+    test "the same episode draws the same walk" do
+      assert walk(context(7), 5) == walk(context(7), 5)
     end
 
-    test "the same episode and step draw the same action" do
-      context = Context.new(7)
-
-      assert draw_from_context(context) == draw_from_context(context)
-    end
-
-    test "two kinds of sampler in the same step draw from different streams" do
-      context = Context.new(7)
-
-      assert ActionSampler.stream(sampler(), nil, context) !=
-               ActionSampler.stream(
-                 UniformlyDistributedSampler.new(actions: [LookDown]),
-                 nil,
-                 context
-               )
-    end
-  end
-
-  describe "threading the stream" do
-    test "a draw advances the stream, so the next draw is a new one" do
-      {_action, rng} = ActionSampler.sample(sampler(), @agent, state())
-
-      assert rng != state()
+    test "a different episode seed draws a different walk" do
+      refute walk(context(7), 5) == walk(context(0), 5)
     end
 
     test "two draws in one step are not forced to be the same action" do
       # What a policy does when it samples a direction and then a distance: the
-      # second draw must be able to differ from the first, which a stream keyed
-      # to the step alone could never do.
-      {pairs, _rng} =
-        Enum.map_reduce(1..50, state(), fn _draw, rng ->
-          {first, rng} = ActionSampler.sample(sampler(), @agent, rng)
-          {second, rng} = ActionSampler.sample(sampler(), @agent, rng)
+      # second draw must be able to differ from the first.
+      ctx = context(42)
 
-          {{first.__struct__, second.__struct__}, rng}
-        end)
+      pairs = for _step <- 1..50, do: {draw(ctx, distant_sampler()), draw(ctx, distant_sampler())}
 
       assert Enum.any?(pairs, fn {first, second} -> first != second end)
     end
+
+    test "a context with no stream says so instead of drawing another one" do
+      assert_raise ArgumentError, ~r/no episode stream/, fn ->
+        ActionSampler.sample(sampler(), @agent, Monty.Context.new(7))
+      end
+    end
   end
 
-  defp draw_from_context(context) do
-    rng = ActionSampler.stream(sampler(), nil, context)
-    {action, _rng} = ActionSampler.sample(sampler(), @agent, rng)
-
-    action
-  end
+  defp walk(ctx, steps), do: for(_step <- 1..steps, do: draw(ctx, distant_sampler()))
 end

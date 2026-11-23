@@ -73,6 +73,10 @@ defmodule Monty.Random.Stream do
   def normals(server, count, loc, scale),
     do: GenServer.call(server, {:normals, count, loc, scale}, :infinity)
 
+  @doc "One of `count` indices, each equally likely: Monty's `ctx.rng.choice(count)`."
+  @spec choice(server(), pos_integer()) :: non_neg_integer()
+  def choice(server, count), do: GenServer.call(server, {:choice, count}, :infinity)
+
   @doc "The stream's own state, for a test that has to say where it is."
   @spec state(server()) :: Numpy.t()
   def state(server), do: GenServer.call(server, :state, :infinity)
@@ -106,6 +110,12 @@ defmodule Monty.Random.Stream do
     {draws, state} = Numpy.normals(state, count, loc, scale)
 
     {:reply, draws, state}
+  end
+
+  def handle_call({:choice, count}, _from, state) do
+    {index, state} = Numpy.choice(state, count)
+
+    {:reply, index, state}
   end
 
   def handle_call(:state, _from, state), do: {:reply, state, state}

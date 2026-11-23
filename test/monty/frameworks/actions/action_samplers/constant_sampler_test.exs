@@ -36,76 +36,78 @@ defmodule Monty.Frameworks.Actions.ActionSamplers.ConstantSamplerTest do
     )
   end
 
-  defp rng, do: :rand.seed_s(:exsss, {1, 2, 3})
+  defp stream, do: Monty.EpisodeStream.start(1)
 
   # Monty compares two samples of the same kind and the configured value, in one
   # assertion; the same here, per kind.
-  defp sample(kind), do: apply(ConstantSampler, :"sample_#{kind}", [sampler(), @agent, rng()])
+  defp sample(kind), do: apply(ConstantSampler, :"sample_#{kind}", [sampler(), @agent, stream()])
 
   describe "the action parameters never change" do
     test "looking down and up turn by the configured degrees, within 90 of the body" do
-      assert {%LookDown{rotation_degrees: 4.0, constraint_degrees: 90.0}, _rng} =
-               sample(:look_down)
-
-      assert {%LookUp{rotation_degrees: 4.0, constraint_degrees: 90.0}, _rng} = sample(:look_up)
+      assert %LookDown{rotation_degrees: 4.0, constraint_degrees: 90.0} = sample(:look_down)
+      assert %LookUp{rotation_degrees: 4.0, constraint_degrees: 90.0} = sample(:look_up)
     end
 
     test "moving forward goes the configured distance" do
-      assert {%MoveForward{distance: 0.02}, _rng} = sample(:move_forward)
+      assert %MoveForward{distance: 0.02} = sample(:move_forward)
     end
 
     test "moving tangentially goes the configured distance, the configured way" do
-      assert {%MoveTangentially{distance: 0.02, direction: [1.0, 2.0, 3.0]}, _rng} =
+      assert %MoveTangentially{distance: 0.02, direction: [1.0, 2.0, 3.0]} =
                sample(:move_tangentially)
     end
 
     test "orienting horizontally turns and moves by the configured amounts" do
-      assert {%OrientHorizontal{
-                rotation_degrees: 4.0,
-                left_distance: 0.02,
-                forward_distance: 0.02
-              }, _rng} = sample(:orient_horizontal)
+      assert %OrientHorizontal{
+               rotation_degrees: 4.0,
+               left_distance: 0.02,
+               forward_distance: 0.02
+             } = sample(:orient_horizontal)
     end
 
     test "orienting vertically turns and moves by the configured amounts" do
-      assert {%OrientVertical{
-                rotation_degrees: 4.0,
-                down_distance: 0.02,
-                forward_distance: 0.02
-              }, _rng} = sample(:orient_vertical)
+      assert %OrientVertical{
+               rotation_degrees: 4.0,
+               down_distance: 0.02,
+               forward_distance: 0.02
+             } = sample(:orient_vertical)
     end
 
     test "the pitch actions use the absolute angle, not the turning one" do
-      assert {%SetAgentPitch{pitch_degrees: 45.0}, _rng} = sample(:set_agent_pitch)
-      assert {%SetSensorPitch{pitch_degrees: 45.0}, _rng} = sample(:set_sensor_pitch)
+      assert %SetAgentPitch{pitch_degrees: 45.0} = sample(:set_agent_pitch)
+      assert %SetSensorPitch{pitch_degrees: 45.0} = sample(:set_sensor_pitch)
     end
 
     test "the pose actions use the configured place and orientation" do
-      assert {%SetAgentPose{location: [4.0, 5.0, 6.0], rotation_quat: @quaternion}, _rng} =
+      assert %SetAgentPose{location: [4.0, 5.0, 6.0], rotation_quat: @quaternion} =
                sample(:set_agent_pose)
 
-      assert {%SetSensorPose{location: [4.0, 5.0, 6.0], rotation_quat: @quaternion}, _rng} =
+      assert %SetSensorPose{location: [4.0, 5.0, 6.0], rotation_quat: @quaternion} =
                sample(:set_sensor_pose)
 
-      assert {%SetSensorRotation{rotation_quat: @quaternion}, _rng} = sample(:set_sensor_rotation)
+      assert %SetSensorRotation{rotation_quat: @quaternion} = sample(:set_sensor_rotation)
     end
 
     test "yaw uses the absolute angle, and turning uses the turning one" do
-      assert {%SetYaw{rotation_degrees: 45.0}, _rng} = sample(:set_yaw)
-      assert {%TurnLeft{rotation_degrees: 4.0}, _rng} = sample(:turn_left)
-      assert {%TurnRight{rotation_degrees: 4.0}, _rng} = sample(:turn_right)
+      assert %SetYaw{rotation_degrees: 45.0} = sample(:set_yaw)
+      assert %TurnLeft{rotation_degrees: 4.0} = sample(:turn_left)
+      assert %TurnRight{rotation_degrees: 4.0} = sample(:turn_right)
     end
   end
 
   describe "what it does to the stream" do
-    test "draws nothing, so the caller's next draw is unaffected" do
-      {_action, rng} = sample(:look_down)
-      assert rng == rng()
+    test "draws nothing, so what the next module draws is the same either way" do
+      used = Monty.EpisodeStream.start(42)
+      untouched = Monty.EpisodeStream.start(42)
+
+      _action = ConstantSampler.sample_look_down(sampler(), @agent, used)
+
+      assert Monty.Random.Stream.random(used) == Monty.Random.Stream.random(untouched)
     end
 
     test "asks for two agents' actions that differ only in whose they are" do
-      {first, _rng} = ConstantSampler.sample_move_forward(sampler(), "agent_id_0", rng())
-      {second, _rng} = ConstantSampler.sample_move_forward(sampler(), "agent_id_1", rng())
+      first = ConstantSampler.sample_move_forward(sampler(), "agent_id_0", stream())
+      second = ConstantSampler.sample_move_forward(sampler(), "agent_id_1", stream())
 
       assert first.distance == second.distance
       assert {first.agent_id, second.agent_id} == {"agent_id_0", "agent_id_1"}

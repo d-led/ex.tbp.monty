@@ -39,7 +39,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   @behaviour Monty.Frameworks.Models.MotorPolicies.MotorPolicy
 
   alias Monty.Cmp
-  alias Monty.Frameworks.Actions.ActionSamplers
   alias Monty.Frameworks.Actions.ActionSamplers.ActionSampler
   alias Monty.Frameworks.Models.MotorPolicies
   alias Monty.Frameworks.Models.MotorPolicies.{MotorPolicyResult, SurfacePolicy}
@@ -78,7 +77,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   ]
   defstruct action_sampler: nil,
             agent_id: nil,
-            rng: nil,
             alpha: nil,
             pc_alpha: nil,
             max_pc_bias_steps: nil,
@@ -112,7 +110,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   @type t :: %__MODULE__{
           action_sampler: ActionSampler.t(),
           agent_id: atom() | String.t(),
-          rng: :rand.state() | nil,
           alpha: float(),
           pc_alpha: float(),
           max_pc_bias_steps: pos_integer(),
@@ -355,7 +352,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
   # -- the standard, momentum step ------------------------------------------
 
   defp standard_tang_step(policy, ctx, state) do
-    {draw, policy} = uniform(policy, ctx, 0.0, 1.0)
+    draw = draw(ctx, 0.0, 1.0)
 
     policy =
       if policy.tangential_angle == nil do
@@ -563,7 +560,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
 
   defp random_heading(policy, ctx, search) do
     limits = min(max(0.1 + search.attempts / @max_search_steps, 0.0), 1.0)
-    {draw, policy} = uniform(policy, ctx, -limits, limits)
+    draw = draw(ctx, -limits, limits)
     rotation = rotate_about_z(draw * @pi)
 
     policy =
@@ -614,25 +611,9 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed d
     end
   end
 
-  defp stream(policy, ctx), do: ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
-
   # Monty's policy draws from the episode's one stream: `ctx.rng.uniform(...)`,
-  # the same stream the sensor's noise draws from, in the same order. When a run
-  # is stepping this policy the context carries that stream as a server, and the
-  # draw has to come from it — a stream of the policy's own answers different
-  # numbers, which diverges at the first draw a heading depends on (the conflict
-  # search; `scripts/probe_action_stream.exs`). A policy driven on its own, as the
-  # policy tests drive it, has no such stream and keeps its own.
-  defp uniform(policy, ctx, low, high) do
-    case ctx.rng do
-      nil ->
-        {draw, rng} = ActionSamplers.uniform(stream(policy, ctx), low, high)
-        {draw, %{policy | rng: rng}}
-
-      episode_stream ->
-        {Monty.Random.Stream.uniform(episode_stream, low, high), policy}
-    end
-  end
+  # the same stream the sensor's noise draws from, in the same order.
+  defp draw(ctx, low, high), do: Monty.Random.Stream.uniform(Monty.Context.rng(ctx), low, high)
 
   # -- what it remembers ----------------------------------------------------
 

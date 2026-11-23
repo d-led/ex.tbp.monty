@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.{Goal, Message}
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{SetAgentPose, SetSensorRotation, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies.{InformedPolicy, MotorPolicyResult}
@@ -83,7 +82,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyTest do
   defp step(policy, options \\ []) do
     InformedPolicy.call(
       policy,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       Keyword.get(options, :observations),
       Keyword.get(options, :state, state()),
       Keyword.get(options, :percept, percept(true)),

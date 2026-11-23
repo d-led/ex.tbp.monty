@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelectorTest
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.Goal
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{MoveForward, SetAgentPose, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies.{BasePolicy, JumpToGoal, MotorPolicyResult}
@@ -89,7 +88,7 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelectorTest
   defp step(selector, options) do
     DistantPolicySelector.call(
       selector,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       nil,
       Keyword.get(options, :state, state()),
       Keyword.get(options, :percept, percept(true)),

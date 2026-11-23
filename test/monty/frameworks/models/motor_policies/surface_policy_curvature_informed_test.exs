@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.Message
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
@@ -96,7 +95,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
   defp step(policy, options \\ []) do
     SurfacePolicyCurvatureInformed.call(
       policy,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       %{@agent => %{@sensor => %{"depth" => [[2.0, 2.0], [2.0, 2.0]]}}},
       state(),
       Keyword.get(options, :percept, percept()),
@@ -107,7 +106,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
   defp tangential_direction(policy, options \\ []) do
     SurfacePolicyCurvatureInformed.tangential_direction(
       policy,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       state(),
       Keyword.get(options, :percept, percept())
     )

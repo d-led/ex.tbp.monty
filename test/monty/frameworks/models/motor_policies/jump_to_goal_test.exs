@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.{Goal, Message}
-  alias Monty.Context
   alias Monty.Frameworks.Actions.{SetAgentPose, SetSensorRotation}
   alias Monty.Frameworks.Models.MotorPolicies.{JumpToGoal, MotorPolicyResult}
   alias Monty.Frameworks.Models.MotorPolicies.NoGoalProvided
@@ -70,7 +69,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
   defp step(policy, options \\ []) do
     JumpToGoal.call(
       policy,
-      Keyword.get(options, :context, Context.new(0)),
+      Keyword.get(options, :context, Monty.EpisodeStream.context(0)),
       nil,
       Keyword.get(options, :state, state()),
       Keyword.get(options, :percept, percept(true)),
@@ -147,7 +146,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
     end
 
     test "unless the run was told to suppress runtime errors" do
-      context = %{Context.new(0) | suppress_runtime_errors: true}
+      context = %{Monty.EpisodeStream.context(0) | suppress_runtime_errors: true}
 
       assert {%MotorPolicyResult{actions: []}, _policy} =
                step(policy(), goal: nil, context: context)

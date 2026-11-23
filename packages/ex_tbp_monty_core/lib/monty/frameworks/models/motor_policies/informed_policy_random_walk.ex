@@ -28,12 +28,11 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk do
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
 
   @enforce_keys [:action_sampler, :agent_id]
-  defstruct action_sampler: nil, agent_id: nil, rng: nil, undo_action: nil
+  defstruct action_sampler: nil, agent_id: nil, undo_action: nil
 
   @type t :: %__MODULE__{
           action_sampler: ActionSampler.t(),
           agent_id: atom() | String.t(),
-          rng: :rand.state() | nil,
           undo_action: Monty.Frameworks.Actions.Action.t() | nil
         }
 
@@ -91,18 +90,17 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalk do
   defp on_object?(nil), do: true
   defp on_object?(%Cmp.Message{} = percept), do: Cmp.Message.on_object?(percept)
 
-  # The stream is threaded through the policy (`docs/monty-differences.md` §2.5).
+  # The stream is the episode's, read off the context (`docs/monty-differences.md` §2.5).
   defp sample(%__MODULE__{} = policy, ctx) do
-    rng = ActionSampler.stream(policy.action_sampler, policy.rng, ctx)
-    {action, rng} = ActionSampler.sample(policy.action_sampler, policy.agent_id, rng)
+    action = ActionSampler.sample(policy.action_sampler, policy.agent_id, ctx)
 
-    {action, %{policy | rng: rng}}
+    {action, policy}
   end
 
   @doc "Starts the next episode with nothing to step back to."
   @impl true
   @spec reset(t()) :: t()
-  def reset(%__MODULE__{} = policy), do: %{policy | rng: nil, undo_action: nil}
+  def reset(%__MODULE__{} = policy), do: %{policy | undo_action: nil}
 
   @doc "The action it would step back with, which is all it knows."
   @impl true

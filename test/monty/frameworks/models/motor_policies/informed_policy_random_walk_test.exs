@@ -2,7 +2,6 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalkTest do
   use ExUnit.Case, async: true
 
   alias Monty.Cmp.Message
-  alias Monty.Context
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
   alias Monty.Frameworks.Actions.{MoveForward, TurnLeft}
   alias Monty.Frameworks.Models.MotorPolicies.{InformedPolicyRandomWalk, MotorPolicyResult}
@@ -46,7 +45,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalkTest do
   defp step(policy, options) do
     InformedPolicyRandomWalk.call(
       policy,
-      Context.new(0),
+      Monty.EpisodeStream.context(0),
       nil,
       Keyword.get(options, :state, %{}),
       Keyword.get(options, :percept, percept(true)),
