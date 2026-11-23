@@ -10,14 +10,18 @@
 //! A step asks about twenty thousand questions of one graph, so the boundary is
 //! crossed once per step, not once per query: `nearest_many` takes a flat binary
 //! of query points and answers a flat binary of ids. Encoding twenty thousand
-//! Elixir lists would cost more than the search.
+//! Elixir lists would cost more than the search. `kiddo`'s own batch query is
+//! what answers it, so the tree's scratch and its leaf walk are set up once for
+//! the whole batch rather than once a question.
 //!
 //! ## Why there is no lock
 //!
 //! A graph is immutable while an episode matches against it: nodes are appended
 //! only at the end of a *training* episode, which builds a new graph. So the
 //! index is built once, shared read-only, and never mutated — no `RwLock`, and
-//! nothing to synchronise on the query path.
+//! nothing to synchronise on the query path. `kiddo`'s immutable tree is exactly
+//! that promise, and the crate's thread pool is turned off: the query is already
+//! on a dirty scheduler, and a pool of its own would fight the BEAM's for cores.
 //!
 //! ## Determinism
 //!
@@ -26,16 +30,20 @@
 //! here by `(distance, id)` before they leave, and the parity test between the
 //! two engines holds them to the same answer wherever the distances differ.
 
-use kiddo::float::distance::SquaredEuclidean;
-use kiddo::KdTree;
-use kiddo::NearestNeighbour;
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use rustler::{Binary, Encoder, Env, NewBinary, ResourceArc, Term};
+use std::num::NonZeroUsize;
 
 /// How many f64s make one point.
 const DIMENSIONS: usize = 3;
 
+/// The index: an immutable tree over the graph's positions, and how many there
+/// are. `kiddo`'s recommended read-heavy variant — array storage, a leaf of 32 —
+/// with the item being the point's own index in the slice it was built from.
+type Tree = ImmutableKdTree<f64, DIMENSIONS>;
+
 struct Index {
-    tree: KdTree<f64, 3>,
+    tree: Tree,
     nodes: usize,
 }
 
@@ -60,15 +68,17 @@ fn available() -> bool {
 fn build<'a>(env: Env<'a>, positions: Binary) -> Term<'a> {
     let points = read_points(positions.as_slice());
 
-    let mut tree: KdTree<f64, 3> = KdTree::with_capacity(points.len());
-
-    for (id, point) in points.iter().enumerate() {
-        tree.add(point, id as u64);
-    }
+    // An empty graph is a tree with nothing in it rather than an error: a caller
+    // that builds an index before its first node is not doing anything wrong.
+    let tree = if points.is_empty() {
+        Tree::default()
+    } else {
+        Tree::new_from_slice(&points).expect("a slice of finite points builds a tree")
+    };
 
     let index = ResourceArc::new(Index {
+        nodes: tree.size(),
         tree,
-        nodes: points.len(),
     });
 
     index.encode(env)
@@ -115,7 +125,7 @@ fn nearest_many_with_distances<'a>(
         for slot in 0..k {
             let distance = neighbours
                 .get(slot)
-                .map(|neighbour| neighbour.distance.sqrt())
+                .map(|(squared, _id)| squared.sqrt())
                 .unwrap_or(f64::INFINITY);
 
             let offset = (query_number * k + slot) * std::mem::size_of::<f64>();
@@ -133,36 +143,44 @@ fn nodes(index: ResourceArc<Index>) -> usize {
     index.nodes
 }
 
-/// One entry per query: its neighbours, nearest first.
+/// One entry per query: its neighbours, nearest first, as `(squared distance, id)`.
 ///
-/// `kiddo` answers unsorted and does not promise an order for equidistant
-/// neighbours; sorting by `(distance, id)` is what makes two runs of the same
-/// episode choose the same nodes.
-fn answers(index: &Index, queries: &[u8], k: usize) -> Vec<Vec<NearestNeighbour<f64, u64>>> {
+/// `kiddo`'s batch query answers a whole step in one call — the scratch the leaves
+/// are walked with is set up once, and the walk is shared by every question — and
+/// it does not promise an order for equidistant neighbours; sorting by
+/// `(distance, id)` is what makes two runs of the same episode choose the same
+/// nodes.
+fn answers(index: &Index, queries: &[u8], k: usize) -> Vec<Vec<(f64, u32)>> {
+    let points = read_points(queries);
     let k = k.min(index.nodes);
 
-    read_points(queries)
-        .iter()
-        .map(|query| {
-            let mut found: Vec<_> = index
-                .tree
-                .nearest_n::<SquaredEuclidean>(query, k)
+    // No neighbours asked for, or none to find: an empty answer a query.
+    if k == 0 || points.is_empty() {
+        return vec![Vec::new(); points.len()];
+    }
+
+    let quantity = NonZeroUsize::new(k).expect("k is not zero");
+
+    index
+        .tree
+        .query_batch(&points)
+        .nearest_n::<SquaredEuclidean<f64>>(quantity)
+        .execute()
+        .into_iter()
+        .map(|found| {
+            let mut found: Vec<(f64, u32)> = found
                 .into_iter()
+                .map(|neighbour| (neighbour.distance, neighbour.item))
                 .collect();
 
-            found.sort_by(|a, b| {
-                a.distance
-                    .partial_cmp(&b.distance)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then(a.item.cmp(&b.item))
-            });
+            found.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
 
             found
         })
         .collect()
 }
 
-fn encode_ids<'a>(env: Env<'a>, found: &[Vec<NearestNeighbour<f64, u64>>], k: usize) -> Term<'a> {
+fn encode_ids<'a>(env: Env<'a>, found: &[Vec<(f64, u32)>], k: usize) -> Term<'a> {
     let mut binary = NewBinary::new(env, found.len() * k * std::mem::size_of::<u32>());
     let bytes = binary.as_mut_slice();
 
@@ -170,7 +188,7 @@ fn encode_ids<'a>(env: Env<'a>, found: &[Vec<NearestNeighbour<f64, u64>>], k: us
         for slot in 0..k {
             let id = neighbours
                 .get(slot)
-                .map(|neighbour| neighbour.item as u32)
+                .map(|(_distance, id)| *id)
                 .unwrap_or(NO_NEIGHBOUR);
 
             let offset = (query_number * k + slot) * std::mem::size_of::<u32>();
