@@ -21,6 +21,52 @@ defmodule Monty.Studio.StepShape do
 
   @type inputs :: %{optional(String.t()) => term()}
 
+  # The choices a run form offers, in one place: the select, the sentences beside
+  # a log and a stored run's own row all read them here, so one choice is not
+  # said in two ways. `{value, atom, label}` — the value is what the record
+  # keeps, the atom is what the page holds.
+  @scheduling [
+    {"wait_for_all", :wait_for_all, "answer in this step"},
+    {"one_step_behind", :one_step_behind, "a slow one answers a step later"}
+  ]
+
+  @sensors [
+    {"auto", :auto, "as the experiment decides"},
+    {"serial", :serial, "one after another"},
+    {"concurrent", :concurrent, "all at once"}
+  ]
+
+  # Monty's own names for the two shapes, which an older record still keeps.
+  @scheduling_aliases %{"barrier" => "wait_for_all", "lagged" => "one_step_behind"}
+
+  @doc "The scheduling choices, as `{value, atom, label}`."
+  @spec scheduling_choices() :: [{String.t(), atom(), String.t()}]
+  def scheduling_choices, do: @scheduling
+
+  @doc "The sensor choices, as `{value, atom, label}`."
+  @spec sensor_choices() :: [{String.t(), atom(), String.t()}]
+  def sensor_choices, do: @sensors
+
+  @doc "A recorded scheduling value in the words the form offered."
+  @spec scheduling_word(term()) :: String.t()
+  def scheduling_word(value) do
+    value
+    |> to_string()
+    |> then(&Map.get(@scheduling_aliases, &1, &1))
+    |> word(@scheduling)
+  end
+
+  @doc "A recorded sensor value in the words the form offered."
+  @spec sensor_word(term()) :: String.t()
+  def sensor_word(value), do: value |> to_string() |> word(@sensors)
+
+  defp word(value, choices) do
+    case Enum.find(choices, fn {string, _atom, _label} -> string == value end) do
+      nil -> value
+      {_string, _atom, label} -> label
+    end
+  end
+
   @doc """
   The sentences a reader of this run's step lines needs.
 

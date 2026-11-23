@@ -591,11 +591,12 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               name="scheduling"
               class="select select-xs w-56"
             >
-              <option value="wait_for_all" selected={@scheduling == :wait_for_all}>
-                answer in this step
-              </option>
-              <option value="one_step_behind" selected={@scheduling == :one_step_behind}>
-                a slow one answers a step later
+              <option
+                :for={{value, atom, label} <- StepShape.scheduling_choices()}
+                value={value}
+                selected={@scheduling == atom}
+              >
+                {label}
               </option>
             </select>
             <%!-- The time a module still computing is given after another one has
@@ -622,9 +623,13 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               name="sensors"
               class="select select-xs w-44"
             >
-              <option value="auto" selected={@sensors == :auto}>as the experiment decides</option>
-              <option value="serial" selected={@sensors == :serial}>one after another</option>
-              <option value="concurrent" selected={@sensors == :concurrent}>all at once</option>
+              <option
+                :for={{value, atom, label} <- StepShape.sensor_choices()}
+                value={value}
+                selected={@sensors == atom}
+              >
+                {label}
+              </option>
             </select>
             <%!-- What each of these does to the numbers the log will show: a
             round of sensors served at once costs its slowest member, and a lagged

@@ -70,7 +70,8 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # The inputs that name what the config already names: the Configuration panel
   # below states the sensors, the learning modules and the epochs in the config's
   # own vocabulary, and the Inputs panel is about what this run was *asked* for.
-  @stated_in_configuration ~w(eval_epochs learning_modules sensors train_epochs)
+  # `parallel` is the parts line below said again.
+  @stated_in_configuration ~w(eval_epochs learning_modules sensors train_epochs parallel)
 
   # A step's number restarts in every episode, so it alone does not name a line:
   # the page appends as a run grows, and a stream with two lines of one id is not
@@ -2787,6 +2788,26 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # holds. The parts themselves are drawn below with their nodes and steps
   # (`#run-division`), so this line is the shape of the division and nothing else.
   defp input_line({"parts", [_ | _] = parts}), do: {"parts", parts_line(parts)}
+
+  # A recorded choice is said in the words the run form offered it in, which live
+  # in one place (`Monty.Studio.StepShape`): a page that showed the record's own
+  # spelling asked a reader to learn `wait_for_all` and `sensors_step`.
+  defp input_line({"scheduling", value}), do: {"modules", StepShape.scheduling_word(value)}
+  defp input_line({"sensors_step", value}), do: {"sensors", StepShape.sensor_word(value)}
+  defp input_line({"settle_steps", value}), do: {"grace steps", format(value)}
+
+  # The Hydra groups the run was composed from. One component a line, with air
+  # around the `=`: the same choices the builder offers, in the names an expert
+  # looks for in the config, rather than one run-together wall.
+  defp input_line({"groups", groups}) when is_map(groups) do
+    components =
+      groups
+      |> Enum.sort_by(fn {group, _option} -> group end)
+      |> Enum.map_join("; ", fn {group, option} -> "#{group} = #{option}" end)
+
+    {"components", components}
+  end
+
   defp input_line({key, value}), do: {key, format(value)}
 
   # "2 parts, 70 episodes (eval) each" — one clause per part when the parts were

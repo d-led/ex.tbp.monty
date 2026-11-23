@@ -77,4 +77,19 @@ defmodule Monty.Studio.StepShapeTest do
              })
            ) == 2
   end
+
+  # The form's select, the step-shape sentences and a stored run's own row are
+  # three readers of one choice; they say it in the same words because the words
+  # are here, not because three files were edited together.
+  test "names the scheduling and sensor choices the way the run form does" do
+    assert StepShape.scheduling_choices() == [
+             {"wait_for_all", :wait_for_all, "answer in this step"},
+             {"one_step_behind", :one_step_behind, "a slow one answers a step later"}
+           ]
+
+    assert StepShape.scheduling_word("wait_for_all") == "answer in this step"
+    assert StepShape.scheduling_word("lagged") == "a slow one answers a step later"
+    assert StepShape.sensor_word("concurrent") == "all at once"
+    assert StepShape.sensor_word("nonsense") == "nonsense"
+  end
 end

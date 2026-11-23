@@ -777,6 +777,42 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       refute inputs =~ "groups"
     end
 
+    # The record keeps the worker's spelling, but a page is read by a person: a
+    # choice is said in the words the run form offered it in, and the raw key and
+    # value do not appear at all.
+    test "says a recorded choice in the words the form offered", %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 2,
+          inputs: %{
+            "episodes" => 1,
+            "groups" => %{"monty/learning_module" => "evidence_1lm_nn5_dod003"},
+            "parallel" => 2,
+            "scheduling" => "wait_for_all",
+            "sensors_step" => "concurrent",
+            "settle_steps" => 3
+          }
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+      inputs = view |> element("#run-inputs") |> render()
+
+      assert inputs =~ "modules"
+      assert inputs =~ "answer in this step"
+      assert inputs =~ "sensors"
+      assert inputs =~ "all at once"
+      assert inputs =~ "grace steps"
+      assert inputs =~ "components"
+      assert inputs =~ "monty/learning_module = evidence_1lm_nn5_dod003"
+
+      refute inputs =~ "wait_for_all"
+      refute inputs =~ "concurrent"
+      refute inputs =~ "scheduling"
+      refute inputs =~ "parallel"
+    end
+
     # The reason the step path exists: a step the worker publishes is in memory on
     # this node, so showing it must not ask the database anything. A page that
     # read the record per step competed with the run it was watching — the reason
