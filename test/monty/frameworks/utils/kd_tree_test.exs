@@ -216,6 +216,21 @@ defmodule Monty.Frameworks.Utils.KdTreeTest do
       assert KdTree.nearest(KdTree.build(points), [0.5, 0.5, 0.5], 4) == [0, 1, 2, 3]
     end
 
+    test "more coincident points than neighbours asked for still have an index that answers" do
+      # kiddo v5's leaf buckets panicked past 32 points identical on every axis.
+      # The order *among* equidistant neighbours is a promise the native index
+      # does not make — the Elixir tree above takes the lowest ids, the index
+      # takes whichever it walked — so what this pins is that such a graph has
+      # an index at all, and that five distinct, in-range ids come back at zero
+      # distance.
+      tree = KdTree.build(for id <- 0..39, do: {[0.5, 0.5, 0.5], id})
+
+      assert [row] = KdTree.nearest_many_with_distances(tree, [[0.5, 0.5, 0.5]], 5)
+      assert length(row) == 5
+      assert row == Enum.uniq(row)
+      assert Enum.all?(row, fn {distance, id} -> distance == 0.0 and id in 0..39 end)
+    end
+
     test "a query on top of a stored point keeps the closer neighbours" do
       points = [{[0.0, 0.0, 0.0], 0}, {[1.0, 0.0, 0.0], 1}, {[0.1, 0.0, 0.0], 2}]
 
