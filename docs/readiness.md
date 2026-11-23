@@ -13,9 +13,9 @@ mix monty.readiness --json /tmp/readiness.json
 ```
 
 The experiments page (`/experiments`) shows the same answer as its first facet,
-**Runs here?** — `Monty.Studio.Readiness.catalog/1` is the one place it is
-computed, and it is cached until the catalogue, the libraries on the machine or
-the configured world moves.
+**Runs here?** `Monty.Studio.Readiness.catalog/1` is the one place it is
+computed. It is cached until the catalogue, the libraries on the machine or the
+configured world moves.
 
 ## Four answers
 
@@ -28,7 +28,7 @@ the configured world moves.
 
 `waiting for prerequisites` is separate from `cannot run here` because the two
 are different facts. A run whose objects are still downloading is not a run whose
-class this port never wrote. The finding is an error — the run does not start —
+class this port never wrote. The finding is an error, and the run does not start,
 but it carries the download: the message says the run is waiting, and the link
 goes to `/prerequisites?fetch=<archive>`, which starts it.
 
@@ -92,8 +92,8 @@ experiment.
 `no_pretrained_memory` is one family and one file: the `dogs/inference*` configs
 load `trained/dogs_surf_unsupervised`, which `dogs/surf_unsupervised` writes. The
 objects are a prerequisite the app exports (`objaverse_dogs`), so the run that
-writes the memory is what closes them, and readiness says so in the same words
-the page does.
+writes the memory is what closes them. Readiness says so in the same words the
+page does.
 
 No experiment is stopped for a _module class_ this port has not written, or for a
 **sensor's** own layers. The cows family's `Vocus2` and `SlicMerge` are written
@@ -125,9 +125,10 @@ last ones ranked here, and all are written (§2.37–§2.39, §23, §24, §31).
 world_image_on_scanned_model` steps a real capture in 80–150 ms a step. A
    whole episode needs the decision §2.35 left open: each step keeps the
    480 × 640 view finder as nested lists, so a 400-step run stopped at step 66 on
-   the worker's heap ceiling. Frames as binaries (a quarter of the cost), or
-   poses without frames, is what turns 66 steps into Monty's 387.
-2. **The cows family's speed.** The fourteen configurations run, and one step of
+   the worker's heap ceiling. Two ways out are open: frames as binaries, a
+   quarter of the cost, or poses without frames. Either turns 66 steps into
+   Monty's 387.
+2. **The cows family's speed.** The fourteen configurations run. One step of
    `base_infer_cows_small_compositional` in MuJoCo, whose view is 256×256, costs
    about 5 s where Monty's costs milliseconds: `SlicMerge` 2.1 s and `Vocus2`
    2.6 s (§2.36). SLIC in a NIF, and the salience map's pyramids, would make a
@@ -148,10 +149,10 @@ without frames, frames as flat binaries — are written down there.
 
 ## Two rules this survey is held to
 
-- **The page and the count cannot disagree.** Both read `Monty.Studio.Readiness`;
-  the wording is `Setup`'s own finding, so "cannot run here" on a row is the same
-  fact that stops a run, and "waiting for prerequisites" is the same finding with
-  a download offered.
+- **The page and the count cannot disagree.** Both read `Monty.Studio.Readiness`,
+  and the wording is `Setup`'s own finding. "Cannot run here" on a row is the same
+  fact that stops a run; "waiting for prerequisites" is the same finding with a
+  download offered.
 - **An experiment that runs in one world and not another says so.** The answer is
-  per world (`--world`), because a supervised experiment runs against MuJoCo and
-  cannot run against the stand-in scene.
+  per world (`--world`). A supervised experiment runs against MuJoCo and cannot
+  run against the stand-in scene.

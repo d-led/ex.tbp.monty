@@ -1,9 +1,9 @@
 # The MCP server
 
 `POST /mcp` speaks the Model Context Protocol over the Streamable HTTP
-transport, so an assistant can ask about the Thousand Brains Project's theory,
-its roadmap and its code, and about this port: what an experiment is configured
-to be, and how to define and run one.
+transport. An assistant can ask about the Thousand Brains Project's theory, its
+roadmap and its code, and about this port: what an experiment is configured to
+be, and how to define and run one.
 
 It is one endpoint, one JSON-RPC message in, one answer out. No sessions, no
 server-sent events, no batches — every request is self-contained, which is what
@@ -115,8 +115,8 @@ Storage:
 
 A node that carries `ex_monty_cad` adds a fourth: `world: "cad"` steps a part
 through the CAD application, which needs `MONTY_CAD_PART` to name the part
-(`docs/cad.md`). The schema offers the word wherever the tool runs and the
-refusal, not the schema, says what this node carries — a schema that hid a world
+(`docs/cad.md`). The schema offers the word wherever the tool runs, and the
+refusal, not the schema, says what this node carries. A schema that hid a world
 would be a tool no validating client could ask.
 
 The limit is read from the running queue, not from the config. The run page
@@ -164,11 +164,12 @@ Habitat configs). `world` keeps the configs written for one simulator:
 `mujoco`, `habitat`, or `other`. Both are the same answers the experiments page
 filters on and [`docs/readiness.md`](readiness.md) counts.
 
-`monty_describe_experiment` answers the next question — sensors and their count,
-learning modules, the objects the config names (or the sampler that places
-them), the connections, the epochs, the seed, `num_parallel`, and which classes
-are ported — in one response, so an assistant needs no filesystem of its own.
-It also says which world a run of it would step and what that run reads off the
+`monty_describe_experiment` answers the next question in one response: sensors
+and their count, learning modules, the objects the config names (or the sampler
+that places them), the connections, the epochs, the seed, `num_parallel`, and
+which classes are ported. An assistant needs no filesystem of its own.
+
+It also says which world a run of it would step, and what that run reads off the
 disk before it starts: the interpreter, the engine's package, the objects and
 the pretrained memory, each with its path and whether it is there. That is the
 same list `monty_run_experiment` refuses a run over, given before the attempt
@@ -246,14 +247,14 @@ group of `monty_experiment_options` as a key (`monty/learning_module`,
 `n_train_epochs`, `n_eval_epochs`, `supervised_lm_ids`, `model_name_or_path`.
 
 A run is queued, not awaited. It is the studio's Oban job, exactly as the page's
-Run button: it steps in the queue, it outlives the request, and the answer is a
-link to `/runs/<id>` — the page that shows the sensors, the log and the summary
-as they arrive. `monty_run_report` reads the same record back for a client that
+Run button: it steps in the queue and outlives the request, and the answer is a
+link to `/runs/<id>`, the page that shows the sensors, the log and the summary as
+they arrive. `monty_run_report` reads the same record back for a client that
 would rather not open a page.
 
-A setup Monty would refuse — a vote matrix of the wrong shape, a sensor nothing
-listens to — is refused here too, before anything is queued, because a run that
-fails immediately looks like a run that worked.
+A setup Monty would refuse is refused here too, before anything is queued: a vote
+matrix of the wrong shape, a sensor nothing listens to. A run that fails
+immediately looks like a run that worked.
 
 ## Configuration
 
@@ -271,10 +272,10 @@ and snapshots the studio composes are already inside the image.
 ## What it is not
 
 There is no authentication. The tools read what the project publishes and write
-only where the studio itself writes; that is a statement about a development
+only where the studio itself writes. That is a statement about a development
 server on a developer's machine, and the endpoint is meant to be used as one.
 
-`Origin`, when a client sends one, must name this host — the DNS-rebinding
-defence the specification asks for — and `MCP-Protocol-Version`, when a client
-sends one, must be a revision the server speaks. `GET` and `DELETE` answer 405:
-there is no stream to subscribe to and no session to terminate.
+`Origin`, when a client sends one, must name this host: the DNS-rebinding defence
+the specification asks for. `MCP-Protocol-Version`, when a client sends one, must
+be a revision the server speaks. `GET` and `DELETE` answer 405: there is no stream
+to subscribe to and no session to terminate.

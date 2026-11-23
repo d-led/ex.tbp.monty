@@ -204,10 +204,12 @@ against. Those files stay Monty's, with its licence beside them in
 [priv/monty/LICENSE](priv/monty/LICENSE).
 
 Everything else third-party is a dependency, not a copy, and each fetched package
-keeps its licence. The build files are the list: Elixir libraries in
-[`mix.exs`](mix.exs) (pinned in [`mix.lock`](mix.lock)), browser packages in
-[`assets/package.json`](assets/package.json), Python in
-[`config/pythonx.exs`](config/pythonx.exs), the NIFs and the window in
-[`packages/ex_tbp_monty_core/native`](packages/ex_tbp_monty_core/native) and
-[`src-tauri/Cargo.toml`](src-tauri/Cargo.toml), and the image's base images in
-the [Dockerfile](Dockerfile).
+keeps its licence. The build files are the list:
+
+- Elixir libraries in [`mix.exs`](mix.exs), pinned in [`mix.lock`](mix.lock)
+- browser packages in [`assets/package.json`](assets/package.json)
+- Python in [`config/pythonx.exs`](config/pythonx.exs)
+- the NIFs and the window in
+  [`packages/ex_tbp_monty_core/native`](packages/ex_tbp_monty_core/native) and
+  [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml)
+- the image's base images in the [Dockerfile](Dockerfile)

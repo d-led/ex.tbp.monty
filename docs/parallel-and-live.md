@@ -89,8 +89,8 @@ Said plainly, because these are the numbers that decide the design:
 - **One scheduler per core, and NIFs must yield.** Anything that blocks in C (a
   camera driver, a simulator) belongs behind a port, not in a NIF called from a
   step.
-- **Fairness.** `Task.async_stream` with `ordered: false` gives completion order;
-  a long episode must not starve a queue of short ones — which is what the
+- **Fairness.** `Task.async_stream` with `ordered: false` gives completion order,
+  and a long episode must not starve a queue of short ones. That is what the
   existing queue (Oban) is for, rather than a bare task per episode.
 - **The largest term in a step was a sort, not a phase to divide.** On the
   ten-distinct-objects evidence experiment
@@ -98,26 +98,26 @@ Said plainly, because these are the numbers that decide the design:
   `ex_mujoco`, on the Mac this was measured on) the model took 121 s and the
   world 3.5 s. The log's own split put nine tenths of that in the vote round, and
   nearly all of the round in `receive`: the modules applying the votes they heard.
-  A round carries about 160 votes for one object, a module holds thirteen thousand
-  hypotheses, and each hypothesis sorted the whole vote list to find its three
-  nearest — O(H·V log V) in Elixir for what Monty asks a KD-tree, O(H log V).
+  A round carries about 160 votes for one object, and a module holds thirteen
+  thousand hypotheses. Each hypothesis sorted the whole vote list to find its
+  three nearest: O(H·V log V) in Elixir for what Monty asks a KD-tree, O(H log V).
   `EvidenceGraphLM` now builds that index (`KdTree`, native when the machine has
   it) and asks it for the three nearest of each hypothesis. The same episode then
-  takes **18 s** in the model, with the same steps, votes and beliefs, and a step
-  is ~700 ms of which the world is ~80 ms. Before fanning anything out, read the
+  takes **18 s** in the model, with the same steps, votes and beliefs. A step is
+  ~700 ms, of which the world is ~80 ms. Before fanning anything out, read the
   split: the biggest term here had no business being in a step at all.
 - **A page says what its numbers measured.** A step's `sensors` is a round's wall
-  clock, not the sum of what ran inside it, and the same is true of `await` and of
-  the round's parts — so the same line means two different things depending on how
-  the run was shaped, and a concurrent run reads as a faster machine rather than
-  as a run that spent less time. `Monty.Studio.StepShape` turns the levers a
-  record keeps (`sensors_step`, `scheduling`) into the sentences that make the
-  line readable, and they are shown beside the log on a run's page, beside the
-  levers on the experiment page — where the choice is made — and, per side, on
-  `/compare`, because a comparison of a serial run with a concurrent one is a
-  comparison of two different questions unless it says so. The sensor cards say
-  the other half: each is throttled on its own, so a card can be a step behind its
-  neighbours, and every card names the step its picture is from.
+  clock, not the sum of what ran inside it. The same is true of `await` and of the
+  round's parts, so one line means two different things depending on how the run
+  was shaped, and a concurrent run reads as a faster machine rather than as a run
+  that spent less time. `Monty.Studio.StepShape` turns the levers a record keeps
+  (`sensors_step`, `scheduling`) into sentences that make the line readable. They
+  are shown beside the log on a run's page, beside the levers on the experiment
+  page where the choice is made, and per side on `/compare`. A comparison of a
+  serial run with a concurrent one is a comparison of two different questions
+  unless it says so. The sensor cards say the other half: each is throttled on its
+  own, so a card can be a step behind its neighbours, and every card names the
+  step its picture is from.
 
 ## 4. A live experiment
 

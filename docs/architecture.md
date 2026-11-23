@@ -52,9 +52,9 @@ Facts worth keeping in mind, all inherited from Monty:
   _previous_ step, and only if at least one sensor percept passed that step;
 - a location-only step (no percept with `process_features_in_lm`) displaces
   hypotheses without updating evidence;
-- sensor modules are stepped **one at a time**, not as a barrier: a sensor may
-  draw from the episode's random stream (the salience module dithers its
-  scores), and a barrier would let the scheduler decide which drew first.
+- sensor modules are stepped **one at a time**, not as a barrier. A sensor may
+  draw from the episode's random stream (the salience module dithers its scores),
+  and a barrier would let the scheduler decide which drew first.
   `Monty.Random.Stream`'s moduledoc says so at the code site.
 
 ## Why processes
@@ -73,7 +73,7 @@ the coordinator losing its step count.
   `Task.async_stream` pass over the modules, `ordered: true` so the gather is
   the listing order and not the arrival order, `on_timeout: :kill_task` so a
   late module costs only its own reply. `:infinity` reproduces Python's
-  synchronous round exactly; a finite deadline is the experiment from
+  synchronous round exactly. A finite deadline is the experiment from
   [the neural-voting thread](https://forum.thousandbrains.org/t/software-architecture-for-neural-voting/129):
   the round closes when time is up, and the step reports what it used
   (`votes_used`) and that it was short (`deadline_hit?`).
