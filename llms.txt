@@ -1,0 +1,49 @@
+# Monty on the BEAM
+
+> A module-for-module Elixir reimplementation of the Thousand Brains Project's
+> Monty. A studio runs Monty's own experiment configs from a browser, and an MCP
+> server answers questions about Monty's docs, roadmap and code.
+
+Two ways in: the studio at `/` (browser or desktop app), and `POST /mcp` over
+Streamable HTTP. A terminal has `mix monty.run` and `mix monty.bench`.
+
+## Reference (exact specs and schemas)
+
+- [MCP server](docs/mcp.md): every tool, its arguments and what it answers.
+- [Features](docs/features.md): what works, each claim linked to its proof. Generated; do not edit.
+- [Module map](docs/module-map.md): the one rule that maps Python `a/b.py::C` to an Elixir module.
+- [Config compatibility](docs/config-compatibility.md): which Hydra features are implemented and how far parity goes.
+- [From Monty](docs/from-monty.md): every copied path and glob, and the task that writes it.
+- [Readiness](docs/readiness.md): which experiments run here, and what each missing piece unblocks.
+- [Partial classes](docs/partial-classes.md) and [planned classes](docs/planned-classes.md): what is not ported yet.
+- [Monty differences](docs/monty-differences.md): every deliberate difference, and what this port suspects upstream.
+
+## Tutorials (learning)
+
+- [Start](README.md): the quickstart compose file, then the first experiment.
+- [A CAD part in a run](docs/cad.md): STEP part, memory, recognition.
+
+## How-to guides (specific tasks)
+
+- [Run the container](docs/container.md): image, variables, volumes, what it reports.
+- [Desktop app](docs/desktop.md): the window, the folder it writes to, signing.
+- [Several nodes](docs/cluster.md): what a cluster shares and what each node owns.
+- [Plugins](docs/plugins.md): calling a plugin across a node, and the rules that keep it safe.
+- [Parallel and live](docs/parallel-and-live.md): parallel episodes, a run that never stops.
+- [Develop](docs/developers.md): tests, gates, the loop when Monty moves.
+
+## Explanation (architecture and concepts)
+
+- [Architecture](docs/architecture.md): one timestep, and where Python sits.
+- [Simulator port](docs/simulator-port.md): the world on the other side of a port.
+- [Theories](docs/theories.md): independent processes on theories.
+- [Validation](docs/validation.md): what has been compared with Monty's numbers.
+- [Speed](docs/speed.md): where a step's time goes.
+- [Training](docs/training.md): what training exists and what is missing.
+- [Open ends](docs/open-ends.md): what upstream says is not done.
+- [Roadmap](docs/roadmap.md): the order the rest arrives in.
+
+## For contributors
+
+- [AGENTS.md](AGENTS.md): the rules this tree is held to.
+- [docs/README.md](docs/README.md): the same four quadrants, as a table.

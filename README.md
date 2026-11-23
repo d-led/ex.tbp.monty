@@ -28,14 +28,13 @@ docker compose -f docker-compose.quickstart.yml up
 
 → <http://localhost:6401>
 
-The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64): it migrates
-itself as it boots, and keeps its database, its downloads and its run records on
-named volumes, so `docker compose down` keeps them and `down -v` deletes them.
+The image is `ghcr.io/d-led/ex.tbp.monty:latest` (amd64 and arm64). It migrates
+itself as it boots and keeps its database, downloads and run records on named
+volumes: `down` keeps them, `down -v` deletes them.
 
-A server-backed stack is the same file with `postgres` in the name
-([docker-compose.postgres.yml](docker-compose.postgres.yml)). The image alone,
-against a Postgres you already have, is in [docs/container.md](docs/container.md)
-with every variable and the one writable directory.
+To run against Postgres, use
+[docker-compose.postgres.yml](docker-compose.postgres.yml). To run the image
+against a Postgres you already have, see [docs/container.md](docs/container.md).
 
 **As an app, nothing installed.** The same studio in a native window, with its
 own server inside — no Docker, no Elixir:
@@ -51,10 +50,10 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 ```
 
 It unpacks the newest build of `main` into `./ex-tbp-monty-<platform>/` and opens
-it; deleting that folder is the whole of removing it, and running it again opens
-what is there (`--update` on macOS and Linux, `$env:EX_TBP_MONTY_UPDATE = 1` on
-Windows, for the newest build again). A tagged release keeps the same file in the
-releases page. Or take the file yourself:
+it. Delete that folder to remove it. Run it again to open what is there, or pass
+`--update` (`$env:EX_TBP_MONTY_UPDATE = 1` on Windows) for the newest build. A
+tagged release keeps the same file on its releases page. Or take the file
+yourself:
 
 | Platform    | Download                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -62,12 +61,12 @@ releases page. Or take the file yourself:
 | Linux x64   | [ex-tbp-monty-linux-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-linux-x64.zip) |
 | Windows x64 | [ex-tbp-monty-win-x64](https://nightly.link/d-led/ex.tbp.monty/workflows/ci/main/ex-tbp-monty-win-x64.zip)     |
 
-Those are the three builds the workflow makes; Intel Macs and arm64 Linux build
-their own (`scripts/package.sh osx-x64`, `scripts/package.sh linux-arm64`), and a
+Those are the three builds the workflow makes. Intel Macs and arm64 Linux build
+their own: `scripts/package.sh osx-x64` and `scripts/package.sh linux-arm64`. A
 checkout opens the window with `scripts/start-desktop.sh`. The macOS app is
 unsigned, so its first launch is right-click → Open. What each download holds,
-and why it is larger than the app — mostly the Python interpreter the release
-carries — is in [docs/desktop.md](docs/desktop.md).
+and why it is larger than the app (mostly the Python interpreter the release
+carries), is in [docs/desktop.md](docs/desktop.md).
 
 ## From source
 
@@ -80,37 +79,36 @@ A release and the desktop app keep their data in a SQLite file unless
 `DATABASE_URL` names a server —
 [docs/developers.md](docs/developers.md#a-file-instead-of-a-server).
 
-Needs Elixir 1.20, node/npm, Docker, and a Rust toolchain — and installs the
-first and the last itself when the machine has neither:
+You need Elixir 1.20, node/npm, Docker and a Rust toolchain. The first and the
+last install themselves when the machine has neither:
 
 ```bash
 scripts/install-elixir.sh    # Elixir 1.20.5 + OTP 29.1, per user, no root
 scripts/install-rust.sh      # the Rust toolchain
 ```
 
-Both take no arguments and do nothing where their toolchain is already there;
-Rust is a _build_ requirement only — the native kernels compile with the app and
-the release carries them. Tests, the gates CI runs, and how a module is added:
+Both take no arguments and do nothing where their toolchain is already there.
+Rust is a _build_ requirement only: the native kernels compile with the app, and
+the release carries them. Tests, the gates CI runs, and how to add a module:
 [docs/developers.md](docs/developers.md).
 
 ## Then what
 
 Open **Experiments**, pick one, press **Run it**. The page shows the config as
-Monty wrote it and as this app composes it, then streams the run: evidence over
-steps, the hypothesis space, both camera views, and where the agent is on the
-object. Every run is recorded, and replays step by step.
+Monty wrote it and as this app composes it. Then it streams the run: evidence
+over steps, the hypothesis space, both camera views, and where the agent is on
+the object. Every run is recorded and replays step by step.
 
-If the page says files are missing, **Prerequisites** names them and fetches them
-in one click. An experiment built from a class this port has not written is
-refused, and the page names the class — a stand-in would be a different
-experiment.
+If files are missing, **Prerequisites** names them and fetches them in one click.
+An experiment built from a class this port has not written is refused, and the
+page names the class. A stand-in would be a different experiment.
 
 ## Three ways in
 
 - **The studio**, above: a page per experiment, runs kept and replayable.
-- **An assistant**, through `/mcp`: ask about Monty's theory, roadmap and code,
-  and preview, save and run experiments. `http://localhost:4001/mcp` is already in
-  [`.vscode/mcp.json`](.vscode/mcp.json) — start the dev server with `PORT=4001`,
+- **An assistant**, through `/mcp`: ask about Monty's theory, roadmap and code;
+  preview, save and run experiments. `http://localhost:4001/mcp` is already in
+  [`.vscode/mcp.json`](.vscode/mcp.json). Start the dev server with `PORT=4001`,
   or copy the address `/mcp/config` prints — [docs/mcp.md](docs/mcp.md).
 - **A terminal**: the same run record without a browser, and a measurement of it:
 
@@ -132,44 +130,36 @@ Flags and what each prints: [docs/features.md](docs/features.md).
   Monty snapshots composes to the same tree here —
   [docs/config-compatibility.md](docs/config-compatibility.md).
 - **Processes, not a loop.** A step is a barrier over processes: sensor modules,
-  learning modules and the motor system exchange CMP messages, and a vote is a
-  round with a deadline — [docs/architecture.md](docs/architecture.md).
-- **MuJoCo is the world a run steps.** Monty's own simulator, copied into
-  `priv/monty_py` rather than ported, driven in the interpreter the release
-  carries; the Elixir stand-in scene is the alternative. Habitat is not carried —
-  a Habitat config is refused rather than given MuJoCo's scene and allowed to look
-  as if it ran — [docs/simulator-port.md](docs/simulator-port.md).
-- **Checked against Monty.** What was compared, with which numbers, is
-  [docs/validation.md](docs/validation.md); what is ported is measured in
-  [docs/features.md](docs/features.md).
+  learning modules and the motor system exchange CMP messages. A vote is a round
+  with a deadline — [docs/architecture.md](docs/architecture.md).
+- **MuJoCo is the world a run steps.** Monty's own simulator is copied into
+  `priv/monty_py` rather than ported, and runs in the interpreter the release
+  carries. The Elixir stand-in scene is the alternative. Habitat is not carried:
+  a Habitat config is refused rather than given MuJoCo's scene and allowed to
+  look as if it ran — [docs/simulator-port.md](docs/simulator-port.md).
+- **Checked against Monty.** [docs/validation.md](docs/validation.md) says what
+  was compared and with which numbers;
+  [docs/features.md](docs/features.md) says what is ported.
 
 ## Where it differs
 
-Monty steps one object graph in one loop; here every module is a process. Voting
-is a round with a deadline, a module that dies is replaced while the step goes on,
-each module draws from its own seeded stream, and state is returned rather than
-mutated. What follows from that, and what looks wrong upstream, is in
+Monty steps one object graph in one loop. Here every module is a process. Voting
+is a round with a deadline, a dead module is replaced mid-step, each module draws
+from its own seeded stream, and state is returned rather than mutated. What
+follows from that, and what looks wrong upstream, is in
 [docs/monty-differences.md](docs/monty-differences.md).
 
 ## Docs
 
-| Doc                                                          | Answers                                                               |
-| ------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [docs/features.md](docs/features.md)                         | what works, and what proves it                                        |
-| [docs/architecture.md](docs/architecture.md)                 | what happens in one timestep?                                         |
-| [docs/module-map.md](docs/module-map.md)                     | where is that Python file here?                                       |
-| [docs/from-monty.md](docs/from-monty.md)                     | what comes from Monty, where it lands, and the task that writes it    |
-| [docs/config-compatibility.md](docs/config-compatibility.md) | which Hydra features are implemented, and how far parity goes         |
-| [docs/validation.md](docs/validation.md)                     | what has been compared with Monty, and how closely                    |
-| [docs/monty-differences.md](docs/monty-differences.md)       | every deliberate difference, and what looks wrong upstream            |
-| [docs/simulator-port.md](docs/simulator-port.md)             | where the world lives, and what is still Python                       |
-| [docs/developers.md](docs/developers.md)                     | how do I work on this?                                                |
-| [docs/container.md](docs/container.md)                       | how do I run the image? every variable, the volumes, what it reports  |
-| [docs/cluster.md](docs/cluster.md)                           | how do I run several nodes, what do they share, and what can each do? |
-| [docs/desktop.md](docs/desktop.md)                           | how do I open this as an app? the window, the folder it writes to     |
-| [docs/mcp.md](docs/mcp.md)                                   | `POST /mcp` — ask this app about Monty's docs, roadmap and code       |
-| [docs/readiness.md](docs/readiness.md)                       | which experiments run here, and what each missing class unblocks      |
-| [docs/roadmap.md](docs/roadmap.md)                           | the order the rest of Monty arrives in                                |
+Four kinds of page, one folder: [docs/README.md](docs/README.md).
+
+| Kind             | Answers                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| Learn it         | how do I get from nothing to a finished run?                                |
+| Do a task        | how do I run the image, the app, a cluster, a plugin?                       |
+| Look up a fact   | is this ported, which config keys, which tools, which experiments run here? |
+| Understand why   | what is Monty's model, and where does this port disagree?                   |
+| Work on the code | [docs/developers.md](docs/developers.md): invariants, tests, gates          |
 
 ## Citation
 
@@ -208,13 +198,13 @@ each release.
 
 ## Licence
 
-MPL-2.0 — see [LICENSE](LICENSE). Monty itself is MIT-licensed, and this project
-ships a verbatim copy of its config tree and of the snapshots our composer is
-checked against: those files stay Monty's, with its licence beside them in
+MPL-2.0 — see [LICENSE](LICENSE). Monty itself is MIT-licensed. This project
+copies Monty's config tree verbatim, and the snapshots our composer is checked
+against. Those files stay Monty's, with its licence beside them in
 [priv/monty/LICENSE](priv/monty/LICENSE).
 
-Everything else third-party here is a dependency rather than a copy, so the build
-files are the list — each fetched package keeps its licence: Elixir libraries in
+Everything else third-party is a dependency, not a copy, and each fetched package
+keeps its licence. The build files are the list: Elixir libraries in
 [`mix.exs`](mix.exs) (pinned in [`mix.lock`](mix.lock)), browser packages in
 [`assets/package.json`](assets/package.json), Python in
 [`config/pythonx.exs`](config/pythonx.exs), the NIFs and the window in
