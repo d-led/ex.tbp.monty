@@ -3,8 +3,13 @@
 # Monty's `unsupervised_inference_distinctobj_dist_agent`, on the dog corpus: the
 # distant agent stands off and looks at the whole object, so it reads a shape the
 # surface agent's 5 cm clip cannot — recognition against the memory
-# `dogs/supervised_pretraining` builds with the matching distant agent, which the
-# model path names.
+# `dogs/supervised_pretraining_dense` builds with the matching distant agent, which
+# the model path names.
+#
+# The finer scan is what the answer rests on. This module over the 5° memory names
+# three of the five dogs and over the 3° one names five of five, every episode
+# ending with a single dog possible; the 5° arm is `dogs/inference_dist_raster`,
+# and both verdicts are in `docs/training.md` §10.
 defaults:
   - /monty: noresetevidencegraph_exp1000_e100_t3
   - /monty/motor_system_config: distant_5
@@ -23,7 +28,7 @@ experiment:
   config:
     show_sensor_output: false
     n_train_epochs: 0
-    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining/pretrained/
+    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining_dense/pretrained/
     n_eval_epochs: 10
     seed: 42
     supervised_lm_ids: []

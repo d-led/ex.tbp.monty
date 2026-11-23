@@ -183,13 +183,13 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       await_composition(view)
 
       assert view |> element("#need-models") |> render() =~
-               "the memory `dogs_supervised_pretraining`"
+               "the memory `dogs_supervised_pretraining_dense`"
 
       assert view |> element("#need-data-action") |> render() =~
                ~s(href="/prerequisites?fetch=objaverse_dogs")
 
       assert view |> element("#need-models-action") |> render() =~
-               ~s(href="/experiments/dogs/supervised_pretraining")
+               ~s(href="/experiments/dogs/supervised_pretraining_dense")
     end
 
     test "the run is recorded with the world it was given", %{conn: conn} do

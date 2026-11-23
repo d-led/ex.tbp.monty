@@ -1,11 +1,13 @@
 # @package _global_
 
-# `dogs/inference_dist`, over the finer-scan memory instead: the same world,
-# module, budget and agent, with `model_name_or_path` pointed at what
-# `dogs/supervised_pretraining_dense` writes. The only thing that differs from
-# that config is the memory, so the two runs' verdicts are one comparison —
-# three degrees a scan step instead of five, on every object, is the density
-# lever `docs/training.md` measures.
+# The control arm of `dogs/inference_dist`: the same world, module, budget and
+# agent, reading the 5° memory `dogs/supervised_pretraining` builds instead of the
+# 3° one the arm itself reads.
+#
+# It is what the density measurement is against — three of the five dogs named
+# here against five of five there, because a graph of this corpus meets a 5° raster
+# in a dozen places a rotation (`docs/training.md` §10) — and nothing else about it
+# differs.
 defaults:
   - /monty: noresetevidencegraph_exp1000_e100_t3
   - /monty/motor_system_config: distant_5
@@ -24,10 +26,10 @@ experiment:
   config:
     show_sensor_output: false
     n_train_epochs: 0
-    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining_dense/pretrained/
+    model_name_or_path: ${constants.pretrained_dir}/trained/dogs_supervised_pretraining/pretrained/
     n_eval_epochs: 10
     seed: 42
     supervised_lm_ids: []
     python_log_level: DEBUG
     logging:
-      run_name: dogs_inference_dist_bydense
+      run_name: dogs_inference_dist_raster

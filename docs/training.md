@@ -198,12 +198,14 @@ graph, so a library's node count is what a percept can be matched against.
 | `trained/dogs_supervised_pretraining` (5 dogs, the supervisor's scan at 5°) | 5       | **185 … 334**   |
 | `trained/dogs_supervised_pretraining_dense` (the same at 3°)                | 5       | **502 … 931**   |
 
-The second row from the bottom is the memory `dogs/inference_dist` reads, i.e.
-the one a dogs run is judged by, and its spread used to be the whole story of
-that run. Before the corpus was normalised by area, the same recipe gave **1 109
-nodes for milka and 124–223 for the other four** — one object above the
-hundreds-of-nodes floor — and nine episodes of `dogs/inference_dist` concluded
-`milka` in eight of them, four of them with another dog as the target.
+The bottom row is the memory `dogs/inference_dist` reads — the same recipe with the
+scan three degrees apart instead of five — because at 5° the graphs sit at the
+density floor and name three of the five dogs where the finer scan names five;
+the verdicts are §10. The spread used to be the whole story of that run: before
+the corpus was normalised by area, the same recipe gave **1 109 nodes for milka
+and 124–223 for the other four** — one object above the hundreds-of-nodes floor —
+and nine episodes concluded `milka` in eight of them, four of them with another
+dog as the target.
 
 Why one recipe produced that spread is the corpus, not the recipe: the import
 used to normalise every object to one **height**, and these five reach 10 cm of
@@ -238,9 +240,9 @@ instead of five, so each pass an object has a third more views of it. It ran to
 70 episodes in 60 970 steps and **3 165 nodes**, against the base recipe's 1 164:
 **2.7× on every object** (502 … 931 against 185 … 334), and the 1.85× spread
 between the widest and the narrowest is unchanged — density multiplies the
-memory, it does not reorder it. `dogs/inference_dist_bydense` is
-`dogs/inference_dist` with `model_name_or_path` pointed at that memory and
-nothing else changed; the same five episodes:
+memory, it does not reorder it. `dogs/inference_dist` reads that memory, and
+`dogs/inference_dist_raster` is the same config pointed at the 5° one, so the two
+runs are one comparison; the same five episodes:
 
 | memory                                   | nodes | evidence at the end | hypotheses | possible | steps, 5 episodes | concluded |
 | ---------------------------------------- | ----- | ------------------- | ---------- | -------- | ----------------- | --------- |
@@ -273,8 +275,8 @@ world, the same agent, the same five episodes — and it concludes **5 of 5
 | --------------------------------- | ------ | ----------------------------------- | ----------------- | ------------------ |
 | `dogs/inference_supervised`       | 5°     | `evidence_tutorial_surf_agent_2obj` | **635**           | **5 of 5 `match`** |
 | `dogs/inference_supervised_dense` | 3°     | `evidence_tutorial_surf_agent_2obj` | 755               | **5 of 5 `match`** |
-| `dogs/inference_dist`             | 5°     | `noresetevidence_1lm`               | 21 490            | 0 of 5 `time_out`  |
-| `dogs/inference_dist_bydense`     | 3°     | `noresetevidence_1lm`               | 2 814             | 0 of 5 `time_out`  |
+| `dogs/inference_dist_raster`      | 5°     | `noresetevidence_1lm`               | 21 490            | 0 of 5 `time_out`  |
+| `dogs/inference_dist`             | 3°     | `noresetevidence_1lm`               | 2 814             | 0 of 5 `time_out`  |
 
 So the corpus normalisation is what unblocked the dogs: this is the same
 `dogs/inference_supervised` that concluded **0 of 8** against the 20–88-node
@@ -686,14 +688,14 @@ state is `time_out` by design. Whether it named the object is Monty's
 `dogs/inference_dist` (`noresetevidence_1lm`, the 5° `dogs_supervised_pretraining`
 memory), one episode recorded from the studio page, this Mac, `ex_mujoco`, seed 42:
 
-| what | value |
-| --- | --- |
-| steps | 2 722, of which 100 matching |
-| last step | `learning_module_0: time_out`, one possible, `milka` at 6.20 |
-| judgement (`eval_stats.csv`) | **`correct_mlh`** — named by its most likely object |
-| `most_likely_object` / `primary_target_object` | `milka` / `milka` |
-| `TFNP` | `target_in_possible_matches_(TP)` |
-| `rotation_error` | empty; no pose resolved |
+| what                                           | value                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| steps                                          | 2 722, of which 100 matching                                 |
+| last step                                      | `learning_module_0: time_out`, one possible, `milka` at 6.20 |
+| judgement (`eval_stats.csv`)                   | **`correct_mlh`** — named by its most likely object          |
+| `most_likely_object` / `primary_target_object` | `milka` / `milka`                                            |
+| `TFNP`                                         | `target_in_possible_matches_(TP)`                            |
+| `rotation_error`                               | empty; no pose resolved                                      |
 
 That is the experiment working as designed. Monty's own
 `unsupervised_inference_distinctobj_dist_agent` reports 99 % correct over 100
@@ -711,15 +713,16 @@ answered by the most likely object, with no pose resolved)", from
 ### The rate over the five episodes
 
 The same configuration, five episodes, this Mac, `ex_mujoco` — a run made from
-the studio page:
+the studio page. This is `dogs/inference_dist_raster`: the 5° memory, which the
+arm read until §10's last measurement moved it to the 3° one.
 
-| target | judged | named | possible |
-| --- | --- | --- | --- |
-| milka | `correct_mlh` | milka | 1 |
-| dog_free_fire | `correct_mlh` | dog_free_fire | 1 |
-| kinder_guard_dog | `confused_mlh` | **dogs_head** | 1 |
-| puppy | `confused_mlh` | **dogs_head** | 2 |
-| dogs_head | `correct_mlh` | dogs_head | 1 |
+| target           | judged         | named         | possible |
+| ---------------- | -------------- | ------------- | -------- |
+| milka            | `correct_mlh`  | milka         | 1        |
+| dog_free_fire    | `correct_mlh`  | dog_free_fire | 1        |
+| kinder_guard_dog | `confused_mlh` | **dogs_head** | 1        |
+| puppy            | `confused_mlh` | **dogs_head** | 2        |
+| dogs_head        | `correct_mlh`  | dogs_head     | 1        |
 
 **Three of five named correctly**, and both errors named `dogs_head`. Every
 episode used its whole 100 matching-step budget and resolved no pose.
@@ -729,5 +732,75 @@ five of five `match` in 635 steps, with a pose. So the two modules differ in
 exactly what the gate asked: the supervised one accepts a pose, the
 unsupervised one names the object through its most likely hypothesis.
 
-What is left in this lane: the corpus sweep, and a look at what the two
-confused targets share with `dogs_head` — the corpus, or the walk.
+### Corpus, walk, or memory: measured, and it is the memory
+
+The two errors were both `dogs_head`, so the question was whether the corpus is
+the problem — `dogs_head` is literally a dog's head in a corpus of whole dogs,
+and at 238 nodes it is the second densest graph — or the walk. Three readings,
+each a run of the same five episodes on this Mac, `ex_mujoco`, seed 42:
+
+- **The verdict is where the cut lands, not a settled similarity.** In the
+  recorded raster run the kinder episode's top hypothesis changes twenty-four
+  times in its 311 steps. The target itself is on top at step 242 with evidence
+  15.9, the head reaches 18.2 with one object possible at 262, and the episode
+  stops at its hundredth matching step while the comparison is still moving. A
+  confusion partner read off that cut is the last state of an oscillation, not a
+  look-alike pair.
+- **Taking the head out does not fix it, it moves it.** The same five episodes
+  against a memory with the head's graph removed (`dogs_supervised_pretraining`
+  minus `dogs_head`: 926 nodes over four dogs) name **two** of the five — where
+  the full memory names three, and one of those two is the head's own episode,
+  which a memory without that graph cannot name at all. Neither failing target
+  improved: the kinder episode now ends on `dog_free_fire` and the puppy episode
+  on `kinder_guard_dog`, and the episode that was right with the head present
+  (`dog_free_fire`) still is. The confusions move with the graphs; removing one
+  is not what the failures are made of.
+- **Density is.** The same arm over `dogs_supervised_pretraining_dense` — the
+  same recipe with the scan at 3° instead of 5°, 3 165 nodes, 2.7× every dog —
+  names **five of five**, each episode ending with a single dog possible:
+
+| placed           | ends on          | evidence | possible |
+| ---------------- | ---------------- | -------- | -------- |
+| milka            | milka            | 4.5      | 1        |
+| dog_free_fire    | dog_free_fire    | 73.5     | 1        |
+| kinder_guard_dog | kinder_guard_dog | 6.8      | 1        |
+| puppy            | puppy            | 47.8     | 2        |
+| dogs_head        | dogs_head        | 93.2     | 1        |
+
+The run's ten eval epochs repeat the same five episodes rather than adding new
+ones, and every cycle that had finished when this was read — seven of them — held
+these five verdicts: one deterministic trial repeated, not independent trials,
+which is also why a fifty-episode run's tally is ten copies of five. The lowest
+evidence is the kinder's 6.8, so the name is decided but not by a margin; the walk
+is the same in every arm (`goals 0` on every step, the same `distant_5` scan),
+which is why it is not the variable.
+
+So the dogs are not the problem and do not need dropping: the same corpus, the
+same episodes and the same module name three of five over a graph of 185–334
+nodes a dog and five of five over one of 502–931. `dogs/inference_dist` now reads
+the 3° memory, and `dogs/inference_dist_raster` keeps the 5° arm as the control.
+What is left is the pose: every one of these names is a `time_out` judgement,
+where `dogs/inference_supervised` concludes with a pose on the same corpus.
+
+The head-free memory is derived, so it stays in Monty's data directory rather
+than the checkout, and the run reads its config from there too:
+
+```sh
+# the A/B's memory: the library is one line per object's graph, so this is a filter
+python3 - "$MONTY_LIBRARIES/trained" <<'PY'
+import gzip, json, os, sys
+lib = sys.argv[1]
+src = os.path.join(lib, "dogs_supervised_pretraining.jsonl.gz")
+dst = os.path.join(lib, "dogs_supervised_pretraining_nohead.jsonl.gz")
+with gzip.open(src, "rt") as f:
+    kept = [l for l in f if l.strip() and json.loads(l)["object_id"] != "dogs_head"]
+with gzip.open(dst, "wt") as f:
+    f.writelines(kept)
+PY
+
+# the run: an overlay in the data directory, read before Monty's own config copy
+mix monty.run dogs/inference_dist --overlay "$MONTY_DATA/scratch/head-free" --no-record
+```
+
+`dogs/inference_dist_raster` is the same arm against the 5° memory and needs no
+overlay; only its `model_name_or_path` differs.
