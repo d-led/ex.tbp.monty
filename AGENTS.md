@@ -1,5 +1,10 @@
 This is a web application written using the Phoenix web framework.
 
+The documentation is four kinds of page — learn it, do a task, look up a fact,
+understand why — indexed in [`docs/README.md`](docs/README.md), with the same map
+for a model with no browser in [`llms.txt`](llms.txt). Read the index before
+adding a page: a how-to, a reference and an explanation do not belong in one file.
+
 ## This project: Monty on the BEAM
 
 A module-for-module reimplementation of the Thousand Brains Project's Monty.

@@ -102,17 +102,17 @@ never a module, and nothing in a step reads the wall clock.
 
 ## The functional core
 
-Every mapped module under [`lib/monty/`](../lib/monty) is a function of its
-inputs: plain data in, plain data out, no processes and no side effects of its
-own. The two
-standing exceptions are named rather than hidden — a draw from the episode's
-stream (`Monty.Context.rng`, a call to a process) and a world
-(`Monty.Simulators.Mujoco.Environment` holds the interpreter it steps in, and
-`Monty.Simulators.Habitat.Environment.HabitatEnvironment` would hold a port). The
-actor layer is thin by design — routing, state holding, telemetry — and is the
-only place that knows about GenServers. This is what lets a contributor port a
-Python class and test it directly against Monty numbers, and what keeps the port
-reviewable by Monty's team.
+Every mapped module under
+[`packages/ex_tbp_monty_core/lib/monty/`](../packages/ex_tbp_monty_core/lib/monty) is
+a function of its inputs: plain data in, plain data out, no processes and no side
+effects of its own. The two standing exceptions are named rather than hidden: a
+draw from the episode's stream (`Monty.Context.rng`, a call to a process) and a
+world (`Monty.Simulators.Mujoco.Environment` holds the interpreter it steps in,
+and `Monty.Simulators.Habitat.Environment.HabitatEnvironment` would hold a port).
+The actor layer is thin by design — routing, state holding, telemetry — and is the
+only place that knows about GenServers. That is what lets a contributor port a
+Python class and test it directly against Monty's numbers. It is also what keeps
+the port reviewable by Monty's team.
 
 ## Boundaries
 
