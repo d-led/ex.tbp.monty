@@ -290,6 +290,33 @@ The CLI's log carries the conclusions and not the judgement, so "5 of 5 `match`"
 is a statement about concluding: whether each match named the dog it was shown is
 what the run page's verdict reports, and these four runs were not recorded.
 
+**The verdict survived Monty's walk (measured 2026-11-23).** Every judgement above
+was taken on this port's own walk: a policy chose its action from an Erlang stream
+its sampler seeded for itself, one per module and one per step, where Monty spends
+the episode's one `ctx.rng` (`docs/monty-differences.md` §2.5). The samplers draw
+numpy's `choice` off the episode's stream now, so the same five episodes were run
+again — `dogs/inference_dist`, `dogs_supervised_pretraining_dense`, seed 42, this
+Mac, `ex_mujoco`:
+
+| episode | placed           | final most likely object | evidence | steps |
+| ------- | ---------------- | ------------------------ | -------- | ----- |
+| 1       | milka            | milka                    | 26.1     | 308   |
+| 2       | dog_free_fire    | dog_free_fire            | 8.0      | 465   |
+| 3       | kinder_guard_dog | kinder_guard_dog         | 43.8     | 333   |
+| 4       | puppy            | puppy                    | 38.8     | 945   |
+| 5       | dogs_head        | dogs_head                | 90.7     | 487   |
+
+**5 of 5 `correct_mlh` in 2 538 steps**, against 2 814 on the old walk: the same
+verdict, in a tenth fewer steps, every episode ending with one graph possible and
+no pose resolved. The arm's result is therefore not an artefact of the walk — which
+is what had to be shown before the walk could be trusted for anything else.
+
+The run wrote no `eval_stats.csv` (its recorded directory holds only `frames/`),
+so this judgement is the log's own rule applied to its last step:
+`learning_module_0: <graph> ev <e>` is the most likely hypothesis, and the placed
+dog is the episode's entry of `object_names` in `eval_dogs_random`. A run the page
+starts still writes the CSV.
+
 The policy is not the limiter, and the earlier reading says the same: against
 20–88-node memories the episodes timed out with the patch seeing the dog.
 The same inference, over two of those memories:
