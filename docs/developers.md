@@ -223,21 +223,31 @@ Tests need the same database; `mix test` creates and migrates it.
 ## Where the code is
 
 ```
-lib/monty/               the port, one module per Monty file: cmp, config, geometry,
-                         frameworks/, experiment/, sensor_modules/, random/
-lib/monty/runtime/       processes only — step barriers, vote rounds, routing
-lib/monty/studio/        experiments, setups, run history (the app's domain)
-lib/monty/simulators/    the world: synthetic, port protocol, recordings, the Habitat handle
-lib/ex_tbp_monty/        the OTP application: repo, MCP server, release plumbing
-lib/ex_tbp_monty_web/    Phoenix endpoint, LiveViews, components
-priv/monty/              Monty's config tree, snapshots and licence, verbatim; exported memories
-priv/experiments/        experiment files the studio writes (a draft is a config, not a row)
-priv/studio_runs/        what each run wrote: run.log, frames, logs (ignored by git)
-priv/prerequisites.yaml  what a run downloads, checksummed
-scripts/                 the gates, the dev scripts, and every Python file this project has
-mix_tasks/               Mix tasks compiled outside `:test` (assets, build info)
-docs/                    architecture, config compatibility, module map, MCP, validation, speed
+packages/ex_tbp_monty_core/   the sensorimotor core, published as `ex_tbp_monty_core`:
+                              one module per Monty file under lib/monty/ — cmp,
+                              geometry, frameworks/, sensor_modules/, observations/,
+                              attention/, memento/, config/, experiment/, random/ —
+                              plus runtime/ (barriers, vote rounds, routing) and
+                              native/ for the Rust kernels it compiles
+lib/monty/                    what belongs to this application, in Monty's namespace:
+                              studio/ (experiments, setups, run history, CAD), the
+                              loggers and environments Monty's tree does not carry,
+                              simulators/ (the MuJoCo and ex_mujoco worlds), config/
+                              (composing, inputs, snapshots), paths.ex, prerequisites/
+lib/ex_tbp_monty/             the OTP application: repo, MCP server, release plumbing
+lib/ex_tbp_monty_web/         Phoenix endpoint, LiveViews, components
+priv/monty/                   Monty's config tree, snapshots and licence, verbatim;
+                              exported memories
+priv/experiments/             experiment files the studio writes (a draft is a config, not a row)
+priv/studio_runs/             what each run wrote: run.log, frames, logs (ignored by git)
+priv/prerequisites.yaml       what a run downloads, checksummed
+scripts/                      the gates, the dev scripts, and every Python file this project has
+mix_tasks/                    Mix tasks compiled outside `:test` (assets, build info)
+docs/                         four kinds of page, indexed in `docs/README.md`
 ```
+
+A module belongs in the package when another project could use it without the
+studio; everything else stays in `lib/monty/`.
 
 The one directory that is not code is [`priv/monty`](../priv/monty): it is
 Monty's data, copied rather than written — `mix monty.inputs` for the YAML,

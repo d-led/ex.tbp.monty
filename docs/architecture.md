@@ -102,13 +102,16 @@ never a module, and nothing in a step reads the wall clock.
 
 ## The functional core
 
-Every mapped module under
-[`packages/ex_tbp_monty_core/lib/monty/`](../packages/ex_tbp_monty_core/lib/monty) is
-a function of its inputs: plain data in, plain data out, no processes and no side
-effects of its own. The two standing exceptions are named rather than hidden: a
-draw from the episode's stream (`Monty.Context.rng`, a call to a process) and a
-world (`Monty.Simulators.Mujoco.Environment` holds the interpreter it steps in,
-and `Monty.Simulators.Habitat.Environment.HabitatEnvironment` would hold a port).
+Every mapped module is a function of its inputs: plain data in, plain data out, no
+processes and no side effects of its own. They live in two trees: the sensorimotor
+core in
+[`packages/ex_tbp_monty_core/lib/monty/`](../packages/ex_tbp_monty_core/lib/monty),
+and, in [`lib/monty/`](../lib/monty), what belongs to this application under
+Monty's namespace — the studio, the loggers, the worlds. The two standing
+exceptions are named rather than hidden: a draw from the episode's stream
+(`Monty.Context.rng`, a call to a process) and a world
+(`Monty.Simulators.Mujoco.Environment` holds the interpreter it steps in, and
+`Monty.Simulators.Habitat.Environment.HabitatEnvironment` would hold a port).
 The actor layer is thin by design — routing, state holding, telemetry — and is the
 only place that knows about GenServers. That is what lets a contributor port a
 Python class and test it directly against Monty's numbers. It is also what keeps
@@ -151,12 +154,13 @@ diffed against a checkout, a generated file is a map _of_ Monty rather than a
 copy of it, and the world is a re-implementation against the same library Monty
 uses — and only the last of the three is code this repository owns.
 
-| Kind         | What                                                                                   | Handles it                                                                             |
-| ------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| copied       | Monty's config tree, the snapshots it was composed into, and its licence               | `mix monty.inputs`                                                                     |
-| derived      | Monty's pretrained memories, exported to a format this port reads                      | the prerequisite fetch (`/prerequisites`, `mix monty.prerequisites.fetch`)             |
-| generated    | the module contract (`lib/monty/module_map/data.ex`) and the two census files          | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census`         |
-| written here | the world — MuJoCo's scene, agents and cameras, mirroring Monty's `simulators/mujoco/` | [`priv/monty_py/world.py`](../priv/monty_py/world.py), run by the embedded interpreter |
+| Kind                                                                                 | What                                                                                   | Handles it                                                                             |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| copied                                                                               | Monty's config tree, the snapshots it was composed into, and its licence               | `mix monty.inputs`                                                                     |
+| derived                                                                              | Monty's pretrained memories, exported to a format this port reads                      | the prerequisite fetch (`/prerequisites`, `mix monty.prerequisites.fetch`)             |
+| generated                                                                            | the module contract                                                                    |
+| (`packages/ex_tbp_monty_core/lib/monty/module_map/data.ex`) and the two census files | `mix monty.module_map.gen`, `mix monty.port_census`, `mix monty.target_census`         |
+| written here                                                                         | the world — MuJoCo's scene, agents and cameras, mirroring Monty's `simulators/mujoco/` | [`priv/monty_py/world.py`](../priv/monty_py/world.py), run by the embedded interpreter |
 
 Every path, glob, writer and the command that checks it is in
 [`from-monty.md`](from-monty.md) — one list, kept there so it cannot drift from

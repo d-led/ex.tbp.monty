@@ -51,7 +51,8 @@ order, each a task of its own:
 
 1. `mix monty.inputs` — fast-forward, then copy `conf/`, the snapshots and the
    licence into `priv/monty/`;
-2. `mix monty.module_map.gen` — rewrite `lib/monty/module_map/data.ex` and the
+2. `mix monty.module_map.gen` — rewrite
+   `packages/ex_tbp_monty_core/lib/monty/module_map/data.ex`, recording the Monty
    commits it was read from;
 3. `mix monty.target_census` — recompose every experiment and collect the
    `_target_`s into `priv/monty/target_census.json`;
