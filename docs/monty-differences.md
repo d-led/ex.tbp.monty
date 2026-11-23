@@ -1621,7 +1621,7 @@ otherwise.
 computes the same three things in the same order, and both blends are Monty's
 lines. The neighbour search is the same question asked of the port's own index —
 `Monty.Frameworks.Utils.KdTree`, the native one on a machine whose `_build` has
-`native/kd_tree_nif` — over the vote locations, a vote's id being its place in
+`packages/ex_tbp_monty_core/native/kd_tree_nif` — over the vote locations, a vote's id being its place in
 the round. The acceptance is the same set — `distance < max_match_distance` here
 is `node_distance_weights <= 0` there, because the weight is zero exactly at the
 radius — and the maximum over the surviving votes is the same value.

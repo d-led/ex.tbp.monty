@@ -367,7 +367,7 @@ An exported variable still wins; `Monty.Paths` is where that is decided.
    build carries its own. Not exercised yet on a machine that has no Python
    toolchain — this Mac has one.
 2. **Signing and notarisation** on macOS: the sidecar, the NIFs
-   (`native/kd_tree_nif`, `native/matcher_nif`) and the hardened runtime all have
+   (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `packages/ex_tbp_monty_core/native/matcher_nif`) and the hardened runtime all have
    to agree. They already build per platform, so this is bundle-and-sign.
 3. **Migrations.** `priv/repo/migrations/20261104090000_wrap_run_json_columns.exs`
    rewrites `log` and `timeline` with `to_jsonb` and is a no-op unless the
@@ -754,7 +754,7 @@ sentence with it. Two changes:
   recompiled and the other did not — and the build's check, being "are there any
   kernels", was answered by the one that was there. The build now asks per crate
   (each under this platform's own spelling, `.so` or `.dll`) before and after
-  `mix release`, the cache key includes `native/*/Cargo.lock`, and the release
+  `mix release`, the cache key includes `packages/ex_tbp_monty_core/native/*/Cargo.lock`, and the release
   refuses to be assembled while a kernel is missing. The boot check below is what
   found the first version of this, on the Linux and Windows runners.
 - **The release a bundle carries is started on every platform.**

@@ -1,25 +1,23 @@
 # Training: what exists, what is missing, and the order to do it in
 
-Written 2026-11-06, after the port finished a full evaluation run and the crash
-that used to end one. Every claim here is a file and a line, or a command whose
-output is quoted.
+The runtime can train an episode, Monty's learning code is ported, and the
+studio's loop hands each episode the memory the last one wrote. A config that
+trains runs here, and the guard that used to refuse it (`Setup.phase_findings/1`)
+is gone. What is missing is the referee: nothing yet compares a trained memory
+against the one Monty's own test asserts.
 
-**Where it stands now — 2026-11-17.** A new corpus (eight Objaverse dogs) is trained
-and recognised end to end, and what decides whether it is recognised is the
-training _policy_, not the number of samples: four rotations of a surface agent
-leave 13 501 nodes over the eight dogs and name eight of eight (23 of 24 over three
-evaluation rotations), where fourteen rotations of a dist agent's raster leave
-124 – 1 109 nodes and name five. The measurements, the commands and the four-row
-table are in [the dogs sections](#walking-the-corpus-recognises-it-7-of-8-names-all-eight-concluded-measured-2026-11-17)
-below; `priv/monty_experiments/sets/dogs/conf/experiment/dogs/` holds the configs
-in the set `dogs`, which every opener reads by name with no flag
-(`Monty.Config.Source.conf_dirs/0`).
+What decides whether a corpus is recognised is the training _policy_, not the
+number of samples. Four rotations of a surface agent leave 13 501 nodes over the
+eight Objaverse dogs and name eight of eight (23 of 24 over three evaluation
+rotations). Fourteen rotations of a dist agent's raster leave 124–1 109 nodes and
+name five. The measurements, the commands and the four-row table are in
+[the dogs sections](#walking-the-corpus-recognises-it-7-of-8-names-all-eight-concluded-measured-2026-11-17)
+below; the configs are in
+`priv/monty_experiments/sets/dogs/conf/experiment/dogs/`, in the set `dogs`, which
+every opener reads by name with no flag (`Monty.Config.Source.conf_dirs/0`).
 
-**The state in one sentence**: the runtime can train an episode, Monty's
-learning code is ported, and the studio's loop now hands each episode the memory
-the last one wrote — so a config that trains runs here, and the guard that used
-to refuse it (`Setup.phase_findings/1`) is gone. What is missing is the referee:
-nothing yet compares a trained memory against the one Monty's own test asserts.
+Every claim in this page is a file and a line, or a command whose output is
+quoted.
 
 Measured 2026-11-06, `MIX_ENV=test` (the stand-in scene), a training config
 stepped by hand:

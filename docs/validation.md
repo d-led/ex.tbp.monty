@@ -556,12 +556,10 @@ sum changes which action comes next, and from there the episode's length; the
 two runs land on the same conclusion by different paths. What is claimed is the
 conclusion, not the itinerary.
 
-The gates behind this, run the same day: `mix monty.module_map.verify` (123
-files, 329 classes — 206 implemented, 4 partial, 72 planned, 47 excluded),
-`mix monty.config.snapshots` (63 snapshots match), `scripts/quality.sh` (2 873
-tests, worst CRAP 29.85), and the acceptance ladder
+The gates behind this are commands, not counts: `mix monty.module_map.verify`,
+`mix monty.config.snapshots`, `scripts/quality.sh`, and the acceptance ladder
 (`mix monty.run base_config_10distinctobj_dist_agent --episodes 1 --steps 8
---no-record`) still printing `0.908, 2.55, 4.086, 5.675, 7.032, 8.639, 10.15,
+--no-record`), which still prints `0.908, 2.55, 4.086, 5.675, 7.032, 8.639, 10.15,
 11.712` with `goals 15 328`.
 
 To reproduce the comparison: run Monty's own

@@ -3,7 +3,7 @@
 Working on the code: invariants, the module contract, tests and gates.
 Deployment and operations live in the Dockerfile and `rel/`.
 
-## To whom it may concern
+## Trust the commands, not the prose
 
 This is a reimplementation, not a fork. Monty's Python is the reference for
 behaviour, names, units and config shape; the BEAM is where it runs. Nothing
@@ -140,12 +140,12 @@ scripts/run-dev.sh     # http://localhost:4000
 ```
 
 [`scripts/init-dev.sh`](../scripts/init-dev.sh) needs node/npm for the asset
-bundle and Docker for the Postgres [`docker-compose.yml`](../docker-compose.yml)
-publishes on 6432 — this project's own port, so that a second project's
-database on the default one cannot be mistaken for it. The application reads it
-from [`config/runtime.exs`](../config/runtime.exs), which defaults to 6432: **no
-`MIX_ENV`, no exported variable and no flags are needed for `mix ecto.*`,
-`mix test` or `mix phx.server`**. Two checkouts at once are the one case that
+bundle, and Docker for the Postgres that
+[`docker-compose.yml`](../docker-compose.yml) publishes. The port is 6432, this
+project's own, so a second project's database on the default port cannot be
+mistaken for it. [`config/runtime.exs`](../config/runtime.exs) already defaults
+to 6432, so **`mix ecto.*`, `mix test` and `mix phx.server` need no `MIX_ENV`, no
+exported variable and no flags**. Two checkouts at once are the one case that
 needs a `DB_PORT`, and it moves the mapping and the application together.
 
 ### A file instead of a server
@@ -173,22 +173,22 @@ A development run on a file is one line away — replace the `:repo` in
 four partitions of the suite run against a service in CI, and some of the schema
 under test (`jsonb` in the run columns) is Postgres's.
 
-The script also installs the
-two toolchains itself when the machine has neither:
+The script also installs the two toolchains itself when the machine has neither:
 
 - [`scripts/install-elixir.sh`](../scripts/install-elixir.sh) leaves an Elixir
-  1.20 or newer on PATH alone and otherwise runs Elixir's own installer, which
-  unpacks a prebuilt OTP 29.1 and Elixir 1.20.5 under `~/.elixir-install` — per
-  user, no root, and the same release on every platform where a package manager
-  would hand out whatever it happens to ship. It prints the two directories to
-  put on PATH, because a script cannot change its caller's environment.
+  1.20 or newer on PATH alone. Otherwise it runs Elixir's own installer, which
+  unpacks a prebuilt OTP 29.1 and Elixir 1.20.5 under `~/.elixir-install`: per
+  user, no root, and the same release everywhere, where a package manager would
+  hand out whatever it ships. It prints the two directories to put on PATH,
+  because a script cannot change its caller's environment.
 - [`scripts/install-rust.sh`](../scripts/install-rust.sh) does the same for
-  `cargo`, and is also what the `Dockerfile` and the CI jobs call. Rust is a
-  _build_ requirement: the nearest-neighbour index is a NIF
-  (`native/kd_tree_nif`) that rustler compiles with the application, so without
-  it `mix compile` stops with "Could not cd to native/kd_tree_nif". The matching
-  arithmetic is a second crate beside it (`native/matcher_nif`), built the same
-  way, and each keeps an Elixir reference that its parity test holds it to.
+  `cargo`, and the `Dockerfile` and the CI jobs call it too. Rust is a _build_
+  requirement: the nearest-neighbour index is a NIF
+  (`packages/ex_tbp_monty_core/native/kd_tree_nif`) that rustler compiles with
+  the application, so without a toolchain `mix compile` stops naming the crate
+  it could not enter. The matching arithmetic is a second crate beside it
+  (`packages/ex_tbp_monty_core/native/matcher_nif`), built the same way, and
+  each keeps an Elixir reference that its parity test holds it to.
 
 Running the app needs neither — the release carries the compiled shared object.
 The script itself runs

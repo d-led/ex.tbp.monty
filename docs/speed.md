@@ -318,7 +318,7 @@ parity test that compares the new path with the Elixir reference **exactly**:
 
 ### What the native kernels cover
 
-Seven kernels in two Rustler crates (`native/kd_tree_nif`, `native/matcher_nif`):
+Seven kernels in two Rustler crates (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `packages/ex_tbp_monty_core/native/matcher_nif`):
 feature evidence, neighbour evidence, principal curvatures, displaced locations,
 window slopes, spread of one channel's evidence, and the graph's flattened arrays
 with its k-d index. Each keeps a runnable Elixir reference and a parity test,
@@ -438,7 +438,7 @@ crosses once.
 
 Two vehicles, both keeping the Elixir reference and its parity tests:
 
-- **Extend `native/matcher_nif`.** No new dependency, rides the crate that is
+- **Extend `packages/ex_tbp_monty_core/native/matcher_nif`.** No new dependency, rides the crate that is
   already built and tested in CI, and the rows are scalar loops that need no
   compiler. Costs: hand-written Rust for each stage, and the RNG must stay on the
   Elixir side by construction.
