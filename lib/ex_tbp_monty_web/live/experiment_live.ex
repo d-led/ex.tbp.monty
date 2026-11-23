@@ -567,7 +567,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               value={@episodes}
               placeholder={to_string(@episodes_in_config)}
               class="input input-xs w-16"
-              aria-label="How many of the config's episodes to run"
             />
             <span id="run-episodes-note">of {@episodes_in_config} in the config</span>
             <label for="run-steps" class="ms-2">steps each, at most</label>
@@ -579,7 +578,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               value={@steps}
               placeholder={to_string(@steps_in_config)}
               class="input input-xs w-24"
-              aria-label="The most steps one episode may take"
             />
             <%!-- What a step does with the modules it hands work to, in the
             words a person reads without knowing Monty's option keys: every
@@ -592,7 +590,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               id="run-scheduling"
               name="scheduling"
               class="select select-xs w-56"
-              aria-label="Whether a step's modules answer in this step or a slow one answers a step later"
             >
               <option value="wait_for_all" selected={@scheduling == :wait_for_all}>
                 answer in this step
@@ -615,7 +612,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               max="200"
               value={@settle}
               class="input input-xs w-16"
-              aria-label="How many more steps a module still computing gets after another has concluded"
             />
             <%!-- Whether a step asks its sensors one after another or together.
             `auto` is the port's rule; naming one is what makes two runs of the
@@ -625,7 +621,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               id="run-sensors"
               name="sensors"
               class="select select-xs w-44"
-              aria-label="Whether a step asks its sensors one after another or all at once"
             >
               <option value="auto" selected={@sensors == :auto}>as the experiment decides</option>
               <option value="serial" selected={@sensors == :serial}>one after another</option>
@@ -659,7 +654,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               id="parallelism-count"
               name="parallelism"
               class="select select-xs w-16"
-              aria-label="How many parts to run the experiment in"
             >
               <option :for={count <- 1..8} value={count} selected={count == @parallelism}>
                 {count}
@@ -682,7 +676,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               name="seed"
               value={@seed}
               class="input input-xs w-20 font-mono"
-              aria-label="The seed this run starts from"
             />
           </form>
           <form
@@ -696,7 +689,6 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               id="world-select"
               name="world"
               class="select select-xs w-72"
-              aria-label="Which world the run steps"
             >
               <%!-- Each world named for what it is: Monty's own MuJoCo
               simulator (copied in, run in this application's interpreter), this
