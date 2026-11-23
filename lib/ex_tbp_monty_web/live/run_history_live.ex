@@ -21,6 +21,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   alias Monty.Studio.{
     Artifacts,
     Duration,
+    EvalStats,
     Failure,
     Jobs,
     Panel,
@@ -123,6 +124,9 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
        # Where a run's files are, on the page that shows it: `nil` until the run
        # is known, for the same reason as the videos.
        folder: nil,
+       # What the run was judged to have done, read from its `eval_stats.csv` once
+       # it has stopped. A run still stepping has no verdict yet.
+       judged: nil,
        # Whether this instance is one of several, which is the only case in which
        # a run's node is a column worth having: a cluster has several run lists,
        # and a page merged over them needs to say whose each row is.
@@ -335,11 +339,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     assign(socket,
       run: run,
       files: Artifacts.files(run.id),
+      judged: judged(run),
       queue: where_each_run_is([run]),
       waiting: waiting(run),
       division: RunHistory.parts(run.id)
     )
   end
+
+  # What the run was judged to have done — which its terminal state cannot say.
+  # The verdict is Monty's own `primary_performance`, written to
+  # `eval_stats.csv` when the run settles; an episode that ends `time_out` can
+  # still be a correct recognition, and the unsupervised inference design is
+  # exactly that case. Read with the files, which a step does not change either.
+  defp judged(%{id: id, status: status}) when status in ["finished", "stopped", "failed"] do
+    dir = Artifacts.dir(id)
+
+    if File.exists?(Path.join(dir, "eval_stats.csv")) do
+      stats = EvalStats.read(dir)
+      Summary.judgement_sentence(EvalStats.outcomes(stats), EvalStats.mlh_judgements(stats))
+    end
+  end
+
+  defp judged(_run), do: nil
 
   # A divided run's steps are its parts', and the record holds none of them until
   # the run closes — four parts writing one transcript would overwrite each
@@ -1918,6 +1939,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
               <dd class="font-mono break-words">{value}</dd>
             </div>
           </dl>
+          <%!-- The record's summary counts terminal states; the judgement is what
+          the run was held to have done with them, and only it can say that an
+          object was named by a run that ended on its evaluation budget. --%>
+          <p :if={@judged} id="run-judgement" class="text-xs text-base-content/70">
+            Judged — {@judged}
+          </p>
         </div>
       </section>
 

@@ -37,6 +37,24 @@ defmodule Monty.Studio.EvalStatsTest do
       assert EvalStats.outcomes(run) == %{"recognised" => 2, "confused" => 1}
     end
 
+    # `correct_mlh` is Monty's judgement for an evaluation that ended on its
+    # budget and named the object through its most likely hypothesis: the object
+    # is recognised, and no pose was resolved. A page that only counted the
+    # terminal state read that as a failure.
+    test "says how many episodes were judged without a resolved pose" do
+      run =
+        EvalStats.read(
+          file!([
+            episode(1, "correct"),
+            episode(2, "correct_mlh"),
+            episode(3, "confused_mlh"),
+            episode(4, "time_out")
+          ])
+        )
+
+      assert EvalStats.mlh_judgements(run) == 2
+    end
+
     test "says why each episode ended, which is the recognition policy's answer" do
       run =
         EvalStats.read(

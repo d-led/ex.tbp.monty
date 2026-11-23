@@ -1748,6 +1748,29 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
       assert has_element?(view, "#log-0-1")
     end
 
+    # An episode can end on its evaluation budget and still be recognised — the
+    # unsupervised inference design does exactly that — and the verdict lives in
+    # `eval_stats.csv`, not in the record's summary. A page that showed only the
+    # terminal state called it a time-out.
+    test "says what the run was judged to have done", %{conn: conn} do
+      _root = Monty.Test.Tmp.env_dir("run-judged", :studio_artifacts_dir)
+      run = insert_run(%{experiment: "dogs/inference_dist", status: "finished"})
+
+      dir = Artifacts.dir(run.id)
+      File.mkdir_p!(dir)
+
+      File.write!(
+        Path.join(dir, "eval_stats.csv"),
+        "episode_seed,primary_performance,num_steps\n1170100843,correct_mlh,100\n"
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      judged = view |> element("#run-judgement") |> render()
+      assert judged =~ "recognised 1 of 1"
+      assert judged =~ "answered by the most likely object"
+    end
+
     # A list of runs names experiments, and the name does not say whether a run
     # trained a memory or used one: "dogs/surf_supervised" and
     # "dogs/inference_supervised" are told apart by the class, and that class is

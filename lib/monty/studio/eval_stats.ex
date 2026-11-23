@@ -140,6 +140,24 @@ defmodule Monty.Studio.EvalStats do
   @spec outcomes(t()) :: %{optional(String.t()) => pos_integer()}
   def outcomes(%{rows: rows}), do: tally(rows, &judgement/1)
 
+  @doc """
+  How many episodes were judged through their most likely object rather than a
+  match — Monty's `correct_mlh` and `confused_mlh`, which an evaluation that ends
+  on its budget reaches without a resolved pose.
+
+  The distinction is the whole answer to "did it recognise the object?" for an
+  unsupervised inference run: its episodes end `time_out` by design, so the
+  terminal state alone says nothing about whether the right object was named.
+  """
+  @spec mlh_judgements(t()) :: non_neg_integer()
+  def mlh_judgements(%{rows: rows}) do
+    Enum.count(rows, fn row ->
+      judgement = row |> Map.get("primary_performance", "") |> String.trim()
+
+      judgement in ["correct_mlh", "confused_mlh"]
+    end)
+  end
+
   @doc "Why each episode ended, counted by reason."
   @spec exits(t()) :: %{optional(String.t()) => pos_integer()}
   def exits(%{rows: rows}), do: tally(rows, &exit_of/1)

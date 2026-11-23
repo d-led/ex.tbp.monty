@@ -676,3 +676,37 @@ tables exist: a number that only a `mix run` in somebody's scratch directory
 printed is a number nobody can check. The recognition script prints the verdict
 beside the placed dog because a run's own log carries only the verdict, and it is
 the name that decides whether a `match` was right.
+
+## 10. The unsupervised arm's judgement, which its conclusion cannot say (2026-11-23)
+
+An unsupervised inference episode ends on its evaluation budget, so its terminal
+state is `time_out` by design. Whether it named the object is Monty's
+`primary_performance` column, and only that column.
+
+`dogs/inference_dist` (`noresetevidence_1lm`, the 5° `dogs_supervised_pretraining`
+memory), one episode recorded from the studio page, this Mac, `ex_mujoco`, seed 42:
+
+| what | value |
+| --- | --- |
+| steps | 2 722, of which 100 matching |
+| last step | `learning_module_0: time_out`, one possible, `milka` at 6.20 |
+| judgement (`eval_stats.csv`) | **`correct_mlh`** — named by its most likely object |
+| `most_likely_object` / `primary_target_object` | `milka` / `milka` |
+| `TFNP` | `target_in_possible_matches_(TP)` |
+| `rotation_error` | empty; no pose resolved |
+
+That is the experiment working as designed. Monty's own
+`unsupervised_inference_distinctobj_dist_agent` reports 99 % correct over 100
+match steps for the same module.
+
+Earlier readings of this corpus called the arm a failure ("0 of 5 `time_out`")
+from a `--no-record` run. The log carries the terminal state; the judgement is
+written only to `eval_stats.csv`.
+
+The studio now reads it. The run page says "Judged — recognised 1 of 1 (1
+answered by the most likely object, with no pose resolved)", from
+`Monty.Studio.EvalStats.mlh_judgements/1` and
+`Monty.Studio.Summary.judgement_sentence/2`.
+
+What is left in this lane: the same five episodes on both arms, recorded, to
+state a rate; then the corpus sweep.

@@ -228,6 +228,34 @@ defmodule Monty.Studio.Summary do
 
   defp matched?(state), do: to_string(state) == "match"
 
+  @doc """
+  What a run was judged to have done, from its `eval_stats.csv` tally: the
+  episodes each module recognised, and how many of those were answered by the
+  most likely object because no pose resolved.
+
+  The record's own summary counts terminal states (`time_out`, `match`), and an
+  episode that ends `time_out` can still be a correct recognition — that is what
+  the unsupervised inference design measures. The judgement is a different fact,
+  and this is where it is said.
+  """
+  @spec judgement_sentence(map(), non_neg_integer()) :: String.t() | nil
+  def judgement_sentence(tally, _by_mlh) when map_size(tally) == 0, do: nil
+
+  def judgement_sentence(tally, by_mlh) do
+    total = tally |> Map.values() |> Enum.sum()
+
+    said =
+      tally
+      |> Enum.sort_by(fn {judgement, _count} -> {judgement != "recognised", judgement} end)
+      |> Enum.map_join(", ", fn {judgement, count} -> "#{judgement} #{count}" end)
+
+    if by_mlh > 0 do
+      "#{said} of #{total} (#{by_mlh} answered by the most likely object, with no pose resolved)"
+    else
+      "#{said} of #{total}"
+    end
+  end
+
   @doc "Average step duration in microseconds, or `nil` for a run with no steps."
   @spec average_step_us(t()) :: float() | nil
   def average_step_us(%__MODULE__{steps: 0}), do: nil

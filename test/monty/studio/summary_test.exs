@@ -134,4 +134,18 @@ defmodule Monty.Studio.SummaryTest do
       assert Summary.rows(%{"outcomes" => %{}, "never_updated" => []}) == []
     end
   end
+
+  describe "what a run was judged to have done" do
+    # The terminal state and the judgement are two facts, and only the second
+    # says whether the object was named.
+    test "names the judgement, and says when it came from the most likely object" do
+      assert Summary.judgement_sentence(%{"recognised" => 1}, 1) ==
+               "recognised 1 of 1 (1 answered by the most likely object, " <>
+                 "with no pose resolved)"
+
+      assert Summary.judgement_sentence(%{"recognised" => 2}, 0) == "recognised 2 of 2"
+
+      assert Summary.judgement_sentence(%{}, 0) == nil
+    end
+  end
 end
