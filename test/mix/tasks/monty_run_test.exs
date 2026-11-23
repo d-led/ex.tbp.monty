@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.Monty.RunTest do
   use ExTbpMonty.DataCase, async: false
 
+  alias Monty.Studio.Artifacts
   alias Monty.Studio.RunHistory
   alias Monty.Test.Tmp
 
@@ -108,6 +109,26 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert length(run.log) == 2
       assert run.summary["steps"] == 2
       assert output =~ "recorded as run #{run.id}"
+    end
+
+    # The config names `BasicCSVStatsHandler`, and that file is what a run's
+    # judgement is read from afterwards — the page's "Judged — …" line, `mix
+    # monty.compare`, the summary sentence. A run started from the page leaves it,
+    # so the command line must not be a second kind of run that keeps the steps and
+    # loses the numbers.
+    test "writes the statistics its config asks for into the run's own folder" do
+      run_and_capture(["base_config_10distinctobj_dist_agent", "--steps", "2", "--episodes", "1"])
+
+      run = recorded_run()
+
+      stats =
+        Path.join(Artifacts.dir(run.id), "eval_stats.csv")
+        |> File.read!()
+        |> String.split("\n", trim: true)
+
+      assert [header | rows] = stats
+      assert header =~ "primary_performance"
+      assert length(rows) == 1
     end
 
     # Monty's `run_parallel.py` from the command line: the episodes are divided

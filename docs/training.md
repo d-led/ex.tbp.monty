@@ -311,11 +311,14 @@ verdict, in a tenth fewer steps, every episode ending with one graph possible an
 no pose resolved. The arm's result is therefore not an artefact of the walk — which
 is what had to be shown before the walk could be trusted for anything else.
 
-The run wrote no `eval_stats.csv` (its recorded directory holds only `frames/`),
-so this judgement is the log's own rule applied to its last step:
-`learning_module_0: <graph> ev <e>` is the most likely hypothesis, and the placed
-dog is the episode's entry of `object_names` in `eval_dogs_random`. A run the page
-starts still writes the CSV.
+The run wrote no `eval_stats.csv`: `mix monty.run`'s whole-run path never built the
+config's logging plan, while a page-started run did. That gap was closed on
+2026-11-23 — the task opens the same plan and reports each episode through it
+before the episode's memory is written — and the arm was run again on the same walk
+afterwards: its CSV says `correct_mlh` in all five episodes, `most_likely_object`
+equal to `primary_target_object` in each, a hundred matching steps an episode, and
+the evidence in the table to the last placed digit. The verdict reads the same off
+the log and off the file.
 
 The policy is not the limiter, and the earlier reading says the same: against
 20–88-node memories the episodes timed out with the patch seeing the dog.

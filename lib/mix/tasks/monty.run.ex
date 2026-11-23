@@ -26,9 +26,11 @@ defmodule Mix.Tasks.Monty.Run do
 
   A run is recorded in the database by default, which is what makes a headless
   run appear in `/runs` next to one started from the page: same record, same
-  log, same summary. `--no-record` is for throwaway runs and for benches.
-
-  Exit status is 1 when the config would not start, so the task is usable from
+  log, same summary, and the same statistics in the run's own folder — the
+  handlers the config names are built and handed each episode before its memory is
+  written, so a headless run's judgement is read from its `eval_stats.csv` exactly
+  as a page-started run's is. `--no-record` is for throwaway runs and for benches;
+  with no record there is no folder to report into.
   a script or a CI job.
 
   ## Options
@@ -121,7 +123,13 @@ defmodule Mix.Tasks.Monty.Run do
   # had, and what `--parallel 1` asks for.
   defp run_whole(opened, opts) do
     history = record(opened, opts)
-    {infos, history, conclusion, outcomes} = run_phases(opened, opts, history)
+
+    # The statistics the config asks for, built exactly as the queue's worker
+    # builds them (`Monty.Studio.Logging`): a headless run is history like any
+    # other, and a run that kept its steps and lost its numbers would be a second
+    # kind of run wearing the same name.
+    logging = Monty.Studio.Logging.open(opened.setup)
+    {infos, history, conclusion, outcomes} = run_phases(opened, opts, history, logging)
 
     summary = summary(infos, opened.setup, conclusion, outcomes)
 
@@ -182,7 +190,7 @@ defmodule Mix.Tasks.Monty.Run do
   # eval, with the phase's mode told to the model. `--episodes` is the slice and
   # the only way to ask for less — a run that answered one episode out of a
   # hundred and forty answers a different question from the experiment.
-  defp run_phases(opened, opts, history) do
+  defp run_phases(opened, opts, history, logging) do
     # A phase starts with nothing in hand and reads its library where it steps:
     # each module builds its own memory from the library its config names, in the
     # module's own process (`Setup.model_spec/3`'s `lazy_state`). Loading it here
@@ -198,10 +206,10 @@ defmodule Mix.Tasks.Monty.Run do
       targets: %{}
     }
 
-    {infos, history, conclusion, carried, outcomes} =
+    {infos, history, conclusion, carried, outcomes, _logging} =
       opened.setup
       |> Monty.Studio.Setup.epoch_plan()
-      |> Enum.reduce({[], history, %{}, carried, %{}}, fn {mode, epochs}, acc ->
+      |> Enum.reduce({[], history, %{}, carried, %{}, logging}, fn {mode, epochs}, acc ->
         run_phase(opened, mode, epochs, acc, opts)
       end)
 
@@ -230,23 +238,33 @@ defmodule Mix.Tasks.Monty.Run do
          opened,
          mode,
          epochs,
-         {infos, history, _conclusion, carried, outcomes},
+         {infos, history, _conclusion, carried, outcomes, logging},
          opts
        ) do
     objects = length(Monty.Studio.Setup.objects(opened.setup, mode))
     episodes = opts[:episodes] || objects * epochs
     scope = %{mode: mode, steps: steps(opened, opts), episodes: episodes}
 
-    Enum.reduce(
-      0..(episodes - 1)//1,
-      {infos, history, %{}, carried, outcomes},
-      fn index, {infos, history, _conclusion, carried, outcomes} ->
-        {episode_infos, history, conclusion, carried, outcomes} =
-          run_episode(opened, scope, index, objects, history, carried, outcomes, opts)
+    # What travels from one episode to the next: the record, the memory the
+    # phase has built, the tallies, and the plan this run reports its
+    # statistics through. One state rather than four arguments, which is also
+    # the shape the queue's worker keeps.
+    state = %{
+      history: history,
+      conclusion: %{},
+      carried: carried,
+      outcomes: outcomes,
+      logging: logging
+    }
 
-        {infos ++ episode_infos, history, conclusion, carried, outcomes}
-      end
-    )
+    {infos, state} =
+      Enum.reduce(0..(episodes - 1)//1, {infos, state}, fn index, {infos, state} ->
+        {episode_infos, state} = run_episode(opened, scope, index, objects, state, opts)
+
+        {infos ++ episode_infos, state}
+      end)
+
+    {infos, state.history, state.conclusion, state.carried, state.outcomes, state.logging}
   end
 
   # The safety cap an episode gets when the command names none: the config's own
@@ -275,7 +293,8 @@ defmodule Mix.Tasks.Monty.Run do
   # as the queued runner does it: a class is not a label on a page, and a
   # pretraining config that ran here without its class would explore and learn
   # nothing.
-  defp run_episode(opened, scope, index, objects, history, carried, outcomes, opts) do
+  defp run_episode(opened, scope, index, objects, run_state, opts) do
+    %{carried: carried, history: history, logging: logging, outcomes: outcomes} = run_state
     # An epoch walks the phase's objects once, so the flat episode index of the
     # phase is two numbers Monty keeps apart: the epoch, and the episode within
     # it. Both are read — the sampler turns the object once per epoch, and the
@@ -291,7 +310,8 @@ defmodule Mix.Tasks.Monty.Run do
           episode: episode,
           epoch: epoch,
           mode: scope.mode,
-          first_seen: carried.first_seen
+          first_seen: carried.first_seen,
+          has_detailed_logger: Monty.Studio.Logging.detailed?(logging)
         ] ++ knowledge(carried) ++ run_levers(opts)
       )
 
@@ -304,6 +324,13 @@ defmodule Mix.Tasks.Monty.Run do
 
     beat = nil
     {infos, history, last_run} = step_through(state.run, history, opts, index, [], beat)
+
+    # The episode's statistics, before the episode's memory is written: Monty's
+    # order, and the same call the queue's worker makes
+    # (`Monty.Studio.Jobs.Run`). A training episode's ground truth is rewritten
+    # on the way into the memory, so an episode logged afterwards would look
+    # confused about the object it just recognised.
+    logging = report(logging, last_run, history, opts)
 
     # The class states the episode's answer before it is written, and writing it
     # is what `next_memories/3` does.
@@ -330,7 +357,41 @@ defmodule Mix.Tasks.Monty.Run do
 
     # The episode is what a run has to show for itself: the steps of an episode
     # are worth one write, and the record is the checkpoint, not the transcript.
-    {Enum.reverse(infos), checkpoint(history), conclusion, carried, outcomes}
+    run_state = %{
+      run_state
+      | history: checkpoint(history),
+        conclusion: conclusion,
+        carried: carried,
+        outcomes: outcomes,
+        logging: logging
+    }
+
+    {Enum.reverse(infos), run_state}
+  end
+
+  # The episode's statistics, into the run's own folder, through the same plan a
+  # page-started run reports through. `--no-record` is the one run with no folder
+  # to report into, and the mode that promises to leave nothing behind.
+  #
+  # A report that fails leaves the run going: the episode is real and the file is
+  # missing, which is said rather than raised — the same reading
+  # `Monty.Studio.Jobs.Run` takes.
+  defp report(logging, _run, nil, _opts), do: logging
+
+  defp report(logging, run, history, opts) do
+    case Monty.Studio.Logging.report(logging, run, Monty.Studio.Artifacts.dir(history.id)) do
+      {:ok, reported} ->
+        reported
+
+      {:skipped, reported} ->
+        reported
+
+      {:error, reason} ->
+        unless opts[:quiet],
+          do: Mix.shell().info("the statistics could not be written: #{inspect(reason)}")
+
+        logging
+    end
   end
 
   # What one episode concluded, in the modules' own words, under the line that
