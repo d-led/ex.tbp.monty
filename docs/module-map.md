@@ -60,7 +60,7 @@ drawn.
 
 ## The map
 
-[`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) is generated
+[`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex) is generated
 from the checkouts:
 
 ```bash
@@ -88,7 +88,7 @@ checkout that has moved since is reported too — the map still describes the
 commits it names, which is a fact to read, not a failure.
 
 The current counts are what `mix monty.module_map.verify` prints. They live
-there and in [`data.ex`](../lib/monty/module_map/data.ex), never here: a number
+there and in [`data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex), never here: a number
 copied into prose is wrong by the next commit.
 
 The generated file's counts are the honest progress bar for the port: the UI
@@ -97,7 +97,7 @@ implemented.
 
 ## Claiming a module
 
-1. Pick an entry from [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex).
+1. Pick an entry from [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex).
 2. Create the module at its mapped name.
 3. Port the behaviour as pure functions, keeping Monty's vocabulary.
 4. Test it — against a Monty fixture when numbers are involved.

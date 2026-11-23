@@ -150,7 +150,7 @@ object:
 MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.exs bracket
 ```
 
-[The first results](cad-results.html) are the two runs above, with their pages.
+[The first results](cad-results.md) are the two runs above, with their pages.
 
 ## What is deliberately not here
 
@@ -160,7 +160,7 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
   and 2 step with the config's own policy, so the patches Monty learns from are
   patches a run would have collected.
 - **No cluster.** Training and evaluation are one node each. What a policy host
-  across nodes is for is in [plugins](plugins.html), and it is not this.
+  across nodes is for is in [plugins](plugins.md), and it is not this.
 - **No numbers.** Which part, which features, how many nodes a memory holds — those
   are printed by the command that makes them rather than written down here. The one
   exception is the dated measurement in _How to run one_, which names the machine,

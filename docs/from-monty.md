@@ -14,7 +14,7 @@ reader checks a row instead of trusting this page.
 | Monty's pretrained memories, in a format this port reads                              | `<data>/libraries`                                                                                                        | `<release>/<model>.jsonl.gz`           | `mix monty.prerequisites.fetch`                                                      | its sha256, in `priv/prerequisites.yaml` |
 | what each Python class _is_, and which classes Monty's configs name                   | [`priv/monty/port_census.json`](../priv/monty/port_census.json), [`target_census.json`](../priv/monty/target_census.json) | one file each                          | `mix monty.port_census --json`, `mix monty.target_census --json`                     | run them again with `--json`             |
 | what Monty _answered_, so the parity tests replay it rather than recompute it         | [`test/fixtures/monty_*`](../test/fixtures)                                                                               | `*.json`, `*.jsonl`                    | [`scripts/record_monty_*.py`](../scripts) (needs a `$MONTY_PYTHON` with Monty in it) | `mix monty.data.check`                   |
-| the module contract — Monty's file to Elixir module, **generated** rather than copied | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex)                                                         | one generated module                   | `mix monty.module_map.gen`                                                           | `mix monty.module_map.verify`            |
+| the module contract — Monty's file to Elixir module, **generated** rather than copied | [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex)                              | one generated module                   | `mix monty.module_map.gen`                                                           | `mix monty.module_map.verify`            |
 | the world — MuJoCo, in this repository's own Python, mirroring Monty's simulator      |
 
         | [`priv/monty_py/world.py`](../priv/monty_py/world.py)
@@ -69,7 +69,7 @@ README.
 ## What deliberately does not travel
 
 Monty's Python source — that is the thing being ported, and
-[`data.ex`](../lib/monty/module_map/data.ex) says where each file went. Its
+[`data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex) says where each file went. Its
 `tests/` and its `docs/`: the MCP server reads the documentation out of a
 checkout at request time, when somebody has one. Its `environment.yml` and
 `pyproject.toml`, because this project does not run Monty's environment. The

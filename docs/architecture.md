@@ -360,7 +360,7 @@ is the same text the page shows.
 Vote rounds and steps are measured from the step coordinator: `Monty.Runtime.Step`
 emits one event, `[:monty, :step, :stop]`, with `duration` (microseconds) as the
 measurement and `step`, `votes_used`, `deadline_hit?` as metadata
-([`lib/monty/runtime/step.ex`](../lib/monty/runtime/step.ex)). That is what a
+([`lib/monty/runtime/step.ex`](../packages/ex_tbp_monty_core/lib/monty/runtime/step.ex)). That is what a
 latency experiment reads: a round that closed early says so, and how many votes
 it actually used is beside it.
 

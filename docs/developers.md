@@ -66,7 +66,7 @@ Monty's documentation and roadmap from the project's published site instead.
    quietly means something else. Add `--source ../monty-orig` to check a
    checkout whose copy you have not refreshed yet.
 3. **Files.** `mix monty.module_map.gen` (re)writes
-   [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex)
+   [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex)
    from both packages: every Python file, the Elixir module its path maps to, its
    classes, and whether that module exists. An entry already marked `excluded`
    with a reason stays excluded; an entry whose module now exists becomes
@@ -95,7 +95,7 @@ Monty's documentation and roadmap from the project's published site instead.
 
 | Question                                               | Look at                                                                                                                                                                   |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where would Monty's `a/b.py::C` live here?             | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), rule in [`module-map.md`](module-map.md)                                                               |
+| Where would Monty's `a/b.py::C` live here?             | [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex), rule in [`module-map.md`](module-map.md)                                    |
 | Is this ported, planned or excluded?                   | the same entry's `status`; `mix monty.port_census` for what planned means                                                                                                 |
 | Does this config still mean what Monty means?          | [`config-compatibility.md`](config-compatibility.md), then `mix monty.config.snapshots`                                                                                   |
 | How does a timestep run, and where is Python involved? | [`architecture.md`](architecture.md) — and [what is Python here](#what-is-python-here-and-what-it-does) below                                                             |
@@ -297,7 +297,7 @@ and `../tbp.teleop`), and `mix monty.port_census` reads it as well.
 - **Module for module.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class`, with a repeated segment collapsed and the class
   dropped when it repeats the file.
-  [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) records the
+  [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex) records the
   mapping and `mix monty.module_map.verify` fails when a Monty file has no
   entry or an `implemented` entry has no module. Do not "improve" a name to
   fit Elixir style; recognisability is the point.
@@ -484,7 +484,7 @@ loses its minutes but not the answer: the newer run is the one that counts.
 ## Adding a module
 
 1. Find the Python file and class in
-   [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex).
+   [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex).
 2. Create the Elixir module at the mapped name.
 3. Port the algorithm as pure functions; keep Python's names for structs and
    keys where they carry meaning (`pose_vectors`, `pose_fully_defined`).

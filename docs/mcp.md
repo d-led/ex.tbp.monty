@@ -25,13 +25,13 @@ takes `http://localhost:4001/mcp`.
 
 The server does not keep a copy of anything it talks about.
 
-| Question                   | Read from                                                                                                            |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| What does the project say? | `docs.thousandbrains.org` — its own search API, `/docs/<slug>.md`, and `llms.txt`                                    |
-| What does it plan?         | `futureworkwidget.thousandbrains.ai/data.json`, the data the project's own roadmap page renders                      |
-| Where is that in code?     | [`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
-| What is this experiment?   | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back                                                 |
-| Did the run work?          | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes                                                    |
+| Question                   | Read from                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| What does the project say? | `docs.thousandbrains.org` — its own search API, `/docs/<slug>.md`, and `llms.txt`                                                               |
+| What does it plan?         | `futureworkwidget.thousandbrains.ai/data.json`, the data the project's own roadmap page renders                                                 |
+| Where is that in code?     | [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex), the same map `mix monty.module_map.verify` checks |
+| What is this experiment?   | `Monty.Studio.open/2` — Monty's `conf/` tree, composed and read back                                                                            |
+| Did the run work?          | `studio_runs`, written by `Monty.Studio.Jobs.Run` as the run goes                                                                               |
 
 Documentation answers carry the page's `slug` and a link to its published
 address (`https://docs.thousandbrains.org/docs/<slug>`), so a claim can be

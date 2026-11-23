@@ -139,7 +139,7 @@ unrelated without saying so.
 
 **What this port does.** The transform is ported unchanged, as
 `EvidenceGoalGenerator`'s private `into_frame/3` — see
-[`evidence_goal_generator.ex`](../lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex) —
+[`evidence_goal_generator.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/goal_generation/evidence_goal_generator.ex) —
 and the assertion is not recomputed, with the reason in a comment there.
 Nothing about the numbers changes.
 
@@ -267,7 +267,7 @@ decision.
 
 **What this port does.** Answers `{best, nil}` for a single hypothesis instead of
 raising, and says so in the doc of
-[`EvidenceGraphLM.get_top_two_pose_hypotheses_for_graph_id/2`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
+[`EvidenceGraphLM.get_top_two_pose_hypotheses_for_graph_id/2`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 An exception becomes a value the caller must handle, which is a difference in
 its own right — see [§2.6](#26-get_top_two_pose_hypotheses_for_graph_id2-answers-best-nil).
 
@@ -305,7 +305,7 @@ so no numeric run is affected. It costs whoever is debugging an odd environment
 more time than spelling out the empty case would have.
 
 **What this port does.**
-[`InformedPolicy.shared_sensor_rotation/1`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
+[`InformedPolicy.shared_sensor_rotation/1`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/informed_policy.ex)
 asks for the shared rotation with the empty case spelled out — the identity when
 there are none — so the failure mode is a value rather than an unbound name.
 
@@ -358,7 +358,7 @@ sensor stays where it landed. Everywhere else this is invisible.
 
 **What this port does.** Nothing: `load_state_dict`/`state_dict` are absent, by
 the decision recorded in
-[`motor_policy.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy.ex)
+[`motor_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/motor_policy.ex)
 — this port's checkpoint is the studio's own record of a run, not a memento
 handed back to a policy. If that changes, this defect is the reason to write the
 checkpoint test first.
@@ -466,7 +466,7 @@ stand-in simulator does.
 **What this port does.** Reproduces Monty's grid in the transform
 ([`depth_to_3dlocations.ex`](../lib/monty/frameworks/environment_utils/transforms/depth_to_3d_locations.ex)),
 and renders the stand-in world's image on the same grid
-([`scene.ex`](../lib/monty/simulators/synthetic/scene.ex)) so that the two
+([`scene.ex`](../packages/ex_tbp_monty_core/lib/monty/simulators/synthetic/scene.ex)) so that the two
 disagree about nothing. A test unprojects every pixel of a rendered patch and
 requires the points to land on the sphere.
 
@@ -506,7 +506,7 @@ neighbourhood, the two estimates differ by about a degree. Measured here with
 numpy against the covariance the comments describe, not from a Monty run.
 
 **What this port does.** Reproduces the expression as it stands
-([`sensor_processing.ex`](../lib/monty/frameworks/utils/sensor_processing.ex)),
+([`sensor_processing.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/utils/sensor_processing.ex)),
 so a normal estimated here and one estimated by Monty move together, and records
 it at the code site.
 
@@ -551,7 +551,7 @@ only when no surface normal could be fitted, and in that case
 module. The disagreement is visible on a percept, not in a result.
 
 **What this port does.** Reproduces it
-([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
+([`observation_processor.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
 with a test that pins the flag where Monty puts it.
 
 ## 1.11 The RGB blur comment names the wrong kernel size
@@ -842,8 +842,8 @@ carries it.
 **The code.**
 [`motor_policies.py:1120-1125`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L1120-L1125)
 — the hack, in Monty's own words. Ours:
-[`motor_policy_result.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy_result.ex)
-and [`motor_system.ex`](../lib/monty/frameworks/models/motor_system.ex).
+[`motor_policy_result.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/motor_policy_result.ex)
+and [`motor_system.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_system.ex).
 
 **Why it is deliberate.** The same effect on the step, with no shared mutable
 object between policy, selector and motor system.
@@ -875,8 +875,8 @@ than only the actions. Same for the selectors and the policies.
 and a struct cannot be changed in place. Monty mutates itself; this returns the
 next version of itself.
 
-**Where.** [`motor_system.ex`](../lib/monty/frameworks/models/motor_system.ex),
-[`motor_policy_selectors.ex`](../lib/monty/frameworks/models/motor_policy_selectors.ex).
+**Where.** [`motor_system.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_system.ex),
+[`motor_policy_selectors.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policy_selectors.ex).
 
 ## 2.4 `get_output/1` answers `{message, lm}`
 
@@ -891,7 +891,7 @@ steps does not need to remember which ones answer bare values.
 
 **What to do about it.** A caller that wants the confidence reads
 `elem(result, 0).confidence`. See
-[`EvidenceGraphLM.get_output/1`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
+[`EvidenceGraphLM.get_output/1`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.5 A sampler draws from the episode's one stream
 
@@ -915,10 +915,10 @@ not the policy.
 
 **The code.** Monty:
 [`action_samplers.py:61-71`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/actions/action_samplers.py#L61-L71).
-Ours: [`action_sampler.ex`](../lib/monty/frameworks/actions/action_samplers/action_sampler.ex),
-used by [`base_policy.ex`](../lib/monty/frameworks/models/motor_policies/base_policy.ex),
-[`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)
-and [`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_policy.ex).
+Ours: [`action_sampler.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/actions/action_samplers/action_sampler.ex),
+used by [`base_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/base_policy.ex),
+[`informed_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/informed_policy.ex)
+and [`surface_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/surface_policy.ex).
 The numbers a drawn walk consists of are pinned against
 `numpy.random.RandomState` in `action_sampler_test.exs`.
 
@@ -933,7 +933,7 @@ The numbers a drawn walk consists of are pinned against
 is a normal state, not an exception, and a crash in the middle of an episode is
 worse than a goal that is not proposed.
 
-**Where.** [`evidence_graph_lm.ex`](../lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
+**Where.** [`evidence_graph_lm.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/evidence_matching/learning_module/evidence_graph_lm.ex).
 
 ## 2.7 `depth_at_center` is a function, and the policies delegate to it
 
@@ -944,10 +944,10 @@ it through their own namespace.
 `@staticmethod` of `PositioningProcedure` at
 [line 75](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/environments/positioning_procedures.py#L75).
 Here it is
-[`PositioningProcedures.depth_at_center/3`](../lib/monty/frameworks/environments/positioning_procedures.ex),
+[`PositioningProcedures.depth_at_center/3`](../packages/ex_tbp_monty_core/lib/monty/frameworks/positioning_procedures.ex),
 reading the same shape — `observations[agent_id][sensor_id]["depth"]`, centre
 pixel — and
-[`MotorPolicies.depth_at_center/3`](../lib/monty/frameworks/models/motor_policies.ex)
+[`MotorPolicies.depth_at_center/3`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies.ex)
 delegates to it.
 
 **Why it is deliberate.** A behaviour cannot carry a static function, so the
@@ -962,18 +962,18 @@ wherever a number could differ.
 
 - `PolicyStatus` is `:ready | :in_progress` here, `"ready" | "in_progress"`
   upstream; the strings appear only on a wire.
-  → [`policy_status.ex`](../lib/monty/frameworks/models/motor_policies/policy_status.ex)
+  → [`policy_status.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/policy_status.ex)
 - `rotation_quat` is a `{w, x, y, z}` tuple here and a `quaternion` object there;
   `ActionJSONDecoder` converts on the way in from JSON lists.
-  → [`action_json_decoder.ex`](../lib/monty/frameworks/actions/action_json_decoder.ex)
+  → [`action_json_decoder.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/actions/action_json_decoder.ex)
 - Monty's `fixme_undo_last_action` raises `TypeError("Invalid action: …")`; ours
   is `undo_last_action/1` and raises `ArgumentError` naming the kind of action it
   was given. The `fixme_` prefix is Monty saying it would rather have
   `Action.undo`, and the name here leaves the complaint out.
-  → [`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex)
+  → [`motor_policies.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies.ex)
 - Actions keep Monty's units (degrees, metres, `wxyz`), deliberately: an action
   built here must be the same object an environment there would perform.
-  → [`action.ex`](../lib/monty/frameworks/actions/action.ex)
+  → [`action.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/actions/action.ex)
 
 **Why it is deliberate.** Atoms for closed sets, tuples for quaternions, and
 Monty's units throughout: the vocabulary stays Monty's where it would show up in
@@ -998,11 +998,11 @@ Elixir structs do not inherit, so the port does two things Monty does not have t
 **The code.** Monty:
 [`motor_policies.py:1077-1100`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/src/tbp/monty/frameworks/models/motor_policies.py#L1077-L1100)
 (`class SurfacePolicy(InformedPolicy)`). Ours:
-[`informed_policy.ex`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex),
-[`motor_policies.ex`](../lib/monty/frameworks/models/motor_policies.ex),
-[`motor_policy.ex`](../lib/monty/frameworks/models/motor_policies/motor_policy.ex)
+[`informed_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/informed_policy.ex),
+[`motor_policies.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies.ex),
+[`motor_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/motor_policy.ex)
 (the optional callback) and
-[`surface_policy.ex`](../lib/monty/frameworks/models/motor_policies/surface_policy.ex).
+[`surface_policy.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/surface_policy.ex).
 
 **Why it is deliberate.** Nothing observable changes: the same step produces the
 same actions and the same policy state. What changes is where the code lives, and
@@ -1033,7 +1033,7 @@ Every config Monty ships that sets `is_surface_sm: true` also asks for
 `object_coverage`, so the crash is latent there.
 
 **What this port does.** Reads a coverage that was not asked for as zero
-([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
+([`observation_processor.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/observation_processor.ex)),
 which answers the same question — "is any of this patch on the object?" — without
 making a missing feature a crash. The percept itself still carries only the
 features the config declared.
@@ -1055,9 +1055,9 @@ there.
 
 **What this port does.** `ObservationProcessor.process/2` answers
 `{:error, :no_point_cloud}`
-([`observation_processor.ex`](../lib/monty/frameworks/models/sensor_modules/observation_processor.ex))
+([`observation_processor.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/observation_processor.ex))
 and `CameraSM.step/4` answers `nil`
-([`camera_sm.ex`](../lib/monty/frameworks/models/sensor_modules/camera_sm.ex)) —
+([`camera_sm.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/sensor_modules/camera_sm.ex)) —
 a sensor that saw no surface, which is a different thing from a sensor that saw a
 surface it could not fit. The runtime already has a shape for a sensor with
 nothing to say on a step: a module whose percept is `nil` contributes nothing to
@@ -1093,7 +1093,7 @@ and `SensorModule.update_state`
 ```
 
 **What this port does.** One function, `AgentState.sensor_pose/2`
-([`agent_state.ex`](../lib/monty/frameworks/models/motor_system_state/agent_state.ex)),
+([`agent_state.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_system_state/agent_state.ex)),
 which both sensor modules call. It also owns the error for an agent that has no
 such sensor, so the two classes cannot disagree about what that means.
 
@@ -1160,7 +1160,7 @@ A procedure that neither reaches the object nor gives up therefore hangs the
 experiment.
 
 **What this port does.**
-[`Monty.Runtime.Positioning.prepare/5`](../lib/monty/runtime/positioning.ex) stops
+[`Monty.Runtime.Positioning.prepare/5`](../packages/ex_tbp_monty_core/lib/monty/runtime/positioning.ex) stops
 after `:max_steps` (100 by default) and answers
 `{:error, {:positioning_did_not_finish, steps}}`.
 
@@ -1309,7 +1309,7 @@ equality, on quaternions, and it raises when they differ.
 **What this port does.** The position is compared exactly, as Monty's is; the
 orientation is compared as an **angle**, and anything under a thousandth of a
 degree counts as where it started
-([`InformedPolicy`](../lib/monty/frameworks/models/motor_policies/informed_policy.ex)).
+([`InformedPolicy`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policies/informed_policy.ex)).
 The raise now says how far the agent was turned, so the number is in the sentence
 rather than something to reproduce.
 
@@ -1354,7 +1354,7 @@ and, for a module it does not supervise, clears those fields so that
 **What this port does.** The same six numbers, in the same order, through one
 function per module: `GraphLM.supervise/3` for a module the experiment names and
 `GraphLM.clear_hypotheses/1` for the others
-([`graph_lm.ex`](../lib/monty/frameworks/models/graph_matching/graph_lm.ex)).
+([`graph_lm.ex`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/graph_matching/graph_lm.ex)).
 `Monty.Studio.Run.supervise/1` reads the target off the world and calls the
 model once, which is where the loop stops being able to reach into a module: a
 module here is a process, not an attribute
@@ -1584,8 +1584,8 @@ Monty's documentation makes; the rest are claims the code makes about itself.
 - [`docs/how-monty-works/motor-system.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system.md):
   a selector chooses among policies, the selector is what goals reach, and
   policies are the only things that produce actions — the shape of
-  [`MotorPolicySelectors`](../lib/monty/frameworks/models/motor_policy_selectors.ex)
-  and [`MotorSystem`](../lib/monty/frameworks/models/motor_system.ex) here.
+  [`MotorPolicySelectors`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_policy_selectors.ex)
+  and [`MotorSystem`](../packages/ex_tbp_monty_core/lib/monty/frameworks/models/motor_system.ex) here.
 - [`docs/how-monty-works/motor-system/policy.md`](https://github.com/thousandbrainsproject/tbp.monty/blob/91303642784ce176e2b8196c7bb990fef57688b6/docs/how-monty-works/motor-system/policy.md):
   "if the sensor patch moves off the object, the previous action is reversed" is
   `InformedPolicy`'s step exactly, and `InformedPolicyRandomWalk`'s too — the

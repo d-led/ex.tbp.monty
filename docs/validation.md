@@ -35,7 +35,7 @@ only place a tolerance is allowed to be loose, and each says why it is.
 A recording is a fact about the commit it was taken from. The map and the shipped
 copy have moved on since — they name `monty@760ad17`
 ([`priv/monty/inputs.json`](../priv/monty/inputs.json),
-[`lib/monty/module_map/data.ex`](../lib/monty/module_map/data.ex) `@sources`) —
+[`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex) `@sources`) —
 so refreshing a fixture against a newer checkout is a commit of its own, and this
 table's revision changes with it.
 

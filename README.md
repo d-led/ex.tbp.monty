@@ -123,8 +123,8 @@ Flags and what each prints: [docs/features.md](docs/features.md).
 
 - **The same modules.** Python `path/file.py::Class` becomes
   `Monty.Path.File.Class` by one rule, with nothing renamed to suit Elixir —
-  [`lib/monty/module_map/data.ex`](lib/monty/module_map/data.ex), checked by
-  `mix monty.module_map.verify`.
+  [`packages/ex_tbp_monty_core/lib/monty/module_map/data.ex`](packages/ex_tbp_monty_core/lib/monty/module_map/data.ex),
+  checked by `mix monty.module_map.verify`.
 - **The same configs.** Monty's Hydra YAML is read unchanged from
   [`priv/monty`](priv/monty), so no Monty checkout is needed; every experiment
   Monty snapshots composes to the same tree here —
@@ -208,5 +208,6 @@ keeps its licence. The build files are the list: Elixir libraries in
 [`mix.exs`](mix.exs) (pinned in [`mix.lock`](mix.lock)), browser packages in
 [`assets/package.json`](assets/package.json), Python in
 [`config/pythonx.exs`](config/pythonx.exs), the NIFs and the window in
-[`native/`](native) and [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml), and the
-image's base images in the [Dockerfile](Dockerfile).
+[`packages/ex_tbp_monty_core/native`](packages/ex_tbp_monty_core/native) and
+[`src-tauri/Cargo.toml`](src-tauri/Cargo.toml), and the image's base images in
+the [Dockerfile](Dockerfile).
