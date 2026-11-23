@@ -685,8 +685,10 @@ An unsupervised inference episode ends on its evaluation budget, so its terminal
 state is `time_out` by design. Whether it named the object is Monty's
 `primary_performance` column, and only that column.
 
-`dogs/inference_dist` (`noresetevidence_1lm`, the 5° `dogs_supervised_pretraining`
-memory), one episode recorded from the studio page, this Mac, `ex_mujoco`, seed 42:
+`dogs/inference_dist_raster` (`noresetevidence_1lm`, the 5°
+`dogs_supervised_pretraining` memory — the arm as it stood when this was
+recorded, before it moved to the finer scan), one episode recorded from the
+studio page, this Mac, `ex_mujoco`, seed 42:
 
 | what                                           | value                                                        |
 | ---------------------------------------------- | ------------------------------------------------------------ |
@@ -708,7 +710,10 @@ written only to `eval_stats.csv`.
 The studio now reads it. The run page says "Judged — recognised 1 of 1 (1
 answered by the most likely object, with no pose resolved)", from
 `Monty.Studio.EvalStats.mlh_judgements/1` and
-`Monty.Studio.Summary.judgement_sentence/2`.
+`Monty.Studio.Summary.judgement_sentence/2`. An episode the run never judged —
+the row a stopped run leaves behind, with no `primary_performance` — is counted
+in neither part of that sentence: it was not answered wrongly, and how many
+episodes ran is the record's own answer.
 
 ### The rate over the five episodes
 

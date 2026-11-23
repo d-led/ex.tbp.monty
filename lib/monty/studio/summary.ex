@@ -237,22 +237,31 @@ defmodule Monty.Studio.Summary do
   episode that ends `time_out` can still be a correct recognition — that is what
   the unsupervised inference design measures. The judgement is a different fact,
   and this is where it is said.
+
+  An episode the run never judged — a row written when a run stopped, with no
+  `primary_performance` — is in neither the count nor the total: the sentence is
+  about the episodes that were answered, and how many ran is the record's own
+  answer. A run that answered none says nothing rather than "0 of 0".
   """
   @spec judgement_sentence(map(), non_neg_integer()) :: String.t() | nil
-  def judgement_sentence(tally, _by_mlh) when map_size(tally) == 0, do: nil
-
   def judgement_sentence(tally, by_mlh) do
-    total = tally |> Map.values() |> Enum.sum()
+    judged = Map.delete(tally, "unrecorded")
+    total = judged |> Map.values() |> Enum.sum()
 
     said =
-      tally
+      judged
       |> Enum.sort_by(fn {judgement, _count} -> {judgement != "recognised", judgement} end)
       |> Enum.map_join(", ", fn {judgement, count} -> "#{judgement} #{count}" end)
 
-    if by_mlh > 0 do
-      "#{said} of #{total} (#{by_mlh} answered by the most likely object, with no pose resolved)"
-    else
-      "#{said} of #{total}"
+    cond do
+      total == 0 ->
+        nil
+
+      by_mlh > 0 ->
+        "#{said} of #{total} (#{by_mlh} answered by the most likely object, with no pose resolved)"
+
+      true ->
+        "#{said} of #{total}"
     end
   end
 

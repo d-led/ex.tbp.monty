@@ -147,5 +147,18 @@ defmodule Monty.Studio.SummaryTest do
 
       assert Summary.judgement_sentence(%{}, 0) == nil
     end
+
+    # A run stopped between episodes leaves a row it never judged. That episode
+    # was not answered wrongly, so it belongs to neither side of the sentence:
+    # the record's own summary says how many episodes ran.
+    test "an episode the run never judged is not counted against the ones it did" do
+      assert Summary.judgement_sentence(%{"recognised" => 1, "unrecorded" => 1}, 1) ==
+               "recognised 1 of 1 (1 answered by the most likely object, " <>
+                 "with no pose resolved)"
+    end
+
+    test "a run that judged nothing says nothing" do
+      assert Summary.judgement_sentence(%{"unrecorded" => 2}, 0) == nil
+    end
   end
 end
