@@ -49,6 +49,22 @@ defmodule Monty.Studio.LearnedTest do
                  "(trained), in #{Learned.dir(run_id)} and in the libraries"
     end
 
+    # An open-ended run's config may name only evaluation epochs while the switch
+    # made the episode train (`Monty.Studio.Endless`), so what it learned is the
+    # exception to "an evaluation plan keeps nothing".
+    test "keeps what an open-ended run learned, though its plan only evaluates" do
+      {:ok, opened} = Monty.Studio.open(@training)
+      run_id = Ecto.UUID.generate()
+
+      assert [_line] =
+               Learned.keep(run_id, opened, [{:eval, 3}], learned_memories(opened),
+                 trained?: true
+               )
+
+      assert Path.wildcard(Path.join([Learned.dir(run_id), Learned.release(), "*.jsonl.gz"])) !=
+               []
+    end
+
     test "writes the index of each module, so a module reads back its own memory" do
       {:ok, opened} = Monty.Studio.open(@training)
       run_id = Ecto.UUID.generate()

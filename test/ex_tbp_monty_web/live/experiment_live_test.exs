@@ -531,6 +531,34 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.inputs["sensors_step"] == "concurrent"
     end
 
+    # An open-ended run is a run nobody expects to end, whose training can be
+    # switched while it goes (`Monty.Studio.Endless`). It is written only when
+    # the boxes were ticked: a run that asked for neither is the record this page
+    # always wrote.
+    test "a run that did not ask to be open-ended records no switches", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view |> element("#step") |> render_click()
+
+      assert [ordinary] = RunHistory.list_for(@tutorial)
+      refute Map.has_key?(ordinary.inputs, "endless")
+      refute Map.has_key?(ordinary.inputs, "training")
+    end
+
+    test "an open-ended run records the switches the page offered", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      view
+      |> element("#run-budget")
+      |> render_change(%{"endless" => "on", "training" => "on"})
+
+      view |> element("#step") |> render_click()
+
+      assert [open_ended] = RunHistory.list_for(@tutorial)
+      assert open_ended.inputs["endless"] == true
+      assert open_ended.inputs["training"] == true
+    end
+
     # The levers decide what a step's numbers will mean, so what they do to the
     # numbers is said beside them: a round of sensors served at once costs the
     # slowest of them, and a run one step behind applies the epoch before. Five sensors is

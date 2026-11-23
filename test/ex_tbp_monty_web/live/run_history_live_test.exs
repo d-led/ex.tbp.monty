@@ -6,6 +6,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
   import Phoenix.LiveViewTest
 
   alias Monty.Studio.Artifacts
+  alias Monty.Studio.Endless
   alias Monty.Studio.RunHistory
 
   # A run as a finished experiment leaves it, in whatever state a test needs.
@@ -95,6 +96,58 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       :ok = ExTbpMonty.Core.FrameVideo.push(video, <<1, 2, 3, 4>>, true)
       :ok = ExTbpMonty.Core.FrameVideo.finish(video)
+    end
+  end
+
+  describe "an open-ended run's training switch" do
+    setup %{conn: conn} do
+      {:ok, run} =
+        RunHistory.start(%{
+          experiment: "tutorial/first_experiment",
+          source: "monty",
+          steps: 10,
+          config: %{},
+          inputs: %{"endless" => true}
+        })
+
+      {:ok, run} = RunHistory.mark_running(run)
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+      :ok = running(job)
+      # What the worker does before its first step: the page and the steps read
+      # the same switches (`Monty.Studio.Endless`).
+      :ok = Endless.start(run.id, run)
+
+      on_exit(fn -> Endless.clear(run.id) end)
+
+      %{conn: conn, run: run}
+    end
+
+    test "is offered on a run that is going, and flips what the run learns", %{
+      conn: conn,
+      run: run
+    } do
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert has_element?(view, "#training-toggle", "Training: off")
+
+      view |> element("#training-toggle") |> render_click()
+
+      assert Endless.training?(run.id)
+      assert view |> element("#training-toggle") |> render() =~ "Training: on"
+
+      view |> element("#training-toggle") |> render_click()
+      refute Endless.training?(run.id)
+      assert view |> element("#training-toggle") |> render() =~ "Training: off"
+    end
+
+    test "is not offered on a run whose experiment decides its training", %{conn: conn} do
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "running"})
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+      :ok = running(job)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      refute has_element?(view, "#training-toggle")
     end
   end
 

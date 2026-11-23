@@ -66,8 +66,11 @@ defmodule Monty.Studio.Jobs.RunTest do
   # `Monty.Frameworks.Experiments.MontyExperiment`'s own spec.
   defp start_run(experiment, steps, options \\ []) do
     {:ok, opened} = Monty.Studio.open(experiment)
+    levers = Map.new(Keyword.take(options, [:endless, :training]))
 
-    RunHistory.start(RunLog.attributes(opened, steps, 0, 1, Keyword.get(options, :episodes, 1)))
+    RunHistory.start(
+      RunLog.attributes(opened, steps, 0, 1, Keyword.get(options, :episodes, 1), levers)
+    )
   end
 
   # The smallest PNG there is, base64: a picture the store can write and the route
@@ -184,6 +187,36 @@ defmodule Monty.Studio.Jobs.RunTest do
   end
 
   describe "a run that is performed" do
+    # An open-ended run has no termination condition: `Run.finished?/1` is the
+    # only place the policy and the budget meet, and this run does not ask it
+    # (`Monty.Studio.Endless`). So the run is asked to stop instead, and what it
+    # says is the truth for a run a person ended. It was told to learn as it
+    # goes, so the stop is also where the memory it built is kept.
+    test "steps past its own budget until it is asked to stop, and keeps what it learned" do
+      {:ok, record} = start_run(@experiment, 2, endless: true, training: true)
+      run_id = record.id
+      Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Jobs.Run.topic(run_id))
+      on_exit(fn -> Stops.ask(run_id) end)
+
+      task = Task.async(fn -> perform_id(run_id) end)
+
+      # Three steps is already past the two the record allows, which is the
+      # thing being tested: a finite run would have closed after its second.
+      Enum.each(1..3, fn _step ->
+        assert_receive {:studio, ^run_id, {:step, _report}}, 60_000
+      end)
+
+      :ok = Stops.ask(run_id)
+
+      assert {:ok, closed} = Task.await(task, 120_000)
+      assert closed.status == "stopped"
+      assert closed.summary["steps"] > 2
+
+      assert Path.wildcard(
+               Path.join([Artifacts.dir(closed.id), "memory", "trained", "*.jsonl.gz"])
+             ) != []
+    end
+
     test "closes its record with the summary of what it did, and what it concluded" do
       {:ok, record} = start_run(3)
 
