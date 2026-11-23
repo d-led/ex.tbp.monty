@@ -252,6 +252,105 @@ defmodule Monty.Studio.Summary do
   @spec compute_us(t()) :: number()
   def compute_us(%__MODULE__{} = summary), do: summary.duration_us + summary.world_us
 
+  # The order a run's numbers are asked in by someone reading them: what it did,
+  # where the time went, and what came of it. A key this build does not know is
+  # still shown, in its own words, after these — a reader loses nothing, and a
+  # new count needs no page change to appear.
+  @rows [
+    {"steps", "steps"},
+    {"duration_us", "took"},
+    {"world_us", "world took"},
+    {"actions", "actions"},
+    {"goals", "goals"},
+    {"votes_sent", "votes sent"},
+    {"votes_used", "votes used"},
+    {"deadline_hits", "deadline misses"},
+    {"inputs", "module steps"},
+    {"outcome", "last step"},
+    {"outcomes", "episodes concluded"},
+    {"never_updated", "never got input"},
+    {"sensor_timeouts", "sensors that gave up"}
+  ]
+
+  @known MapSet.new(Enum.map(@rows, &elem(&1, 0)))
+
+  # A failure's words are shown beside it by the page that knows the run's
+  # status; a grid of amounts would repeat one and unfold the other.
+  @not_amounts ~w(reason technical)
+
+  @doc """
+  A stored summary as the rows a page shows: a label a person reads, and the
+  value in its own unit.
+
+  The record keeps the run's own names (`duration_us`, `votes_sent`) because
+  that is what a worker writes and a JSON reader understands. A page that
+  printed them asked a reader to translate microseconds in their head and to
+  know that `deadline_hits` is a count of votes that were late. The reading
+  lives here, with every other reading of a summary, so the live page and the
+  stored one cannot disagree about it.
+  """
+  @spec rows(map()) :: [{String.t(), String.t()}]
+  def rows(summary) when is_map(summary) do
+    summary = Map.new(summary, fn {key, value} -> {to_string(key), value} end)
+
+    known =
+      @rows
+      |> Enum.map(fn {key, label} -> {key, label, Map.get(summary, key)} end)
+      |> Enum.reject(fn {_key, _label, value} -> value in [nil, %{}, []] end)
+      |> Enum.map(fn {key, label, value} -> {label, value_text(key, value)} end)
+
+    unknown =
+      summary
+      |> Enum.reject(fn {key, value} ->
+        key in @not_amounts or MapSet.member?(@known, key) or value in [nil, %{}, []]
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map(fn {key, value} -> {words(key), value_text(key, value)} end)
+
+    known ++ unknown
+  end
+
+  @doc "A duration in the unit that reads: µs under a millisecond, then ms, then s."
+  @spec duration(integer() | nil) :: String.t()
+  def duration(nil), do: "—"
+
+  def duration(microseconds) when is_integer(microseconds) and microseconds < 1_000,
+    do: "#{microseconds} µs"
+
+  def duration(microseconds) when is_integer(microseconds) and microseconds < 1_000_000,
+    do: "#{Float.round(microseconds / 1_000, 1)} ms"
+
+  def duration(microseconds) when is_integer(microseconds),
+    do: "#{Float.round(microseconds / 1_000_000, 2)} s"
+
+  def duration(_no_duration), do: "—"
+
+  defp value_text("duration_us", value) when is_integer(value), do: duration(value)
+  defp value_text("world_us", value) when is_integer(value), do: duration(value)
+  defp value_text("deadline_hits", 0), do: "none"
+  defp value_text("deadline_hits", value), do: to_string(value)
+  defp value_text("outcome", value) when is_map(value), do: conclusions(value)
+  defp value_text("outcomes", value) when is_map(value), do: outcomes_line(value)
+  defp value_text(_key, value) when is_map(value), do: assignments(value)
+  defp value_text(_key, value) when is_list(value), do: Enum.map_join(value, ", ", &to_string/1)
+  defp value_text(_key, value), do: to_string(value)
+
+  defp assignments(value) do
+    value
+    |> Enum.sort_by(fn {key, _nested} -> to_string(key) end)
+    |> Enum.map_join(" ", fn {key, nested} -> "#{key}=#{value_text(to_string(key), nested)}" end)
+  end
+
+  defp conclusions(value) do
+    value
+    |> Enum.sort_by(fn {module_id, _state} -> to_string(module_id) end)
+    |> Enum.map_join(" · ", fn {module_id, state} ->
+      "#{module_id}: #{if state in [nil, ""], do: "no conclusion", else: state}"
+    end)
+  end
+
+  defp words(key), do: String.replace(key, "_", " ")
+
   defp add_step(info, summary) do
     votes = Map.get(info, :votes, %{})
 

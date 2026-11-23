@@ -31,6 +31,7 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     RunStream,
     Setup,
     StepShape,
+    Summary,
     Yaml
   }
 
@@ -65,10 +66,6 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   # A step is published as several messages, and reading the record once per
   # message meant the page spent longer rendering than the run spent stepping.
   @refresh_after_ms 250
-
-  # The two keys that answer "why did this stop", shown in the failure panel and
-  # kept out of the table of everything else.
-  @said_above ["reason", "technical"]
 
   # The inputs that name what the config already names: the Configuration panel
   # below states the sensors, the learning modules and the epochs in the config's
@@ -2830,14 +2827,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
   defp summary(%{summary: summary}) when summary in [%{}, nil], do: []
 
-  defp summary(%{summary: summary}) do
-    summary
-    |> Enum.reject(fn {key, value} ->
-      key in @said_above or value in [%{}, []]
-    end)
-    |> Enum.sort_by(fn {key, _value} -> key end)
-    |> Enum.map(fn {key, value} -> {key, format(value)} end)
-  end
+  # The record's own names are for the worker and the JSON reader; a page reads
+  # the same summary through the one reader that names each amount and gives a
+  # time its unit (`Monty.Studio.Summary.rows/1`).
+  defp summary(%{summary: summary}), do: Summary.rows(summary)
 
   # What ended a run that did not finish. Absent is a real answer: a run that
   # finished, or one still going, has nothing that ended it. The record keeps the

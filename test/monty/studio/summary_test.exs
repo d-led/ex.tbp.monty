@@ -89,4 +89,49 @@ defmodule Monty.Studio.SummaryTest do
 
     assert summary.sensor_timeouts == [:patch]
   end
+
+  describe "what a page reads out of a stored summary" do
+    test "each amount is named, and a time is in the unit that reads" do
+      rows =
+        Summary.rows(%{
+          "steps" => 40,
+          "duration_us" => 1_491_954,
+          "world_us" => 374_557,
+          "goals" => 61_215,
+          "actions" => 80,
+          "votes_sent" => 40,
+          "votes_used" => 40,
+          "deadline_hits" => 0,
+          "inputs" => %{"learning_module_0" => 40},
+          "outcome" => %{"learning_module_0" => nil},
+          "outcomes" => %{"learning_module_0" => %{"match" => 2, "time_out" => 1}}
+        })
+
+      assert {"steps", "40"} in rows
+      assert {"took", "1.49 s"} in rows
+      assert {"world took", "374.6 ms"} in rows
+      assert {"deadline misses", "none"} in rows
+      assert {"module steps", "learning_module_0=40"} in rows
+      assert {"last step", "learning_module_0: no conclusion"} in rows
+      assert {"episodes concluded", "learning_module_0: match 2, time_out 1 of 3"} in rows
+    end
+
+    test "the counts come in the order a reader asks them in" do
+      labels =
+        Summary.rows(%{"goals" => 1, "steps" => 2, "actions" => 3})
+        |> Enum.map(&elem(&1, 0))
+
+      assert labels == ["steps", "actions", "goals"]
+    end
+
+    test "a key this build does not know is still words" do
+      assert [{"some new thing", "7"}] = Summary.rows(%{"some_new_thing" => 7})
+    end
+
+    test "a summary with nothing in it says nothing" do
+      assert Summary.rows(%{}) == []
+      assert Summary.rows(%{"reason" => "killed", "technical" => "trace"}) == []
+      assert Summary.rows(%{"outcomes" => %{}, "never_updated" => []}) == []
+    end
+  end
 end

@@ -286,15 +286,7 @@ defmodule ExTbpMontyWeb.StudioComponents do
 
   @doc "Milliseconds for a duration in microseconds."
   @spec duration(non_neg_integer() | nil) :: String.t()
-  def duration(nil), do: "—"
-
-  def duration(microseconds) when is_integer(microseconds) and microseconds < 1_000,
-    do: "#{microseconds} µs"
-
-  def duration(microseconds) when is_integer(microseconds),
-    do: "#{Float.round(microseconds / 1_000, 1)} ms"
-
-  def duration(_no_duration), do: "—"
+  def duration(microseconds), do: Monty.Studio.Summary.duration(microseconds)
 
   # Why there is nothing to look at, in the run's own terms: a run from before a
   # step kept its pictures has none anywhere, and one step can miss its own.
