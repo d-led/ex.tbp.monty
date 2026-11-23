@@ -165,6 +165,10 @@ defmodule ExTbpMonty.MixProject do
       {:phoenix_live_view, "~> 1.2.0"},
       {:phoenix_live_dashboard, "~> 0.9.1"},
       {:phoenix_test, "~> 0.14.0", only: :test, runtime: false},
+      # `lazy_html` 0.1.14 asks for `fine ~> 0.2.0`, and `pythonx` — which the
+      # parity probes and the wandb client need — asks for `fine ~> 0.1.2`, so
+      # the resolver keeps 0.1.13. The requirement stays open-ended on purpose: it
+      # takes 0.1.14 in the release that lets `pythonx` have fine 0.2.
       {:lazy_html, ">= 0.1.0", only: :test},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},

@@ -834,29 +834,49 @@ can see.
 
 ## Rust dependencies
 
-Three crates, three lockfiles (`src-tauri`, `native/kd_tree_nif`,
-`native/matcher_nif`), and Dependabot watches all of them weekly.
+Every crate here keeps its own lockfile — the three Tauri apps (`src-tauri` and
+the two examples under `examples/*/app`), the NIFs in
+`packages/ex_tbp_monty_core/native`, and the example plugin's own NIF — and
+Dependabot watches them weekly.
 
 Two versions move as a pair, and a bump that moves one is a build that fails:
 the `rustler` crate the NIFs declare and the `rustler` hex package `mix.exs`
-depends on. They are released together, so hex's newest is the ceiling — 0.38.0
-at the time of writing, against a crate at 0.39.0.
+depends on. They are released together, so hex's newest is the ceiling — the
+crate is one release ahead of the package.
 
-`kiddo`, the k-d tree, sits on 5.3.3 while 6.x exists. 6.0 is a rewrite of the
-tree and of the query API (`KdTree` over `LeafStrategy`/`StemStrategy`, a
-fluent builder), and the thing that judges it is the Elixir parity suite —
+`kiddo`, the k-d tree, is on 6.3 behind an `ImmutableKdTree`: the tree is built
+once and queried many times, which is what that type is for. The thing that
+judged the 5.x to 6.x move was the Elixir parity suite —
 `test/monty/frameworks/utils/kd_tree_test.exs`, plus the
-`*_native_parity_test.exs` files beside the modules that query the tree — so
-the port is a change with a specification behind it rather than a version to
-accept.
+`*_native_parity_test.exs` files beside the modules that query the tree — and it
+judged it answer for answer.
 
-Dependabot also reports one moderate advisory against `src-tauri/Cargo.lock`:
-`glib` 0.18.5, unsound `Iterator` impls in `VariantStrIter`, patched in 0.20.0.
-It cannot be taken here. `glib` 0.18 is the last line the gtk3 bindings have,
-and `gtk` 0.18.2 pins it; `gtk` arrives through `tao`, `wry`, `muda` and
-`webkit2gtk`, which is the whole Linux window. The alert closes when those move
-to a newer gtk, not before, and the affected type is one this window never
-names.
+### The `glib` advisory, and why it is still open
+
+Dependabot reports GHSA-wrw7-89jp-8q8g — unsound `Iterator` and
+`DoubleEndedIterator` impls in `VariantStrIter`, fixed in `glib` 0.20.0, medium —
+against the lockfile of every Tauri app here. `glib` 0.18 is the last line the
+gtk3 bindings have and `gtk` 0.18.2 pins it; `gtk` arrives through `tao`, `wry`,
+`muda` and `webkit2gtk`, which is the whole Linux window. Cargo refuses the fix
+in its own words:
+
+```
+error: failed to select a version for the requirement `glib = "^0.18"`
+candidate versions found which didn't match: 0.20.0
+location searched: crates.io index
+required by package `gtk v0.18.2`
+    ... which satisfies dependency `gtk = "^0.18"` of package `tauri v2.12.7`
+```
+
+`muda` 0.21.2, the one release that might have carried the move, cannot come in
+either: `tauri` asks for `muda ^0.20`. With `tauri` at its newest 2.x, the whole
+window is one gtk-rs release behind the fix, and no crate in this repo names
+`VariantStrIter` or calls into `glib` at all.
+
+So the alerts are dismissed as a tolerable risk (2026-11-23), and this section is
+what the dismissal points at. **Exit condition:** when `tauri` moves to gtk-rs
+0.20 — a 2.x bump or `tauri` 3 — run `cargo update -p glib` in every lockfile,
+delete the dismissals, and delete this section.
 
 ## What is still open
 
