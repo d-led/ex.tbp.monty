@@ -1,6 +1,6 @@
 # Features
 
-What this repository does, checked in the tree on 2026-11-20. Every claim links to
+What this repository does, checked in the tree on 2026-11-23. Every claim links to
 the thing that proves it. Anything not built is listed at the end, so nobody has to
 guess. The counts are measured by [`scripts/refresh_features.py`](../scripts/refresh_features.py),
 not recalled — run it after anything lands that can move one.
@@ -11,7 +11,7 @@ not recalled — run it after anything lands that can move one.
   `Monty.Path.File.Class`; a repeated segment collapses, a class repeating the file
   name is dropped. ([rule](module-map.md))
 - **The map is the contract.** 123 Python files (116 `tbp.monty`, 7 `tbp.teleop`),
-  329 classes. Implemented: 58 files / 211 classes. Planned: 55 / 68. Excluded: 10 / 47.
+  329 classes. Implemented: 60 files / 217 classes. Planned: 53 / 62. Excluded: 10 / 47.
   ([`module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex))
 - `mix monty.module_map.gen` re-derives the map from the checkouts;
   `mix monty.module_map.verify` fails on an unmapped file, an `implemented` entry
@@ -24,7 +24,7 @@ not recalled — run it after anything lands that can move one.
 - **Numbers checked against Monty**, strongest first: replayed (Monty's own code ran
   and its answers are committed fixtures), recorded (whole episodes), counted
   (config and naming). Each check names its tolerance and its test.
-  ([validation.md](validation.md), 14 `*_parity_test.exs` files)
+  ([validation.md](validation.md), 16 `*_parity_test.exs` files)
 - **Deliberate differences are written down**, so a Python/Elixir diff is
   explainable. ([monty-differences.md](monty-differences.md))
 - Deterministic: one RNG value threaded through Python's call order.
@@ -99,7 +99,7 @@ not recalled — run it after anything lands that can move one.
 - `/jobs` — the Oban queue, with cancel (ends at the next step) and kill.
 - `/prerequisites` — data and pretrained models downloaded into Monty's own
   `MONTY_DATA` / `MONTY_MODELS` paths: streamed, written to `<target>.part`, renamed
-  only when the checksum matches — 10 entries in
+  only when the checksum matches — 12 entries in
   [`priv/prerequisites.yaml`](../priv/prerequisites.yaml). A memory is exported by
   reading the pickles, and the page says which model it is reading while it does
   (`reading memory 3/15 · pretrained_ycb_v13/…`), so a first start shows progress
@@ -208,7 +208,7 @@ what CI runs.
   tarball, a `.deb` and an AppImage) and Windows x64 (NSIS setup and the portable
   folder) — uploading each to the release on a tag.
   ([desktop.md](desktop.md), [`ci.yml`](../.github/workflows/ci.yml))
-- 3,604 `test` declarations in the suite.
+- 3,816 `test` declarations in the suite.
 
 ## Not built — do not assume these
 
