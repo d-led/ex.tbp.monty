@@ -708,5 +708,26 @@ answered by the most likely object, with no pose resolved)", from
 `Monty.Studio.EvalStats.mlh_judgements/1` and
 `Monty.Studio.Summary.judgement_sentence/2`.
 
-What is left in this lane: the same five episodes on both arms, recorded, to
-state a rate; then the corpus sweep.
+### The rate over the five episodes
+
+The same configuration, five episodes, this Mac, `ex_mujoco` — a run made from
+the studio page:
+
+| target | judged | named | possible |
+| --- | --- | --- | --- |
+| milka | `correct_mlh` | milka | 1 |
+| dog_free_fire | `correct_mlh` | dog_free_fire | 1 |
+| kinder_guard_dog | `confused_mlh` | **dogs_head** | 1 |
+| puppy | `confused_mlh` | **dogs_head** | 2 |
+| dogs_head | `correct_mlh` | dogs_head | 1 |
+
+**Three of five named correctly**, and both errors named `dogs_head`. Every
+episode used its whole 100 matching-step budget and resolved no pose.
+
+Beside it, the supervised module on the same corpus and the same five episodes:
+five of five `match` in 635 steps, with a pose. So the two modules differ in
+exactly what the gate asked: the supervised one accepts a pose, the
+unsupervised one names the object through its most likely hypothesis.
+
+What is left in this lane: the corpus sweep, and a look at what the two
+confused targets share with `dogs_head` — the corpus, or the walk.
