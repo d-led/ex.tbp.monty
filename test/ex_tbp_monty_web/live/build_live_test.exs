@@ -36,6 +36,41 @@ defmodule ExTbpMontyWeb.BuildLiveTest do
                "#blueprint_monty_learning_module option[value='evidence_1lm_nn5_dod003']"
              )
     end
+
+    # A person who has never seen Monty's conf should still know which field
+    # decides what. The group's own name stays on the page, because it is the
+    # name an expert will look for in the config.
+    test "each choice says what it chooses, and names Monty's group", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/build")
+      html = render(view)
+
+      assert html =~ "Recognising"
+      assert html =~ "How what it sees is matched to what it remembers"
+      assert html =~ "Monty&#39;s group: monty/learning_module"
+    end
+  end
+
+  describe "adjusting an experiment" do
+    test "a draft opens in the builder with its own choices, ready to change", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/build")
+      view |> element("#blueprint-form") |> render_change(%{"blueprint" => %{"name" => "mine"}})
+      view |> element("#blueprint-form") |> render_submit()
+
+      {:ok, view, _html} = live(conn, ~p"/build?base=mine")
+
+      assert view
+             |> element("#blueprint-form input[name='blueprint[name]']")
+             |> render() =~ "mine"
+
+      assert has_element?(
+               view,
+               "#blueprint-form select[name='blueprint[base]'] option[value='mine'][selected]"
+             )
+
+      refute has_element?(view, "[id^=finding-unknown_base]")
+    end
   end
 
   describe "importing a file" do

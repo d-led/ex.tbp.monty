@@ -465,6 +465,19 @@ defmodule ExTbpMontyWeb.ExperimentLive do
           >
             <.icon name="hero-arrow-down-tray-mini" class="size-3.5" /> yaml
           </.link>
+          <%!-- Changing what this experiment is: the builder opens on its own
+          choices, so adjusting one is a change and not a retype. A plugin's
+          experiment is a definition another node answers, so there is nothing
+          here to open. --%>
+          <.link
+            :if={@opened.source != :plugin}
+            id="adjust-experiment"
+            navigate={~p"/build?#{[base: @opened.name]}"}
+            class="btn btn-ghost btn-xs gap-1.5 font-normal"
+            title="Open a copy of this experiment in the builder"
+          >
+            <.icon name="hero-pencil-square-mini" class="size-3.5" /> adjust a copy
+          </.link>
         </div>
         <p class="max-w-3xl text-base-content/70">
           {@opened.setup.experiment_class.class} · {@opened.setup.monty_class.class}
@@ -568,22 +581,24 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               class="input input-xs w-24"
               aria-label="The most steps one episode may take"
             />
-            <%!-- Monty's order, or the step-a-behind round this port added. Named
-            by what the step does rather than by the mechanism: a person choosing
-            here is deciding whether a step waits for the modules it handed work
-            to (`docs/monty-differences.md` §2.30). --%>
-            <label for="run-scheduling" class="ms-2">a step</label>
+            <%!-- What a step does with the modules it hands work to, in the
+            words a person reads without knowing Monty's option keys: every
+            module answers in the step, or a slow one answers the step after.
+            Nothing falls behind and nothing is lost — the second shape is how
+            one module's lagged answer is still counted
+            (`docs/monty-differences.md` §2.30). --%>
+            <label for="run-scheduling" class="ms-2">modules</label>
             <select
               id="run-scheduling"
               name="scheduling"
-              class="select select-xs w-40"
-              aria-label="Whether a step waits for every module it handed work to"
+              class="select select-xs w-56"
+              aria-label="Whether a step's modules answer in this step or a slow one answers a step later"
             >
               <option value="wait_for_all" selected={@scheduling == :wait_for_all}>
-                waits for all its modules
+                answer in this step
               </option>
               <option value="one_step_behind" selected={@scheduling == :one_step_behind}>
-                runs one step behind
+                a slow one answers a step later
               </option>
             </select>
             <%!-- The time a module still computing is given after another one has
@@ -591,7 +606,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             tells the rest they are out of time. The window is the grace they need
             to deliver a prediction that still counts
             (`docs/monty-differences.md` §2.31). --%>
-            <label for="run-settle" class="ms-2">settle</label>
+            <label for="run-settle" class="ms-2">grace steps</label>
             <input
               id="run-settle"
               type="number"
@@ -600,21 +615,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
               max="200"
               value={@settle}
               class="input input-xs w-16"
-              aria-label="How many steps a module still computing gets after a conclusion"
+              aria-label="How many more steps a module still computing gets after another has concluded"
             />
-            <%!-- Whether a step serves its sensors one after another or at once.
+            <%!-- Whether a step asks its sensors one after another or together.
             `auto` is the port's rule; naming one is what makes two runs of the
             same seed a measurement of the fan-out rather than of both. --%>
             <label for="run-sensors" class="ms-2">sensors</label>
             <select
               id="run-sensors"
               name="sensors"
-              class="select select-xs w-28"
-              aria-label="Whether a step serves its sensors one after another or at once"
+              class="select select-xs w-44"
+              aria-label="Whether a step asks its sensors one after another or all at once"
             >
-              <option value="auto" selected={@sensors == :auto}>auto</option>
-              <option value="serial" selected={@sensors == :serial}>serial</option>
-              <option value="concurrent" selected={@sensors == :concurrent}>concurrent</option>
+              <option value="auto" selected={@sensors == :auto}>as the experiment decides</option>
+              <option value="serial" selected={@sensors == :serial}>one after another</option>
+              <option value="concurrent" selected={@sensors == :concurrent}>all at once</option>
             </select>
             <%!-- What each of these does to the numbers the log will show: a
             round of sensors served at once costs its slowest member, and a lagged

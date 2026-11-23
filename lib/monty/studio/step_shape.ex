@@ -44,8 +44,7 @@ defmodule Monty.Studio.StepShape do
       "concurrent" ->
         [
           "Sensors: all at once — `sensors` is the slowest of them, not their sum. " <>
-            "A round is not taken over a sensor that draws from the episode's stream, " <>
-            "which steps them one at a time again."
+            "A sensor that draws from the episode's stream is still asked on its own."
         ]
 
       "serial" ->
@@ -54,7 +53,7 @@ defmodule Monty.Studio.StepShape do
       _auto ->
         [
           "Sensors: one after another, as Monty steps them — `sensors` is their sum. " <>
-            "`concurrent` asks them all at once instead."
+            "Choosing all at once asks them together instead."
         ]
     end
   end
@@ -67,8 +66,8 @@ defmodule Monty.Studio.StepShape do
     case Map.get(inputs, "scheduling") do
       setting when setting in ["one_step_behind", "lagged"] ->
         [
-          "Modules: a step behind — a step's `receive` and `settle` belong to the epoch " <>
-            "before it, and `await` is not waited for at all."
+          "Modules: the slow ones answer a step later — a step's `receive` and `settle` " <>
+            "belong to the epoch before it, and `await` is not waited for at all."
         ]
 
       _monty_order ->

@@ -304,7 +304,7 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
 
-      assert view |> element("#run-step-shape") |> render() =~ "a step behind"
+      assert view |> element("#run-step-shape") |> render() =~ "answer a step later"
     end
   end
 

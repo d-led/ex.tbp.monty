@@ -493,6 +493,19 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert run.inputs["scheduling"] == "one_step_behind"
     end
 
+    # What the choice does, in words a newcomer reads without knowing what the
+    # option's key means: nothing here falls behind or fails, a slow module
+    # simply answers later.
+    test "the step choice says what happens, and nothing sounds broken", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/experiments/#{@tutorial}")
+
+      assert view |> element("#run-scheduling option[value=wait_for_all]") |> render() =~
+               "answer in this step"
+
+      assert view |> element("#run-scheduling option[value=one_step_behind]") |> render() =~
+               "a slow one answers a step later"
+    end
+
     # How a step serves its sensors is the other thing two runs of one seed may
     # differ in: serial is what a step always did, concurrent is the fan-out this
     # port added. A run that made no choice records none, so `auto` stays a fact
@@ -536,7 +549,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
       assert view |> element("#step-shape") |> render() =~ "one after another"
 
       view |> element("#run-budget") |> render_change(%{"scheduling" => "one_step_behind"})
-      assert view |> element("#step-shape") |> render() =~ "a step behind"
+      assert view |> element("#step-shape") |> render() =~ "answer a step later"
     end
 
     test "and the step it records is one step of that experiment, not a redraw", %{conn: conn} do

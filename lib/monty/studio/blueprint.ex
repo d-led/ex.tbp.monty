@@ -23,11 +23,12 @@ defmodule Monty.Studio.Blueprint do
   alias Monty.Studio.{Catalog, ConfigText, Finding}
 
   @enforce_keys [:name, :base, :defaults, :experiment_class, :config]
-  defstruct [:name, :base, :defaults, :experiment_class, :config, groups: %{}]
+  defstruct [:name, :base, :defaults, :experiment_class, :config, base_file: nil, groups: %{}]
 
   @type t :: %__MODULE__{
           name: String.t(),
           base: String.t(),
+          base_file: Path.t() | nil,
           defaults: [{String.t(), String.t()}],
           experiment_class: String.t(),
           config: map(),
@@ -59,11 +60,13 @@ defmodule Monty.Studio.Blueprint do
   def new(attributes) do
     attributes = normalize_keys(attributes)
     base = Map.get(attributes, "base") || default_base()
-    experiment = experiment(base)
+    base_file = Map.get(attributes, "base_file")
+    experiment = experiment(base, base_file)
 
     %__MODULE__{
       name: Map.get(attributes, "name") || Path.basename(base),
       base: base,
+      base_file: base_file,
       defaults: experiment.defaults,
       groups: group_choices(experiment.defaults),
       experiment_class: experiment.experiment_class,
@@ -129,7 +132,7 @@ defmodule Monty.Studio.Blueprint do
   @doc "What is wrong with the choices, if anything."
   @spec findings(t(), keyword()) :: [Finding.t()]
   def findings(%__MODULE__{} = blueprint, opts \\ []) do
-    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dir() end)
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
 
     name_findings(blueprint) ++
       base_findings(blueprint, conf_dir) ++
@@ -190,6 +193,21 @@ defmodule Monty.Studio.Blueprint do
 
       true ->
         []
+    end
+  end
+
+  defp base_findings(%__MODULE__{base_file: path}, _conf_dir) when is_binary(path) do
+    if File.exists?(path) do
+      []
+    else
+      [
+        Finding.new(
+          :error,
+          :unknown_base,
+          "The file this experiment was built from is no longer there.",
+          "base"
+        )
+      ]
     end
   end
 
@@ -316,18 +334,16 @@ defmodule Monty.Studio.Blueprint do
 
   # -- building -------------------------------------------------------------
 
-  defp experiment(base) do
-    conf_dir = Source.conf_dir()
-
+  defp experiment(base, base_file) do
     config =
-      case Source.load(conf_dir, "experiment", base) do
+      case load_experiment(base, base_file) do
         {:ok, config} ->
           config
 
         {:error, _reason} ->
           # An unknown base is a finding, not a crash: the blueprint is built
           # from the default so the page can say what is wrong.
-          {:ok, fallback} = Source.load(conf_dir, "experiment", default_base())
+          {:ok, fallback} = load_experiment(default_base(), nil)
           fallback
       end
 
@@ -344,6 +360,15 @@ defmodule Monty.Studio.Blueprint do
       config: Map.get(experiment_body, "config", %{})
     }
   end
+
+  # A base this application wrote is an experiment file of its own: it is read
+  # from its path, so adjusting a draft shows the choices that draft made. One
+  # of Monty's own is read by group and name from the conf tree. Both arrive as
+  # the same shape once loaded.
+  defp load_experiment(_base, path) when is_binary(path), do: Source.load_file(path)
+
+  defp load_experiment(base, _no_file),
+    do: Source.load(Source.conf_dir(), "experiment", base)
 
   # Hydra's `${constants.name}` is how a config reuses a value it gave once, and
   # the constants live in their own group rather than in the experiment file.

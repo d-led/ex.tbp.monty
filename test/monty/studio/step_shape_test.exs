@@ -64,7 +64,7 @@ defmodule Monty.Studio.StepShapeTest do
       })
 
     assert [sentence] = sentences
-    assert sentence =~ "a step behind"
+    assert sentence =~ "answer a step later"
     assert sentence =~ "the epoch"
   end
 

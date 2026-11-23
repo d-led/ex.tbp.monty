@@ -23,6 +23,21 @@ defmodule ExTbpMontyWeb.BuildLive do
   # experiment already gets right.
   @choices ~w(environment monty monty/sensor_module monty/learning_module monty/connectivity monty/motor_system_config)
 
+  # What each group decides, in words a person who has never opened Monty's
+  # conf can act on. The group's own name stays on the page beside it, because
+  # that is what an expert looks for in the written config.
+  @group_labels %{
+    "environment" =>
+      {"World and task", "The scene the agent steps in, and what it is asked to recognise."},
+    "monty" => {"Agent", "How the agent is put together."},
+    "monty/sensor_module" => {"Sensors", "What the agent sees with."},
+    "monty/learning_module" =>
+      {"Recognising", "How what it sees is matched to what it remembers."},
+    "monty/connectivity" =>
+      {"Wired together", "How many sensors feed how many learning modules."},
+    "monty/motor_system_config" => {"Movement", "How the agent chooses where to look next."}
+  }
+
   @impl true
   def mount(params, _session, socket) do
     blueprint = blueprint_from(params)
@@ -49,9 +64,10 @@ defmodule ExTbpMontyWeb.BuildLive do
       <header class="space-y-1.5">
         <h1 class="text-3xl font-semibold tracking-tight">Build an experiment</h1>
         <p class="max-w-3xl text-base-content/70">
-          Every field is a component Monty ships. A name is enough — the rest is
-          inherited from <span class="font-mono text-xs">{@blueprint.base}</span> — and the
-          config below is composed from the same Hydra groups Monty runs.
+          Start from an experiment that already works, then change any part below.
+          What you have is drawn as you change it, and saving gives it a name you
+          can run. Every field is one of Monty's own components, so the config that
+          comes out is what Monty would run.
         </p>
       </header>
 
@@ -67,13 +83,20 @@ defmodule ExTbpMontyWeb.BuildLive do
         class="space-y-3"
       >
         <div class="grid gap-2 sm:grid-cols-2">
-          <.input field={@form[:name]} label="Name" type="text" required />
+          <.input
+            field={@form[:name]}
+            label="Name"
+            type="text"
+            required
+            hint="The name you will run it as, and the file it is saved under."
+          />
           <.input
             field={@form[:base]}
             label="Start from"
             type="select"
             options={base_options()}
             required
+            hint="An experiment that already runs; everything below starts as its values."
           />
         </div>
 
@@ -81,16 +104,36 @@ defmodule ExTbpMontyWeb.BuildLive do
           <.input
             :for={{group, options} <- @choices}
             field={@form[field_name(group)]}
-            label={group}
+            label={group_label(group)}
+            hint={group_hint(group)}
             type="select"
             options={options}
           />
         </div>
 
         <div class="grid gap-2 sm:grid-cols-3">
-          <.input field={@form[:n_train_epochs]} label="Training epochs" type="number" min="0" />
-          <.input field={@form[:n_eval_epochs]} label="Evaluation epochs" type="number" min="0" />
-          <.input field={@form[:seed]} label="Seed" type="number" min="0" />
+          <.input
+            field={@form[:n_train_epochs]}
+            label="Training epochs"
+            type="number"
+            min="0"
+            hint="How many times it learns. 0 skips training."
+          />
+          <.input
+            field={@form[:n_eval_epochs]}
+            label="Evaluation epochs"
+            type="number"
+            min="0"
+            placeholder={@preview.setup && to_string(@preview.setup.epochs.eval)}
+            hint="How many rotations the memory is judged over."
+          />
+          <.input
+            field={@form[:seed]}
+            label="Seed"
+            type="number"
+            min="0"
+            hint="The same seed replays the same run."
+          />
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -286,6 +329,7 @@ defmodule ExTbpMontyWeb.BuildLive do
       |> Map.take(["name", "base" | @choices] ++ Blueprint.builder_config_keys())
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new(fn {key, value} -> {key, coerce(key, value)} end)
+      |> with_base_file()
 
     blueprint =
       case Map.pop(attrs, "base") do
@@ -304,6 +348,15 @@ defmodule ExTbpMontyWeb.BuildLive do
   end
 
   defp coerce(_key, value), do: value
+
+  # A draft is an experiment file this application wrote, not one in Monty's
+  # conf tree. Adjusting one reads that file, so the page shows the choices the
+  # draft made rather than the template's.
+  defp with_base_file(%{"base" => base} = attrs) do
+    if Drafts.exists?(base), do: Map.put(attrs, "base_file", Drafts.path(base)), else: attrs
+  end
+
+  defp with_base_file(attrs), do: attrs
 
   # `path` is the temporary file Phoenix wrote for this upload, not anything the
   # browser named; the client's file name is only classified, never opened.
@@ -361,9 +414,18 @@ defmodule ExTbpMontyWeb.BuildLive do
   defp roots, do: Monty.Config.Source.conf_dirs()
 
   defp base_options do
-    templates = Catalog.templates()
+    templates = Catalog.templates() |> Enum.map(&{&1, &1})
     others = Catalog.experiments(conf_dir: roots()) |> Enum.map(&{&1.name, &1.name})
-    templates |> Enum.map(&{&1, &1}) |> Enum.concat(others) |> Enum.uniq()
+    drafts = Drafts.names() |> Enum.map(&{&1, &1})
+
+    Enum.uniq(templates ++ others ++ drafts)
+  end
+
+  defp group_label(group), do: @group_labels |> Map.fetch!(group) |> elem(0)
+
+  defp group_hint(group) do
+    {_label, hint} = Map.fetch!(@group_labels, group)
+    "#{hint} Monty's group: #{group}."
   end
 
   # A draft is a config file, and whether this application can *run* it is a

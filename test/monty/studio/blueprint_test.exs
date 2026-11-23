@@ -115,6 +115,18 @@ defmodule Monty.Studio.BlueprintTest do
       assert :unknown_group_option in codes(blueprint)
     end
 
+    # The builder offers the options every root the page reads from; a check
+    # that consulted only Monty's own tree would refuse a choice the page had
+    # just offered, which is how `displacement_2lm` (a set of ours) read as a
+    # typo while it sat in the select.
+    test "an option from another config root is a choice, not an error" do
+      blueprint =
+        Blueprint.new(%{"name" => "x"})
+        |> Blueprint.put_group("monty/learning_module", "displacement_2lm")
+
+      refute :unknown_group_option in codes(blueprint)
+    end
+
     test "a base Monty does not have" do
       assert :unknown_base in codes(
                Blueprint.new(%{"name" => "x", "base" => "no/such/experiment"})

@@ -151,6 +151,10 @@ defmodule ExTbpMontyWeb.CoreComponents do
   attr :class, :any, default: nil, doc: "the input class to use over defaults"
   attr :error_class, :any, default: nil, doc: "the input error class to use over defaults"
 
+  attr :hint, :string,
+    default: nil,
+    doc: "persistent helper text under the control, linked to it by aria-describedby"
+
   attr :rest, :global,
     include: ~w(accept autocomplete capture cols disabled form list max maxlength min minlength
                 multiple pattern placeholder readonly required rows size step)
@@ -215,12 +219,20 @@ defmodule ExTbpMontyWeb.CoreComponents do
           name={@name}
           class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
+          aria-describedby={@hint && "#{@id}-hint"}
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
           {Phoenix.HTML.Form.options_for_select(@options, @value)}
         </select>
       </label>
+      <span
+        :if={@hint}
+        id={@id <> "-hint"}
+        class="mt-1 block text-xs font-normal text-base-content/60"
+      >
+        {@hint}
+      </span>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
@@ -261,9 +273,17 @@ defmodule ExTbpMontyWeb.CoreComponents do
             @class || "w-full input",
             @errors != [] && (@error_class || "input-error")
           ]}
+          aria-describedby={@hint && "#{@id}-hint"}
           {@rest}
         />
       </label>
+      <span
+        :if={@hint}
+        id={@id <> "-hint"}
+        class="mt-1 block text-xs font-normal text-base-content/60"
+      >
+        {@hint}
+      </span>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
