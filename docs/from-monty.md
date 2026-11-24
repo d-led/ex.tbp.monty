@@ -44,10 +44,10 @@ mix monty.refresh            # fast-forward the checkout, then everything below
 mix monty.refresh --no-update  # copy the checkout exactly as it stands
 ```
 
-The refresh has two halves and both are needed: the **copy** of Monty's files,
-and the **map** from each Python class to the Elixir module that answers for it,
-with the censuses that say which of those a config actually names. Run in this
-order, each a task of its own:
+The refresh has two halves, and both are needed. The first is the **copy** of
+Monty's files. The second is the **map** from each Python class to the Elixir
+module that answers for it, with the censuses that say which of those a config
+names. Run in this order, each a task of its own:
 
 1. `mix monty.inputs` — fast-forward, then copy `conf/`, the snapshots and the
    licence into `priv/monty/`;
@@ -92,10 +92,10 @@ here rather than restating the table:
 ## The record each row is checked against
 
 Every table row above is a data set with an origin, and one file states it:
-[`priv/data_provenance.yaml`](../priv/data_provenance.yaml). Each entry says
+[`priv/data_provenance.yaml`](../priv/data_provenance.yaml). Each entry says what
 kind of thing it is, where it came from, on what terms, what writes it, and the
-sha256 of the bytes — the file's own, or a tree hash for a directory, so four
-hundred configs are one number that still moves when any file inside them does.
+sha256 of the bytes. For a directory that is a tree hash, so four hundred configs
+are one number that still moves when any file inside them does.
 
     mix monty.data.check
 
@@ -107,10 +107,10 @@ cannot arrive in a commit without its origin — and the fix a stale entry needs
 in the task's own output.
 
 **No model is in this repository, and none may be.** A pretrained memory is what
-Monty's training wrote: exporting it is `mix monty.prerequisites.fetch`'s work,
-it arrives through `/prerequisites`, and its record is the archive's sha256 in
-`priv/prerequisites.yaml` — the same place, and the same kind of statement, as
-the object meshes. A memory committed here would be a model nobody can
+Monty's training wrote. Exporting it is `mix monty.prerequisites.fetch`'s work; it
+arrives through `/prerequisites`, and its record is the archive's sha256 in
+`priv/prerequisites.yaml`, the same place and the same kind of statement as the
+object meshes. A memory committed here would be a model nobody can
 re-derive: true of one machine one day, with nothing in the tree to say how it
 come to be. That is why none of it is in the tree: the export writes it under the
 data folder, and the archive's checksum is the record of where it came from.

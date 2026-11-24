@@ -9,13 +9,13 @@ a cluster of callers from talking itself into a loop.
 **Discovery.** A plugin joins `:pg` under `PLUGIN_SCOPE` from its own boot, and
 `:pg` is OTP's cluster-wide process group — a name joined on one node is visible on
 every node. The package turns what is registered into the tags a studio reads
-(`plugin`, `plugin:<kind>`), so a plugin host appears in Settings → Cluster as a
+(`plugin`, `plugin:<kind>`). A plugin host then appears in Settings → Cluster as a
 node with those tags and no web URL.
 
 **Identity over rpc.** A studio node's poller asks each peer for its version, tags
-and web URL. A plugin host is not a studio and has no `identity/0` of its own, so
-the poller asks a second question — `:rpc.call(node, MontyPlugin.Registry,
-:identity, [])` — rather than deciding the peer is dead. That is the one place this
+and web URL. A plugin host is not a studio and has no `identity/0` of its own. The
+poller therefore asks a second question, `:rpc.call(node, MontyPlugin.Registry,
+:identity, [])`, rather than deciding the peer is dead. That is the one place this
 repository names the package, and it does it through `Module.concat` because the
 studio does not depend on the plugin host and must not start doing so.
 
@@ -39,17 +39,17 @@ which is `MotorPolicy`'s own shape — the argument in, the argument out — wit
 policy named first, so that nothing about it is remembered where it is decided.
 A provider is one process per kind and name for the whole cluster, and a cluster
 runs several episodes at once: six parts of a sweep are six episodes in one VM. A
-policy kept in that process would be one heading walked by every episode, and the
+policy kept in that process would be one heading walked by every episode. The
 first parallel sweep this studio ran with a plugin's surface policy lost all six
 parts to a pre-jump pose they had overwritten for each other. So the caller holds
 the policy and every call carries it; what that costs is copying a few hundred
 numbers beside the depth images on the same call.
 
-`examples/example_plugin` is the plugin's half of that shape; the studio picks it
+`examples/example_plugin` is the plugin's half of that shape. The studio picks it
 up when the node was started with
 `MONTY_REMOTE_POLICY=example_plugin.spiral_scan`, and the run's record then reads
-`motor_policy: example_plugin.spiral_scan@0.1.1 on example_plugin@127.0.0.1`, so
-a run whose actions came from another node says so.
+`motor_policy: example_plugin.spiral_scan@0.1.1 on example_plugin@127.0.0.1`. A run
+whose actions came from another node therefore says so.
 
 A name is cluster-wide, not per node: `:pg` groups by kind _and_ name, so two
 hosts offering the same name join one group and `lookup/2` cannot say whose
@@ -69,25 +69,25 @@ therefore namespaces its names, as the example's do.
    expected to know; a cluster should not depend on that.
 3. **`needs` is checked by the caller, and answered by the host.** A plugin says
    what it calls while it answers (`:quiddity` for the geometry, `:monty` for the
-   framework), and a host publishes what it carries: the packages on its code
-   path, by the name `needs` uses, plus the machine tags in `MONTY_CAPABILITIES`
+   framework). A host publishes what it carries: the packages on its code path,
+   by the name `needs` uses, plus the machine tags in `MONTY_CAPABILITIES`
    (`MontyPlugin.Capabilities.carried/0`, `ex_monty_plugin` 0.1.2).
    `Monty.Studio.RemotePolicy.among/3` asks every plugin host, keeps the host's
    tags beside the answer, and treats a node that does not offer what the plugin
    declares as no candidate. The refusal therefore reads "offered, but by no node
-   that can serve it: … does not offer :quiddity" instead of a step failing
+   that can serve it: … does not offer :quiddity", instead of a step failing
    inside a plugin. The check belongs in `route/4`, so that the next caller does
-   not have to write it again. Before 0.1.2 the host's tags came only from the
-   plugins it registered, so no `needs` could be satisfied and the honest value
-   was `[]`. A host on an older lock still answers that way, and a plugin asking
-   for the framework is refused rather than called where the framework is not.
-4. **No answer discipline.** Nothing says whether a request is idempotent, how long
-   it may take, or what a call in flight does when the peer dies
-   (`GenServer.call` to a dead remote pid exits with `:noproc`), so every caller
+   not write it again. Before 0.1.2 the host's tags came only from the plugins it
+   registered, so no `needs` could be satisfied and the honest value was `[]`.
+   A host on an older lock still answers that way, and a plugin asking for the
+   framework is refused rather than called where the framework is not.
+4. **No answer discipline.** Nothing says whether a request is idempotent, how
+   long it may take, or what a call in flight does when the peer dies. A
+   `GenServer.call` to a dead remote pid exits with `:noproc`, so every caller
    invents its own answer. `RemotePolicy` invents one: a 5 s timeout, and an exit
    that becomes an `ArgumentError` naming the policy and the node it stopped on.
 5. **Only a motor policy is called per step; a learning module is not routed.**
-   A learning module is still advertised and not routed: a step asks it thousands
+   A learning module is still advertised and not routed. A step asks it thousands
    of times over hypotheses and a k-d tree, so the node that runs a run has to
    have its code, and it does not have another app's. A definition naming one is
    refused by name (`Monty.Studio.PluginExperiment`).
