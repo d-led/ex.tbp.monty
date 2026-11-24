@@ -48,11 +48,11 @@ mix monty.port_census                  # what the newly planned classes actually
 
 This block is the only place a Monty checkout is read. Everything these tasks
 produce is committed (`priv/monty`, the module map), so nothing the application
-runs at run time needs one — not the studio, not the MCP server, which reads
-Monty's documentation and roadmap from the project's published site instead.
+runs at run time needs one. The studio does not, and the MCP server reads Monty's
+documentation and roadmap from the project's published site instead.
 
 1. **Inputs.** `mix monty.inputs` only ever fast-forwards `main`, and only when
-   the checkout is on `main` with nothing uncommitted; anything else is reported
+   the checkout is on `main` with nothing uncommitted. Anything else is reported
    and left alone, because a copy taken from a tree that is not what it claims to
    be is worse than a stale copy. The revision is recorded in
    [`priv/monty/inputs.json`](../priv/monty/inputs.json) (`monty`, `conf_files`,
@@ -66,7 +66,7 @@ Monty's documentation and roadmap from the project's published site instead.
    quietly means something else. Add `--source ../monty-orig` to check a
    checkout whose copy you have not refreshed yet.
 3. **Files.** `mix monty.module_map.gen` (re)writes
-   [`lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex)
+   [`packages/ex_tbp_monty_core/lib/monty/module_map/data.ex`](../packages/ex_tbp_monty_core/lib/monty/module_map/data.ex)
    from both packages: every Python file, the Elixir module its path maps to, its
    classes, and whether that module exists. An entry already marked `excluded`
    with a reason stays excluded; an entry whose module now exists becomes
@@ -79,15 +79,16 @@ Monty's documentation and roadmap from the project's published site instead.
    a `TypedDict`, or a dataclass that does arithmetic. Only the last is a module
    to port; the counts it prints are the honest backlog, not a "classes remaining"
    number.
-5. **Behaviour.** Read what changed before porting it. [`monty-differences.md`](monty-differences.md)
-   records the places where Monty looks wrong and what this port does instead,
-   with the reason; [`open-ends.md`](open-ends.md) records what upstream says is
-   not done; [`validation.md`](validation.md) is what has actually been checked
-   against Monty's numbers, and a claim that is not there is not a claim.
+5. **Behaviour.** Read what changed before porting it.
+   [`monty-differences.md`](monty-differences.md) records the places where Monty
+   looks wrong and what this port does instead, with the reason.
+   [`open-ends.md`](open-ends.md) records what upstream says is not done.
+   [`validation.md`](validation.md) is what has been checked against Monty's
+   numbers, and a claim that is not there is not a claim.
 6. **Port.** Add the module under the name the map gives it, as pure functions,
-   with a test that says what it decides — and where numbers matter, against a
-   fixture recorded from Monty (`scripts/record_monty_*.py` run Monty in Monty's
-   environment and write what it answered; the suite replays that JSON).
+   with a test that says what it decides. Where numbers matter, test against a
+   fixture recorded from Monty: `scripts/record_monty_*.py` run Monty in Monty's
+   environment and write what it answered, and the suite replays that JSON.
 7. **Gate.** [`scripts/quality.sh`](../scripts/quality.sh), and `mix dialyzer`
    for the types job.
 
@@ -151,10 +152,10 @@ needs a `DB_PORT`, and it moves the mapping and the application together.
 ### A file instead of a server
 
 `mix ecto.*` above is Postgres because `config/dev.exs` and `config/test.exs`
-name it. A process that has nobody to configure it — a release, and the desktop
-app — asks the environment instead: `DATABASE_URL` names a Postgres, and with no
+name it. A process that has nobody to configure it (a release, and the desktop
+app) asks the environment instead. `DATABASE_URL` names a Postgres; with no
 `DATABASE_URL` the runs live in a SQLite file, `ex_tbp_monty.db` under
-`Monty.Paths.database()` (`SQLITE_PATH` moves it). Both drivers are in the
+`Monty.Paths.database()`, and `SQLITE_PATH` moves it. Both drivers are in the
 release, so one artifact serves either.
 
 Two things worth knowing before you touch a file-backed database:
@@ -168,10 +169,10 @@ Two things worth knowing before you touch a file-backed database:
   from. Postgres has the same shape of danger with a smaller blast radius,
   because a cluster usually holds other databases too.
 
-A development run on a file is one line away — replace the `:repo` in
-`config/dev.exs` with `ExTbpMonty.Repo.SQLite` — but the tests stay on Postgres:
-four partitions of the suite run against a service in CI, and some of the schema
-under test (`jsonb` in the run columns) is Postgres's.
+A development run on a file is one line away: replace the `:repo` in
+`config/dev.exs` with `ExTbpMonty.Repo.SQLite`. The tests stay on Postgres. Four
+partitions of the suite run against a service in CI, and some of the schema under
+test (`jsonb` in the run columns) is Postgres's.
 
 The script also installs the two toolchains itself when the machine has neither:
 

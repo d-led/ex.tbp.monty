@@ -186,9 +186,9 @@ Saying this plainly matters more than the table above:
   steps that is Monty's only up to the random-stream difference below.
 - **The path of a run, past its first steps.** The model's draws are Monty's now
   (§2.1 of `monty-differences.md`), and the first action of an episode is Monty's to the
-  last digit — but from some later step the two runs part, and two of ten episodes
-  of the comparison above agree on their step count. Two draw sites are still on
-  their own stream (`DepthTo3DLocations` noise and a camera's message noise), and
+  last digit. From some later step the two runs part, though, and two of ten
+  episodes of the comparison above agree on their step count. Two draw sites are
+  still on their own stream (`DepthTo3DLocations` noise and a camera's message noise), and
   neither is in the config compared here, so that is not yet the explanation.
 - **The simulator peer in CI.** Habitat and MuJoCo need Monty's pinned conda
   environment, so the peer that drives Monty's own environments runs here as a

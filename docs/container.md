@@ -264,9 +264,10 @@ episodes were made with is a third entry there; a run does not need it.
 MuJoCo runs in the interpreter the release already carries. `pythonx` builds it
 at compile time and ships it under `/app/lib/pythonx-*/priv`, with `mujoco` and
 `numpy` in it; `priv/monty_py/world.py` is the scene, the agents and their
-cameras. A MuJoCo run needs two things beyond the image, and neither is a package: the GL
-libraries for MuJoCo's offscreen camera rendering (`libegl1`, `libgl1`,
-`libosmesa6`, installed by the Dockerfile), and the datasets below.
+cameras. A MuJoCo run needs two things beyond the image, and neither is a package. The
+first is the GL libraries for MuJoCo's offscreen camera rendering (`libegl1`,
+`libgl1`, `libosmesa6`, installed by the Dockerfile). The second is the datasets
+described below.
 
 **Habitat-Sim is not carried.** It exists only as a conda package for `linux-64`
 and `osx-64`, built against Python 3.9, and this application's world is MuJoCo.

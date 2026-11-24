@@ -7,7 +7,7 @@ node can do**.
 
 Clustering is off unless it is asked for. A `mix phx.server` with no variables
 set, a release with no node name and the desktop window all start exactly the
-tree they started before clustering existed: no libcluster, no `Horde`, no
+tree they started before clustering existed. No libcluster, no `Horde`, no
 poller, no second folder. Everything below is an addition reached by environment,
 and `ExTbpMonty.Cluster.children/0` is the single place that decides it.
 
@@ -32,7 +32,7 @@ Windows. The recipe is three decisions, all of them environment:
 
 The password is written once in that file, under `vars`, and reaches a node
 twice: as `--cookie` on the command line, and as `MONTY_CLUSTER_SECRET` in its
-environment. The flag is the one that matters at start-up — it is a VM flag, so
+environment. The flag is the one that matters at start-up. It is a VM flag, so
 the cookie exists before the node compiles, and a peer's first handshake is
 answered instead of refused. `config/runtime.exs` still applies the secret for a
 start that passed no flag (a hand-typed `mix phx.server --sname node1`), which is
@@ -59,13 +59,13 @@ its node name with everything a path cannot hold replaced
 | `nodes/<name>/projects/` — what Monty itself writes (`MONTY_LOGS`) | `data/libraries/` — memory exported from those archives |
 
 Two nodes must not open one SQLite file, and a run belongs to the node that
-started it; what they do share is what was _downloaded_, because fetching a
-gigabyte twice is the only thing worse than fetching it once.
+started it. What they do share is what was _downloaded_: fetching a gigabyte
+twice is the only thing worse than fetching it once.
 
-Which of the two folders a node is in is decided once, in `config/runtime.exs`,
-from the same value that turns clustering on: a node that was asked to cluster
-_and_ has a name gets its own folder; anything else keeps the single folder it
-always had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
+`config/runtime.exs` decides which of the two folders a node is in, once, from
+the same value that turns clustering on. A node that was asked to cluster _and_
+has a name gets its own folder. Anything else keeps the single folder it always
+had. `Monty.Paths.node_root/0` is the only thing that knows the rule.
 
 ## The variables
 

@@ -83,7 +83,7 @@ and `post_episode` calls `self.model.update_ltm()` after each one
 (`monty_experiment.py:613`), so episode two is matched against the graph episode
 one built. This port starts a model per episode — `Jobs.Run.start_episode/5` →
 `Run.start/2`, stopped again in `end_episode/4` — and `end_episode` never called
-`update_ltm` at all, so there was nothing to carry even if the model had lived.
+`update_ltm` at all. There was nothing to carry, even if the model had lived.
 
 The first step (`Run.memories/1`, `Run.start/2`'s `:memory`,
 `Setup.memories/1`, and the write in `end_episode/4`) makes the memory the thing
@@ -161,9 +161,9 @@ has not written; `mix monty.readiness` prints the counts.
 
 ## 6. The world this application cannot step
 
-A handful of the shipped experiments name a world this build does not carry (`mix
-monty.readiness` counts them; nine on 2026-11-16), and almost all of them are
-Habitat-Sim: the scene is images another program rendered, the
+A handful of the shipped experiments name a world this build does not carry
+(`mix monty.readiness` counts them), and almost all of them are Habitat-Sim: the
+scene is images another program rendered, the
 config has no mesh to place, and the package exists only as a conda build for
 another Python. `Setup.world/3` cannot step it, so a MuJoCo run of such a config
 is refused at open time with `:world_not_carried` — an error, not a warning,
