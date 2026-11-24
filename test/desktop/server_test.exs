@@ -7,29 +7,34 @@ defmodule ExTbpMonty.Desktop.ServerTest do
   alias Monty.Test.Tmp
 
   describe "the port the desktop app answers on" do
+    # A port in the operating system's ephemeral range (32768–60999 on Linux) can
+    # be refused although nothing serves it: an outgoing connection already owns
+    # it, and `choose_port` then falls back — which is the behaviour, and a test
+    # that bound such a port was red on CI once for exactly this. So the ports
+    # these cases write stay below 32768, and a claim about parsing reads
+    # `preferred_port/1`, which binds nothing.
     test "is the same preferred one every launch, so a client pasted with it keeps working" do
       Tmp.without_env("MONTY_DESKTOP_PORT")
       settings = Tmp.file("desktop_port")
 
       assert Server.preferred_port(settings) == 42_800
-      assert Server.choose_port(settings) == 42_800
     end
 
     test "is taken from the settings file when one names a port" do
       Tmp.without_env("MONTY_DESKTOP_PORT")
       settings = Tmp.file("desktop_port")
       # Written the way the notes spell a port, underscore and all.
-      File.write!(settings, "42_910\n")
+      File.write!(settings, "20_910\n")
 
-      assert Server.choose_port(settings) == 42_910
+      assert Server.choose_port(settings) == 20_910
     end
 
     test "gives way to MONTY_DESKTOP_PORT, so a script can move it without editing a file" do
-      Tmp.system_env("MONTY_DESKTOP_PORT", "42920")
+      Tmp.system_env("MONTY_DESKTOP_PORT", "20920")
       settings = Tmp.file("desktop_port")
-      File.write!(settings, "42910")
+      File.write!(settings, "20910")
 
-      assert Server.choose_port(settings) == 42_920
+      assert Server.choose_port(settings) == 20_920
     end
 
     test "ignores a setting that is not a port rather than refusing to start" do
@@ -37,7 +42,7 @@ defmodule ExTbpMonty.Desktop.ServerTest do
       settings = Tmp.file("desktop_port")
       File.write!(settings, "eighty")
 
-      assert Server.choose_port(settings) == 42_800
+      assert Server.preferred_port(settings) == 42_800
     end
 
     test "falls back to one the operating system picks when the preferred one is held" do
