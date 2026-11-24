@@ -31,7 +31,6 @@ defmodule Mix.Tasks.Monty.Run do
   written, so a headless run's judgement is read from its `eval_stats.csv` exactly
   as a page-started run's is. `--no-record` is for throwaway runs and for benches;
   with no record there is no folder to report into.
-  a script or a CI job.
 
   ## Options
 
@@ -64,7 +63,8 @@ defmodule Mix.Tasks.Monty.Run do
       division of episodes (`Monty.Studio.Partition`). The parts are the run's
       record, so `--parallel` needs a recorded run and refuses `--no-record`
       rather than running undivided under a name that promised otherwise.
-    * `--quiet` — findings and summary only, no per-step lines
+    * `--quiet` — findings and summary only, no per-step lines. The run's log is
+      still written, because a quiet run is usually one read afterwards.
   """
 
   use Mix.Task
