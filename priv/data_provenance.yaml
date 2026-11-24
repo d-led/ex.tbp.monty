@@ -171,7 +171,19 @@ data:
     # five of five, so `inference_dist` moved to it and the 5° arm kept its
     # comparison under `inference_dist_raster`. `docs/training.md` §10 has the
     # two verdicts and the head-removal control that ruled the corpus out.
-    hash: b229aef83606f3268de90a1b7c47871585ca202974cc74d5f56f0167f8057926
+    #
+    # `sets/live` is the device arm (2026-11-24): one experiment,
+    # `live/novel_object_unsupervised`, the run a streamed RGBD/LiDAR capture
+    # will step. Its memory is empty, so the object is novel, and three training
+    # epochs follow before three that only evaluate — which is what gives the
+    # studio's open-ended run and its training switch both directions to take.
+    # `_unsupervised` is Monty's word for a run with nothing pretrained behind
+    # it. Its streamed counterpart becomes
+    # `live/novel_object_from_stream_unsupervised` when the camera world lands,
+    # following `world_image_from_stream_on_scanned_model`. It lives here rather
+    # than in `priv/monty/`, because `mix monty.inputs` deletes every YAML in
+    # that mirror which Monty does not ship.
+    hash: 4569292a4c03fd5a2c682ef54f542211ecc59bb1dbc1fc66e9a2544c3563aa6d
 
   - path: priv/cad_experiments/conf
     kind: written
