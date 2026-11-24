@@ -1,0 +1,59 @@
+# @package _global_
+# A novel object, taught where it stands and then recognised — the experiment a
+# live RGBD/LiDAR capture will step.
+#
+# Ours, and named so: `live` is the set, `novel_object` is what the run is
+# about, and `unsupervised` is Monty's own word for a run with nothing
+# pretrained behind it (`tutorial/surf_agent_2obj_unsupervised`). A config of
+# ours lives here and not in `priv/monty/`, because `mix monty.inputs` writes
+# that mirror and deletes every YAML in it that Monty does not ship
+# (`Monty.Config.Inputs.sync/2`). Here the prune cannot reach it, and the set is
+# found by `Monty.Config.Source.conf_dirs/0` like every other.
+#
+# The memory starts empty (`model_name_or_path: ''`), which is what makes the
+# object novel: there is nothing to recognise it against, so the training
+# epochs build the graph and the evaluation epochs are the first chance to
+# match against what the run itself learned. That is also why the studio's
+# *open-ended* run and its training switch fit this experiment: a capture has no
+# episode boundary to end on, and whether a step teaches or tests is decided
+# while the object turns.
+#
+# Until a camera world exists, the environment below is Monty's MuJoCo one and
+# the stand-in scene (Elixir, one sphere) steps it with no object data at all.
+#
+# A streamed counterpart follows Monty's own convention for it, which is worth
+# copying in full when the device arrives: `world_image_from_stream_on_scanned_model`
+# names a streamed run <world>_from_stream_on_<memory>, and pairs it with
+# `/environment: two_d_data_stream` and `/env_interface: eval_stream` — the
+# interface waits on `$MONTY_DATA/worldimages/world_data_stream`, where the
+# capture server writes an `rgb_N.png` and a `depth_N.data` for each frame. So
+# this one becomes `live/novel_object_from_stream_unsupervised` when that
+# world lands, and nothing else in the file changes.
+defaults:
+  - /monty: graph_exp1000_e3_t100
+  - /monty/motor_system_config: surface
+  - /monty/learning_module: evidence_tutorial_surf_agent_2obj_unsupervised
+  - /monty/sensor_module: camera_surf_raw0
+  - /monty/connectivity: 1lm_1sm
+  - /environment: mujoco_ycb_surf_agent
+  - /env_interface: tutorial_train_2obj_random
+  - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
+  - /termination: any1_objectrecognition_t2000_e500_tot5000
+  - /logging: basic_info_monty_runs
+  - /telemetry: info
+
+experiment:
+  _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
+  config:
+    show_sensor_output: false
+    # Training first, then a phase that only matches: the run learns the object
+    # and then has somewhere to show that it did.
+    n_train_epochs: 3
+    n_eval_epochs: 3
+    model_name_or_path: ''
+    seed: 42
+    supervised_lm_ids: []
+    do_eval: false
+    logging:
+      output_dir: ${path.expanduser:"~/tbp/results/monty/projects"}
+      run_name: live_novel_object_unsupervised
