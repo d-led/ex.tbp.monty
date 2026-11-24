@@ -187,6 +187,11 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       # the port's own rule, so a run started without choosing is the run this
       # page always started.
       sensors: :auto,
+      # An open-ended run: no termination condition, and training that can be
+      # switched on and off from the run's page while it steps
+      # (`Monty.Studio.Endless`). Both off is the run this page always started.
+      endless: false,
+      training: false,
       # The batch a press of Run started and the page shows: `nil` until a run of
       # this experiment is followed, and then the parts whose cards the page draws
       # beside the run it is watching (`Monty.Studio.Partition`).
@@ -631,6 +636,27 @@ defmodule ExTbpMontyWeb.ExperimentLive do
                 {label}
               </option>
             </select>
+            <%!-- An open-ended run has no termination condition: its episode
+            steps until Stop, and whether it learns can be switched while it
+            runs, on the run's own page. Both off is the run this page always
+            started, so the boxes are the whole difference. --%>
+            <label for="run-endless" class="ms-2">open-ended</label>
+            <input
+              id="run-endless"
+              type="checkbox"
+              name="endless"
+              class="checkbox checkbox-xs"
+              checked={@endless}
+            />
+            <label for="run-training" class="ms-2">train as it goes</label>
+            <input
+              id="run-training"
+              type="checkbox"
+              name="training"
+              class="checkbox checkbox-xs"
+              checked={@training}
+              disabled={!@endless}
+            />
             <%!-- What each of these does to the numbers the log will show: a
             round of sensors served at once costs its slowest member, and a lagged
             run applies the epoch before. Said beside the choice, because it is a
@@ -1455,9 +1481,15 @@ defmodule ExTbpMontyWeb.ExperimentLive do
       steps: cap(count_of(params["steps"]), socket.assigns.opened.setup),
       scheduling: scheduling_of(params["scheduling"], socket.assigns.scheduling),
       settle: settle_of(params["settle"], socket.assigns.settle),
-      sensors: sensors_of(params["sensors"], socket.assigns.sensors)
+      sensors: sensors_of(params["sensors"], socket.assigns.sensors),
+      endless: truthy?(params["endless"]),
+      training: truthy?(params["training"])
     )
   end
+
+  # A checkbox submits `"on"` when it is ticked and sends nothing when it is
+  # not, so its absence is off rather than unreadable.
+  defp truthy?(value), do: value in ["on", "true", "1"]
 
   # How a step serves its sensors. `auto` is the port's own rule — serial while
   # one sensor's chain is what a step costs, concurrent once several sensors
@@ -2597,7 +2629,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     %{
       scheduling: socket.assigns.scheduling,
       settle: socket.assigns.settle,
-      sensors: socket.assigns.sensors
+      sensors: socket.assigns.sensors,
+      endless: socket.assigns.endless,
+      training: socket.assigns.training
     }
   end
 
@@ -2610,7 +2644,9 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         parts: parts,
         scheduling: levers.scheduling,
         settle: levers.settle,
-        sensors: levers.sensors
+        sensors: levers.sensors,
+        endless: levers.endless,
+        training: levers.training
       })
 
     case RunHistory.start(attributes) do

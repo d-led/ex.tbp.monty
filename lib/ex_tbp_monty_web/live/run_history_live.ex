@@ -342,7 +342,12 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
       judged: judged(run),
       queue: where_each_run_is([run]),
       waiting: waiting(run),
-      division: RunHistory.parts(run.id)
+      division: RunHistory.parts(run.id),
+      # An open-ended run's learning switch, read here rather than while
+      # rendering: the page's assigns are the page's state, and the poll that
+      # calls this is where a change made from another tab arrives
+      # (`Monty.Studio.Endless`).
+      training: Monty.Studio.Endless.training?(run.id)
     )
   end
 
@@ -1814,6 +1819,23 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
             >
               Stop
             </button>
+            <%!-- An open-ended run has no ending of its own, so it never
+            settles unless somebody stops it — and while it steps, whether it
+            learns is a person's choice, not the episode's
+            (`Monty.Studio.Endless`). Only that kind of run shows this. --%>
+            <button
+              :if={in_flight?(@run, @queue) and endless?(@run)}
+              id="training-toggle"
+              phx-click="toggle_training"
+              phx-value-id={@run.id}
+              class={[
+                "btn btn-xs",
+                if(@training, do: "btn-secondary", else: "btn-outline")
+              ]}
+              title="Whether this run learns from the steps it takes"
+            >
+              {if @training, do: "Training: on", else: "Training: off"}
+            </button>
             <button
               :if={running_now?(@run, @queue)}
               id={"end-#{@run.id}"}
@@ -2308,6 +2330,13 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     end
   end
 
+  # An open-ended run's one lever: learn from the steps it is taking, or stop
+  # learning. Like selection above, it arrives here and leaves as an assignment;
+  # what the switch answers is its own small piece of state.
+  def handle_event("toggle_training", %{"id" => run_id}, socket) do
+    {:noreply, toggle_training(run_id, socket)}
+  end
+
   # -- the replay ------------------------------------------------------------
 
   @impl true
@@ -2330,6 +2359,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     {:noreply, socket}
   end
+
+  # The switch is node-local, like a stop (`Monty.Studio.Jobs.Stops`), so the run
+  # this page follows is the run it flips; the next poll reads the new answer.
+  defp toggle_training(run_id, socket) do
+    case Monty.Studio.Endless.toggle_training(run_id) do
+      {:ok, on?} ->
+        socket |> assign(:training, on?) |> put_flash(:info, training_message(on?))
+
+      {:error, :not_endless} ->
+        put_flash(
+          socket,
+          :error,
+          "That run is not open-ended — its training is fixed by its experiment."
+        )
+    end
+  end
+
+  defp training_message(true),
+    do: "Training is on: this run is learning from its steps now."
+
+  defp training_message(false),
+    do: "Training is off: what it learned is kept and written when the run stops."
 
   defp replay("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket),
     do: socket |> assign(follow: false) |> replay_to(run, parse_step(step))
@@ -2965,6 +3016,11 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
     do: unfinished?(queue[run.id])
 
   defp in_flight?(_run, _queue), do: false
+
+  # An open-ended run is the only kind whose training this page may switch, and
+  # the only kind that never settles by itself (`Monty.Studio.Endless`).
+  defp endless?(%{inputs: %{"endless" => true}}), do: true
+  defp endless?(_run), do: false
 
   defp running_now?(%{status: "running"} = run, queue), do: going?(queue[run.id])
   defp running_now?(_run, _queue), do: false

@@ -53,7 +53,10 @@ defmodule Monty.Studio.Learned do
 
   A run with no record has nowhere to put them — a throwaway run keeps nothing —
   and a plan with no training phase learned nothing that outlives it: both answer
-  `[]`, which says nothing rather than saying that something failed.
+  `[]`, which says nothing rather than saying that something failed. `trained?:
+  true` is the exception, and it is how an open-ended run states that it did
+  learn: its config may name only evaluation epochs, while the switch a person
+  turned on is what made the episode train (`Monty.Studio.Endless`).
 
   A **part** of a parallel training run keeps its memory in its own directory and
   leaves the library tree alone (`library: false`): the library is what the parts
@@ -68,7 +71,9 @@ defmodule Monty.Studio.Learned do
   def keep(nil, _opened, _plan, _memories, _options), do: []
 
   def keep(run_id, opened, plan, memories, options) do
-    if trains?(plan), do: keep_run(run_id, opened, memories, options), else: []
+    if trains?(plan) or Keyword.get(options, :trained?, false),
+      do: keep_run(run_id, opened, memories, options),
+      else: []
   end
 
   @doc "Where a run's memories are written."

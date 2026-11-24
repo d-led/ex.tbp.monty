@@ -33,6 +33,7 @@ defmodule Monty.Studio.Jobs.Run do
     Artifacts,
     CentreView,
     Claim,
+    Endless,
     Failure,
     Learned,
     Logging,
@@ -353,6 +354,10 @@ defmodule Monty.Studio.Jobs.Run do
     # run's, which the run has already attached: the part writes its lines to its
     # own file and leaves the row alone.
     record = if part?(record), do: record, else: attach_log(record, run_id, log_ready)
+    # What an open-ended run carries: whether it ends at all and whether it is
+    # learning now (`Monty.Studio.Endless`). A part of a divided run is not
+    # open-ended — its switches would live on another node than its page.
+    _ = if part?(record), do: :ok, else: Endless.start(run_id, record)
     sensor_ids = Setup.sensor_ids(opened.setup)
     experiment = Setup.experiment_class(opened.setup)
     # An epoch walks its own phase's objects: a config can train on two and
@@ -478,7 +483,10 @@ defmodule Monty.Studio.Jobs.Run do
         pre_episode: &start_episode(run_id, opened, &1, &2, &3, &4),
         ground_truth: &ground_truth(&1),
         step: &step_once(run_id, &1, sensor_ids),
-        finished?: fn %{run: run} -> Run.finished?(run) end,
+        # `finished?` is the one place the recognition policy and the step budget
+        # meet. An open-ended run does not ask: its episode steps until somebody
+        # presses Stop, which the loop checks before this (see `Endless`).
+        finished?: fn %{run: run} -> not Endless.endless?(run_id) and Run.finished?(run) end,
         stopped?: fn -> stop_requested?(run_id) end,
         post_episode: &end_episode(run_id, &1, &2, &3)
       })
@@ -492,11 +500,14 @@ defmodule Monty.Studio.Jobs.Run do
 
     # A part of a batch keeps its memory to its own directory: the library is what
     # the parts learned between them, and one part writing it would overwrite the
-    # merged one with its own share.
+    # merged one with its own share. `trained?` is what an open-ended run adds:
+    # its config may name only evaluation epochs, and the switch is what made the
+    # episode learn (`Monty.Studio.Endless`).
     Enum.each(
       Learned.keep(run_id, opened, plan, state.memories,
         library: not part?(record),
-        targets: state.targets
+        targets: state.targets,
+        trained?: Endless.trained?(run_id)
       ),
       &say(run_id, &1)
     )
@@ -1514,10 +1525,16 @@ defmodule Monty.Studio.Jobs.Run do
     }
   end
 
-  defp targets_after(run, %{mode: :train, targets: carried}),
-    do: Run.merge_targets(carried, Run.memory_targets(run))
-
-  defp targets_after(_run, %{targets: carried}), do: carried
+  defp targets_after(run, %{targets: carried} = state) do
+    # A training episode names the graphs it built, and an open-ended run that
+    # ever trained is the same thing even if its episode began as `:eval`:
+    # without the names the library it writes cannot say what it holds.
+    if state.mode == :train or Endless.trained?(state.record.id) do
+      Run.merge_targets(carried, Run.memory_targets(run))
+    else
+      carried
+    end
+  end
 
   # What the end of an episode owes its run's tally: one more conclusion, under
   # the module that made it. The last episode is not the run — whether this port
@@ -1546,7 +1563,10 @@ defmodule Monty.Studio.Jobs.Run do
         say(run_id, "the episode crashed, so its statistics were not read")
         {%{}, state.memories, state.logging, []}
 
-      state.mode == :train ->
+      # A training episode writes its memory, and so does an open-ended run that
+      # ever learned: `trained?` is latched, so switching training off before the
+      # stop does not throw away what was learned (`Monty.Studio.Endless`).
+      state.mode == :train or Endless.trained?(run_id) ->
         {read, model_state} = :timer.tc(fn -> episode_state(state, run) end)
 
         {recorded, logging} =
@@ -1769,6 +1789,10 @@ defmodule Monty.Studio.Jobs.Run do
   # nobody trusts. What the loop does with that — and with a caller's stop — is
   # `MontyExperiment.run_episode_steps/2`, which is Monty's episode loop.
   defp step_once(run_id, %{run: run} = state, sensor_ids) do
+    # Before the step, not after: the training switch is part of what the step
+    # is. For a run that is not open-ended this reads one absent table row and
+    # nothing else happens (`Monty.Studio.Endless.sync/3`).
+    _ = Endless.sync(run_id, run.model_id, run.mode)
     {:ok, info, observations, run} = Run.step(run)
     beliefs = beliefs_after(info, run, state.beliefs)
 
@@ -2081,6 +2105,8 @@ defmodule Monty.Studio.Jobs.Run do
     # A run that has closed has no steps left to ask, and a run of the same id
     # started later is not this one's to stop.
     Stops.clear(run_id)
+    # And its open-ended switches are not the next run's either.
+    Endless.clear(run_id)
   end
 
   defp key(run_id), do: {:studio_run, run_id}

@@ -52,6 +52,10 @@ defmodule ExTbpMonty.Application do
           # happen in tasks its worker started, and a stop written only to the
           # worker is read only between waves.
           Monty.Studio.Jobs.Stops,
+          # The two switches an open-ended run carries — whether it ends at all,
+          # and whether it is learning right now — read by every step and
+          # flipped from the run's page. Absent for every ordinary run.
+          Monty.Studio.Endless,
           # The readiness survey over every config, composed by one process: a page
           # opened on a node that has just started asks for it, and every page used
           # to compose a copy of its own (three tabs: three times all 132 configs).

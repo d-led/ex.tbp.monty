@@ -545,6 +545,7 @@ defmodule Monty.Studio.RunLog do
         |> Map.merge(scheduling_input(part))
         |> Map.merge(settle_input(part))
         |> Map.merge(sensors_step_input(part))
+        |> Map.merge(endless_input(part))
     }
   end
 
@@ -610,6 +611,15 @@ defmodule Monty.Studio.RunLog do
     do: %{"sensors_step" => to_string(sensors)}
 
   defp sensors_step_input(_part), do: %{}
+
+  # An open-ended run — one with no termination condition, whose training can be
+  # switched on and off while it steps (`Monty.Studio.Endless`). Written only
+  # when asked for: a run that did not ask for it has no key, so its record is
+  # the record this application always wrote.
+  defp endless_input(%{endless: true} = levers),
+    do: %{"endless" => true, "training" => Map.get(levers, :training, false)}
+
+  defp endless_input(_part), do: %{}
 
   @doc "Appends a step to the record in hand, leaving it unwritten until `RunHistory.checkpoint/1`."
   @spec append_step(RunHistory.Run.t(), map(), map(), map(), keyword()) :: RunHistory.Run.t()
