@@ -127,8 +127,11 @@ defmodule Mix.Tasks.Monty.RunTest do
       run = recorded_run()
 
       assert run.log_path == Artifacts.log_path(run.id)
+      # The three kinds of line a page run's log holds, in the words the console
+      # printed them: a step, what the episode concluded, and the summary a
+      # reader compares two runs by.
       assert File.read!(run.log_path) =~ "step 0 ·"
-      # The printed line and the logged line are one sentence, not two.
+      assert File.read!(run.log_path) =~ "learning_module_0:"
       assert output =~ "step 0 ·"
     end
 

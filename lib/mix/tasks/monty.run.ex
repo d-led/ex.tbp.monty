@@ -320,7 +320,7 @@ defmodule Mix.Tasks.Monty.Run do
     # ground truth (and, for a supervised one, the switch to exploring).
     {:ok, state} = experiment.pre_episode(%{run: run}, index, object_of(run), episode_callbacks())
 
-    say_episode(index, scope.episodes, opts)
+    say_episode(history, index, scope.episodes, opts)
 
     beat = nil
     {infos, history, last_run} = step_through(state.run, history, opts, index, [], beat)
@@ -341,16 +341,13 @@ defmodule Mix.Tasks.Monty.Run do
     conclusion = Monty.Studio.Run.conclusion(last_run)
     outcomes = Monty.Studio.Summary.tally(outcomes, conclusion)
 
-    unless opts[:quiet], do: Mix.shell().info(say_outcome(conclusion))
+    note(history, say_outcome(conclusion), opts)
 
     carried = learned_from(last_run, carried, scope)
-
     # A training episode has nothing to recognise, so what it has to show for
     # itself is the memory it just built.
     if scope.mode == :train do
-      unless opts[:quiet] do
-        Mix.shell().info(Monty.Studio.Learned.growth_line(carried.memories))
-      end
+      note(history, Monty.Studio.Learned.growth_line(carried.memories), opts)
     end
 
     Monty.Studio.Run.stop(last_run)
@@ -476,10 +473,21 @@ defmodule Mix.Tasks.Monty.Run do
 
   defp epoch_and_episode(index, _no_objects), do: {index, 0}
 
-  defp say_episode(_index, 1, _opts), do: :ok
+  defp say_episode(_history, _index, 1, _opts), do: :ok
 
-  defp say_episode(index, count, opts) do
-    unless opts[:quiet], do: Mix.shell().info("episode #{index + 1}/#{count}")
+  defp say_episode(history, index, count, opts) do
+    note(history, "episode #{index + 1}/#{count}", opts)
+  end
+
+  # A line that belongs in the run's log as much as on the console: an episode's
+  # header, what it concluded, the memory a training episode built. `--quiet`
+  # silences the console and keeps the log, because a run read afterwards is the
+  # reason the log exists.
+  defp note(nil, _line, _opts), do: :ok
+
+  defp note(history, line, opts) do
+    unless opts[:quiet], do: Mix.shell().info(line)
+    Monty.Studio.Jobs.Run.log_line(history.id, line)
   end
 
   # The record this task writes, claimed the way a worker claims one: this task
@@ -618,9 +626,7 @@ defmodule Mix.Tasks.Monty.Run do
   # the mode with no folder, so it prints and writes nothing.
   defp print_step(info, beliefs, episode, history, opts) do
     entry = Monty.Studio.RunLog.entry(info, beliefs, episode: episode)
-    line = Monty.Studio.RunLog.line(entry)
-    unless opts[:quiet], do: Mix.shell().info(line)
-    if history, do: Monty.Studio.Jobs.Run.log_line(history.id, line)
+    note(history, Monty.Studio.RunLog.line(entry), opts)
   end
 
   defp open(name, opts) do
