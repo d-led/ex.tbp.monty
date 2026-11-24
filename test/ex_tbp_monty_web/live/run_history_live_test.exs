@@ -149,6 +149,22 @@ defmodule ExTbpMontyWeb.RunHistoryLiveTest do
 
       refute has_element?(view, "#training-toggle")
     end
+
+    # The page only draws the button for an open-ended run, but a page left open
+    # from before the run's record said so can still ask, and it is the switch
+    # that decides: a run whose experiment fixes its training is refused.
+    test "refuses a run whose experiment decides its training", %{conn: conn} do
+      run = insert_run(%{experiment: "tutorial/first_experiment", status: "running"})
+      {:ok, job} = Monty.Studio.Jobs.Run.enqueue_run(run)
+      :ok = running(job)
+
+      {:ok, view, _html} = live(conn, ~p"/runs/#{run.id}")
+
+      assert render_hook(view, "toggle_training", %{"id" => run.id}) =~
+               "not open-ended"
+
+      refute Endless.training?(run.id)
+    end
   end
 
   # A job Oban has started: `executing` from `attempted_at` until an outcome.

@@ -2331,31 +2331,10 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
   end
 
   # An open-ended run's one lever: learn from the steps it is taking, or stop
-  # learning. The switch is node-local, like a stop (`Monty.Studio.Jobs.Stops`),
-  # so the run this page follows is the run it flips; the run page redraws after
-  # this and reads the new answer.
+  # learning. Like selection above, it arrives here and leaves as an assignment;
+  # what the switch answers is its own small piece of state.
   def handle_event("toggle_training", %{"id" => run_id}, socket) do
-    case Monty.Studio.Endless.toggle_training(run_id) do
-      {:ok, on?} ->
-        {:noreply,
-         socket
-         |> assign(:training, on?)
-         |> put_flash(
-           :info,
-           if(on?,
-             do: "Training is on: this run is learning from its steps now.",
-             else: "Training is off: what it learned is kept and written when the run stops."
-           )
-         )}
-
-      {:error, :not_endless} ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "That run is not open-ended — its training is fixed by its experiment."
-         )}
-    end
+    {:noreply, toggle_training(run_id, socket)}
   end
 
   # -- the replay ------------------------------------------------------------
@@ -2380,6 +2359,28 @@ defmodule ExTbpMontyWeb.RunHistoryLive do
 
     {:noreply, socket}
   end
+
+  # The switch is node-local, like a stop (`Monty.Studio.Jobs.Stops`), so the run
+  # this page follows is the run it flips; the next poll reads the new answer.
+  defp toggle_training(run_id, socket) do
+    case Monty.Studio.Endless.toggle_training(run_id) do
+      {:ok, on?} ->
+        socket |> assign(:training, on?) |> put_flash(:info, training_message(on?))
+
+      {:error, :not_endless} ->
+        put_flash(
+          socket,
+          :error,
+          "That run is not open-ended — its training is fixed by its experiment."
+        )
+    end
+  end
+
+  defp training_message(true),
+    do: "Training is on: this run is learning from its steps now."
+
+  defp training_message(false),
+    do: "Training is off: what it learned is kept and written when the run stops."
 
   defp replay("replay_seek", %{"step" => step}, %{assigns: %{run: run}} = socket),
     do: socket |> assign(follow: false) |> replay_to(run, parse_step(step))
