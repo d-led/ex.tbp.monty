@@ -111,6 +111,27 @@ defmodule Mix.Tasks.Monty.RunTest do
       assert output =~ "recorded as run #{run.id}"
     end
 
+    # The record's own log, at the path a page-started run writes it to: the
+    # folder, the file in it, and the row pointing at both — one boundary
+    # sequence for the two ways a run starts (`Monty.Studio.Jobs.Run.begin/1`).
+    test "writes the run's log file, and the record points at it" do
+      output =
+        run_and_capture([
+          "base_config_10distinctobj_dist_agent",
+          "--steps",
+          "2",
+          "--episodes",
+          "1"
+        ])
+
+      run = recorded_run()
+
+      assert run.log_path == Artifacts.log_path(run.id)
+      assert File.read!(run.log_path) =~ "step 0 ·"
+      # The printed line and the logged line are one sentence, not two.
+      assert output =~ "step 0 ·"
+    end
+
     # The config names `BasicCSVStatsHandler`, and that file is what a run's
     # judgement is read from afterwards — the page's "Judged — …" line, `mix
     # monty.compare`, the summary sentence. A run started from the page leaves it,

@@ -342,6 +342,27 @@ defmodule Monty.Studio.Jobs.Run do
     end
   end
 
+  @doc """
+  What every run writes down before its first step: the folder its log lives in,
+  and the row that points at it.
+
+  Two callers start a run — this module's worker and `mix monty.run` — and a run
+  is history the same way whichever started it, so the sequence lives here once
+  rather than in each of them. A part of a divided run is the exception: its log
+  is its own stream's, and the row it would be attached to is the run's, which
+  the run has already attached.
+  """
+  @spec begin(struct()) :: struct()
+  def begin(record) do
+    log_ready = Artifacts.start(record.id)
+
+    if part?(record), do: record, else: attach_log(record, record.id, log_ready)
+  end
+
+  @doc "One line into a run's own log file, stamped and appended."
+  @spec log_line(binary(), String.t()) :: :ok
+  def log_line(run_id, line), do: say(run_id, line)
+
   # One run is one *epoch*: an episode per object the experiment names, each of
   # them ending the way Monty's does — the recognition policy said done, or the
   # page's step budget ran out. The loop is the experiment class's
@@ -349,11 +370,7 @@ defmodule Monty.Studio.Jobs.Run do
   # the page, which the loop asks for through callbacks.
   defp run_alone(record, opened) do
     run_id = record.id
-    log_ready = Artifacts.start(run_id)
-    # A part's log is its own stream's, and the row it would be attached to is the
-    # run's, which the run has already attached: the part writes its lines to its
-    # own file and leaves the row alone.
-    record = if part?(record), do: record, else: attach_log(record, run_id, log_ready)
+    record = begin(record)
     # What an open-ended run carries: whether it ends at all and whether it is
     # learning now (`Monty.Studio.Endless`). A part of a divided run is not
     # open-ended — its switches would live on another node than its page.

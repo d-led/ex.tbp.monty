@@ -506,7 +506,9 @@ defmodule Mix.Tasks.Monty.Run do
         )
 
       {:ok, history} = Monty.Studio.RunHistory.mark_running(history)
-      history
+      # The folder and the row pointing at it, the way a page-started run gets
+      # them: a headless run is history like any other, log included.
+      Monty.Studio.Jobs.Run.begin(history)
     end
   end
 
@@ -556,7 +558,7 @@ defmodule Mix.Tasks.Monty.Run do
     case Monty.Studio.RunLimits.watch_step(fn -> Monty.Studio.Run.step(run) end) do
       {:ok, {:ok, info, observations, next_run}} ->
         beliefs = Monty.Studio.Run.beliefs(run)
-        print_step(info, beliefs, episode, opts)
+        print_step(info, beliefs, episode, history, opts)
 
         history = append(history, info, observations, beliefs, episode)
         beat = Monty.Studio.RunHistory.heartbeat(history, beat)
@@ -611,11 +613,14 @@ defmodule Mix.Tasks.Monty.Run do
     end
   end
 
-  defp print_step(info, beliefs, episode, opts) do
-    unless opts[:quiet] do
-      entry = Monty.Studio.RunLog.entry(info, beliefs, episode: episode)
-      Mix.shell().info(Monty.Studio.RunLog.line(entry))
-    end
+  # The line a page's stream writes into the run's log, printed here and appended
+  # there: one sentence per step, the same one in both places. `--no-record` is
+  # the mode with no folder, so it prints and writes nothing.
+  defp print_step(info, beliefs, episode, history, opts) do
+    entry = Monty.Studio.RunLog.entry(info, beliefs, episode: episode)
+    line = Monty.Studio.RunLog.line(entry)
+    unless opts[:quiet], do: Mix.shell().info(line)
+    if history, do: Monty.Studio.Jobs.Run.log_line(history.id, line)
   end
 
   defp open(name, opts) do
