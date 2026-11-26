@@ -144,53 +144,66 @@ defmodule Monty.Frameworks.Utils.EdgeDetection.ImageOps do
     end
   end
 
+  # Tuples, so a tap is `elem/2` and not a walk: `Enum.at/2` on a list is a
+  # slice, and this reads nine of them a pixel over a whole patch.
   defp blur_rows(image, weights) do
     half = div(length(weights) - 1, 2)
     width = image |> hd() |> length()
+    stored = List.to_tuple(weights)
+    last = tuple_size(stored) - 1
 
     Enum.map(image, fn row ->
+      row = List.to_tuple(row)
+
       for column <- 0..(width - 1)//1 do
-        weights
-        |> Enum.with_index()
-        |> Enum.map(fn {weight, index} ->
-          weight * Enum.at(row, reflected(column + index - half, width))
+        Enum.reduce(0..last, 0.0, fn index, sum ->
+          sum + elem(stored, index) * elem(row, reflected(column + index - half, width))
         end)
-        |> Enum.sum()
       end
     end)
   end
 
+  # The image and the kernel become tuples once: a convolution reads `size²`
+  # pixels for every pixel of the patch, and as lists each read walked a row
+  # from the front — hundreds of millions of `Enum.drop/2` steps a step.
   defp convolve(image, kernel) do
     height = length(image)
     width = image |> hd() |> length()
+    stored = image |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
+    kernel = kernel |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
 
     for row <- 0..(height - 1)//1 do
       for column <- 0..(width - 1)//1 do
-        convolved_at(image, kernel, {row, column}, {height, width})
+        convolved_at(stored, kernel, row, column, height, width)
       end
     end
   end
 
   # One pixel's answer: every kernel weight against the pixel it sits over, with
-  # the patch's edges reflected so the window is always full.
-  defp convolved_at(image, kernel, {row, column}, {height, width}) do
-    kernel
-    |> Enum.with_index()
-    |> Enum.map(fn {kernel_row, row_offset} ->
-      kernel_row
-      |> Enum.with_index()
-      |> Enum.map(fn {weight, column_offset} ->
-        weight * pixel(image, row + row_offset - 1, column + column_offset - 1, {height, width})
-      end)
-      |> Enum.sum()
+  # the patch's edges reflected so the window is always full. The two sums run in
+  # the kernel's own order, as `Enum.sum/1` over each row and then over the rows.
+  defp convolved_at(stored, kernel, row, column, height, width) do
+    rows = tuple_size(kernel)
+
+    Enum.reduce(0..(rows - 1)//1, 0.0, fn row_offset, outer ->
+      kernel_row = elem(kernel, row_offset)
+      columns = tuple_size(kernel_row)
+
+      inner =
+        Enum.reduce(0..(columns - 1)//1, 0.0, fn column_offset, inner ->
+          weight = elem(kernel_row, column_offset)
+
+          inner +
+            weight *
+              pixel(stored, row + row_offset - 1, column + column_offset - 1, height, width)
+        end)
+
+      outer + inner
     end)
-    |> Enum.sum()
   end
 
-  defp pixel(image, row, column, {height, width}) do
-    image
-    |> Enum.at(reflected(row, height))
-    |> Enum.at(reflected(column, width))
+  defp pixel(stored, row, column, height, width) do
+    elem(elem(stored, reflected(row, height)), reflected(column, width))
   end
 
   defp transpose(image) do
