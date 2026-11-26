@@ -171,16 +171,62 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
   """
   @spec call(t(), Monty.Context.t(), [[[float()]]], [[float()]]) :: [[float()]]
   def call(%__MODULE__{} = strategy, %Monty.Context{} = ctx, rgba, depth) do
-    {features, lightness_pyramid} =
-      rgba
-      |> rgb()
-      |> strategy.color_space_converter.()
-      |> colour_features(strategy, ctx)
+    if by_kernel?(strategy) do
+      call_by_kernel(strategy, ctx, rgba)
+    else
+      {features, lightness_pyramid} =
+        rgba
+        |> rgb()
+        |> strategy.color_space_converter.()
+        |> colour_features(strategy, ctx)
 
-    features
-    |> maybe_add_depth(strategy, ctx, depth)
-    |> maybe_add_orientation(strategy, ctx, lightness_pyramid)
-    |> then(&combine_and_normalise(strategy, &1))
+      features
+      |> maybe_add_depth(strategy, ctx, depth)
+      |> maybe_add_orientation(strategy, ctx, lightness_pyramid)
+      |> then(&combine_and_normalise(strategy, &1))
+    end
+  end
+
+  # The whole score in binaries, which is what Monty's `__call__` is: the image
+  # into the colour space, a channel salience call per plane, and the combine —
+  # four calls, and between them nothing but a plane. In Elixir the *crossings*
+  # were the cost: 65 536 pixels a plane were packed, called, decoded and packed
+  # again, 1.25 million times a step, and none of those values was read by
+  # anything but the next kernel.
+  #
+  # Taken only for the shape every cows config has — the default colour space, no
+  # depth and no orientation — because those three are where the plan of a call
+  # would stop being one call per kernel.
+  defp by_kernel?(%__MODULE__{} = strategy) do
+    SalienceNif.loaded?() and strategy.color_space_converter == (&Images.rgb_to_opponent/1) and
+      is_nil(strategy.depth) and is_nil(strategy.orientation) and
+      match?(%WeightedMean{}, strategy.combine) and
+      strategy.normalize == (&__MODULE__.range_normalize/1)
+  end
+
+  defp call_by_kernel(%__MODULE__{} = strategy, ctx, rgba) do
+    height = length(rgba)
+    width = rgba |> hd() |> length()
+    bytes = width * height * 8
+
+    planes = SalienceNif.opponent_planes(packed_rgba(rgba), width, height)
+
+    maps =
+      for plane <- 0..2, plane_bytes = binary_part(planes, plane * bytes, bytes) do
+        Task.async(fn ->
+          ColorChannelSalience.process_plane(strategy.color, ctx, plane_bytes, width, height)
+        end)
+      end
+      |> Enum.map(&Task.await(&1, :infinity))
+
+    [lightness, other_a, other_b] = maps
+
+    %{"L" => lightness, "a" => other_a, "b" => other_b}
+    |> then(&combine_and_normalise(strategy, &1, {width, height}))
+  end
+
+  defp packed_rgba(rgba) do
+    for row <- rgba, pixel <- row, value <- pixel, into: <<>>, do: <<value * 1.0::float-little-64>>
   end
 
   @doc """
@@ -192,12 +238,21 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
   normaliser, a machine with no crate — takes the reference below.
   """
   @spec combine_and_normalise(t(), map()) :: [[float()]]
-  def combine_and_normalise(%__MODULE__{} = strategy, features) do
+  def combine_and_normalise(%__MODULE__{} = strategy, features),
+    do: combine_and_normalise(strategy, features, nil)
+
+  # `shape` is the view's, when the caller already has it: a map that is still a
+  # binary cannot say how wide it is, and decoding it to find out is exactly what
+  # this path exists to avoid.
+  @doc false
+  @spec combine_and_normalise(t(), map(), {pos_integer(), pos_integer()} | nil) :: [[float()]]
+  def combine_and_normalise(%__MODULE__{} = strategy, features, shape) do
     with true <- SalienceNif.loaded?(),
          true <- strategy.normalize == (&__MODULE__.range_normalize/1),
          %WeightedMean{} = combine <- strategy.combine,
-         {:ok, weighted} <- weighted_planes(features, combine) do
-      by_combine_kernel(weighted)
+         {:ok, weighted} <- weighted_planes(features, combine),
+         {:ok, width, height} <- plane_shape(weighted, shape) do
+      by_combine_kernel(weighted, width, height)
     else
       _other -> combine_and_normalise_reference(strategy, features)
     end
@@ -216,24 +271,32 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
     |> strategy.normalize.()
   end
 
-  defp by_combine_kernel(weighted) do
-    [first | _rest] = planes = Enum.map(weighted, &elem(&1, 1))
-    height = length(first)
-    width = first |> hd() |> length()
+  defp by_combine_kernel(weighted, width, height) do
+    weights = for {weight, _plane} <- weighted, into: <<>>, do: <<weight::float-little-64>>
 
-    packed =
-      for plane <- planes, value <- List.flatten(plane), into: <<>> do
-        <<value::float-little-64>>
-      end
-
-    weights =
-      for {weight, _plane} <- weighted, into: <<>>, do: <<weight::float-little-64>>
-
-    packed
+    weighted
+    |> Enum.map_join(fn {_weight, plane} -> as_binary(plane) end)
     |> SalienceNif.combine_weighted(weights, width, height)
     |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
     |> Enum.chunk_every(width)
   end
+
+  # A feature map arrives as a binary when the channel that made it left it in
+  # the encoding the kernel answers, and as rows when something in between read
+  # it.
+  defp as_binary(plane) when is_binary(plane), do: plane
+
+  defp as_binary(plane) do
+    for value <- List.flatten(plane), into: <<>>, do: <<value::float-little-64>>
+  end
+
+  defp plane_shape([{_weight, _map} | _rest], {width, height}), do: {:ok, width, height}
+
+  defp plane_shape([{_weight, first} | _rest], nil) when is_list(first) do
+    {:ok, first |> hd() |> length(), length(first)}
+  end
+
+  defp plane_shape(_weighted, _shape), do: :error
 
   # The weights in the order `WeightedMean` reads them off the map, so the sum
   # happens in the same order: `Enum.map` over the map, then the mean's total.
@@ -267,13 +330,17 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
   # state and no draw from the episode's stream — so they run at once. The order
   # the results are taken in is the order the planes are in, so the map does not
   # depend on which channel finished first.
+  #
+  # The centre pyramid is asked for only when the strategy has orientation to
+  # build from it: every other feature is a map of the view.
   defp colour_features(image, strategy, ctx) do
     [lightness, other_a, other_b] = channels(image)
+    options = [pyramid?: strategy.orientation != nil]
 
     [{lightness_map, lightness_pyramid}, {a_map, _a_pyramid}, {b_map, _b_pyramid}] =
       [lightness, other_a, other_b]
       |> Enum.map(fn plane ->
-        Task.async(fn -> ColorChannelSalience.process(strategy.color, ctx, plane) end)
+        Task.async(fn -> ColorChannelSalience.process(strategy.color, ctx, plane, options) end)
       end)
       |> Enum.map(&Task.await(&1, :infinity))
 

@@ -64,12 +64,13 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
   anyway with a warning — which is Monty's behaviour, and is how a large image
   can be tried with sigmas nobody has validated.
   """
-  @spec process(t(), Monty.Context.t(), [[float()]]) :: {[[float()]], Pyramid.t()}
-  def process(%__MODULE__{} = salience, %Monty.Context{} = ctx, image) do
+  @spec process(t(), Monty.Context.t(), [[float()]], keyword()) ::
+          {[[float()]], Pyramid.t() | nil}
+  def process(%__MODULE__{} = salience, %Monty.Context{} = ctx, image, options \\ []) do
     check_limits!(salience, ctx, image)
 
     if SalienceNif.loaded?(),
-      do: by_kernel(salience, image),
+      do: by_kernel(salience, image, options),
       else: reference(salience, image)
   end
 
@@ -104,9 +105,50 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
   # one, and every plane crossing the boundary on its own was most of a cows
   # step's second. The whole channel is one call: the octave shapes and every
   # sigma are resolved here, so the kernel does arithmetic and nothing else.
-  defp by_kernel(%__MODULE__{} = salience, image) do
+  #
+  # The centre pyramid crosses back only when a strategy has a use for it —
+  # `Vocus2` needs it for orientation, and no cows config has orientation, so
+  # decoding it was 527 000 values a step that nothing read.
+  defp by_kernel(%__MODULE__{} = salience, image, options) do
     height = length(image)
     width = image |> hd() |> length()
+    {map, centres, centre_shapes} = channel(salience, plane(image), width, height)
+
+    centre =
+      case Keyword.get(options, :pyramid?, true) do
+        false ->
+          nil
+
+        true ->
+          centres |> planes(centre_shapes) |> Enum.chunk_every(salience.n_scales) |> Pyramid.new()
+      end
+
+    {rows(map, width), centre}
+  end
+
+  @doc """
+  The salience of one colour channel whose plane is already a binary, as the
+  channel's own map in the same encoding.
+
+  `Vocus2` splits its image into three planes in one crossing and hands each
+  straight here, so the channel's `plane` argument is never packed again and its
+  map is never decoded until something reads it. `process/4` is the same call for
+  a plane in lists, and `reference/2` is the Elixir behind both.
+  """
+  @spec process_plane(t(), Monty.Context.t(), binary(), pos_integer(), pos_integer()) :: binary()
+  def process_plane(%__MODULE__{} = salience, %Monty.Context{} = ctx, plane, width, height) do
+    check_size!(salience, ctx, width, height)
+    {map, _centres, _centre_shapes} = channel(salience, plane, width, height)
+    map
+  end
+
+  defp plane(image) do
+    for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
+  end
+
+  # The one kernel call: the octave shapes and every sigma resolved here, so the
+  # kernel does arithmetic and nothing else.
+  defp channel(%__MODULE__{} = salience, plane, width, height) do
     scales = salience.n_scales
 
     shapes =
@@ -125,21 +167,14 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
         <<sigma * :math.pow(2.0, scale / scales)::float-little-64>>
       end
 
-    plane = for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
-
-    {map, centres, centre_shapes} =
-      SalienceNif.channel_salience(
-        plane,
-        shapes,
-        salience.center_sigma * 1.0,
-        scale_sigmas,
-        surround_sigmas,
-        2.5
-      )
-
-    centre = centres |> planes(centre_shapes) |> Enum.chunk_every(scales) |> Pyramid.new()
-
-    {rows(map, width), centre}
+    SalienceNif.channel_salience(
+      plane,
+      shapes,
+      salience.center_sigma * 1.0,
+      scale_sigmas,
+      surround_sigmas,
+      2.5
+    )
   end
 
   # Rows come out of the binary directly: `Enum.chunk_every/2` on a 65 536-value
@@ -172,7 +207,11 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
   end
 
   defp check_limits!(salience, ctx, image) do
-    smallest = min(length(image), image |> hd() |> length())
+    check_size!(salience, ctx, length(image), image |> hd() |> length())
+  end
+
+  defp check_size!(%__MODULE__{} = salience, %Monty.Context{} = ctx, width, height) do
+    smallest = min(width, height)
     limits = salience.operating_limits
 
     case limits.__struct__.validate(

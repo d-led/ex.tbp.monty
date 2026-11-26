@@ -178,4 +178,14 @@ defmodule ExTbpMonty.Core.SalienceNif do
   """
   def gaussian_blur_rgba(_rgba, _width, _height, _kernel),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  The camera's RGBA image in Klein and Frintrop's opponent space — Monty's
+  `Images.rgb_to_opponent/1` — as three planes in one binary: `L` first, then the
+  two colour axes, each `width * height` little-endian `f64`s.
+
+  `rgba` is `width * height` pixels of four `f64`s. `Images.rgb_to_opponent/1` is
+  the reference the answer is held to.
+  """
+  def opponent_planes(_rgba, _width, _height), do: :erlang.nif_error(:nif_not_loaded)
 end

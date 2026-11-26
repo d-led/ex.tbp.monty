@@ -314,6 +314,54 @@ fn blur<'a>(
     Ok(Term::from(binary))
 }
 
+/// The camera's RGBA image in Klein and Frintrop's opponent space — Monty's
+/// `Images.rgb_to_opponent/1`, which is one call over the whole picture.
+///
+/// The three channels are what `ColorChannelSalience` scores, so this is where a
+/// salience step's `score` begins: the alpha drop, the conversion and the split
+/// into three planes were three more passes over 65 536 pixels in Elixir, and
+/// every one of them built 65 536 lists to hand to a kernel that wanted a binary.
+/// Here the image crosses once and the three planes come back as one binary —
+/// `L` first, then the two colour axes, each `width * height` `f64`s.
+///
+/// `rgba` is `width * height` pixels of four little-endian `f64`s. The arithmetic
+/// is `Images.rgb_to_opponent/1`'s, operation for operation.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn opponent_planes<'a>(
+    env: Env<'a>,
+    rgba: Binary,
+    width: usize,
+    height: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let count = width * height;
+    let values = f64s(rgba.as_slice())?;
+
+    if count == 0 || values.len() != count * 4 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let unit = std::mem::size_of::<f64>();
+    let mut binary = NewBinary::new(env, count * 3 * unit);
+    let out = binary.as_mut_slice();
+
+    for index in 0..count {
+        let red = values[index * 4];
+        let green = values[index * 4 + 1];
+        let blue = values[index * 4 + 2];
+
+        let lightness = (red + green + blue) / (3.0 * 255.0);
+        let other_a = (red - green + 255.0) / (2.0 * 255.0);
+        let other_b = (blue - (green + red) / 2.0 + 255.0) / (2.0 * 255.0);
+
+        for (plane, value) in [lightness, other_a, other_b].iter().enumerate() {
+            let offset = (plane * count + index) * unit;
+            out[offset..offset + unit].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+
+    Ok(Term::from(binary))
+}
+
 /// `cv2.GaussianBlur` on the colour channels of an RGBA image, with the alpha
 /// channel carried through — Monty's `GaussianBlurRGB`, which is one OpenCV call.
 ///
