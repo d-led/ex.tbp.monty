@@ -187,8 +187,11 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     end
   end
 
-  defp add({count, sum}, colour) do
-    {count + 1, Enum.zip_with(sum, Enum.take(colour, 3), fn a, b -> a + b end)}
+  # The channel-wise sum, read by pattern: `Enum.zip_with/3` on three-element
+  # lists goes through the Stream machinery, and this runs once for every pixel
+  # of the view.
+  defp add({count, [sum_l, sum_a, sum_b]}, [red, green, blue | _alpha]) do
+    {count + 1, [sum_l + red, sum_a + green, sum_b + blue]}
   end
 
   @doc """

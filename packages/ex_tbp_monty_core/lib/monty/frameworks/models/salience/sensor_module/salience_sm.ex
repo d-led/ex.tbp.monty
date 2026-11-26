@@ -506,13 +506,29 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
 
   # The pixels both segmented and on the object, as locations: a region is about
   # the surface under the view, not about everything the segmenter saw.
+  # Three planes walked together, by pattern: `Enum.zip/2` over three-element
+  # tuples is the Stream machinery, and this runs once for every pixel of the
+  # view.
   defp region_locations(%OnObjectObservation{} = view, segmentation_map) do
-    for {locations, on_object, segmented} <-
-          Enum.zip([view.location_map, view.on_object_map, segmentation_map]),
-        {location, true, segment} <- Enum.zip([locations, on_object, segmented]),
-        segment != 0,
-        do: location
+    view.location_map
+    |> gathered(view.on_object_map, segmentation_map, [])
+    |> Enum.reverse()
   end
+
+  defp gathered([], _mask, _segments, acc), do: acc
+
+  defp gathered([locations | locationss], [mask | masks], [segments | segmentss], acc) do
+    gathered(locationss, masks, segmentss, row(locations, mask, segments, acc))
+  end
+
+  defp row([], _mask, _segments, acc), do: acc
+
+  defp row([location | locations], [true | mask], [segment | segments], acc)
+       when segment != 0,
+       do: row(locations, mask, segments, [location | acc])
+
+  defp row([_location | locations], [_on_object | mask], [_segment | segments], acc),
+    do: row(locations, mask, segments, acc)
 
   # -- recording -------------------------------------------------------------
 
