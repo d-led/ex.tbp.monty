@@ -214,8 +214,11 @@ defmodule ExTbpMonty.MixProject do
       # still starting, and the VM died there before any application started —
       # every desktop bundle and both images. 0.2.6 is the first whose renderer
       # cannot be disturbed by a renderer made after it, which is what a run of
-      # two parts on one node is (`docs/parallel-and-live.md`).
-      {:ex_mujoco, "~> 0.2.6"},
+      # two parts on one node is (`docs/parallel-and-live.md`). The branch below
+      # is 0.2.6's bindings regenerated for **MuJoCo 3.13.0**, the version Monty
+      # pins: a percept is a render, and a world one major version away from the
+      # experiment's is a different experiment.
+      {:ex_mujoco, git: "https://github.com/d-led/ex.mujoco.git", branch: "mujoco-3-13"},
       # A corpus of 3D scans arrives as GLB, and its textures are PNG or JPEG.
       # The world wants `texture_map.png`, and MuJoCo is not asked to read a
       # JPEG: this reads either and writes the PNG the object set names.

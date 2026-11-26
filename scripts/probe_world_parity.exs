@@ -32,6 +32,16 @@ _version = ExMujoco.version()
 {:ok, _python} = Application.ensure_all_started(:pythonx)
 {:ok, _host} = Monty.Simulators.Mujoco.Host.start_link([])
 
+# Which two MuJoCos are being compared. A difference between two versions is not
+# a difference between two implementations, and this probe used to print its
+# numbers without saying which it had.
+IO.puts(
+  "comparing: compiled world MuJoCo #{ExMujoco.version()} against Python MuJoCo " <>
+    Pythonx.decode(
+      elem(Pythonx.eval("str(__import__('mujoco').__version__)", %{}), 0)
+    ) <> " (pin #{ExMujoco.mujoco_version()})"
+)
+
 {:ok, opened} = Studio.open(experiment, world_simulator: :mujoco)
 setup = opened.setup
 agent_id = Monty.Simulators.Synthetic.Environment.agent_id()
