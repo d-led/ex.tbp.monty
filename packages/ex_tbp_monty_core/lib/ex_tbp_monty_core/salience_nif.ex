@@ -59,6 +59,19 @@ defmodule ExTbpMonty.Core.SalienceNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  sRGB to the Lab `skimage` answers: three planes out of one interleaved binary.
+
+  The reference is `Images.rgb_to_lab/1` followed by `SlicMerge.skimage_lab/1` —
+  the rescale `(value - low) / span * 255.0`, the gamma decode, OpenCV's D65
+  matrix, its white point, the 8-bit scaling with its clamps, and the `L * 100`,
+  `a * 255 - 128`, `b * 255 - 128` the wrapper reads back.
+
+  `rgb` is `count` pixels of three little-endian `f64`s; the answer is three
+  planes of `count` values, `L` then `a` then `b`.
+  """
+  def lab(_rgb, _count, _low, _span), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The feature maps combined by their weights and normalised to `[0, 1]`.
 
   `maps` is the planes concatenated as little-endian `f64` values, `weights` one

@@ -870,6 +870,91 @@ fn combine_weighted<'a>(
     Ok(Term::from(binary))
 }
 
+/// sRGB to the Lab `skimage` answers, three planes out of one interleaved binary.
+///
+/// `Images.rgb_to_lab/1` and `SlicMerge.skimage_lab/1` are the reference: the
+/// rescale `(value - low) / span * 255.0`, the gamma decode, OpenCV's D65
+/// matrix, the white point, `lab_f`, the 8-bit scaling with its clamps, and the
+/// `L * 100`, `a * 255 - 128`, `b * 255 - 128` the wrapper reads back. `rgb` is
+/// `count` pixels of three little-endian `f64`s, row-major; the answer is three
+/// planes of `count` values, concatenated `L`, `a`, `b`.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn lab<'a>(
+    env: Env<'a>,
+    rgb: Binary,
+    count: usize,
+    low: f64,
+    span: f64,
+) -> Result<Term<'a>, rustler::Error> {
+    let values = f64s(rgb.as_slice())?;
+
+    if values.len() != count * 3 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let mut binary = NewBinary::new(env, count * 3 * std::mem::size_of::<f64>());
+    let out = binary.as_mut_slice();
+    let unit = std::mem::size_of::<f64>();
+
+    for index in 0..count {
+        let red = (values[index * 3] - low) / span * 255.0;
+        let green = (values[index * 3 + 1] - low) / span * 255.0;
+        let blue = (values[index * 3 + 2] - low) / span * 255.0;
+
+        let red = gamma_decode(red / 255.0);
+        let green = gamma_decode(green / 255.0);
+        let blue = gamma_decode(blue / 255.0);
+
+        let x = 0.412453 * red + 0.357580 * green + 0.180423 * blue;
+        let y = 0.212671 * red + 0.715160 * green + 0.072169 * blue;
+        let z = 0.019334 * red + 0.119193 * green + 0.950227 * blue;
+
+        let f_x = lab_f(x / WHITE[0]);
+        let f_y = lab_f(y / WHITE[1]);
+        let f_z = lab_f(z / WHITE[2]);
+
+        let lightness = 116.0 * f_y - 16.0;
+        let a = 500.0 * (f_x - f_y);
+        let b = 200.0 * (f_y - f_z);
+
+        for (plane, value) in [(0usize, lightness), (1, a), (2, b)] {
+            let scaled = if plane == 0 {
+                clip(255.0 * value / 100.0, 0.0, 255.0) / 255.0 * 100.0
+            } else {
+                clip(value + 128.0, 0.0, 255.0) / 255.0 * 255.0 - 128.0
+            };
+
+            let offset = (plane * count + index) * unit;
+            out[offset..offset + unit].copy_from_slice(&scaled.to_le_bytes());
+        }
+    }
+
+    Ok(Term::from(binary))
+}
+
+/// OpenCV's white point.
+const WHITE: [f64; 3] = [0.950456, 1.0, 1.088754];
+
+fn gamma_decode(value: f64) -> f64 {
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn lab_f(value: f64) -> f64 {
+    if value > 0.008856 {
+        value.powf(1.0 / 3.0)
+    } else {
+        7.787 * value + 16.0 / 116.0
+    }
+}
+
+fn clip(value: f64, low: f64, high: f64) -> f64 {
+    value.max(low).min(high)
+}
+
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
 
 /// SLIC's k-means: which seed each pixel belongs to, after at most `max_iter`

@@ -328,24 +328,51 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # `img_as_float`, the wrapper's rescale to `[0, 1]` over every value, and
   # `rgb2lab`, whose Lab this answers: `L` in `0..100`, `a` and `b` unshifted.
+  #
+  # Three planes either way: the smoothing blurs each channel on its own and the
+  # k-means interleaves them into its binary, so pixel rows exist only on the
+  # reference path.
   defp prepared_lab(rgb) do
-    pixels = for row <- rgb, pixel <- row, do: Enum.take(pixel, 3)
-    values = List.flatten(pixels)
+    values =
+      for row <- rgb, [_alpha | _rest] = pixel <- row, value <- rescale_values(pixel), do: value
+
     low = Enum.min(values)
     high = Enum.max(values)
     span = if high == low, do: 1.0, else: high - low
 
-    # `Enum.take(pixel, 3)` walked each pixel's list from the front — 65 536
-    # slice calls on a 256-square view — and `Enum.map` over the result built
-    # another list per pixel. A pattern match reads the three channels and
-    # writes the rescaled ones in one pass.
+    if SalienceNif.loaded?(),
+      do: lab_by_kernel(rgb, low, span),
+      else: lab_reference(rgb, low, span)
+  end
+
+  # The whole conversion in one call: sixteen operations a pixel in Elixir, over
+  # 65 536 pixels and three channels, which was the largest single per-pixel
+  # chain left in a step.
+  defp lab_by_kernel(rgb, low, span) do
+    height = length(rgb)
+    width = rgb |> hd() |> length()
+
+    packed =
+      for row <- rgb, [red, green, blue | _alpha] <- row, into: <<>> do
+        <<red::float-little-64, green::float-little-64, blue::float-little-64>>
+      end
+
+    packed
+    |> SalienceNif.lab(width * height, low, span)
+    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+    |> Enum.chunk_every(width)
+    |> Enum.chunk_every(height)
+  end
+
+  defp lab_reference(rgb, low, span) do
     rgb
-    |> Enum.map(fn row ->
-      for [_alpha | _rest] = pixel <- row, do: rescale(pixel, low, span)
-    end)
+    |> Enum.map(fn row -> for [_alpha | _rest] = pixel <- row, do: rescale(pixel, low, span) end)
     |> Images.rgb_to_lab()
     |> Enum.map(fn row -> Enum.map(row, &skimage_lab/1) end)
+    |> planes()
   end
+
+  defp rescale_values([red, green, blue | _alpha]), do: [red, green, blue]
 
   defp rescale([red, green, blue | _alpha], low, span),
     do: [(red - low) / span * 255.0, (green - low) / span * 255.0, (blue - low) / span * 255.0]
@@ -366,12 +393,10 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # and the reference's loop weaves them back into pixels itself — so nothing
   # is split only to be joined again.
   defp smooth(lab, sigma) when is_number(sigma) and sigma > 0 do
-    lab
-    |> planes()
-    |> Enum.map(&Images.gaussian_blur(&1, sigma, @truncate))
+    Enum.map(lab, &Images.gaussian_blur(&1, sigma, @truncate))
   end
 
-  defp smooth(lab, _no_smoothing), do: planes(lab)
+  defp smooth(lab, _no_smoothing), do: lab
 
   defp planes(lab) do
     {lightness, a, b} =
