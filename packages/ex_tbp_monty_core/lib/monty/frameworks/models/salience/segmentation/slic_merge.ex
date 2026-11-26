@@ -332,13 +332,20 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     high = Enum.max(values)
     span = if high == low, do: 1.0, else: high - low
 
+    # `Enum.take(pixel, 3)` walked each pixel's list from the front — 65 536
+    # slice calls on a 256-square view — and `Enum.map` over the result built
+    # another list per pixel. A pattern match reads the three channels and
+    # writes the rescaled ones in one pass.
     rgb
     |> Enum.map(fn row ->
-      Enum.map(row, fn pixel -> Enum.map(Enum.take(pixel, 3), &((&1 - low) / span * 255.0)) end)
+      for [_alpha | _rest] = pixel <- row, do: rescale(pixel, low, span)
     end)
     |> Images.rgb_to_lab()
     |> Enum.map(fn row -> Enum.map(row, &skimage_lab/1) end)
   end
+
+  defp rescale([red, green, blue | _alpha], low, span),
+    do: [(red - low) / span * 255.0, (green - low) / span * 255.0, (blue - low) / span * 255.0]
 
   # `Images.rgb_to_lab/1` answers the OpenCV scaling divided by 255 — `L/100`,
   # `(a + 128)/255`, `(b + 128)/255` — and `skimage` answers `L`, `a`, `b`.

@@ -148,21 +148,21 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
     |> Enum.chunk_every(width)
   end
 
-  # Each plane's own shape says how many values it takes, so the concatenation
-  # is split by shape rather than by a count kept here.
+  # Each plane's own shape says how many bytes it takes, so each is decoded from
+  # its own stretch of the binary: decoding all of them and then splitting the
+  # list per plane walked the rest of the values once per plane.
   defp planes(raw, shapes) do
-    values = for <<value::float-little-64 <- raw>>, do: value
-
     shapes
     |> then(fn binary ->
       for <<columns::little-32, rows::little-32 <- binary>>, do: {rows, columns}
     end)
-    |> Enum.reduce({[], values}, fn {rows, columns}, {planes, rest} ->
-      {plane, rest} = Enum.split(rest, rows * columns)
-      {[Enum.chunk_every(plane, columns) | planes], rest}
+    |> Enum.map_reduce(0, fn {rows, columns}, offset ->
+      bytes = rows * columns * 8
+      values = for <<value::float-little-64 <- binary_part(raw, offset, bytes)>>, do: value
+
+      {Enum.chunk_every(values, columns), offset + bytes}
     end)
     |> elem(0)
-    |> Enum.reverse()
   end
 
   defp check_limits!(salience, ctx, image) do
