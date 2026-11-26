@@ -149,11 +149,12 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
              |> element("#need-data-action")
              |> render() =~ ~s(href="/prerequisites?fetch=ycb_objects_1_0")
 
-      # The memory this config reads is in the v14 archive, so its click starts
-      # that download — the archive is the file the model arrives in.
+      # The memory this config reads is in the v15 archive — the release Monty's
+      # `constants.pretrained_dir` names — so its click starts that download: the
+      # archive is the file the model arrives in.
       assert view
              |> element("#need-models-action")
-             |> render() =~ ~s(href="/prerequisites?fetch=pretrained_ycb_v14")
+             |> render() =~ ~s(href="/prerequisites?fetch=pretrained_ycb_v15")
 
       # The ways out are both named: the download, and the scene that reads
       # nothing.

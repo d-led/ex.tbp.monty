@@ -69,10 +69,42 @@ prerequisites:
 
   # The release Monty's current configs name (`constants.pretrained_dir`), which
   # is the one a run of `base_10simobj_surf_agent` and its siblings loads.
+  - id: pretrained_ycb_v15
+    title: Pretrained YCB models (v15)
+    description: >
+      The pretrained models Monty's current configs name, unpacked into
+      ~/tbp/results/monty/pretrained_models/pretrained_ycb_v15.
+    url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v15.tgz
+    # Hashed from that URL on 2026-11-26, the release Monty's getting-started
+    # guide links to.
+    sha256: 2f851dc23a81c3ed1dbd18ae930fae4f0f735c66b257f10b25a8e2b3c98c4675
+    upstream: thousandbrainsproject/tbp.monty, release pretrained_ycb_v15
+    licence: MIT, as Monty itself — the models are its training's output
+    root: MONTY_MODELS
+    target: pretrained_ycb_v15.tgz
+    extract: true
+    unpacks_to: pretrained_ycb_v15
+    # The models inside the archive, so a config that names one of them is sent
+    # here and a config that names a model no archive carries is sent to the run
+    # that trains it. Read off the snapshots the pull brought: every
+    # `model_name_or_path` that goes through `constants.pretrained_dir`.
+    provides:
+      - supervised_pre_training_base
+      - supervised_pre_training_5lms
+      - supervised_pre_training_5lms_all_objects
+      - supervised_pre_training_10distinctobj_vocus2
+      - surf_agent_1lm_10distinctobj
+      - surf_agent_1lm_10similarobj
+      - surf_agent_1lm_77obj
+      - surf_agent_1lm_numenta_lab_obj
+
+  # The release Monty's configs named before v0.60.0. A run does not need it;
+  # a machine that already trained with it does, and the parity fixtures were
+  # exported from it.
   - id: pretrained_ycb_v14
     title: Pretrained YCB models (v14)
     description: >
-      The pretrained models Monty's current configs name, unpacked into
+      The release Monty's configs named before v0.60.0, unpacked into
       ~/tbp/results/monty/pretrained_models/pretrained_ycb_v14.
     url: https://tbp-pretrained-models-public-c9c24aef2e49b897.s3.us-east-2.amazonaws.com/tbp.monty/pretrained_ycb_v14.tgz
     sha256: 9908c25e0e0470733dd0443b8a0021243ad05e30b2bc8027b0017e47bdcc1e48
