@@ -60,6 +60,24 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
       assert length(List.flatten(labels)) == 16 * 16
       assert labels |> List.flatten() |> MapSet.new() |> MapSet.size() == 64
     end
+
+    # The arithmetic above is proven on sixteen pixels a side; this proves the
+    # *same* arithmetic on the view a cows run actually segments — 256 a side,
+    # 64 seeds, ten passes, which is where the step's seconds are.
+    #
+    # A digest, because the answer is 65 536 labels and the question is only
+    # whether they changed. Both digests were taken from the implementation as
+    # it stood before the loop was made cheaper, so a change that alters one
+    # label, or breaks a tie the other way, shows up here and nowhere else.
+    test "a 256-square view segments to the labels this implementation has always produced" do
+      strategy = SlicMerge.new()
+
+      assert digest(SlicMerge.segment_image(strategy, gradient_view(256))) ==
+               "8bc0f61e461e292e253e833f1d9b7a448f796e974c65bcd8c18759e4797da7ba"
+
+      assert digest(SlicMerge.segment_image(strategy, disc_view(256))) ==
+               "b0701eb1b2a46fc92701b8f5cfbdf67ac1374c9e615b6dbca22059463a4443a6"
+    end
   end
 
   describe "which superpixels touch which" do
@@ -198,4 +216,31 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
       end
     end
   end
+
+  # The colours a view has when nothing in it needs cutting: every pixel near
+  # its neighbours, so the k-means is the only work there is.
+  defp gradient_view(size) do
+    for y <- 0..(size - 1),
+        do: for(x <- 0..(size - 1), do: [y / size, x / size, rem(y + x, size) / size])
+  end
+
+  # And a view with two flat discs on it, which is the other shape a view has:
+  # regions that end, and a boundary the connectivity pass has to carry.
+  defp disc_view(size) do
+    for y <- 0..(size - 1) do
+      for x <- 0..(size - 1) do
+        near_first = :math.pow(y - size / 3.2, 2) + :math.pow(x - size / 2.8, 2)
+        near_second = :math.pow(y - size / 1.35, 2) + :math.pow(x - size / 1.6, 2)
+
+        cond do
+          near_first < size -> [0.9, 0.2, 0.2]
+          near_second < size * 1.8 -> [0.2, 0.8, 0.3]
+          true -> [y / size, x / size, rem(y + x, size) / size]
+        end
+      end
+    end
+  end
+
+  defp digest(labels),
+    do: :crypto.hash(:sha256, :erlang.term_to_binary(labels)) |> Base.encode16(case: :lower)
 end

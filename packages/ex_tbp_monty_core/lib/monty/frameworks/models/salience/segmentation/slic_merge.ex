@@ -342,10 +342,16 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # A pixel per index, row-major (`index = row * width + column`), each already
   # scaled by `1/compactness` as the wrapper scales the whole image.
+  #
+  # The colour is a tuple, not a three-element list: the k-means compares the
+  # colour of every pixel against every seed whose window reaches it — 7.8
+  # million comparisons on a 256-square view — and a tuple reads its components
+  # with `elem/2` while a list is walked and zipped, which was 31 million
+  # `Enum.zip_list/3` calls and a quarter of the step's allocation budget.
   defp pixels(lab, factor) do
     lab
     |> Enum.concat()
-    |> Enum.map(fn pixel -> Enum.map(pixel, &(&1 * factor)) end)
+    |> Enum.map(fn [lightness, a, b] -> {lightness * factor, a * factor, b * factor} end)
     |> List.to_tuple()
   end
 
@@ -361,7 +367,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
       for z <- indices(depth, Enum.at(slices, 0)),
           y <- indices(height, Enum.at(slices, 1)),
           x <- indices(width, Enum.at(slices, 2)) do
-        %{z: z * 1.0, y: y * 1.0, x: x * 1.0, colour: [0.0, 0.0, 0.0], dead?: false}
+        %{z: z * 1.0, y: y * 1.0, x: x * 1.0, colour: {0.0, 0.0, 0.0}, dead?: false}
       end
 
     {steps, seeds}
@@ -457,11 +463,14 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   defp claim(pixels, width, seed, k, steps, labels, distances, changed?) do
     height = div(tuple_size(pixels), width)
     window = window_steps(steps)
+    # A seed's window is the same for every pixel in it, so the scale that turns
+    # squared pixel distance into the wrapper's units is worked out once here.
+    spatial_factor = 1.0 / :math.pow(Enum.max(steps), 2)
 
     for y <- window_range(seed.y, Enum.at(window, 1), height),
         x <- window_range(seed.x, Enum.at(window, 2), width),
         reduce: {labels, distances, changed?} do
-      acc -> claim_pixel(pixels, width, seed, k, steps, y, x, acc)
+      acc -> claim_pixel(pixels, width, seed, k, spatial_factor, y, x, acc)
     end
   end
 
@@ -473,14 +482,12 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     if high < low, do: [], else: Enum.to_list(low..high)
   end
 
-  defp claim_pixel(pixels, width, seed, k, steps, y, x, {labels, distances, changed?}) do
+  defp claim_pixel(pixels, width, seed, k, spatial_factor, y, x, {labels, distances, changed?}) do
     index = y * width + x
     colour = elem(pixels, index)
 
     # A view is one pixel deep, so `skimage`'s `z` term is nought either way.
-    spatial =
-      (:math.pow(seed.y - y, 2) + :math.pow(seed.x - x, 2)) *
-        (1.0 / :math.pow(Enum.max(steps), 2))
+    spatial = (:math.pow(seed.y - y, 2) + :math.pow(seed.x - x, 2)) * spatial_factor
 
     distance = spatial + squared_distance(colour, seed.colour)
 
@@ -491,8 +498,14 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     end
   end
 
-  defp squared_distance(left, right) do
-    left |> Enum.zip(right) |> Enum.reduce(0.0, fn {a, b}, sum -> sum + (a - b) * (a - b) end)
+  # The same three differences, summed in the same order (`l`, then `a`, then
+  # `b`) as `Enum.zip/2 |> Enum.reduce(0.0, …)`, which allocated two tuples and
+  # a float for every one of the 7.8 million comparisons a view costs.
+  defp squared_distance({l1, a1, b1}, {l2, a2, b2}) do
+    dl = l1 - l2
+    da = a1 - a2
+    db = b1 - b2
+    dl * dl + da * da + db * db
   end
 
   # Every centroid becomes the mean of the pixels it won. A centroid that won
@@ -519,22 +532,16 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
           :error ->
             %{seed | dead?: true}
 
-          {:ok, {count, y, x, colour}} ->
-            %{
-              seed
-              | y: y / count,
-                x: x / count,
-                colour: Enum.map(colour, &(&1 / count))
-            }
+          {:ok, {count, y, x, {l, a, b}}} ->
+            %{seed | y: y / count, x: x / count, colour: {l / count, a / count, b / count}}
         end
       end)
 
     {seeds, labels}
   end
 
-  defp sum_member({count, y, x, colour}, index, width, pixel) do
-    {count + 1, y + div(index, width), x + rem(index, width),
-     Enum.zip_with(colour, pixel, fn a, b -> a + b end)}
+  defp sum_member({count, y, x, {l, a, b}}, index, width, {pl, pa, pb}) do
+    {count + 1, y + div(index, width), x + rem(index, width), {l + pl, a + pa, b + pb}}
   end
 
   # -- connectivity ---------------------------------------------------------
