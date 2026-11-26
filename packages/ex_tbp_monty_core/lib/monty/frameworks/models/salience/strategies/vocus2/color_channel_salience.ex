@@ -142,10 +142,12 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
     {rows(map, width), centre}
   end
 
+  # Rows come out of the binary directly: `Enum.chunk_every/2` on a 65 536-value
+  # list is a Stream over the whole plane, and the shape is already known.
   defp rows(raw, width) do
-    raw
-    |> then(fn binary -> for <<value::float-little-64 <- binary>>, do: value end)
-    |> Enum.chunk_every(width)
+    for <<row::binary-size(^width * 8) <- raw>> do
+      for <<value::float-little-64 <- row>>, do: value
+    end
   end
 
   # Each plane's own shape says how many bytes it takes, so each is decoded from
@@ -158,9 +160,13 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
     end)
     |> Enum.map_reduce(0, fn {rows, columns}, offset ->
       bytes = rows * columns * 8
-      values = for <<value::float-little-64 <- binary_part(raw, offset, bytes)>>, do: value
+      plane = binary_part(raw, offset, bytes)
 
-      {Enum.chunk_every(values, columns), offset + bytes}
+      cut =
+        for <<row::binary-size(^columns * 8) <- plane>>,
+          do: for(<<v::float-little-64 <- row>>, do: v)
+
+      {cut, offset + bytes}
     end)
     |> elem(0)
   end

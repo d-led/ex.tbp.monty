@@ -357,11 +357,14 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
         <<red::float-little-64, green::float-little-64, blue::float-little-64>>
       end
 
-    packed
-    |> SalienceNif.lab(width * height, low, span)
-    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
-    |> Enum.chunk_every(width)
-    |> Enum.chunk_every(height)
+    {width, height, raw} = {width, height, SalienceNif.lab(packed, width * height, low, span)}
+    plane_bytes = width * height * 8
+
+    for plane <- 0..2 do
+      for <<row::binary-size(^width * 8) <- binary_part(raw, plane * plane_bytes, plane_bytes)>> do
+        for <<value::float-little-64 <- row>>, do: value
+      end
+    end
   end
 
   defp lab_reference(rgb, low, span) do
@@ -841,11 +844,10 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # -- answers --------------------------------------------------------------
 
-  defp to_rows(labels, height, width) do
-    labels
-    |> then(fn binary -> for <<label::little-32 <- binary>>, do: label end)
-    |> Enum.chunk_every(width)
-    |> Enum.take(height)
+  defp to_rows(labels, _height, width) do
+    for <<row::binary-size(^width * 4) <- labels>> do
+      for <<label::little-32 <- row>>, do: label
+    end
   end
 
   defp transpose([]), do: []
