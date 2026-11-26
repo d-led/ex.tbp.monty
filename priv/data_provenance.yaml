@@ -183,7 +183,15 @@ data:
     # following `world_image_from_stream_on_scanned_model`. It lives here rather
     # than in `priv/monty/`, because `mix monty.inputs` deletes every YAML in
     # that mirror which Monty does not ship.
-    hash: cf20070f9d7cd19e3d105568f01875d1ebcdd8c355ab427ce4b39a3d0f8375a0
+    #
+    # Re-hashed on the v0.60.0 catch-up (2026-11-26), which the record above was
+    # not re-written for: 27 of our configs named recognition-strategy and
+    # termination groups the pull retired (`graph_exp500_e3_t3`,
+    # `graph_exp1000_e3_t100`, `evidencegraph_exp1000_emin_t3`,
+    # `noresetevidencegraph_exp1000_e100_t3`, and the `*_t3e3exp*` / `*_t100e3exp*`
+    # / `*_t3e100exp*` termination groups), and the tests re-pointed at the ones
+    # that survived. No other file under `sets/` changed.
+    hash: 8c0d8e16ca52e7f385aa3ce1e71cdce5cd9d62c6d002c498191eb9f1061eadd9
 
   # One termination group of ours: the union of `monty/graph_exp500_e3_t3` with
   # Monty's `any1_train_steps_3_500_tot6000`, written because v0.60.0 moved the
