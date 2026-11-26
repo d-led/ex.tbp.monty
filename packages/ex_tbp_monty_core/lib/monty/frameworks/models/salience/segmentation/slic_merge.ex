@@ -303,13 +303,16 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     width = length(hd(rgb))
     {steps, seeds} = grid_centroids({1, height, width}, strategy.n_seeds)
 
-    pixels =
+    lab =
       rgb
       |> prepared_lab()
       |> smooth(strategy.sigma)
-      |> pixels(1.0 / strategy.compactness)
 
-    {labels, _seeds} = labels(pixels, width, seeds, steps, strategy.max_iter, k_means)
+    flat_factor = 1.0 / strategy.compactness
+
+    {labels, _seeds} =
+      labels(lab, width, flat_factor, seeds, steps, strategy.max_iter, k_means)
+
     segment_size = height * width / length(seeds)
 
     labels
@@ -359,16 +362,16 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # Apart, `plane(lab, channel)` read every pixel's list from the front —
   # `Enum.at/2` on a list is a slice — and the two `Enum.zip_with` calls after
   # the blurs built the Stream machinery for every row and then every pixel.
+  # Three planes, not pixel rows: the k-means interleaves them into its binary,
+  # and the reference's loop weaves them back into pixels itself — so nothing
+  # is split only to be joined again.
   defp smooth(lab, sigma) when is_number(sigma) and sigma > 0 do
-    [lightness, a, b] =
-      lab
-      |> planes()
-      |> Enum.map(&Images.gaussian_blur(&1, sigma, @truncate))
-
-    weave(lightness, a, b)
+    lab
+    |> planes()
+    |> Enum.map(&Images.gaussian_blur(&1, sigma, @truncate))
   end
 
-  defp smooth(lab, _no_smoothing), do: lab
+  defp smooth(lab, _no_smoothing), do: planes(lab)
 
   defp planes(lab) do
     {lightness, a, b} =
@@ -489,13 +492,9 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # the same numbers — the parity case compares the two — as one `u32` per pixel
   # in one binary, because the work is 7.8 million comparisons on a 256-square
   # view and encoding them as lists on the way in and out was a tenth of it.
-  defp labels(pixels, width, seeds, steps, max_iter, :native) do
+  defp labels(lab, width, factor, seeds, steps, max_iter, :native) do
     window = window_steps(steps)
-
-    flat =
-      for index <- 0..(tuple_size(pixels) - 1), {l, a, b} = elem(pixels, index), into: <<>> do
-        <<l::float-little-64, a::float-little-64, b::float-little-64>>
-      end
+    flat = interleaved(lab, factor)
 
     packed =
       for %{y: y, x: x, colour: {l, a, b}} <- seeds, into: <<>> do
@@ -515,10 +514,40 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     |> then(&{&1, seeds})
   end
 
-  defp labels(pixels, width, seeds, steps, max_iter, :reference) do
-    {labels, seeds} = k_means(pixels, width, seeds, steps, max_iter)
+  defp labels(lab, width, factor, seeds, steps, max_iter, :reference) do
+    [lightness, a, b] = lab
+
+    {labels, seeds} =
+      lightness
+      |> weave(a, b)
+      |> pixels(factor)
+      |> k_means(width, seeds, steps, max_iter)
 
     {packed_labels(labels), seeds}
+  end
+
+  # The three channels interleaved and scaled, as one binary — what the kernel
+  # reads. Built straight from the planes: `pixels/2`'s 65 536 `{l, a, b}`
+  # tuples exist because the reference's loop compares tuples, and packing them
+  # again afterwards wrote every value twice.
+  defp interleaved([lightness, a, b], factor) do
+    lightness = Enum.concat(lightness)
+    a = Enum.concat(a)
+    b = Enum.concat(b)
+
+    interleaved(lightness, a, b, factor, [])
+  end
+
+  defp interleaved([], _a, _b, _factor, acc), do: IO.iodata_to_binary(Enum.reverse(acc))
+
+  defp interleaved([lightness | lightnesses], [a | as], [b | bs], factor, acc) do
+    acc = [
+      <<lightness * factor::float-little-64, a * factor::float-little-64,
+        b * factor::float-little-64>>
+      | acc
+    ]
+
+    interleaved(lightnesses, as, bs, factor, acc)
   end
 
   # One label field, one shape downstream of the k-means: one little-endian
