@@ -122,42 +122,25 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   Monty converts the RGB image with `cv2.cvtColor(..., COLOR_RGB2LAB)` and
   divides by 255 — `Images.rgb_to_lab/1` — and then takes the mean per region.
+  One call: the conversion and the mean are `SalienceNif.region_colours/4`, and
+  `compute_superpixel_mean_colors/2` is the reference it is held to.
   """
   @spec extract_region_colors([[colour()]], [[non_neg_integer()]]) :: [colour()]
   def extract_region_colors(rgb, region_image) do
-    compute_superpixel_mean_colors(region_image, merge_image(rgb))
-  end
-
-  # `Images.rgb_to_lab/1` over the whole view is sixteen `f64` operations a
-  # pixel for a mean per region, so the kernel answers it where it is loaded.
-  # The rescale is `low: 0.0, span: 255.0`: this call converts the camera's own
-  # values, not a rescaled view.
-  defp merge_image(rgb) do
     if SalienceNif.loaded?() do
       height = length(rgb)
       width = rgb |> hd() |> length()
 
-      packed =
-        for row <- rgb, [red, green, blue | _alpha] <- row, into: <<>> do
-          <<red::float-little-64, green::float-little-64, blue::float-little-64>>
-        end
-
-      raw = SalienceNif.lab_opencv(packed, width * height, 0.0, 255.0)
-      plane_bytes = width * height * 8
-
-      [lightness, a, b] =
-        for plane <- 0..2 do
-          plane_binary = binary_part(raw, plane * plane_bytes, plane_bytes)
-
-          for <<row::binary-size(^width * 8) <- plane_binary>> do
-            for <<value::float-little-64 <- row>>, do: value
-          end
-        end
-
-      weave(lightness, a, b)
+      SalienceNif.region_colours(packed_rgb(rgb), packed_label_rows(region_image), width, height)
+      |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+      |> Enum.chunk_every(3)
     else
-      Images.rgb_to_lab(rgb)
+      compute_superpixel_mean_colors(region_image, Images.rgb_to_lab(rgb))
     end
+  end
+
+  defp packed_label_rows(region_image) do
+    for row <- region_image, label <- row, into: <<>>, do: <<label::little-32>>
   end
 
   @doc """
@@ -218,29 +201,49 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   @spec build_adjacency_graph([[non_neg_integer()]], non_neg_integer()) ::
           [MapSet.t(non_neg_integer())]
   def build_adjacency_graph(region_image, n_regions) do
+    # A tuple, not a list: a contact is one `:erlang.setelement/3`, where
+    # `List.update_at/3` walked up to every region for each of them — millions
+    # of steps for one view's graph.
+    empty = List.to_tuple(List.duplicate(MapSet.new(), n_regions))
+
     region_image
     |> contacts()
-    |> Kernel.++(region_image |> transpose() |> contacts())
-    |> Enum.reduce(List.duplicate(MapSet.new(), n_regions), fn {left, right}, adjacency ->
+    |> Enum.reduce(empty, fn {left, right}, adjacency ->
       adjacency
       |> add_neighbour(left, right)
       |> add_neighbour(right, left)
     end)
+    |> Tuple.to_list()
   end
 
-  # Every pair of labels that meet along a row of the image as given.
+  # Every pair of labels that meet along a row, and along a column. The columns
+  # are the rows paired with the row below them: a transpose of the whole view,
+  # read back through `Enum.at/2` a cell, was the same pairs twenty times the
+  # work.
   defp contacts(region_image) do
+    row_contacts(region_image) ++ column_contacts(region_image)
+  end
+
+  defp row_contacts(region_image) do
     for row <- region_image,
         {left, right} <- adjacent_pairs(row),
         left != right,
         do: {left, right}
   end
 
+  defp column_contacts(region_image) do
+    region_image
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(fn [above, below] ->
+      for {up, down} <- Enum.zip(above, below), up != down, do: {up, down}
+    end)
+  end
+
   defp adjacent_pairs([_only]), do: []
   defp adjacent_pairs([left, right | rest]), do: [{left, right} | adjacent_pairs([right | rest])]
 
   defp add_neighbour(adjacency, label, neighbour) do
-    List.update_at(adjacency, label, &MapSet.put(&1, neighbour))
+    :erlang.setelement(label + 1, adjacency, MapSet.put(elem(adjacency, label), neighbour))
   end
 
   @doc """
@@ -331,8 +334,8 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   @spec segment_image(t(), [[colour()]]) :: [[non_neg_integer()]]
   def segment_image(%__MODULE__{} = strategy, rgb) do
     if SalienceNif.loaded?(),
-      do: segment(strategy, rgb, :native),
-      else: segment(strategy, rgb, :reference)
+      do: segment_by_kernel(strategy, rgb),
+      else: segment_reference(strategy, rgb)
   end
 
   @doc """
@@ -344,34 +347,79 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   """
   @spec segment_image_reference(t(), [[colour()]]) :: [[non_neg_integer()]]
   def segment_image_reference(%__MODULE__{} = strategy, rgb),
-    do: segment(strategy, rgb, :reference)
+    do: segment_reference(strategy, rgb)
 
-  defp segment(%__MODULE__{} = strategy, rgb, k_means) do
+  # Monty calls `skimage.segmentation.slic(image, ...)` once and takes a label
+  # field back, and so does this: the whole chain — the rescale, the Lab, the
+  # Gaussian, the k-means, the connectivity pass — is one crossing
+  # (`SalienceNif.slic/3`), because each crossing between two stages of it cost
+  # more than the arithmetic it carried. The seed grid stays here: it is twenty
+  # numbers, not sixty-five thousand.
+  defp segment_by_kernel(%__MODULE__{} = strategy, rgb) do
+    height = length(rgb)
+    width = rgb |> hd() |> length()
+    {steps, seeds} = grid_centroids({1, height, width}, strategy.n_seeds)
+    window = window_steps(steps)
+    segment_size = height * width / length(seeds)
+
+    rgb
+    |> packed_rgb()
+    |> SalienceNif.slic(packed_seeds(seeds), %{
+      width: width,
+      height: height,
+      step_y: Enum.at(window, 1),
+      step_x: Enum.at(window, 2),
+      spatial_factor: 1.0 / :math.pow(Enum.max(steps), 2),
+      compactness: strategy.compactness,
+      max_iter: strategy.max_iter,
+      sigma: strategy.sigma,
+      truncate: @truncate,
+      min_size: trunc(strategy.min_size_factor * segment_size),
+      max_size: trunc(strategy.max_size_factor * segment_size)
+    })
+    |> to_rows(height, width)
+  end
+
+  # `skimage`'s stages, spelled out: the colour conversion, the Gaussian, the
+  # k-means in Lab-plus-position space, and the connectivity pass.
+  defp segment_reference(%__MODULE__{} = strategy, rgb) do
     height = length(rgb)
     width = length(hd(rgb))
     {steps, seeds} = grid_centroids({1, height, width}, strategy.n_seeds)
 
-    lab =
-      rgb
-      |> prepared_lab()
-      |> smooth(strategy.sigma)
-
-    flat_factor = 1.0 / strategy.compactness
+    [lightness, a, b] = rgb |> prepared_lab() |> smooth(strategy.sigma)
 
     {labels, _seeds} =
-      labels(lab, width, flat_factor, seeds, steps, strategy.max_iter, k_means)
+      lightness
+      |> weave(a, b)
+      |> pixels(1.0 / strategy.compactness)
+      |> k_means(width, seeds, steps, strategy.max_iter)
 
     segment_size = height * width / length(seeds)
 
     labels
-    |> enforce_connectivity(
+    |> enforce_connectivity_reference(
       trunc(strategy.min_size_factor * segment_size),
       trunc(strategy.max_size_factor * segment_size),
-      width,
-      height,
-      k_means
+      width
     )
+    |> packed_labels()
     |> to_rows(height, width)
+  end
+
+  # The view's colours as one binary of three little-endian `f64`s a pixel,
+  # row-major — what a kernel reads. Three callers pack the same way.
+  defp packed_rgb(rgb) do
+    for row <- rgb, [red, green, blue | _alpha] <- row, into: <<>> do
+      <<red::float-little-64, green::float-little-64, blue::float-little-64>>
+    end
+  end
+
+  defp packed_seeds(seeds) do
+    for %{y: y, x: x, colour: {l, a, b}} <- seeds, into: <<>> do
+      <<y::float-little-64, x::float-little-64, l::float-little-64, a::float-little-64,
+        b::float-little-64>>
+    end
   end
 
   # `img_as_float`, the wrapper's rescale to `[0, 1]` over every value, and
@@ -400,12 +448,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     height = length(rgb)
     width = rgb |> hd() |> length()
 
-    packed =
-      for row <- rgb, [red, green, blue | _alpha] <- row, into: <<>> do
-        <<red::float-little-64, green::float-little-64, blue::float-little-64>>
-      end
-
-    {width, height, raw} = {width, height, SalienceNif.lab(packed, width * height, low, span)}
+    raw = SalienceNif.lab(packed_rgb(rgb), width * height, low, span)
     plane_bytes = width * height * 8
 
     for plane <- 0..2 do
@@ -564,68 +607,6 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # -- k-means --------------------------------------------------------------
 
-  # The label field, from the kernel or from the loop below. The kernel answers
-  # the same numbers — the parity case compares the two — as one `u32` per pixel
-  # in one binary, because the work is 7.8 million comparisons on a 256-square
-  # view and encoding them as lists on the way in and out was a tenth of it.
-  defp labels(lab, width, factor, seeds, steps, max_iter, :native) do
-    window = window_steps(steps)
-    flat = interleaved(lab, factor)
-
-    packed =
-      for %{y: y, x: x, colour: {l, a, b}} <- seeds, into: <<>> do
-        <<y::float-little-64, x::float-little-64, l::float-little-64, a::float-little-64,
-          b::float-little-64>>
-      end
-
-    flat
-    |> SalienceNif.slic_labels(
-      width,
-      packed,
-      Enum.at(window, 1),
-      Enum.at(window, 2),
-      1.0 / :math.pow(Enum.max(steps), 2),
-      max_iter
-    )
-    |> then(&{&1, seeds})
-  end
-
-  defp labels(lab, width, factor, seeds, steps, max_iter, :reference) do
-    [lightness, a, b] = lab
-
-    {labels, seeds} =
-      lightness
-      |> weave(a, b)
-      |> pixels(factor)
-      |> k_means(width, seeds, steps, max_iter)
-
-    {packed_labels(labels), seeds}
-  end
-
-  # The three channels interleaved and scaled, as one binary — what the kernel
-  # reads. Built straight from the planes: `pixels/2`'s 65 536 `{l, a, b}`
-  # tuples exist because the reference's loop compares tuples, and packing them
-  # again afterwards wrote every value twice.
-  defp interleaved([lightness, a, b], factor) do
-    lightness = Enum.concat(lightness)
-    a = Enum.concat(a)
-    b = Enum.concat(b)
-
-    interleaved(lightness, a, b, factor, [])
-  end
-
-  defp interleaved([], _a, _b, _factor, acc), do: IO.iodata_to_binary(Enum.reverse(acc))
-
-  defp interleaved([lightness | lightnesses], [a | as], [b | bs], factor, acc) do
-    acc = [
-      <<lightness * factor::float-little-64, a * factor::float-little-64,
-        b * factor::float-little-64>>
-      | acc
-    ]
-
-    interleaved(lightnesses, as, bs, factor, acc)
-  end
-
   # One label field, one shape downstream of the k-means: one little-endian
   # `u32` per pixel. The loop above works on an `:array`, so this is where the
   # reference path pays for it — which is what makes the two paths comparable
@@ -634,11 +615,6 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     for index <- 0..(:array.size(labels) - 1), into: <<>> do
       <<:array.get(index, labels)::little-32>>
     end
-  end
-
-  defp unpacked_labels(binary) do
-    labels = for <<label::little-32 <- binary>>, do: label
-    :array.from_list(labels, 0)
   end
 
   defp k_means(pixels, width, seeds, steps, max_iter) do
@@ -767,24 +743,14 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # -- connectivity ---------------------------------------------------------
 
-  # `_enforce_label_connectivity_cython`: in raster order, a breadth-first search
-  # for each blob, and a blob smaller than `min_size` handed to the neighbour it
-  # touches. A blob that reaches `max_size` keeps a label of its own.
-  defp enforce_connectivity(labels, min_size, max_size, width, height, :native),
-    do: SalienceNif.enforce_connectivity(labels, width, height, min_size, max_size)
-
-  defp enforce_connectivity(labels, min_size, max_size, width, _height, :reference) do
-    labels
-    |> unpacked_labels()
-    |> enforce_connectivity_reference(min_size, max_size, width)
-    |> packed_labels()
-  end
-
   @doc """
-  The Elixir connectivity pass: the reference the native kernel is held to.
+  The connectivity pass: in raster order, a breadth-first search for each blob,
+  and a blob smaller than `min_size` handed to the neighbour it touches. A blob
+  that reaches `max_size` keeps a label of its own.
 
-  Kept public because it is what a parity case compares against, and what runs
-  where the crate was never built.
+  `_enforce_label_connectivity_cython` in Monty's `skimage` call, and the
+  reference the label field is held to: the native `slic/3` runs the same walk,
+  and `test/.../slic_merge_test.exs` compares the two fields.
   """
   @spec enforce_connectivity_reference(
           term(),
@@ -896,12 +862,6 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     for <<row::binary-size(^width * 4) <- labels>> do
       for <<label::little-32 <- row>>, do: label
     end
-  end
-
-  defp transpose([]), do: []
-
-  defp transpose([first | _rest] = rows) do
-    for column <- 0..(length(first) - 1), do: Enum.map(rows, &Enum.at(&1, column))
   end
 
   defp region_max(region_image), do: region_image |> List.flatten() |> Enum.max(fn -> 0 end)

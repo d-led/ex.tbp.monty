@@ -1,23 +1,25 @@
 defmodule ExTbpMonty.Core.SalienceNif do
   @moduledoc """
-  The native kernels `Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images`
-  and `SlicMerge` use when they can: the bicubic resize, SLIC's k-means, and the
-  Gaussian blur.
+  The native kernels the salience strategies use when they can: the bicubic
+  resize, the Gaussian blur, SLIC's whole label field, the mean colour of every
+  superpixel, and the Vocus2 channel arithmetic.
 
   A pyramid's collapse resamples every octave back to the view's size, and each
   pixel is sixteen taps: 16.8 million of them in a 256-square salience step, at
-  the BEAM's ~20 million operations a second. The Elixir implementation in
-  `Images.cubic_reference/3` is the reference — what the tests describe, what
-  runs where no Rust toolchain built this — and this is the fast path, held to it
-  by a parity test.
+  the BEAM's ~20 million operations a second. A boundary costs a crossing —
+  encode, call, decode — and on a view this size a crossing is often the larger
+  half: three 256-square blurs measured 29.15 ms through their own crossings
+  against 0.96 ms of taps. So a kernel is one of Monty's own calls wherever
+  Monty makes one: `slic/3` is `skimage.segmentation.slic`, `region_colours/4`
+  is `extract_region_colors`, and each keeps its Elixir reference.
 
   A NIF is a library the BEAM loads into itself, so its absence is a raised
   `ErlangError` rather than a returned error: `loaded?/0` is the question a caller
-  asks once, and `Images.resize/3` asks it per call.
+  asks once, and each caller asks it per call.
 
-  The plane crosses as one binary of little-endian `f64` values, row-major,
+  A plane crosses as one binary of little-endian `f64` values, row-major,
   because a 256-square view is 65 536 numbers and encoding them as lists twice
-  would cost more than the resize.
+  would cost more than the arithmetic.
   """
 
   use Rustler, otp_app: :ex_tbp_monty_core, crate: "salience_nif"
@@ -72,11 +74,16 @@ defmodule ExTbpMonty.Core.SalienceNif do
   def lab(_rgb, _count, _low, _span), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
-  The same conversion in OpenCV's own scaling — `L / 100`, `(a + 128) / 255`,
-  `(b + 128) / 255` — which is what `Images.rgb_to_lab/1` answers and what the
-  superpixel mean colours are taken in.
+  The mean colour of every superpixel, in the scale Monty's merge threshold is a
+  threshold in: `cv2.cvtColor(image, COLOR_RGB2LAB) / 255`, averaged per region.
+
+  `SlicMerge.compute_superpixel_mean_colors/2` is the reference — the sum in
+  raster order, per region, and the zeros the reference leaves for a region the
+  labels never name. `rgb` is `width * height` pixels of three little-endian
+  `f64`s; `labels` is one little-endian `u32` per pixel; the answer is three
+  `f64` per region, `region_max + 1` regions, in label order.
   """
-  def lab_opencv(_rgb, _count, _low, _span), do: :erlang.nif_error(:nif_not_loaded)
+  def region_colours(_rgb, _labels, _width, _height), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
   The feature maps combined by their weights and normalised to `[0, 1]`.
@@ -126,26 +133,22 @@ defmodule ExTbpMonty.Core.SalienceNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
-  SLIC's connectivity pass: every label becomes one connected blob, and a blob
-  smaller than `min_size` is absorbed into the label it borders, exactly as
-  `SlicMerge.enforce_connectivity_reference/4` walks it.
+  `skimage.segmentation.slic` — the view's label field, which is one call in
+  Monty's `slic_merge.py`.
 
-  `labels` is `width * height` little-endian `u32` labels, row-major; the answer
-  is the same encoding.
+  Inside that one call `skimage` rescales the colours to fill their own range,
+  converts to Lab, blurs with `sigma`, runs the k-means in Lab-plus-position
+  space and enforces connectivity; every one of those steps had a kernel of its
+  own here, and each crossing between two of them cost more than the arithmetic
+  it carried. This is the same chain in one crossing and the same numbers:
+  `SlicMerge.segment_image_reference/2` is the reference and a parity case holds
+  the two label fields to each other.
+
+  `rgb` is `width * height` pixels of three little-endian `f64`s, the camera's
+  values; `seeds` is five `f64` each — `y`, `x`, `r`, `g`, `b`; `settings`
+  carries Monty's SLIC parameters (`compactness`, `max_iter`, `sigma`,
+  `min_size`, `max_size`, the grid's `step_y`/`step_x` and `spatial_factor`) and
+  the shape. The answer is one little-endian `u32` per pixel.
   """
-  def enforce_connectivity(_labels, _width, _height, _min_size, _max_size),
-    do: :erlang.nif_error(:nif_not_loaded)
-
-  @doc """
-  SLIC's k-means: one label per pixel, as the `SlicMerge` reference computes it.
-
-  `pixels` is `width * height` colours of three little-endian `f64`s, already
-  scaled by `1/compactness`; `seeds` is five `f64` each — `y`, `x`, `r`, `g`,
-  `b`. `step_y`/`step_x` are the seed grid's steps, truncated as the window uses
-  them, and `spatial_factor` is `1 / max(steps)²`.
-
-  The answer is `width * height` little-endian `u32` labels.
-  """
-  def slic_labels(_pixels, _width, _seeds, _step_y, _step_x, _spatial_factor, _max_iter),
-    do: :erlang.nif_error(:nif_not_loaded)
+  def slic(_rgb, _seeds, _settings), do: :erlang.nif_error(:nif_not_loaded)
 end

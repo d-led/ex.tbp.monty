@@ -141,6 +141,14 @@ fn cubic_weights(x: f64) -> [f64; 4] {
 
 /// A plane blurred with a Gaussian of `sigma`: the body of `blur/5` without the
 /// binary in and out, so the channel kernel can blur a plane it already holds.
+///
+/// Both passes walk a row at a time. The second one used to read a column at a
+/// stride of `width` — a fresh subslice and a per-pixel walk of the window's
+/// pairs — and read 0.47 ms on a 256-square plane against 0.32 ms here, with no
+/// dependence on the stride at all (64x1024 and 1024x64 read the same as
+/// 256x256), so the cost was the per-pixel machinery and not the memory
+/// traffic. Each pixel is still the centre term plus the folded pairs in the
+/// same order, so the plane stays bit for bit the reference's.
 fn blur_plane(values: &[f64], width: usize, height: usize, sigma: f64, truncate: f64) -> Vec<f64> {
     let kernel = gaussian_kernel(sigma, truncate);
     let across = windows(&kernel, width);
@@ -158,9 +166,21 @@ fn blur_plane(values: &[f64], width: usize, height: usize, sigma: f64, truncate:
 
     let mut out = vec![0.0f64; width * height];
 
-    for row in 0..height {
+    for (row, window) in down.iter().enumerate() {
+        let dest = &mut out[row * width..(row + 1) * width];
+        let middle = &horizontal[window.middle * width..];
+
         for column in 0..width {
-            out[row * width + column] = blurred(&down[row], &horizontal[column..], width);
+            dest[column] = window.middle_weight * middle[column];
+        }
+
+        for (left, right, weight) in &window.pairs {
+            let left = &horizontal[left * width..];
+            let right = &horizontal[right * width..];
+
+            for column in 0..width {
+                dest[column] += weight * (left[column] + right[column]);
+            }
         }
     }
 
@@ -281,33 +301,14 @@ fn blur<'a>(
     truncate: f64,
 ) -> Result<Term<'a>, rustler::Error> {
     let pixels = decode(plane.as_slice(), width * height)?;
+    let values = blur_plane(&pixels, width, height, sigma, truncate);
 
-    let kernel = gaussian_kernel(sigma, truncate);
-    let across = windows(&kernel, width);
-    let down = windows(&kernel, height);
-
-    let mut horizontal = vec![0.0f64; width * height];
-
-    for row in 0..height {
-        let line = &pixels[row * width..(row + 1) * width];
-
-        for column in 0..width {
-            horizontal[row * width + column] = blurred(&across[column], line, 1);
-        }
-    }
-
-    let mut binary = NewBinary::new(env, width * height * std::mem::size_of::<f64>());
+    let mut binary = NewBinary::new(env, values.len() * std::mem::size_of::<f64>());
     let out = binary.as_mut_slice();
 
-    for row in 0..height {
-        for column in 0..width {
-            // The column's values from the first pass, read with the width as
-            // the stride: `values[index]` is `horizontal[index][column]`.
-            let value = blurred(&down[row], &horizontal[column..], width);
-
-            let offset = (row * width + column) * std::mem::size_of::<f64>();
-            out[offset..offset + std::mem::size_of::<f64>()].copy_from_slice(&value.to_le_bytes());
-        }
+    for (index, value) in values.iter().enumerate() {
+        let offset = index * std::mem::size_of::<f64>();
+        out[offset..offset + std::mem::size_of::<f64>()].copy_from_slice(&value.to_le_bytes());
     }
 
     Ok(Term::from(binary))
@@ -411,26 +412,8 @@ fn blurred(window: &Window, values: &[f64], step: usize) -> f64 {
 /// numbers: a queue that advances instead of two lists appended on every pixel
 /// (which was O(n²) a blob) and no persistent array (whose every write copies a
 /// path).
-#[rustler::nif(schedule = "DirtyCpu")]
-fn enforce_connectivity<'a>(
-    env: Env<'a>,
-    labels: Binary,
-    width: usize,
-    height: usize,
-    min_size: usize,
-    max_size: usize,
-) -> Result<Term<'a>, rustler::Error> {
+fn connected_labels(label_of: &[u32], width: usize, height: usize, min_size: usize, max_size: usize) -> Vec<i64> {
     let size = width * height;
-
-    if labels.as_slice().len() != size * std::mem::size_of::<u32>() {
-        return Err(rustler::Error::BadArg);
-    }
-
-    let label_of: Vec<u32> = labels
-        .as_slice()
-        .chunks_exact(std::mem::size_of::<u32>())
-        .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("four bytes")))
-        .collect();
 
     let mut connected: Vec<i64> = vec![-1; size];
     let mut next_label: i64 = 0;
@@ -478,16 +461,7 @@ fn enforce_connectivity<'a>(
         }
     }
 
-    let mut binary = NewBinary::new(env, size * std::mem::size_of::<u32>());
-    let out = binary.as_mut_slice();
-
-    for (index, &label) in connected.iter().enumerate() {
-        let offset = index * std::mem::size_of::<u32>();
-        out[offset..offset + std::mem::size_of::<u32>()]
-            .copy_from_slice(&(label as u32).to_le_bytes());
-    }
-
-    Ok(Term::from(binary))
+    connected
 }
 
 /// `+x, -x, +y, -y` in that order: `skimage`'s order with the two z neighbours
@@ -889,18 +863,79 @@ fn lab<'a>(
     encode_planes(env, lab_values(rgb.as_slice(), count, low, span)?, count, true)
 }
 
-/// The same conversion in OpenCV's own scaling: `L / 100`, `(a + 128) / 255`,
-/// `(b + 128) / 255` — what `Images.rgb_to_lab/1` answers, and what the
-/// superpixel mean colours are taken in.
+/// The mean colour of every superpixel, in the scale Monty's merge threshold is
+/// a threshold in — `cv2.cvtColor(image, COLOR_RGB2LAB) / 255`, averaged per
+/// region.
+///
+/// `SlicMerge.compute_superpixel_mean_colors/2` is the reference. The conversion
+/// already had a kernel and the mean did not: 65 536 `Map` updates, over a pixel
+/// list woven out of the three planes first, and the crossing to get the planes
+/// at all. This is the same sum in raster order, per region, in one crossing —
+/// the planes in, one colour per region out, and a region the labels never name
+/// answers the zeros the reference leaves.
+///
+/// `rgb` is `width * height` pixels of three little-endian `f64`s; `labels` is
+/// one `u32` per pixel; the answer is three `f64` per region, `region_max + 1`
+/// regions, in label order.
 #[rustler::nif(schedule = "DirtyCpu")]
-fn lab_opencv<'a>(
+fn region_colours<'a>(
     env: Env<'a>,
     rgb: Binary,
-    count: usize,
-    low: f64,
-    span: f64,
+    labels: Binary,
+    width: usize,
+    height: usize,
 ) -> Result<Term<'a>, rustler::Error> {
-    encode_planes(env, lab_values(rgb.as_slice(), count, low, span)?, count, false)
+    let count = width * height;
+
+    if count == 0 || labels.as_slice().len() != count * std::mem::size_of::<u32>() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let label_of: Vec<u32> = labels
+        .as_slice()
+        .chunks_exact(std::mem::size_of::<u32>())
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("four bytes")))
+        .collect();
+
+    // This call converts the camera's own values, so the rescale is the identity
+    // — `low: 0.0, span: 255.0`.
+    let planes = lab_values(rgb.as_slice(), count, 0.0, 255.0)?;
+
+    let regions = label_of.iter().copied().max().map_or(1, |max| max as usize + 1);
+    let mut counts = vec![0.0f64; regions];
+    let mut sums = vec![[0.0f64; 3]; regions];
+
+    for index in 0..count {
+        let region = label_of[index] as usize;
+
+        counts[region] += 1.0;
+        sums[region][0] += planes[0][index];
+        sums[region][1] += planes[1][index];
+        sums[region][2] += planes[2][index];
+    }
+
+    let unit = std::mem::size_of::<f64>();
+    let mut binary = NewBinary::new(env, regions * 3 * unit);
+    let out = binary.as_mut_slice();
+
+    for region in 0..regions {
+        let colour = if counts[region] == 0.0 {
+            [0.0, 0.0, 0.0]
+        } else {
+            [
+                sums[region][0] / counts[region],
+                sums[region][1] / counts[region],
+                sums[region][2] / counts[region],
+            ]
+        };
+
+        for (channel, value) in colour.iter().enumerate() {
+            let offset = (region * 3 + channel) * unit;
+            out[offset..offset + unit].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+
+    Ok(Term::from(binary))
 }
 
 /// The three Lab planes, in the wrapper's scaled units.
@@ -1006,55 +1041,159 @@ rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
 /// re-centring in pixel order — and a parity case holds the two label fields to
 /// each other on views of several shapes.
 ///
-/// `pixels` is `width * height` colours of three `f64`s, already scaled by
-/// `1/compactness`; `seeds` is five `f64` each (`y`, `x`, `r`, `g`, `b`).
-#[rustler::nif(schedule = "DirtyCpu")]
-fn slic_labels<'a>(
-    env: Env<'a>,
-    pixels: Binary,
+/// The scalar side of `slic/3`: Monty's own SLIC parameters, and the seed grid
+/// the Elixir side has already worked out — `SlicMerge.grid_centroids/2` is
+/// `skimage`'s `regular_grid`, and it is twenty numbers, not sixty-five
+/// thousand, so it does not belong behind the boundary.
+#[derive(rustler::NifMap)]
+struct SlicSettings {
     width: usize,
-    seeds: Binary,
+    height: usize,
     step_y: i64,
     step_x: i64,
     spatial_factor: f64,
+    compactness: f64,
     max_iter: usize,
-) -> Result<Term<'a>, rustler::Error> {
-    let bytes_per_pixel = std::mem::size_of::<f64>() * 3;
+    sigma: f64,
+    truncate: f64,
+    min_size: usize,
+    max_size: usize,
+}
 
-    if width == 0 || pixels.len() % (width * bytes_per_pixel) != 0 || seeds.len() % 40 != 0 {
+/// `skimage.segmentation.slic`, which is one call in Monty's `slic_merge.py` and
+/// the whole of the label field: the rescale that fills `[0, 1]`, the Lab
+/// conversion, the Gaussian of `sigma`, the k-means in Lab-plus-position space,
+/// and the connectivity pass.
+///
+/// Every stage in that chain already had a kernel, and each crossing between two
+/// of them cost more than the arithmetic it carried: three 256-square blurs
+/// measured 29.15 ms through their own crossing against 0.96 ms of taps, and
+/// interleaving three planes into the k-means's binary another 8.75 ms. This is
+/// the same chain with no crossings and the same numbers — the same
+/// `lab_values`, the same `blur_plane`, the same `k_means`, the same
+/// `connected_labels` — so the label field is the one `segment_image_reference/2`
+/// answers, bit for bit, which its parity case holds it to on several shapes.
+///
+/// `rgb` is `width * height` pixels of three little-endian `f64`s; `seeds` is
+/// five `f64` each (`y`, `x`, `r`, `g`, `b`); the answer is one little-endian
+/// `u32` per pixel.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn slic<'a>(
+    env: Env<'a>,
+    rgb: Binary,
+    seeds: Binary,
+    settings: SlicSettings,
+) -> Result<Term<'a>, rustler::Error> {
+    let count = settings.width * settings.height;
+
+    if count == 0 || rgb.as_slice().len() != count * 3 * std::mem::size_of::<f64>() {
         return Err(rustler::Error::BadArg);
     }
 
-    let height = pixels.len() / (width * bytes_per_pixel);
-    let points: Vec<f64> = pixels
-        .as_slice()
-        .chunks_exact(std::mem::size_of::<f64>())
-        .map(|bytes| f64::from_le_bytes(bytes.try_into().expect("eight bytes")))
-        .collect();
+    // `img_as_float` and the wrapper's rescale: the colours stretched to fill
+    // their own range, which is what makes `compactness` mean the same thing on
+    // any camera. The scale is the whole image's, so it is found first.
+    let values = f64s(rgb.as_slice())?;
+    let mut low = f64::INFINITY;
+    let mut high = f64::NEG_INFINITY;
 
-    let mut centres: Vec<Seed> = seeds
-        .as_slice()
-        .chunks_exact(5 * std::mem::size_of::<f64>())
-        .map(|chunk| {
-            let mut numbers = [0.0f64; 5];
-            for (slot, bytes) in chunk.chunks_exact(std::mem::size_of::<f64>()).enumerate() {
-                numbers[slot] = f64::from_le_bytes(bytes.try_into().expect("eight bytes"));
-            }
-            Seed { y: numbers[0], x: numbers[1], colour: [numbers[2], numbers[3], numbers[4]], dead: false }
+    for value in &values {
+        low = low.min(*value);
+        high = high.max(*value);
+    }
+
+    let span = if high == low { 1.0 } else { high - low };
+
+    // `rgb2lab`, in `skimage`'s units: `L` in `0..100`, `a` and `b` unshifted.
+    let planes: Vec<Vec<f64>> = lab_values(rgb.as_slice(), count, low, span)?
+        .into_iter()
+        .enumerate()
+        .map(|(plane, values)| {
+            values
+                .into_iter()
+                .map(|value| if plane == 0 { value * 100.0 } else { value * 255.0 - 128.0 })
+                .collect()
         })
         .collect();
 
-    let labels = k_means(&points, width, height, &mut centres, step_y, step_x, spatial_factor, max_iter);
+    // `gaussian(image, sigma=[sigma, sigma, 0], mode="reflect")`: each channel on
+    // its own, so no colour bleeds into another.
+    let smoothed: Vec<Vec<f64>> = if settings.sigma > 0.0 {
+        planes
+            .iter()
+            .map(|plane| {
+                blur_plane(plane, settings.width, settings.height, settings.sigma, settings.truncate)
+            })
+            .collect()
+    } else {
+        planes
+    };
 
-    let mut binary = NewBinary::new(env, labels.len() * std::mem::size_of::<u32>());
+    let factor = 1.0 / settings.compactness;
+    let mut points = vec![0.0f64; count * 3];
+
+    for index in 0..count {
+        points[index * 3] = smoothed[0][index] * factor;
+        points[index * 3 + 1] = smoothed[1][index] * factor;
+        points[index * 3 + 2] = smoothed[2][index] * factor;
+    }
+
+    let mut centres = seeds_of(seeds.as_slice())?;
+
+    let labels = k_means(
+        &points,
+        settings.width,
+        settings.height,
+        &mut centres,
+        settings.step_y,
+        settings.step_x,
+        settings.spatial_factor,
+        settings.max_iter,
+    );
+
+    let connected = connected_labels(
+        &labels,
+        settings.width,
+        settings.height,
+        settings.min_size,
+        settings.max_size,
+    );
+
+    let mut binary = NewBinary::new(env, count * std::mem::size_of::<u32>());
     let out = binary.as_mut_slice();
 
-    for (index, label) in labels.iter().enumerate() {
+    for (index, label) in connected.iter().enumerate() {
         let offset = index * std::mem::size_of::<u32>();
         out[offset..offset + std::mem::size_of::<u32>()].copy_from_slice(&(*label as u32).to_le_bytes());
     }
 
     Ok(Term::from(binary))
+}
+
+/// One centroid as the binary carries it: five little-endian `f64`s.
+fn seed_of(chunk: &[u8]) -> Seed {
+    let mut numbers = [0.0f64; 5];
+
+    for (slot, bytes) in chunk.chunks_exact(std::mem::size_of::<f64>()).enumerate() {
+        numbers[slot] = f64::from_le_bytes(bytes.try_into().expect("eight bytes"));
+    }
+
+    Seed {
+        y: numbers[0],
+        x: numbers[1],
+        colour: [numbers[2], numbers[3], numbers[4]],
+        dead: false,
+    }
+}
+
+fn seeds_of(bytes: &[u8]) -> Result<Vec<Seed>, rustler::Error> {
+    let bytes_per_seed = 5 * std::mem::size_of::<f64>();
+
+    if bytes.len() % bytes_per_seed != 0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    Ok(bytes.chunks_exact(bytes_per_seed).map(seed_of).collect())
 }
 
 struct Seed {

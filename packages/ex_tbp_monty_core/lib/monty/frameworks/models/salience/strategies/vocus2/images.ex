@@ -171,10 +171,12 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
   # The whole plane crosses as one binary and comes back the same way: three
   # colour channels and SLIC's smoothing call this on a 256-square plane, where
   # 21.6 ms of Elixir arithmetic is a tenth of the step.
+  #
+  # The shape is read off the plane itself; `as_rows/1` would build a second
+  # copy of all 65 536 values as tuples to answer two lengths.
   defp by_blur_native(image, sigma, truncate) do
-    rows = as_rows(image)
-    height = tuple_size(rows)
-    width = tuple_size(elem(rows, 0))
+    height = length(image)
+    width = image |> hd() |> length()
 
     plane = for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
 

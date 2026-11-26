@@ -353,6 +353,58 @@ What is left in the step is `segment` (43 % of it), the inhibitor (25 %) and
 265 ms a step on this config, so the port is 1.3× behind it, and the first two
 entries of that list are where the next factor of two is.
 
+### A crossing is not free, so a kernel is one of Monty's calls
+
+The per-pixel work was native and the step did not move, because what was left
+was the boundary: packing a plane into a binary, calling, and turning 65 536
+floats back into lists. Measured warm on one 256-square view
+(`scripts/probe_segment_stages.exs`, seven readings a stage after three warm
+calls, this Mac):
+
+| stage                                | before   | after       |
+| ------------------------------------ | -------- | ----------- |
+| `segment_image` (`skimage`'s `slic`) | 74.2 ms  | **30.1 ms** |
+| `extract_region_colors`              | 27.9 ms  | **11.2 ms** |
+| `build_adjacency_graph`              | 24.4 ms  | **2.0 ms**  |
+| `merge_regions`, `create_mask`       | 1.0 ms   | 1.0 ms      |
+| the whole `call/3`                   | 128.3 ms | **47.2 ms** |
+
+What each change was, and why it is not a change of algorithm:
+
+- **`slic` is one call.** Monty's `slic_merge.py` calls
+  `skimage.segmentation.slic(image, ...)` once and takes a label field back;
+  everything inside — the rescale, the Lab, the Gaussian, the k-means, the
+  connectivity pass — is `skimage`'s own business. The port had a kernel for
+  each of those five stages and paid a crossing between every pair: the three
+  blurs were **29.15 ms of crossings against 0.96 ms of taps**, and building the
+  k-means's interleaved binary another 8.75 ms. `SalienceNif.slic/3` is the same
+  five stages, in the same order, in one crossing, and the label field is bit for
+  bit the reference's.
+- **`extract_region_colors` is one call.** The same shape: a Lab conversion
+  through a crossing, three planes unpacked into 65 536 pixel lists, and then a
+  mean per region as a `Map` update a pixel. `SalienceNif.region_colours/4`
+  takes the labels and the colours and answers one colour a region, summed in
+  raster order as `compute_superpixel_mean_colors/2` sums it.
+- **The adjacency graph keeps Monty's function and loses two Elixir defects.**
+  It was four and a half times its own work because a contact updated a _list_
+  (`List.update_at/3`, up to every region for each of 65 536 pairs) and because
+  the columns were read by transposing the whole view and then walking it with
+  `Enum.at/2`: 24.4 → 2.0 ms with the same neighbour sets.
+
+Two measurements that decided against a change, and are worth knowing before the
+next one: the Gaussian's second pass used to read a column at a stride of
+`width`, and rewriting it row-major bought **0.47 → 0.32 ms** with no dependence
+on the stride (64×1024 and 1024×64 read the same as 256×256), so the cost was
+the per-pixel window walk and never the memory traffic; and one reading of a
+stage that allocates lists is the arithmetic plus whatever the collector was
+doing — three blurs read 43.6 ms cold where the same work, warmed, is 19.5.
+
+At the run level, the same 121-step episode went from **41 540 612 µs to
+38 936 935 µs** of model time with the ladder unchanged (`goals 3412263`,
+`votes 0/0`). That is less than the 81 ms a step the segmenter lost, and the
+reason is the concurrency below: `segment` now finishes before the branch it
+runs beside, so the step waits on `score` and the inhibitor instead.
+
 ### What the native kernels cover
 
 Seven kernels in two Rustler crates (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `packages/ex_tbp_monty_core/native/matcher_nif`):
