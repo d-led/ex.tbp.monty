@@ -316,6 +316,43 @@ parity test that compares the new path with the Elixir reference **exactly**:
   plain step's **1.24 M reductions → 0.78 M**. The acceptance ladder is digit for
   digit, and the numpy suite pins the twist's draws across the block boundaries.
 
+### The salience kernels, measured end to end
+
+The view finder's sensor was the whole of a step, and making its per-pixel work
+native is the change on this page with a number a user can feel. Measured on
+this Mac (Apple M2, 8 cores), `base_infer_cows_small_compositional`, seed 42,
+`--world ex_mujoco`, `--episodes 2` — 121 steps. Each arm was recompiled before
+it was timed (`scripts/compare_builds.sh`: a comparison worktree otherwise
+reuses a `_build` and reports the other arm's numbers), and both report the same
+ladder: `goals 3412263`, `votes 0/0`, every learning module `time_out`.
+
+|                           | before (`5a9d182d`) | after         |           |
+| ------------------------- | ------------------- | ------------- | --------- |
+| the model, 121 steps      | 595 999 992 µs      | 41 540 612 µs | **14.3×** |
+| the whole run, wall clock | 623 s               | 69 s          | **9.0×**  |
+| one step                  | 4 926 ms            | 343 ms        | 14.3×     |
+
+The sensor's own phases, cumulative over the same 121 steps (`:timer.tc` around
+each, an accumulator in `:persistent_term` — the instrument inflates a phase's
+size, not its order):
+
+| phase                          | before       | after       |           |
+| ------------------------------ | ------------ | ----------- | --------- |
+| `score` (the Vocus2 channels)  | 344 909.6 ms | 10 537.9 ms | **32.7×** |
+| `segment` (SLIC and the merge) | 210 131.5 ms | 27 683.7 ms | **7.6×**  |
+| `inhibitor`                    | 15 358.4 ms  | 15 967.6 ms | unchanged |
+| `weight`, `view`, `goals`      | 11 193.9 ms  | 10 195.3 ms | unchanged |
+
+Those six phases were 581 s of the old model's 596 s: the step was the view
+finder, and the rest of the model was noise beside it. They are 64 s of the new
+model on the same instrument, which is most of the instrument's own overhead —
+the ranking is what it is for, not the totals.
+
+What is left in the step is `segment` (43 % of it), the inhibitor (25 %) and
+`score` (16 %), and the shares are the instrument's. Monty's own runner spends
+265 ms a step on this config, so the port is 1.3× behind it, and the first two
+entries of that list are where the next factor of two is.
+
 ### What the native kernels cover
 
 Seven kernels in two Rustler crates (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `packages/ex_tbp_monty_core/native/matcher_nif`):
