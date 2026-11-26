@@ -348,17 +348,51 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # `gaussian(image, sigma=[sigma, sigma, 0], mode="reflect")` on a view one
   # pixel deep: each colour channel smoothed on its own, so no colour bleeds into
   # another.
+  # The three channels are separated in one pass and woven back in one pass.
+  # Apart, `plane(lab, channel)` read every pixel's list from the front —
+  # `Enum.at/2` on a list is a slice — and the two `Enum.zip_with` calls after
+  # the blurs built the Stream machinery for every row and then every pixel.
   defp smooth(lab, sigma) when is_number(sigma) and sigma > 0 do
-    [0, 1, 2]
-    |> Enum.map(fn channel -> lab |> plane(channel) |> Images.gaussian_blur(sigma, @truncate) end)
-    |> Enum.zip_with(fn channel_rows -> channel_rows end)
-    |> Enum.map(fn channel_rows -> Enum.zip_with(channel_rows, fn pixel -> pixel end) end)
+    [lightness, a, b] =
+      lab
+      |> planes()
+      |> Enum.map(&Images.gaussian_blur(&1, sigma, @truncate))
+
+    weave(lightness, a, b)
   end
 
   defp smooth(lab, _no_smoothing), do: lab
 
-  defp plane(lab, channel),
-    do: for(row <- lab, do: for(pixel <- row, do: Enum.at(pixel, channel)))
+  defp planes(lab) do
+    {lightness, a, b} =
+      Enum.reduce(lab, {[], [], []}, fn row, {lightness, a, b} ->
+        {l_row, a_row, b_row} = split_row(row)
+        {[l_row | lightness], [a_row | a], [b_row | b]}
+      end)
+
+    [lightness, a, b] |> Enum.map(&Enum.reverse/1)
+  end
+
+  defp split_row(row) do
+    Enum.reduce(row, {[], [], []}, fn
+      [lightness, a, b], {l_row, a_row, b_row} -> {[lightness | l_row], [a | a_row], [b | b_row]}
+    end)
+    |> then(fn {l_row, a_row, b_row} ->
+      {Enum.reverse(l_row), Enum.reverse(a_row), Enum.reverse(b_row)}
+    end)
+  end
+
+  defp weave(lightness, a, b), do: weave_rows(lightness, a, b, [])
+
+  defp weave_rows([], _a, _b, acc), do: Enum.reverse(acc)
+
+  defp weave_rows([lightness | lightnesses], [a | as], [b | bs], acc),
+    do: weave_rows(lightnesses, as, bs, [weave_pixels(lightness, a, b, []) | acc])
+
+  defp weave_pixels([], _a, _b, acc), do: Enum.reverse(acc)
+
+  defp weave_pixels([lightness | lightnesses], [a | as], [b | bs], acc),
+    do: weave_pixels(lightnesses, as, bs, [[lightness, a, b] | acc])
 
   # A pixel per index, row-major (`index = row * width + column`), each already
   # scaled by `1/compactness` as the wrapper scales the whole image.
