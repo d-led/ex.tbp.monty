@@ -62,21 +62,22 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
     end
 
     # The arithmetic above is proven on sixteen pixels a side; this proves the
-    # *same* arithmetic on the view a cows run actually segments — 256 a side,
-    # 64 seeds, ten passes, which is where the step's seconds are.
+    # *same* arithmetic on a view big enough for the k-means to converge and the
+    # connectivity pass to have blobs to absorb — 128 a side, where a 256-square
+    # view costs 1.6 s a call and would make the suite pay for a pin.
     #
     # A digest, because the answer is 65 536 labels and the question is only
     # whether they changed. Both digests were taken from the implementation as
     # it stood before the loop was made cheaper, so a change that alters one
     # label, or breaks a tie the other way, shows up here and nowhere else.
-    test "a 256-square view segments to the labels this implementation has always produced" do
+    test "a 128-square view segments to the labels this implementation has always produced" do
       strategy = SlicMerge.new()
 
-      assert digest(SlicMerge.segment_image(strategy, gradient_view(256))) ==
-               "8bc0f61e461e292e253e833f1d9b7a448f796e974c65bcd8c18759e4797da7ba"
+      assert digest(SlicMerge.segment_image(strategy, gradient_view(128))) ==
+               "de23624545b51b56de895a3cbe7ac217ca56209153da16dd1334db1f7590b367"
 
-      assert digest(SlicMerge.segment_image(strategy, disc_view(256))) ==
-               "b0701eb1b2a46fc92701b8f5cfbdf67ac1374c9e615b6dbca22059463a4443a6"
+      assert digest(SlicMerge.segment_image(strategy, disc_view(128))) ==
+               "c90719f74956522fef8e8a16ae558807eaf7f06f3d8200b8fdd1ebca86468cf2"
     end
   end
 
