@@ -348,10 +348,29 @@ finder, and the rest of the model was noise beside it. They are 64 s of the new
 model on the same instrument, which is most of the instrument's own overhead —
 the ranking is what it is for, not the totals.
 
-What is left in the step is `segment` (43 % of it), the inhibitor (25 %) and
-`score` (16 %), and the shares are the instrument's. Monty's own runner spends
-265 ms a step on this config, so the port is 1.3× behind it, and the first two
-entries of that list are where the next factor of two is.
+What is left in the step is `segment` (the binding branch — the score and the
+segmentation run beside each other and the step waits for the longer one), then
+the inhibitor and `score`, and the shares are the instrument's. Monty's own
+runner spends 265 ms a step on this config; the port is under that now, and the
+first two entries of that list are where the next factor of two is.
+
+### The score: one decode at the end, instead of one per kernel
+
+`Vocus2` asks `ColorChannelSalience` for the centre pyramid so it can build
+orientation from it; no cows config has orientation, so **527 000 values a step
+were decoded and never read**. Beyond that, the score's planes went through a
+full pack-decode-pack between every pair of Monty's four calls — 1.25 million
+Elixir calls a step whose only product was the next kernel's input.
+
+`Vocus2.call/4` now has a binary path — taken only for the shape every cows
+config has: the default colour space, no depth, no orientation, `WeightedMean` and
+`range_normalize` — where the image crosses once into three planes
+(`SalienceNif.opponent_planes/3`, Monty's `rgb_to_opponent`), each plane goes into
+its own channel call and comes back a map binary, the combine takes binaries, and
+the answer is decoded once. Every Monty call is still its own call; what stopped
+is the marshalling between them. On a 256-square view: **65.9 → 39.9 ms**, and the
+episode 26 436 840 → 25 826 725 µs — less than the score lost, because it now
+finishes before the segmentation beside it.
 
 ### A crossing is not free, so a kernel is one of Monty's calls
 
