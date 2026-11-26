@@ -2878,8 +2878,11 @@ not a rounding one.
 simulator does (`world.py`'s `_configure_spec_settings/1` and `Scene.settings/1`
 both write `znear="0.005" zfar="500"`), and MuJoCo multiplies that by
 `stat.extent`. Read back through that formula the two models hold different
-extents — the two builders do not compile the same scene, not merely the same
-scene lit differently.
+extents — 143.108 / 500 ≈ 0.286 on the compiled side, 792.233 / 500 ≈ 1.585 on
+the Python side — so the two builders do not compile the same scene, not merely
+the same scene lit differently. The compiled model of this config is
+`nlight=1, nbody=3, ngeom=1`: one light, one geom, which is the object and
+nothing else.
 
 **Why it matters.** On episode 1 of that config (seed 1170100843, `001_cube`) the
 port's `learning_module_2` reaches `match` at step 21 and names the cube, where
