@@ -698,11 +698,20 @@ carries 293.1 ms of ordinary-scheduler work (9.0 % of the machine, 8.4 ms of it
 GC) and 232.1 ms of dirty-CPU work (7.0 %) — **1.3 of 8 cores**, with 2 920.9 ms
 of idle per step across the schedulers. So this step is not arithmetic-bound and
 not short of cores: it is one serial chain, and every remaining millisecond is a
-latency rather than a throughput. That is the shape of the next factor of two —
-overlap, not less work — and the thing that blocks it is measured too: a sensor's
-observation is copied into its process on every step, so running the four sensors
-at once cost more in copying than the overlap saved (26.24 s against 25.83 s for
-the same 121 steps, four sensors in one round versus Monty's serial loop).
+latency rather than a throughput.
+
+The obvious response — overlap the four sensors, which Monty steps one after
+another — was measured and does not pay, and the reason was measured too. A
+`Barrier` round of four requests whose closures hold an observation of the real
+size (7 MB) costs **8.3 ms**, where a round of one costs 2.08 and a round of four
+with nothing to copy costs nothing; so the copies are 8 ms and not the 40 the
+sensor phase's arithmetic suggested. Meanwhile the overlap it would buy is the
+three patches' 29 ms beside the view finder's 133 — and putting them in one round
+over 121 steps came out **3.4 ms a step slower** (26.24 s against 25.83 s). Both
+halves of that estimate were wrong, so carrying observations as binaries is worth
+about 8 ms and is not the next factor of two. What is left is arithmetic inside
+Monty's own chain — `score` and `segment` — which no restructuring of the port
+removes.
 
 The dirty-CPU share is one k-nearest search per hypothesis: `/usr/bin/sample` on
 a stepping beam puts kiddo's `nearest_n_recurse` ahead of everything else in the
