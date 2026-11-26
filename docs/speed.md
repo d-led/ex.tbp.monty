@@ -405,6 +405,28 @@ At the run level, the same 121-step episode went from **41 540 612 µs to
 reason is the concurrency below: `segment` now finishes before the branch it
 runs beside, so the step waits on `score` and the inhibitor instead.
 
+### The inhibition field: 248 ns a pair, and the arithmetic is a square root
+
+The salience module's inhibition of return asks one question a step — how
+strongly each recent visit argues against each point on the object — and Monty
+answers it with `np.max` over the field's kernels. On this config the field
+holds one kernel per visit, so a twelve-step episode is **1.98 million
+kernel-times-point pairs** (12 kernels against 26 374 points by the last step),
+and in Elixir they measured **491.5 ms**: 248 ns a pair, of which the arithmetic
+is a square root and an exponential. The rest was a two-cons list a pair for the
+`zip_with` that took the maximum.
+
+`SalienceNif.inhibition_weights/3` is that `np.max` in one crossing, with the
+kernels' age weights and half-lives resolved on the Elixir side so the kernel
+holds no logarithm. Twelve kernels against 26 374 points: **34.6 ms → 2.4 ms**,
+the same floats, which `return_inhibitor_test.exs` compares exactly over visits
+that differ in age, in reach, and in whether they have a cutoff at all.
+
+The episode went **38 936 935 → 26 866 755 µs** of model time on the same 121
+steps, ladder still `goals 3412263` / `votes 0/0`: **222 ms a step against
+Monty's 265**, which is the first time this port has been the faster of the two
+on this scene.
+
 ### What the native kernels cover
 
 Seven kernels in two Rustler crates (`packages/ex_tbp_monty_core/native/kd_tree_nif`, `packages/ex_tbp_monty_core/native/matcher_nif`):

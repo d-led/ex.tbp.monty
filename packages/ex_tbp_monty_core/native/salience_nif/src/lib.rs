@@ -1041,6 +1041,72 @@ rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
 /// re-centring in pixel order — and a parity case holds the two label fields to
 /// each other on views of several shapes.
 ///
+/// How strongly every visit argues against every point: the strongest kernel at
+/// each point, which is Monty's `np.max` over a `DecayField`'s kernels.
+///
+/// `DecayField.weights_reference/2` is the reference. The field answers 20 000
+/// to 32 000 points against one kernel per visit, so a twelve-step episode is
+/// 1.98 million kernel-times-point pairs, and in Elixir that was 491.5 ms —
+/// 248 ns a pair, because the pair's weight was a two-cons list for the `max`
+/// that followed it. The arithmetic is a square root and an exponential; the
+/// rest was the marshalling.
+///
+/// `kernels` is six little-endian `f64` each — `x`, `y`, `z`, the weight from
+/// age alone, the distance at which the kernel halves, and the spatial cutoff
+/// (`+inf` where it has none); `points` is three `f64` each. The answer is
+/// `count` weights.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn inhibition_weights<'a>(
+    env: Env<'a>,
+    kernels: Binary,
+    points: Binary,
+    count: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let floats = std::mem::size_of::<f64>();
+
+    if kernels.as_slice().len() % (6 * floats) != 0 || points.as_slice().len() != count * 3 * floats {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let kernel_values = f64s(kernels.as_slice())?;
+    let point_values = f64s(points.as_slice())?;
+
+    let mut binary = NewBinary::new(env, count * floats);
+    let out = binary.as_mut_slice();
+
+    for index in 0..count {
+        let x = point_values[index * 3];
+        let y = point_values[index * 3 + 1];
+        let z = point_values[index * 3 + 2];
+
+        // `Enum.max` over the kernels: every weight is positive, and a field with
+        // no kernel never reaches here.
+        let mut strongest = f64::NEG_INFINITY;
+
+        for kernel in kernel_values.chunks_exact(6) {
+            let dx = kernel[0] - x;
+            let dy = kernel[1] - y;
+            let dz = kernel[2] - z;
+            let distance = (dx * dx + dy * dy + dz * dz).sqrt();
+
+            let weight = if distance > kernel[5] {
+                0.0
+            } else {
+                kernel[3] * (-distance / kernel[4]).exp()
+            };
+
+            if weight > strongest {
+                strongest = weight;
+            }
+        }
+
+        let offset = index * floats;
+        out[offset..offset + floats].copy_from_slice(&strongest.to_le_bytes());
+    }
+
+    Ok(Term::from(binary))
+}
+
 /// The scalar side of `slic/3`: Monty's own SLIC parameters, and the seed grid
 /// the Elixir side has already worked out — `SlicMerge.grid_centroids/2` is
 /// `skimage`'s `regular_grid`, and it is twenty numbers, not sixty-five

@@ -151,4 +151,17 @@ defmodule ExTbpMonty.Core.SalienceNif do
   the shape. The answer is one little-endian `u32` per pixel.
   """
   def slic(_rgb, _seeds, _settings), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  How strongly every visit argues against every point — Monty's `np.max` over the
+  field's kernels.
+
+  `kernels` is six little-endian `f64` each — the place it was made (`x`, `y`,
+  `z`), its weight from age alone, the distance at which it halves, and its
+  spatial cutoff (`+inf` for a kernel that has none); `points` is three `f64`
+  each; the answer is `count` weights, the strongest kernel at each point.
+
+  `DecayField.weights_reference/2` is the reference the answer is held to.
+  """
+  def inhibition_weights(_kernels, _points, _count), do: :erlang.nif_error(:nif_not_loaded)
 end

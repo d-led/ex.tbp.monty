@@ -84,6 +84,30 @@ defmodule Monty.Frameworks.Models.Salience.ReturnInhibitorTest do
 
       assert forgotten.kernels == []
     end
+
+    test "the native field answers what the Elixir field answers" do
+      # The kernel is the field's own arithmetic: one square root and one
+      # exponential a pair, the strongest visit winning, and a kernel with no
+      # cutoff saying something everywhere. Compared exactly, over visits that
+      # differ in age, in reach and in whether they have a cutoff at all.
+      field =
+        DecayField.new()
+        |> DecayField.add([0.0, 0.0, 0.0])
+        |> DecayField.add([0.01, 0.005, 0.0])
+        |> DecayField.step()
+        |> DecayField.add([-0.02, 0.0, 0.01])
+
+      without_cutoff = %{
+        field
+        | kernels: [DecayKernel.new([0.0, 0.0, 0.0], spatial_cutoff: nil) | field.kernels]
+      }
+
+      points = for x <- 0..20, y <- 0..20, do: [x / 1000, y / 1000, 0.0]
+
+      for field <- [field, without_cutoff] do
+        assert DecayField.weights(field, points) == DecayField.weights_reference(field, points)
+      end
+    end
   end
 
   describe "the inhibitor" do

@@ -96,5 +96,9 @@ defmodule Monty.Frameworks.Models.Salience.ReturnInhibitor.DecayKernel do
     {stepped, time_weight(stepped) < kernel.w_t_min}
   end
 
-  defp half_life(tau), do: tau / :math.log(2)
+  # The distance at which the kernel halves. Public because `DecayField` packs it
+  # for the native field, and the two must divide by the same number.
+  @doc false
+  @spec half_life(float()) :: float()
+  def half_life(tau), do: tau / :math.log(2)
 end
