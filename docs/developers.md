@@ -444,6 +444,38 @@ docker build .             # does it build at all
 scripts/quality.sh --image # builds it, checks the uid it runs as
 ```
 
+### A dependency advisory, and how to run Hex here
+
+`mix hex.audit` is the check on the Elixir side; it currently reports one
+finding with no fix to move to:
+
+- **`db_connection` 2.10.2, EEF-CVE-2026-133555 (HIGH)** — code execution
+  through the `:log` option of a forged `DBConnection.Stream` struct. 2.10.2 is
+  the newest release (`mix hex.outdated db_connection` says so), so this is a
+  wait rather than an update. What it needs to fire is a caller inside this
+  process who can already build the struct: the `:log` value is ours, from the
+  Ecto repo's configuration, not anything a request carries. Revisit when a
+  release names the fix.
+
+**Hex is not reachable from this box as configured**: the stored key in
+`~/.hex/hex.config` fails to exchange for an OAuth token, so every task that
+touches the registry (`hex.outdated`, `deps.update`, `deps.get` for a package
+that is not already in `deps/`) dies with `Failed to exchange API key for OAuth
+token` — while `repo.hex.pm` answers 200 to an anonymous request. Until the key
+is refreshed, give the task a throwaway Hex home, which has no key to exchange:
+
+```bash
+HEX_HOME=$(mktemp -d) mix hex.outdated
+HEX_HOME=$(mktemp -d) mix deps.update <package>
+```
+
+The dependency set is otherwise current: `rustler` is at 0.38.0 (its pin, and
+the latest), Phoenix, LiveView and Ecto are at their newest, and the only
+allowable updates in the sweep that found this were `libcluster` 3.6.0 → 3.6.1
+and `soundcheck` 0.3.0 → 0.3.2. `lazy_html` shows as updatable from 0.1.13 to
+0.1.16 and cannot be: the constraint that holds it comes from `phoenix_test`,
+which is itself at its newest.
+
 ## What a run costs
 
 Measured on a warm cache (a CI run, before the suite was split): a push
