@@ -168,16 +168,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   """
   @spec compute_superpixel_mean_colors([[non_neg_integer()]], [[colour()]]) :: [colour()]
   def compute_superpixel_mean_colors(region_image, merge_image) do
-    sums =
-      region_image
-      |> Enum.zip(merge_image)
-      |> Enum.reduce(%{}, fn {labels, colours}, sums ->
-        labels
-        |> Enum.zip(colours)
-        |> Enum.reduce(sums, fn {label, colour}, sums ->
-          Map.update(sums, label, {1, Enum.take(colour, 3)}, &add(&1, colour))
-        end)
-      end)
+    sums = accumulate(region_image, merge_image, %{})
 
     for label <- 0..max(region_max(region_image), 0) do
       case Map.get(sums, label, {0, [0.0, 0.0, 0.0]}) do
@@ -187,9 +178,31 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     end
   end
 
-  # The channel-wise sum, read by pattern: `Enum.zip_with/3` on three-element
-  # lists goes through the Stream machinery, and this runs once for every pixel
+  # The labels and the colours walked together, by pattern: `Enum.zip/2` over a
+  # whole plane goes through the Stream machinery, and this runs for every pixel
   # of the view.
+  defp accumulate([], _merge_image, sums), do: sums
+
+  defp accumulate([labels | labels_rows], [colours | colour_rows], sums) do
+    accumulate(labels_rows, colour_rows, accumulate_row(labels, colours, sums))
+  end
+
+  defp accumulate_row([], _colours, sums), do: sums
+
+  defp accumulate_row([label | labels], [colour | colours], sums) do
+    accumulate_row(labels, colours, add_to(sums, label, colour))
+  end
+
+  defp add_to(sums, label, colour) do
+    case Map.fetch(sums, label) do
+      :error -> Map.put(sums, label, {1, first_three(colour)})
+      {:ok, {count, sum}} -> Map.put(sums, label, add({count, sum}, colour))
+    end
+  end
+
+  defp first_three([red, green, blue | _alpha]), do: [red, green, blue]
+
+  # The channel-wise sum, read by pattern.
   defp add({count, [sum_l, sum_a, sum_b]}, [red, green, blue | _alpha]) do
     {count + 1, [sum_l + red, sum_a + green, sum_b + blue]}
   end
