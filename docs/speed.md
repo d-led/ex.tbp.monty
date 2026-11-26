@@ -691,6 +691,19 @@ carries the largest single slice, because the serial parts of a step (the
 sensors, the module's own bookkeeping before and after the round) live in one
 process.
 
+**Measured on the cows config after the kernel campaign**
+(`base_infer_cows_small_compositional`, `ex_mujoco`, eight warm steps,
+`MIX_ENV=test mix run scripts/probe_step_busy.exs`): a step of **404.5 ms**
+carries 293.1 ms of ordinary-scheduler work (9.0 % of the machine, 8.4 ms of it
+GC) and 232.1 ms of dirty-CPU work (7.0 %) — **1.3 of 8 cores**, with 2 920.9 ms
+of idle per step across the schedulers. So this step is not arithmetic-bound and
+not short of cores: it is one serial chain, and every remaining millisecond is a
+latency rather than a throughput. That is the shape of the next factor of two —
+overlap, not less work — and the thing that blocks it is measured too: a sensor's
+observation is copied into its process on every step, so running the four sensors
+at once cost more in copying than the overlap saved (26.24 s against 25.83 s for
+the same 121 steps, four sensors in one round versus Monty's serial loop).
+
 The dirty-CPU share is one k-nearest search per hypothesis: `/usr/bin/sample` on
 a stepping beam puts kiddo's `nearest_n_recurse` ahead of everything else in the
 step together, and every hypothesis's search location is distinct, so a step asks
