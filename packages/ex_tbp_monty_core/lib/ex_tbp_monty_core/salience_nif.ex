@@ -59,6 +59,42 @@ defmodule ExTbpMonty.Core.SalienceNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  One colour channel's salience map, from the plane to the collapsed map.
+
+  Everything `ColorChannelSalience.reference/3` does — the centre and surround
+  pyramids, their difference, `brighter`/`darker` and their mean, and the
+  collapse — over one binary. `shapes` is one `{width, height}` pair of
+  little-endian `u32`s per octave, finest first; `scale_sigmas` is the sigma each
+  further scale is blurred by and `surround_sigmas` the sigma each surround is
+  blurred by, both little-endian `f64`. Every scalar is resolved on the Elixir
+  side, so no power or square root happens here.
+
+  Answers `{map, centres, centre_shapes}`: the map at the finest octave's shape,
+  the centre pyramid's planes concatenated, and one shape pair per centre plane.
+  """
+  def channel_salience(
+        _plane,
+        _shapes,
+        _first_sigma,
+        _scale_sigmas,
+        _surround_sigmas,
+        _truncate
+      ),
+      do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  A pyramid collapsed into one plane: every plane enlarged to `width` by
+  `height` with the cubic, then averaged pixel by pixel in plane order, exactly
+  as `Pyramids.collapse_mean_reference/1` reduces it.
+
+  `planes` is the concatenation of the pyramid's planes as little-endian `f64`
+  values, `shapes` one `{width, height}` pair of little-endian `u32`s per plane
+  in the same order, and the answer is `width * height` values.
+  """
+  def collapse_mean(_planes, _shapes, _width, _height),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   SLIC's connectivity pass: every label becomes one connected blob, and a blob
   smaller than `min_size` is absorbed into the label it borders, exactly as
   `SlicMerge.enforce_connectivity_reference/4` walks it.

@@ -19,6 +19,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
 
   require Logger
 
+  alias ExTbpMonty.Core.SalienceNif
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.{OperatingLimits, SafeOperatingLimits}
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid
@@ -67,6 +68,19 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
   def process(%__MODULE__{} = salience, %Monty.Context{} = ctx, image) do
     check_limits!(salience, ctx, image)
 
+    if SalienceNif.loaded?(),
+      do: by_kernel(salience, image),
+      else: reference(salience, image)
+  end
+
+  @doc """
+  The Elixir channel: the reference the kernel is held to.
+
+  Kept public because it is what the parity case compares against, and what runs
+  where the crate was never built.
+  """
+  @spec reference(t(), [[float()]]) :: {[[float()]], Pyramid.t()}
+  def reference(%__MODULE__{} = salience, image) do
     {center, surround} =
       Pyramids.center_surround(image,
         center_sigma: salience.center_sigma,
@@ -84,6 +98,71 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ColorChannelSalienc
       ])
 
     {salience.collapse.(feature_pyramid), center}
+  end
+
+  # A channel blurs twenty-seven planes twice over and collapses them back to
+  # one, and every plane crossing the boundary on its own was most of a cows
+  # step's second. The whole channel is one call: the octave shapes and every
+  # sigma are resolved here, so the kernel does arithmetic and nothing else.
+  defp by_kernel(%__MODULE__{} = salience, image) do
+    height = length(image)
+    width = image |> hd() |> length()
+    scales = salience.n_scales
+
+    shapes =
+      for {rows, columns} <- Pyramids.octave_shapes({height, width}, salience.max_octaves),
+          into: <<>>,
+          do: <<columns::little-32, rows::little-32>>
+
+    scale_sigmas =
+      for scale <- 1..scales, into: <<>> do
+        <<Pyramids.sigma_difference(salience.center_sigma, scale, scales)::float-little-64>>
+      end
+
+    surround_sigmas =
+      for scale <- 0..(scales - 1), into: <<>> do
+        sigma = :math.sqrt(salience.surround_sigma ** 2 - salience.center_sigma ** 2)
+        <<sigma * :math.pow(2.0, scale / scales)::float-little-64>>
+      end
+
+    plane = for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
+
+    {map, centres, centre_shapes} =
+      SalienceNif.channel_salience(
+        plane,
+        shapes,
+        salience.center_sigma * 1.0,
+        scale_sigmas,
+        surround_sigmas,
+        2.5
+      )
+
+    centre = centres |> planes(centre_shapes) |> Enum.chunk_every(scales) |> Pyramid.new()
+
+    {rows(map, width), centre}
+  end
+
+  defp rows(raw, width) do
+    raw
+    |> then(fn binary -> for <<value::float-little-64 <- binary>>, do: value end)
+    |> Enum.chunk_every(width)
+  end
+
+  # Each plane's own shape says how many values it takes, so the concatenation
+  # is split by shape rather than by a count kept here.
+  defp planes(raw, shapes) do
+    values = for <<value::float-little-64 <- raw>>, do: value
+
+    shapes
+    |> then(fn binary ->
+      for <<columns::little-32, rows::little-32 <- binary>>, do: {rows, columns}
+    end)
+    |> Enum.reduce({[], values}, fn {rows, columns}, {planes, rest} ->
+      {plane, rest} = Enum.split(rest, rows * columns)
+      {[Enum.chunk_every(plane, columns) | planes], rest}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
   end
 
   defp check_limits!(salience, ctx, image) do

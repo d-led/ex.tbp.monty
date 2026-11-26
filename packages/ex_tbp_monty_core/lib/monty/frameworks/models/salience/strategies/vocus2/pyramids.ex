@@ -18,6 +18,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids do
   handful of blurs.
   """
 
+  alias ExTbpMonty.Core.SalienceNif
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid
 
@@ -87,7 +88,16 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids do
     end)
   end
 
-  defp sigma_difference(sigma, scale, scales) do
+  @doc """
+  The sigma that takes a plane blurred at the previous scale to this one.
+
+  Blurs compose in quadrature, so the difference of the squares is what has to
+  be applied. Public because the channel kernel is handed every sigma resolved:
+  it computes no power or square root of its own, so the two paths cannot
+  disagree about a scalar before they have started.
+  """
+  @spec sigma_difference(float(), pos_integer(), pos_integer()) :: float()
+  def sigma_difference(sigma, scale, scales) do
     target = sigma * :math.pow(2.0, scale / scales)
     previous = sigma * :math.pow(2.0, (scale - 1) / scales)
 
@@ -229,7 +239,41 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids do
   @doc "Collapses a pyramid by averaging its planes at each pixel."
   @spec collapse_mean(Pyramid.t()) :: plane()
   def collapse_mean(pyramid) do
+    if SalienceNif.loaded?(),
+      do: collapse_mean_native(pyramid),
+      else: collapse_mean_reference(pyramid)
+  end
+
+  @doc """
+  The Elixir collapse: the reference the kernel is held to.
+
+  A channel collapses twenty-seven planes and every plane used to cross the
+  boundary on its own — twenty-four encodings of 65 536 floats — so the kernel
+  takes the whole pyramid in one binary and answers the one plane.
+  """
+  @spec collapse_mean_reference(Pyramid.t()) :: plane()
+  def collapse_mean_reference(pyramid) do
     collapse(pyramid, &elementwise(&1, fn values -> Enum.sum(values) / length(values) end))
+  end
+
+  defp collapse_mean_native(%Pyramid{} = pyramid) do
+    [first | _rest] = planes = Pyramid.flat(pyramid)
+    {height, width} = shape(first)
+
+    packed =
+      for plane <- planes, value <- List.flatten(plane), into: <<>> do
+        <<value::float-little-64>>
+      end
+
+    shapes =
+      for plane <- planes, {rows, columns} = shape(plane), into: <<>> do
+        <<columns::little-32, rows::little-32>>
+      end
+
+    packed
+    |> SalienceNif.collapse_mean(shapes, width, height)
+    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+    |> Enum.chunk_every(width)
   end
 
   # Reduces several planes at every pixel: rows first, then the values in them.

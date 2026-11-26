@@ -145,5 +145,33 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.PyramidsTest do
 
       assert {length(collapsed), collapsed |> hd() |> length()} == {8, 8}
     end
+
+    # The kernel collapses a whole channel, which is 27 planes at up to 256
+    # square: the larger shapes here are where a wrong plane order, a missed
+    # resize or a sum starting from the second plane would show as a different
+    # attention map a step later. Same question as every other kernel: not
+    # "close", "the same number".
+    test "the native collapse answers the same numbers, bit for bit, as the Elixir" do
+      for {shape, sigma, scales, octaves} <- [
+            {{8, 8}, 1.0, 2, nil},
+            {{16, 12}, 1.0, 3, nil},
+            {{32, 32}, 2.0, 2, 3},
+            {{7, 5}, 1.0, 2, nil}
+          ] do
+        pyramid =
+          Pyramids.gaussian_pyramid(plane(shape),
+            sigma: sigma,
+            n_scales: scales,
+            max_octaves: octaves
+          )
+
+        assert Pyramids.collapse_mean(pyramid) == Pyramids.collapse_mean_reference(pyramid),
+               "the native collapse and the reference disagree on #{inspect(shape)} at sigma #{sigma}"
+      end
+    end
+
+    defp plane({rows, columns}) do
+      for row <- 0..(rows - 1), do: for(column <- 0..(columns - 1), do: (row * 3 + column) / 11)
+    end
   end
 end

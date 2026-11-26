@@ -56,6 +56,31 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Vocus2ParityTest do
     assert_close_planes(center, expected_center)
   end
 
+  # The kernel is the fast path; `reference/2` is the Elixir. A channel blurs
+  # twenty-seven planes twice over and collapses them back to one, and every
+  # plane crossing the boundary on its own was most of a cows step's second, so
+  # the whole channel is one call now. Parity here is exact rather than the
+  # float32 above: the kernel repeats the same `f64` operations in the same
+  # order, and every sigma is resolved on this side.
+  test "the native channel answers the same numbers, bit for bit, as the Elixir", %{
+    fixture: fixture
+  } do
+    image = fixture["color"]["image"]
+
+    for options <- [
+          [center_sigma: 2.0, surround_sigma: 3.0, n_scales: 2],
+          [center_sigma: 1.0, surround_sigma: 3.0, n_scales: 2],
+          [center_sigma: 1.0, surround_sigma: 3.0, n_scales: 3, max_octaves: 2]
+        ] do
+      salience =
+        ColorChannelSalience.new(Keyword.put(options, :operating_limits, NoOperatingLimits.new()))
+
+      assert ColorChannelSalience.process(salience, context(), image) ==
+               ColorChannelSalience.reference(salience, image),
+             "the native channel and the reference disagree on #{inspect(options)}"
+    end
+  end
+
   test "a depth channel's salience map is Monty's", %{fixture: fixture} do
     %{"image" => image, "map" => expected} = fixture["depth"]
 

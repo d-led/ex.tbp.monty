@@ -27,7 +27,7 @@
 //! than the taps being saved. The call is on a dirty CPU scheduler, because it
 //! holds its scheduler for the whole plane.
 
-use rustler::{Binary, Env, NewBinary, Term};
+use rustler::{Binary, Encoder, Env, NewBinary, Term};
 
 /// OpenCV's cubic constant, the one `skimage`'s `resize` uses for `:cubic`.
 const CUBIC_A: f64 = -0.75;
@@ -137,6 +137,126 @@ fn cubic_weights(x: f64) -> [f64; 4] {
     let third = ((CUBIC_A + 2.0) * (1.0 - x) - (CUBIC_A + 3.0)) * (1.0 - x) * (1.0 - x) + 1.0;
 
     [first, second, third, 1.0 - first - second - third]
+}
+
+/// A plane blurred with a Gaussian of `sigma`: the body of `blur/5` without the
+/// binary in and out, so the channel kernel can blur a plane it already holds.
+fn blur_plane(values: &[f64], width: usize, height: usize, sigma: f64, truncate: f64) -> Vec<f64> {
+    let kernel = gaussian_kernel(sigma, truncate);
+    let across = windows(&kernel, width);
+    let down = windows(&kernel, height);
+
+    let mut horizontal = vec![0.0f64; width * height];
+
+    for row in 0..height {
+        let line = &values[row * width..(row + 1) * width];
+
+        for column in 0..width {
+            horizontal[row * width + column] = blurred(&across[column], line, 1);
+        }
+    }
+
+    let mut out = vec![0.0f64; width * height];
+
+    for row in 0..height {
+        for column in 0..width {
+            out[row * width + column] = blurred(&down[row], &horizontal[column..], width);
+        }
+    }
+
+    out
+}
+
+/// A plane resampled with the cubic: the body of `enlarge_cubic/5`.
+fn cubic_resize(values: &[f64], source_width: usize, source_height: usize, width: usize, height: usize) -> Vec<f64> {
+    let vertical: Vec<([usize; 4], [f64; 4])> = (0..height)
+        .map(|row| cubic_taps(row, height, source_height))
+        .collect();
+    let horizontal: Vec<([usize; 4], [f64; 4])> = (0..width)
+        .map(|column| cubic_taps(column, width, source_width))
+        .collect();
+
+    let mut out = vec![0.0f64; width * height];
+
+    for row in 0..height {
+        let (offsets_y, weights_y) = vertical[row];
+
+        for column in 0..width {
+            let (offsets_x, weights_x) = horizontal[column];
+
+            out[row * width + column] =
+                weighted(values, source_width, &offsets_x, &weights_x, &offsets_y, &weights_y);
+        }
+    }
+
+    out
+}
+
+/// The source a destination pixel covers along one axis: `first..last` with the
+/// fraction of each end pixel, exactly as `Images.span/3` answers it.
+struct Span {
+    first: i64,
+    last: i64,
+    low: f64,
+    high: f64,
+}
+
+fn span(index: usize, destination: usize, source: usize) -> Span {
+    let low = index as f64 * source as f64 / destination as f64;
+    let high = (index + 1) as f64 * source as f64 / destination as f64;
+
+    Span {
+        first: low.floor() as i64,
+        last: high.ceil() as i64 - 1,
+        low,
+        high,
+    }
+}
+
+fn coverage(index: i64, span: &Span) -> f64 {
+    if span.first == span.last {
+        span.high - span.low
+    } else if index == span.first {
+        span.first as f64 + 1.0 - span.low
+    } else if index == span.last {
+        span.high - span.last as f64
+    } else {
+        1.0
+    }
+}
+
+/// A plane resampled by `:area`: each destination pixel averages the source it
+/// covers, weighted by how much of each source pixel that is — the body of
+/// `Images.by_area/3`, accumulating in the same order.
+fn area_resize(values: &[f64], source_width: usize, source_height: usize, width: usize, height: usize) -> Vec<f64> {
+    let vertical: Vec<Span> = (0..height).map(|row| span(row, height, source_height)).collect();
+    let horizontal: Vec<Span> = (0..width).map(|column| span(column, width, source_width)).collect();
+
+    let mut out = vec![0.0f64; width * height];
+
+    for row in 0..height {
+        let down = &vertical[row];
+
+        for column in 0..width {
+            let across = &horizontal[column];
+            let mut weighted_total = 0.0f64;
+            let mut weights = 0.0f64;
+
+            for source_row in down.first..=down.last {
+                for source_column in across.first..=across.last {
+                    let weight = coverage(source_row, down) * coverage(source_column, across);
+
+                    weighted_total +=
+                        values[source_row as usize * source_width + source_column as usize] * weight;
+                    weights += weight;
+                }
+            }
+
+            out[row * width + column] = weighted_total / weights;
+        }
+    }
+
+    out
 }
 
 /// A `width` by `height` plane blurred with a Gaussian of `sigma`.
@@ -384,6 +504,293 @@ fn neighbours(index: usize, width: usize) -> Vec<usize> {
         .filter(|(r, c)| *r >= 0 && *r <= last && *c >= 0 && *c <= last)
         .map(|(r, c)| (r * width as isize + c) as usize)
         .collect()
+}
+
+/// A pyramid collapsed into one plane: every plane enlarged to `width` by
+/// `height` with the cubic above, then averaged pixel by pixel in plane order.
+///
+/// `Pyramids.collapse_mean_reference/1` is the reference — `Pyramid.flat/1`
+/// order, `Images.resize/3` with `:cubic` (no resize where the plane already
+/// has the target's shape), and `Enum.sum(values) / length(values)` per pixel.
+/// A channel collapses twenty-seven planes, three colour channels collapse one
+/// each, and every plane crossing the boundary on its own was 24 encodings of
+/// 65 536 floats a channel — most of the cost. One binary in, one plane out.
+///
+/// `shapes` is one `{width, height}` pair of little-endian `u32`s per plane, in
+/// the same order as the planes in `planes`.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn collapse_mean<'a>(
+    env: Env<'a>,
+    planes: Binary,
+    shapes: Binary,
+    width: usize,
+    height: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let shapes = shapes.as_slice();
+
+    if shapes.len() % (2 * std::mem::size_of::<u32>()) != 0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let sizes: Vec<(usize, usize)> = shapes
+        .chunks_exact(2 * std::mem::size_of::<u32>())
+        .map(|pair| {
+            let (first, second) = pair.split_at(std::mem::size_of::<u32>());
+
+            (
+                u32::from_le_bytes(first.try_into().expect("four bytes")) as usize,
+                u32::from_le_bytes(second.try_into().expect("four bytes")) as usize,
+            )
+        })
+        .collect();
+
+    let pixels = planes.as_slice();
+    let plane_size = std::mem::size_of::<f64>();
+    let mut at = 0usize;
+    let mut sum = vec![0.0f64; width * height];
+
+    for &(plane_width, plane_height) in &sizes {
+        let length = plane_width * plane_height * plane_size;
+
+        if at + length > pixels.len() {
+            return Err(rustler::Error::BadArg);
+        }
+
+        let plane = &pixels[at..at + length];
+        at += length;
+
+        let values: Vec<f64> = plane
+            .chunks_exact(plane_size)
+            .map(|bytes| f64::from_le_bytes(bytes.try_into().expect("eight bytes")))
+            .collect();
+
+        if plane_width == width && plane_height == height {
+            for (total, value) in sum.iter_mut().zip(values.iter()) {
+                *total += *value;
+            }
+        } else {
+            let vertical: Vec<([usize; 4], [f64; 4])> = (0..height)
+                .map(|row| cubic_taps(row, height, plane_height))
+                .collect();
+            let horizontal: Vec<([usize; 4], [f64; 4])> = (0..width)
+                .map(|column| cubic_taps(column, width, plane_width))
+                .collect();
+
+            for row in 0..height {
+                let (offsets_y, weights_y) = vertical[row];
+
+                for column in 0..width {
+                    let (offsets_x, weights_x) = horizontal[column];
+                    let sample = weighted(
+                        &values,
+                        plane_width,
+                        &offsets_x,
+                        &weights_x,
+                        &offsets_y,
+                        &weights_y,
+                    );
+
+                    sum[row * width + column] += sample;
+                }
+            }
+        }
+    }
+
+    if at != pixels.len() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let count = sizes.len() as f64;
+    let mut binary = NewBinary::new(env, width * height * plane_size);
+    let out = binary.as_mut_slice();
+
+    for (index, total) in sum.iter().enumerate() {
+        let offset = index * plane_size;
+        out[offset..offset + plane_size].copy_from_slice(&(total / count).to_le_bytes());
+    }
+
+    Ok(Term::from(binary))
+}
+
+/// One colour channel's salience map, from the plane to the collapsed map.
+///
+/// This is `Pyramids.center_surround/2`, `Pyramid.subtract/2`,
+/// `ColorChannelSalience`'s `brighter`/`darker` and mean combine, and
+/// `Pyramids.collapse_mean/1` — the whole of `ColorChannelSalience.process/3`
+/// except the operating-limit check — over one binary. A channel blurs
+/// twenty-seven planes twice over and collapses them; each plane crossing the
+/// boundary on its own was most of a cows step's second.
+///
+/// Every floating-point scalar is resolved on the Elixir side and handed in:
+/// the octave shapes (`Pyramids.octave_shapes/2`), the sigma each further scale
+/// is blurred by, and the sigma each surround is blurred by. Nothing here
+/// computes a power or a square root, so the two paths cannot disagree about a
+/// scalar before they have even started. The rest — the same `f64` operations in
+/// the same order — is what the other kernels already answer bit for bit.
+///
+/// Answers `{map, centres, centre_shapes}`: the collapsed map at the finest
+/// octave's shape, the centre pyramid's planes concatenated, and one
+/// `{width, height}` pair of `u32`s per centre plane.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn channel_salience<'a>(
+    env: Env<'a>,
+    plane: Binary,
+    shapes: Binary,
+    first_sigma: f64,
+    scale_sigmas: Binary,
+    surround_sigmas: Binary,
+    truncate: f64,
+) -> Result<Term<'a>, rustler::Error> {
+    let shapes = pairs_of_u32(shapes.as_slice())?;
+    let scale_sigmas = f64s(scale_sigmas.as_slice())?;
+    let surround_sigmas = f64s(surround_sigmas.as_slice())?;
+
+    if shapes.is_empty() || scale_sigmas.is_empty() || scale_sigmas.len() != surround_sigmas.len() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let (width, height) = shapes[0];
+    let image = decode(plane.as_slice(), width * height)?;
+    let scales = scale_sigmas.len();
+
+    // The centre pyramid, octave by octave: three planes each here, the last of
+    // which the next octave starts from.
+    let mut centre: Vec<(usize, usize, Vec<f64>)> = Vec::new();
+    let mut extra: Option<Vec<f64>> = None;
+    let mut extra_shape = (width, height);
+
+    for &(w, h) in &shapes {
+        let first = match &extra {
+            None => blur_plane(&image, width, height, first_sigma, truncate),
+            Some(previous) => area_resize(previous, extra_shape.0, extra_shape.1, w, h),
+        };
+
+        let mut previous = first.clone();
+        centre.push((w, h, first));
+
+        for (index, &sigma) in scale_sigmas.iter().enumerate() {
+            previous = blur_plane(&previous, w, h, sigma, truncate);
+
+            // `Enum.take(planes, scales)` keeps the first `scales` planes; the
+            // one built last is what the next octave starts from, not a plane
+            // the pyramid holds.
+            if index + 1 < scales {
+                centre.push((w, h, previous.clone()));
+            }
+        }
+
+        extra = Some(previous);
+        extra_shape = (w, h);
+    }
+
+    // The surround, and the difference: same order, plane by plane.
+    let mut combined: Vec<(usize, usize, Vec<f64>)> = Vec::with_capacity(centre.len());
+
+    for (index, (w, h, centre_plane)) in centre.iter().enumerate() {
+        let scale = index % scales;
+        let surround = blur_plane(centre_plane, *w, *h, surround_sigmas[scale], truncate);
+
+        let mut brighter = Vec::with_capacity(centre_plane.len());
+        let mut darker = Vec::with_capacity(centre_plane.len());
+
+        for (left, right) in centre_plane.iter().zip(surround.iter()) {
+            // `Pyramid.subtract/2` is `left + -1.0 * right`, not `left - right`.
+            let difference = left + -1.0 * right;
+
+            brighter.push(difference.max(0.0));
+            darker.push((-difference).max(0.0));
+        }
+
+        // `combine_mean` of the two: the sum in pyramid order, over two.
+        combined.push((
+            *w,
+            *h,
+            brighter
+                .iter()
+                .zip(darker.iter())
+                .map(|(up, down)| (up + down) / 2.0)
+                .collect(),
+        ));
+    }
+
+    // The collapse: every plane at the finest shape, averaged in plane order.
+    let mut sum = vec![0.0f64; width * height];
+
+    for (w, h, values) in &combined {
+        if *w == width && *h == height {
+            for (total, value) in sum.iter_mut().zip(values.iter()) {
+                *total += *value;
+            }
+        } else {
+            let enlarged = cubic_resize(values, *w, *h, width, height);
+
+            for (total, value) in sum.iter_mut().zip(enlarged.iter()) {
+                *total += *value;
+            }
+        }
+    }
+
+    let count = combined.len() as f64;
+    let mut map = NewBinary::new(env, width * height * std::mem::size_of::<f64>());
+
+    for (index, total) in sum.iter().enumerate() {
+        let offset = index * std::mem::size_of::<f64>();
+        map.as_mut_slice()[offset..offset + std::mem::size_of::<f64>()]
+            .copy_from_slice(&(total / count).to_le_bytes());
+    }
+
+    let mut planes = NewBinary::new(env, centre.iter().map(|(w, h, _)| w * h).sum::<usize>() * std::mem::size_of::<f64>());
+    let mut at = 0usize;
+
+    for (_w, _h, values) in &centre {
+        for value in values {
+            let offset = at;
+            planes.as_mut_slice()[offset..offset + std::mem::size_of::<f64>()]
+                .copy_from_slice(&value.to_le_bytes());
+            at += std::mem::size_of::<f64>();
+        }
+    }
+
+    let mut centre_shapes = NewBinary::new(env, centre.len() * 2 * std::mem::size_of::<u32>());
+
+    for (index, (w, h, _values)) in centre.iter().enumerate() {
+        let offset = index * 2 * std::mem::size_of::<u32>();
+        centre_shapes.as_mut_slice()[offset..offset + 4].copy_from_slice(&(*w as u32).to_le_bytes());
+        centre_shapes.as_mut_slice()[offset + 4..offset + 8].copy_from_slice(&(*h as u32).to_le_bytes());
+    }
+
+    let answer: (Binary, Binary, Binary) = (map.into(), planes.into(), centre_shapes.into());
+
+    Ok(answer.encode(env))
+}
+
+fn pairs_of_u32(bytes: &[u8]) -> Result<Vec<(usize, usize)>, rustler::Error> {
+    if bytes.len() % (2 * std::mem::size_of::<u32>()) != 0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    Ok(bytes
+        .chunks_exact(2 * std::mem::size_of::<u32>())
+        .map(|pair| {
+            let (first, second) = pair.split_at(std::mem::size_of::<u32>());
+
+            (
+                u32::from_le_bytes(first.try_into().expect("four bytes")) as usize,
+                u32::from_le_bytes(second.try_into().expect("four bytes")) as usize,
+            )
+        })
+        .collect())
+}
+
+fn f64s(bytes: &[u8]) -> Result<Vec<f64>, rustler::Error> {
+    if bytes.len() % std::mem::size_of::<f64>() != 0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    Ok(bytes
+        .chunks_exact(std::mem::size_of::<f64>())
+        .map(|value| f64::from_le_bytes(value.try_into().expect("eight bytes")))
+        .collect())
 }
 
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
