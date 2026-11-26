@@ -2904,3 +2904,33 @@ while both of this port's worlds are 4.0.1: the Python one because
 `config/pythonx.exs` declares bare `"mujoco"` and uv resolves the latest, the
 compiled one because `ex.mujoco/mujoco.version` is 4.0.1. Matching Monty's
 version is a prerequisite for comparing percepts at all, and it is two pins.
+
+**The version was not the cause, which narrowed it to two.** Moving the compiled
+world to 3.13.0 (`ex.mujoco`'s `mujoco-3-13` branch) left the difference at
+_exactly_ the same numbers: 12 288 of 16 384 patch values, widest 25, far depth
+143.108 against 792.233. Two independent defects, and each was measured rather
+than argued:
+
+- **Depth is `stat.extent`.** For identical geometry — `geom_pos (0, 1.5, 0)`, the
+  light at `(0, 0, 0.2)`, `geom_rbound 0.086603` — MuJoCo's **XML path** computes
+  `stat.extent` 0.286603 and its **`MjSpec` path** 1.586603. The far plane is
+  `vis.map.zfar × stat.extent` (500 ×), which is exactly 143.1 and 792.2. Monty
+  builds an `MjSpec` (`world.py`), so the compiled world has to state that number
+  instead of letting MJCF infer it.
+- **Colour is this port's renderer, not the scene.** The `ex_mujoco` NIF renders a
+  patch 12.6 % darker than MuJoCo's own Python renderer — mean 132 against 151.39
+  for the same model — and these are excluded, each by measurement: the MuJoCo
+  version (identical numbers at 4.0.1 and 3.13.0), the scene's `stat.extent`
+  (setting one model's to the other's changes nothing), the model itself (Python
+  renders the Elixir-built XML and the `MjSpec` to the _same_ mean, 151.39 each),
+  the `mjRND_` flags (`mjv_defaultScene`'s zeros and the flags `mjv_updateScene`
+  derives give the same picture — and, before they were cleared, the segmentation
+  pass leaked `SEGMENT`/`IDCOLOR` into the colour pass and rendered `[1, 0, 0]`),
+  the `mjvOption` (`mjv_defaultOption` and a zeroed one are identical, 151.39
+  each), and the model's directional light (switching its diffuse off drops the
+  mean to 72.199, a factor of 0.477 — not the observed 0.874).
+
+What is left is inside `ex.mujoco`'s own render path — the same
+`mjr_makeContext` / `mjr_setBuffer(mjFB_OFFSCREEN)` / `mjv_updateScene` /
+`mjr_render` / `mjr_readPixels` sequence MuJoCo's Python renderer runs — and it is
+reproducible in one command (`scripts/probe_world_parity.exs`).
