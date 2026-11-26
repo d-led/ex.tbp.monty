@@ -192,10 +192,19 @@ LABEL org.opencontainers.image.title="Elixir TBP Monty" \
 # the point release pins `+b1` and trixie has `+deb13u1` for CVE-2026-76844 and
 # CVE-2026-85091 (the amd64 leg's scan failed on exactly that pair on
 # 2026-11-08). Both are base-image packages, so no builder change can fix them.
+#
+# `libzstd1`, `passwd` and `login.defs` are the same story one snapshot later:
+# the base pins `libzstd1` at `1.5.7+dfsg-1` and `passwd` at `1:4.17.4-2`, while
+# trixie-security has `+deb13u1` of all three (CVE-2026-124851, an
+# uninitialised-buffer disclosure in zstd). `apt-get install` only upgrades a
+# package it was asked for, and the base image already satisfies it, so naming
+# them is what moves them. The security suite is the one archive that is live
+# even behind a snapshot base; without consuming it the scan goes red on a fix
+# that already exists and no builder change can reach.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        apt ca-certificates libstdc++6 openssl libncurses6 libsctp1 locales tzdata \
-       libegl1 libgl1 libosmesa6 zlib1g \
+       libegl1 libgl1 libosmesa6 zlib1g libzstd1 passwd \
   && rm -rf /var/lib/apt/lists/* \
   && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
   && locale-gen
