@@ -567,7 +567,7 @@ defmodule Monty.Studio.Setup do
         settle_steps: Keyword.get(opts, :settle_steps, 0),
         scheduling: Keyword.get(opts, :scheduling, :wait_for_all)
       },
-      Map.merge(criterion_spec(setup.match_criterion), monty_args(setup))
+      Map.merge(criterion_spec(criterion_of(setup)), monty_args(setup))
     )
   end
 
@@ -577,18 +577,51 @@ defmodule Monty.Studio.Setup do
   defp criterion_spec(nil), do: %{}
   defp criterion_spec(criterion), do: %{match_criterion: criterion}
 
+  # A criterion written on `experiment.config` (what a termination group that
+  # only wraps strategies writes) or on the strategy itself (what
+  # `MontyForGraphMatchingSetStepTypeAndCheckIfDone` and `MatchCriteria` take).
+  defp criterion_of(%__MODULE__{match_criterion: nil} = setup) do
+    case recognition_strategy(setup) do
+      {:ok, policy} -> RecognitionStrategy.match_criterion(policy)
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp criterion_of(%__MODULE__{match_criterion: criterion}), do: criterion
+
   # Monty keeps these on the model (`MontyBase.min_steps`), not on a module: a
   # matching episode may not conclude before `min_eval_steps` matching steps,
   # and an exploratory one runs for `num_exploratory_steps`.
+  #
+  # Until v0.60.0 they were `monty_config`'s keys; since then they are the
+  # recognition strategy's arguments, so the policy a config names is where its
+  # numbers are read (`Setup.recognition_strategy/1`), and a policy that holds
+  # none leaves the model's own defaults alone.
   @monty_args %{
     "min_eval_steps" => :min_eval_steps,
     "min_train_steps" => :min_train_steps,
     "num_exploratory_steps" => :num_exploratory_steps
   }
 
-  defp monty_args(%__MODULE__{monty_args: args}) do
+  defp monty_args(%__MODULE__{} = setup) do
+    Map.merge(tree_monty_args(setup), policy_monty_args(setup))
+  end
+
+  defp tree_monty_args(%__MODULE__{monty_args: args}) do
     for {key, field} <- @monty_args, Map.has_key?(args, key), into: %{} do
       {field, Map.fetch!(args, key)}
+    end
+  end
+
+  defp policy_monty_args(%__MODULE__{} = setup) do
+    case recognition_strategy(setup) do
+      {:ok, policy} ->
+        policy
+        |> RecognitionStrategy.step_type_args()
+        |> Map.take(Map.values(@monty_args))
+
+      {:error, _reason} ->
+        %{}
     end
   end
 
@@ -2595,14 +2628,22 @@ defmodule Monty.Studio.Setup do
   The experiment's recognition policy: what counts as the episode being over.
 
   Monty's `termination` group writes `recognition_strategy` into the experiment
-  config, and an experiment that names none gets `MontyIsDone`
-  (`monty_experiment.py`). That default is honoured here rather than left to the
-  run, so a config without a policy still ends the way it ends in Monty.
+  config, and since v0.60.0 the experiment requires one (the old default,
+  `MontyIsDone`, went with the model's own `is_done`). A config that names none
+  still ends the way it ended here before: the model's step-type rule
+  (`MontyForGraphMatchingSetStepTypeAndCheckIfDone`) over the numbers the config
+  gave the model, so an older config runs the episodes it always ran.
   """
   @spec recognition_strategy(t()) ::
           {:ok, Monty.Experiment.RecognitionStrategy.t()} | {:error, term()}
-  def recognition_strategy(%__MODULE__{recognition_strategy: nil}),
-    do: RecognitionStrategy.MontyIsDone.new()
+  def recognition_strategy(%__MODULE__{recognition_strategy: nil} = setup) do
+    RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone.new(
+      match_criterion: setup.match_criterion || Monty.Experiment.MatchCriteria.default(),
+      min_train_steps: Map.get(setup.monty_args, "min_train_steps", 0),
+      min_eval_steps: Map.get(setup.monty_args, "min_eval_steps", 0),
+      num_exploratory_steps: Map.get(setup.monty_args, "num_exploratory_steps", 0)
+    )
+  end
 
   def recognition_strategy(%__MODULE__{recognition_strategy: config}),
     do: RecognitionStrategy.from_config(config)

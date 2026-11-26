@@ -41,12 +41,18 @@ defmodule Monty.Experiment.RecognitionStrategy do
   concluded. `conclusions` is each module's answer, in module order, with `nil`
   for a module that has not concluded. `terminal_states` is the same answers
   keyed by module id, which is the shape a match criterion reads, and
-  `match_criterion` is the criterion the model was built with.
+  `match_criterion` is the criterion the model was built with. `processed?` is
+  Monty's `check_if_any_lms_updated` for the step just taken: whether a module
+  was given something to process, as opposed to only a location to buffer.
   """
   @type model :: %{
           required(:is_done) => boolean(),
           required(:is_exploring) => boolean(),
           required(:matching_steps) => non_neg_integer(),
+          required(:processed?) => boolean(),
+          required(:min_train_steps) => non_neg_integer(),
+          required(:min_eval_steps) => non_neg_integer(),
+          required(:num_exploratory_steps) => non_neg_integer(),
           required(:conclusions) => [RecognitionStatus.conclusion() | nil],
           required(:terminal_states) => %{
             optional(atom() | String.t()) => MatchCriterion.terminal_state()
@@ -67,6 +73,68 @@ defmodule Monty.Experiment.RecognitionStrategy do
   def call({module, state}, model, counter), do: module.call(model, counter, state)
 
   @doc """
+  The step-type numbers a policy carries, wherever in its chain it holds them.
+
+  Since v0.60.0 Monty keeps `min_train_steps`, `min_eval_steps` and
+  `num_exploratory_steps` on a recognition strategy rather than on
+  `monty_config`, and a termination group reaches them through `Any` and the
+  wrappers. This walks the policy tree for the strategy that carries them; a
+  policy that carries none answers `%{}`.
+
+  The model still needs the numbers (`MontyBase.min_steps`), so this is how
+  `Monty.Studio.Setup` hands them on: read once, from the policy the config
+  names.
+  """
+  @spec step_type_args(t()) :: map()
+  def step_type_args(
+        {Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone, state}
+      ),
+      do: state
+
+  def step_type_args(
+        {Monty.Experiment.RecognitionStrategy.MontyBaseSetStepTypeAndCheckIfDone, state}
+      ),
+      do: state
+
+  def step_type_args({_module, %{strategies: strategies}}) when is_list(strategies),
+    do: Enum.find_value(strategies, %{}, &found_step_type_args/1)
+
+  def step_type_args({_module, %{wrapped: wrapped}}), do: step_type_args(wrapped)
+
+  def step_type_args(_policy_that_carries_none), do: %{}
+
+  # An empty answer is "not here", so the walk goes on to the next member.
+  defp found_step_type_args(policy) do
+    case step_type_args(policy) do
+      args when map_size(args) == 0 -> nil
+      args -> args
+    end
+  end
+
+  @doc """
+  The match criterion a policy decides with, wherever in its chain it holds one.
+
+  A criterion written on a strategy (`MatchCriteria`'s, and the graph-matching
+  step-type strategy's) is the one the model should carry too, because
+  `update_terminal_condition` and the vote round read the model's.
+  """
+  @spec match_criterion(t()) :: {module(), term()} | nil
+  def match_criterion({Monty.Experiment.RecognitionStrategy.MatchCriteria, state}),
+    do: Map.get(state, :match_criterion)
+
+  def match_criterion(
+        {Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone, state}
+      ),
+      do: Map.get(state, :match_criterion)
+
+  def match_criterion({_module, %{strategies: strategies}}) when is_list(strategies),
+    do: Enum.find_value(strategies, &match_criterion/1)
+
+  def match_criterion({_module, %{wrapped: wrapped}}), do: match_criterion(wrapped)
+
+  def match_criterion(_policy_that_carries_none), do: nil
+
+  @doc """
   The signature every policy module implements.
 
   `state` is whatever the policy's `new/1` decided to keep — Monty keeps them as
@@ -83,7 +151,10 @@ defmodule Monty.Experiment.RecognitionStrategy do
     "MaximumSteps" => Monty.Experiment.RecognitionStrategy.MaximumSteps,
     "MinEvalMaxTotalSteps" => Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps,
     "MinimumLMs" => Monty.Experiment.RecognitionStrategy.MinimumLMs,
-    "MontyIsDone" => Monty.Experiment.RecognitionStrategy.MontyIsDone,
+    "MontyBaseSetStepTypeAndCheckIfDone" =>
+      Monty.Experiment.RecognitionStrategy.MontyBaseSetStepTypeAndCheckIfDone,
+    "MontyForGraphMatchingSetStepTypeAndCheckIfDone" =>
+      Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone,
     "NaiveScan" => Monty.Experiment.RecognitionStrategy.NaiveScan,
     "ObjectRecognition" => Monty.Experiment.RecognitionStrategy.ObjectRecognition,
     "StepLimit" => Monty.Experiment.RecognitionStrategy.StepLimit
@@ -129,14 +200,26 @@ defmodule Monty.Experiment.RecognitionStrategy do
     end
   end
 
-  # A wrapping or combining policy names its children as strategies of their own.
+  # A wrapping or combining policy names its children as strategies of their own,
+  # and a step-type policy names the match criterion it decides with.
   defp nested_options(options) do
     with {:ok, wrapped} <- nested(options, "wrapped"),
-         {:ok, strategies} <- nested_strategies(options) do
+         {:ok, strategies} <- nested_strategies(options),
+         {:ok, criterion} <- nested_criterion(options) do
       {:ok,
-       Enum.reject([{:wrapped, wrapped}, {:strategies, strategies}], fn {_key, value} ->
-         is_nil(value)
-       end)}
+       Enum.reject(
+         [{:wrapped, wrapped}, {:strategies, strategies}, {:match_criterion, criterion}],
+         fn {_key, value} -> is_nil(value) end
+       )}
+    end
+  end
+
+  # Monty's step-type strategy takes a `MatchCriterion` where its siblings take
+  # strategies: a config writes `_target_` and the criterion's own arguments.
+  defp nested_criterion(options) do
+    case Map.fetch(options, "match_criterion") do
+      {:ok, config} -> Monty.Experiment.MatchCriteria.from_config(config)
+      :error -> {:ok, nil}
     end
   end
 
@@ -169,7 +252,7 @@ defmodule Monty.Experiment.RecognitionStrategy do
   # policy this port has not caught up with must say so.
   @options %{
     Monty.Experiment.RecognitionStrategy.Any => [:strategies],
-    Monty.Experiment.RecognitionStrategy.MatchCriteria => [],
+    Monty.Experiment.RecognitionStrategy.MatchCriteria => [:match_criterion],
     Monty.Experiment.RecognitionStrategy.MaxTotalSteps => [:max_total_steps],
     Monty.Experiment.RecognitionStrategy.MaximumSteps => [:max_train_steps, :max_eval_steps],
     Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps => [
@@ -178,7 +261,17 @@ defmodule Monty.Experiment.RecognitionStrategy do
       :max_total_steps
     ],
     Monty.Experiment.RecognitionStrategy.MinimumLMs => [:min_lms],
-    Monty.Experiment.RecognitionStrategy.MontyIsDone => [],
+    Monty.Experiment.RecognitionStrategy.MontyBaseSetStepTypeAndCheckIfDone => [
+      :min_train_steps,
+      :min_eval_steps,
+      :num_exploratory_steps
+    ],
+    Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone => [
+      :match_criterion,
+      :min_train_steps,
+      :min_eval_steps,
+      :num_exploratory_steps
+    ],
     Monty.Experiment.RecognitionStrategy.NaiveScan => [:fixed_amount],
     Monty.Experiment.RecognitionStrategy.ObjectRecognition => [
       :max_train_steps,
@@ -197,7 +290,7 @@ defmodule Monty.Experiment.RecognitionStrategy do
     known = Map.fetch!(@options, module)
 
     options
-    |> Map.drop(["wrapped", "strategies"])
+    |> Map.drop(["wrapped", "strategies", "match_criterion"])
     |> Enum.reduce_while({:ok, []}, fn {name, value}, {:ok, built} ->
       atom = String.to_existing_atom(name)
 

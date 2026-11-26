@@ -13,7 +13,7 @@ defmodule Monty.Studio.YamlTest do
     "num_parallel" => 16,
     "defaults" => [
       %{"environment" => "mujoco_ycb_surf_agent"},
-      %{"monty" => "evidencegraph_exp1000_emin_t3"}
+      %{"monty" => "evidencegraph"}
     ],
     "experiment" => %{
       "_target_" => "contrib.liveview_experiment.src.experiment_factory.monty",

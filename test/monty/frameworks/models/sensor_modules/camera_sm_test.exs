@@ -612,7 +612,6 @@ defmodule Monty.Frameworks.Models.SensorModules.CameraSMTest do
     {observations, state, _world} = Environment.step(world, [])
 
     transforms = [
-      MissingToMaxDepth.new(agent_id: "agent_id_0", max_depth: 1.0),
       DepthTo3DLocations.new(
         agent_id: "agent_id_0",
         sensor_ids: ["patch"],

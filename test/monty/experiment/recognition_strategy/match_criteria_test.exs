@@ -1,8 +1,12 @@
 defmodule Monty.Experiment.RecognitionStrategy.MatchCriteriaTest do
   @moduledoc """
   Monty's `tests/unit/experiments/recognition_strategy_test.py::MatchCriteriaTest`,
-  case for case: the strategy believes the model's own match criterion, and asks
-  it about the modules' terminal states.
+  case for case: the strategy asks its own match criterion about the modules'
+  terminal states.
+
+  The criterion moved off the model and onto the strategy (Monty's own TODO, in
+  `MatchCriteria` before v0.60.0), so the second case pins that the model's
+  criterion is no longer the one that answers.
   """
 
   use ExUnit.Case, async: true
@@ -15,27 +19,30 @@ defmodule Monty.Experiment.RecognitionStrategy.MatchCriteriaTest do
 
   # Monty's `test_done_iff_match_criterion_has_been_met`: done exactly when the
   # criterion says so, and a satisfied criterion times the laggards out with it.
-  test "the strategy is done when the model's criterion is satisfied" do
-    {:ok, strategy} = MatchCriteria.new()
+  test "the strategy is done when its criterion is satisfied" do
+    {:ok, strategy} = MatchCriteria.new(match_criterion: criterion(1))
 
-    assert answer(strategy, %{"lm_0" => :match}, criterion(1)) ==
+    assert answer(strategy, %{"lm_0" => :match}) ==
              %RecognitionResult{is_done: true, time_out_lms: true}
 
-    assert answer(strategy, %{"lm_0" => :time_out, "lm_1" => nil}, criterion(1)) ==
+    assert answer(strategy, %{"lm_0" => :time_out, "lm_1" => nil}) ==
              %RecognitionResult{}
   end
 
-  # The criterion travels with the model, so a strategy built once answers
-  # differently per model — which is what makes it the system's usual notion of
-  # recognition rather than a step count.
-  test "the criterion it applies is the one the model carries" do
-    {:ok, strategy} = MatchCriteria.new()
+  # A strategy answers the same way whatever the model carries, because the
+  # criterion it applies is its own — that is the change this translation pins.
+  test "the criterion it applies is the one it was built with, not the model's" do
+    {:ok, one} = MatchCriteria.new(match_criterion: criterion(1))
+    {:ok, two} = MatchCriteria.new(match_criterion: criterion(2))
     states = %{"lm_0" => :match, "lm_1" => :no_match}
 
-    assert answer(strategy, states, criterion(1)).is_done
-    refute answer(strategy, states, criterion(2)).is_done
-    refute answer(strategy, %{"lm_0" => :match}, named(["lm_1"])).is_done
-    assert answer(strategy, %{"lm_0" => :match, "lm_1" => :match}, named(["lm_1"])).is_done
+    assert answer(one, states).is_done
+    refute answer(two, states).is_done
+
+    {:ok, named} = MatchCriteria.new(match_criterion: names(["lm_1"]))
+
+    refute answer(named, %{"lm_0" => :match}).is_done
+    assert answer(named, %{"lm_0" => :match, "lm_1" => :match}).is_done
   end
 
   defp criterion(count) do
@@ -43,19 +50,25 @@ defmodule Monty.Experiment.RecognitionStrategy.MatchCriteriaTest do
     {AnyLMsMatch, criterion}
   end
 
-  defp named(ids) do
+  defp names(ids) do
     {:ok, criterion} = NamedLMsMatch.new(ids)
     {NamedLMsMatch, criterion}
   end
 
-  defp answer(strategy, terminal_states, match_criterion) do
+  # The model always carries a criterion of two modules, so a strategy whose own
+  # criterion says one is done anyway: that is what the second case is for.
+  defp answer(strategy, terminal_states) do
     model = %{
       is_done: false,
       is_exploring: false,
       matching_steps: 0,
+      processed?: true,
+      min_train_steps: 0,
+      min_eval_steps: 0,
+      num_exploratory_steps: 0,
       conclusions: [],
       terminal_states: terminal_states,
-      match_criterion: match_criterion
+      match_criterion: criterion(2)
     }
 
     RecognitionStrategy.call(strategy, model, RecognitionContext.new(:eval))

@@ -34,7 +34,8 @@ from tbp.monty.experiment.recognition_strategy import (
     MaximumSteps,
     MinEvalMaxTotalSteps,
     MinimumLMs,
-    MontyIsDone,
+    MontyBaseSetStepTypeAndCheckIfDone,
+    MontyForGraphMatchingSetStepTypeAndCheckIfDone,
     NaiveScan,
     ObjectRecognition,
     RecognitionContext,
@@ -54,19 +55,43 @@ class StubStatus:
         self.conclusion = conclusion
 
 
+class StubBuffer:
+    """Just the field `_check_if_any_lms_updated` reads."""
+
+    def __init__(self, processed):
+        self._processed = processed
+
+    def get_last_obs_processed(self):
+        return self._processed
+
+
 class StubLM:
-    def __init__(self, learning_module_id, conclusion, terminal_state):
+    def __init__(self, learning_module_id, conclusion, terminal_state, processed):
         self.learning_module_id = learning_module_id
         self.recognition_status = StubStatus(conclusion)
         self.terminal_state = terminal_state
+        self.buffer = StubBuffer(processed)
+
+    def update_terminal_condition(self):
+        """Monty's graph-matching strategy asks each module to settle.
+
+        A module's own answer is the one it already holds: what a real update
+        changes is symmetry evidence and the pose, neither of which a strategy
+        reads.
+        """
 
 
 def _terminal_states(matched_lms):
     """Three module ids, `matched_lms` of which recognised the object.
 
     The module after the last one that matched has timed out and the rest have
-    not concluded — the mix a match criterion has to tell apart.
+    not concluded — the mix a match criterion has to tell apart. `"no_match"`
+    is the other ending worth asking about: every module gave up, which the
+    graph-matching strategy ends an episode on before any step minimum.
     """
+    if matched_lms == "no_match":
+        return {f"lm_{index}": "no_match" for index in range(3)}
+
     return {
         f"lm_{index}": (
             "match"
@@ -82,15 +107,22 @@ def _terminal_states(matched_lms):
 class StubModel:
     """What a recognition strategy is allowed to look at."""
 
-    def __init__(self, is_done, is_exploring, matching_steps, matched_lms, criterion):
+    def __init__(
+        self, is_done, is_exploring, matching_steps, matched_lms, processed, criterion
+    ):
         self.is_done = is_done
         self.is_exploring = is_exploring
+        self.step_type = "exploratory_step" if is_exploring else "matching_step"
         self.matching_steps = matching_steps
         self.learning_modules = [
             StubLM(
                 module_id,
-                RecognitionConclusion.MATCH if state == "match" else None,
+                # `GraphLM.recognition_status` is
+                # `RecognitionConclusion(self.terminal_state)` whenever there is
+                # a terminal state, so a timed-out module has concluded too.
+                RecognitionConclusion(state) if state is not None else None,
                 state,
+                processed,
             )
             for module_id, state in _terminal_states(matched_lms).items()
         ]
@@ -102,7 +134,9 @@ def _states():
 
     A full product of these dimensions would be thousands of rows that repeat
     each other; these are chosen so that each policy's branches are crossed at
-    least once, at the step and count they turn on.
+    least once, at the step and count they turn on. Every row is asked twice,
+    with and without a module having processed the step: the two step-type
+    strategies end an episode only on a step a module processed.
     """
     rows = [
         # (is_done, is_exploring, matching, exploring, step, mode, matched_lms)
@@ -139,25 +173,30 @@ def _states():
         (False, True, 0, 50, 50, "TRAIN", 3),
         (False, False, 10, 0, 10, "EVAL", 1),
         (False, False, 10, 0, 10, "EVAL", 3),
+        # Every module gave up: an ending that owes no step minimum.
+        (False, False, 0, 0, 0, "EVAL", "no_match"),
+        (False, False, 20, 0, 20, "TRAIN", "no_match"),
         (True, True, 0, 100, 100, "TRAIN", 3),
     ]
 
-    for is_done, is_exploring, matching, exploring, step, mode, matched in rows:
-        yield {
-            "model": {
-                "is_done": is_done,
-                "is_exploring": is_exploring,
-                "matching_steps": matching,
-                "matched_lms": matched,
-                "terminal_states": _terminal_states(matched),
-            },
-            "counter": {
-                "step": step,
-                "matching_steps": matching,
-                "exploring_steps": exploring,
-                "mode": mode,
-            },
-        }
+    for processed in (True, False):
+        for is_done, is_exploring, matching, exploring, step, mode, matched in rows:
+            yield {
+                "model": {
+                    "is_done": is_done,
+                    "is_exploring": is_exploring,
+                    "matching_steps": matching,
+                    "matched_lms": matched,
+                    "processed": processed,
+                    "terminal_states": _terminal_states(matched),
+                },
+                "counter": {
+                    "step": step,
+                    "matching_steps": matching,
+                    "exploring_steps": exploring,
+                    "mode": mode,
+                },
+            }
 
 
 def _policies():
@@ -170,7 +209,6 @@ def _policies():
         max_train_steps=1000, max_eval_steps=500, max_total_steps=6000
     )
     strategies = {
-        "MontyIsDone": MontyIsDone(),
         "MaxTotalSteps(20)": MaxTotalSteps(max_total_steps=20),
         "MaximumSteps(1000, 500)": MaximumSteps(
             max_train_steps=1000, max_eval_steps=500
@@ -206,6 +244,33 @@ def _policies():
         ),
     }
 
+    # The two strategies that carry the step-type and terminal-condition rules,
+    # with the numbers the shipped termination groups configure (min train, min
+    # eval, steps exploring). Two eval minimums, because an evaluation ends only
+    # once the matching count has passed that minimum.
+    criteria = AnyLMsMatch(count=1)
+    strategies["MontyForGraphMatchingSetStepTypeAndCheckIfDone(20, 20, 100)"] = (
+        MontyForGraphMatchingSetStepTypeAndCheckIfDone(
+            match_criterion=criteria,
+            min_train_steps=20,
+            min_eval_steps=20,
+            num_exploratory_steps=100,
+        )
+    )
+    strategies["MontyForGraphMatchingSetStepTypeAndCheckIfDone(20, 500, 100)"] = (
+        MontyForGraphMatchingSetStepTypeAndCheckIfDone(
+            match_criterion=criteria,
+            min_train_steps=20,
+            min_eval_steps=500,
+            num_exploratory_steps=100,
+        )
+    )
+    strategies["MontyBaseSetStepTypeAndCheckIfDone(20, 20, 100)"] = (
+        MontyBaseSetStepTypeAndCheckIfDone(
+            min_train_steps=20, min_eval_steps=20, num_exploratory_steps=100
+        )
+    )
+
     default_criterion = AnyLMsMatch(count=1)
     named_criterion = NamedLMsMatch(ids=["lm_2"])
 
@@ -213,11 +278,11 @@ def _policies():
         name: (strategy, default_criterion, "AnyLMsMatch(1)")
         for name, strategy in strategies.items()
     }
-    # `MatchCriteria` takes no configuration: what varies between these two rows
-    # is the criterion on the model, which is what the strategy reads.
-    entries["MatchCriteria"] = (MatchCriteria(), default_criterion, "AnyLMsMatch(1)")
+    # `MatchCriteria` carries the criterion itself now (it used to read the
+    # model's), so the two rows differ in the strategy, not only in the model.
+    entries["MatchCriteria"] = (MatchCriteria(default_criterion), default_criterion, "AnyLMsMatch(1)")
     entries["MatchCriteria(NamedLMsMatch[lm_2])"] = (
-        MatchCriteria(),
+        MatchCriteria(named_criterion),
         named_criterion,
         "NamedLMsMatch([lm_2])",
     )
@@ -248,16 +313,16 @@ REFUSALS = [
     ),
     (
         "MinEvalMaxTotalSteps.min",
-        lambda: MinEvalMaxTotalSteps(MontyIsDone(), min_eval_steps=-1),
+        lambda: MinEvalMaxTotalSteps(MaxTotalSteps(max_total_steps=20), min_eval_steps=-1),
     ),
     (
         "MinEvalMaxTotalSteps.total",
-        lambda: MinEvalMaxTotalSteps(MontyIsDone(), max_total_steps=0),
+        lambda: MinEvalMaxTotalSteps(MaxTotalSteps(max_total_steps=20), max_total_steps=0),
     ),
     (
         "MinEvalMaxTotalSteps.order",
         lambda: MinEvalMaxTotalSteps(
-            MontyIsDone(), min_eval_steps=500, max_total_steps=20
+            MaxTotalSteps(max_total_steps=20), min_eval_steps=500, max_total_steps=20
         ),
     ),
 ]
@@ -268,6 +333,7 @@ def _result(result):
         "is_done": bool(result.is_done),
         "time_out_lms": bool(result.time_out_lms),
         "start_exploring": bool(result.start_exploring),
+        "global_time_out": bool(result.global_time_out),
     }
 
 
@@ -287,6 +353,7 @@ def main() -> None:
                 is_exploring=model_state["is_exploring"],
                 matching_steps=model_state["matching_steps"],
                 matched_lms=model_state["matched_lms"],
+                processed=model_state["processed"],
                 criterion=criterion,
             )
             counter_state = state["counter"]

@@ -15,7 +15,7 @@ defmodule Monty.Runtime.PositioningTest do
   alias Monty.Frameworks.Actions.MoveForward
   # `Environments` before `EnvironmentUtils`: credo orders these case-blind.
   alias Monty.Frameworks.Environments.PositioningProcedures.GetGoodViewFactory
-  alias Monty.Frameworks.EnvironmentUtils.Transforms.{DepthTo3DLocations, MissingToMaxDepth}
+  alias Monty.Frameworks.EnvironmentUtils.Transforms.{AddNoiseToRawDepthImage, DepthTo3DLocations}
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
   alias Monty.Geometry.Rotation
   alias Monty.Runtime.Positioning
@@ -81,7 +81,7 @@ defmodule Monty.Runtime.PositioningTest do
     assert [looked | [looked_again]] = world.seen
     assert looked == looked_again
 
-    assert [%DepthTo3DLocations{} = narrowed, %MissingToMaxDepth{} = rest] = looked
+    assert [%DepthTo3DLocations{} = narrowed, %AddNoiseToRawDepthImage{} = rest] = looked
 
     assert narrowed.sensor_ids == [@sensor],
            "the step should compute the procedure's sensor alone"
@@ -158,7 +158,7 @@ defmodule Monty.Runtime.PositioningTest do
         intrinsics: [:wide, :narrow],
         depth_clip_sensors: [1]
       },
-      %MissingToMaxDepth{agent_id: @agent, max_depth: 20.0}
+      %AddNoiseToRawDepthImage{agent_id: @agent, sigma: 20.0}
     ]
   end
 

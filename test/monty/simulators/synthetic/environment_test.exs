@@ -107,10 +107,13 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
 
       seen = sensor(observations)
 
-      # Depth 0 is what a depth image has where the camera saw nothing.
+      # The far plane is what a depth image has where the camera saw nothing:
+      # `Monty.Simulators.Synthetic.Scene` answers the same 500 m the compiled
+      # world's cameras unproject to, so a miss never reads as an object at
+      # zero distance (`docs/monty-differences.md` §1.7).
       assert [[depth]] = seen["depth"]
       assert [[semantic_id]] = seen["semantic"]
-      assert depth == 0.0
+      assert depth == 500.0
       assert semantic_id == 0.0
     end
   end
@@ -189,7 +192,7 @@ defmodule Monty.Simulators.Synthetic.EnvironmentTest do
       patch = sensor(observations)
 
       assert List.flatten(patch["semantic"]) == List.duplicate(0.0, 9)
-      assert List.flatten(patch["depth"]) == List.duplicate(0.0, 9)
+      assert List.flatten(patch["depth"]) == List.duplicate(500.0, 9)
     end
   end
 

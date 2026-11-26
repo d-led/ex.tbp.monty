@@ -100,13 +100,15 @@ defmodule Monty.Studio.SetupTest do
   defp warnings(setup), do: setup.findings |> Finding.at(:warning) |> Enum.map(& &1.code)
 
   @base %{
-    "monty" => "graph_exp1000_e3_t3",
+    "monty" => "graph",
     "monty/motor_system_config" => "distant_5",
     "monty/learning_module" => "evidence_1lm_nn5_dod003",
     "monty/sensor_module" => "camera_dist_delta_salience",
     "monty/connectivity" => "1lm_1sm",
     "environment" => "mujoco_dist_agent_semantics1",
-    "termination" => "any1_objectrecognition_t1000_e500_tot6000",
+    # The step-type numbers used to be the `monty` group's; since v0.60.0 they
+    # are this group's, so the fixture reads its numbers here.
+    "termination" => "any1_any_mfgm_t3ecexp1000_t1000e500tot6000",
     "logging" => "silent_warning_train",
     "telemetry" => "warning"
   }
@@ -311,7 +313,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /monty/sensor_module: camera_dist_delta_salience
 
@@ -335,7 +337,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /monty/sensor_module: camera_dist_delta_salience
 
@@ -356,17 +358,19 @@ defmodule Monty.Studio.SetupTest do
   end
 
   describe "the match criterion a termination config names" do
-    # Monty's experiment reads `match_criterion` from the same config group as
-    # the recognition strategy and sets it on the model before the first
-    # episode. A config that names `NamedLMsMatch` must not run to the model's
-    # own default, which is a different notion of recognition.
+    # Until v0.60.0 the criterion sat on `experiment.config`; since then it is
+    # the strategy's own argument (Monty's `MatchCriteria` carries it too), so
+    # what a config names reaches the model *through* the policy it also names.
+    # A config that says `NamedLMsMatch` must not run to the model's own
+    # default, which is a different notion of recognition.
     test "reaches the model, instead of the default" do
       setup =
-        setup_from(Map.put(@base, "termination", "named_lm2_objectrecognition_t1000_e100_tot500"))
+        setup_from(
+          Map.put(@base, "termination", "named_lm2_any_mfgm_t3ecexp1000_t1000e100tot500")
+        )
 
       named = {NamedLMsMatch, %NamedLMsMatch{ids: MapSet.new(["learning_module_2"])}}
 
-      assert setup.match_criterion == named
       assert Setup.model_spec(setup, :criterion_test).match_criterion == named
     end
 
@@ -376,7 +380,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /monty/sensor_module: camera_dist_delta_salience
 
@@ -450,7 +454,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /environment: mujoco_ycb_dist_agent
 
@@ -494,7 +498,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /monty/sensor_module: camera_dist_delta_salience
           - /monty/connectivity: 1lm_1sm
@@ -561,7 +565,7 @@ defmodule Monty.Studio.SetupTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
 
         experiment:

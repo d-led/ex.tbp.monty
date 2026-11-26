@@ -1,19 +1,19 @@
 defmodule Monty.Experiment.RecognitionStrategy.ObjectRecognition do
   @moduledoc """
-  Monty's own object-recognition policy: three ways to finish an episode.
+  Monty's own object-recognition policy: two ways to finish an episode.
 
-  Mirrors `tbp/monty/experiment/recognition_strategy.py::ObjectRecognition`, and is
-  what `termination/any1_objectrecognition_t1000_e500_tot6000` configures. In
+  Mirrors `tbp/monty/experiment/recognition_strategy.py::ObjectRecognition`, and
+  is what `termination/any1_objectrecognition_t1000_e500_tot6000` configures. In
   Monty's order:
 
     1. the mode's matching limit is reached and the model is not exploring —
        done, and time the modules out beside it;
-    2. the total step ceiling is reached — done, and time the modules out;
-    3. the model says it is done — done, and nothing to time out.
+    2. the total step ceiling is reached — done, and time the modules out.
 
-  The order matters because the first two also *time out* the modules: an
-  episode stopped by a limit still owes an answer, while an episode that
-  recognised its object already has one.
+  Both time the modules out: an episode stopped by a limit still owes an answer.
+  (The port used to have a third clause reading `model.is_done`, which Monty
+  removed along with the model's own `is_done` — a strategy decides, the model
+  no longer does.)
   """
 
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
@@ -51,19 +51,16 @@ defmodule Monty.Experiment.RecognitionStrategy.ObjectRecognition do
     end
   end
 
-  @doc "The first of the three conditions that holds, in Monty's order."
+  @doc "The first of the two conditions that holds, in Monty's order."
   @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
     cond do
-      not model.is_exploring and model.matching_steps >= limit(state, counter.mode) ->
+      not model.is_exploring and counter.matching_steps >= limit(state, counter.mode) ->
         %RecognitionResult{is_done: true, time_out_lms: true}
 
       counter.step >= state.max_total_steps ->
         %RecognitionResult{is_done: true, time_out_lms: true}
-
-      model.is_done ->
-        %RecognitionResult{is_done: true}
 
       true ->
         %RecognitionResult{}

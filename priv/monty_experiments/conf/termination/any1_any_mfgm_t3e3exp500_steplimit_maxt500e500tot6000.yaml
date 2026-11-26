@@ -1,0 +1,25 @@
+# @package experiment.config
+
+# The only termination this repository's own experiments need that Monty no
+# longer ships: the union of `monty/graph_exp500_e3_t3` (three training steps,
+# three matching steps, 500 exploratory steps) with Monty's surviving
+# `any1_train_steps_3_500_tot6000` (a StepLimit of 3/500/500/500 and a 6000-step
+# ceiling). The two halves were separate groups before v0.60.0 moved the
+# step-type numbers into the recognition strategy.
+recognition_strategy:
+  _target_: tbp.monty.experiment.recognition_strategy.Any
+  strategies:
+    - _target_: tbp.monty.experiment.recognition_strategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone
+      match_criterion:
+        _target_: tbp.monty.experiment.match_criteria.AnyLMsMatch
+        count: 1
+      min_train_steps: 3
+      min_eval_steps: 3
+      num_exploratory_steps: 500
+    - _target_: tbp.monty.experiment.recognition_strategy.StepLimit
+      min_train_steps: 3
+      num_exploring_steps: 500
+      max_train_steps: 500
+      max_eval_steps: 500
+    - _target_: tbp.monty.experiment.recognition_strategy.MaxTotalSteps
+      max_total_steps: 6000

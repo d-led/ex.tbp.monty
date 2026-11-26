@@ -16,8 +16,8 @@ defmodule Monty.ModuleMap.Data do
 
   @sources %{
     "monty" => %{
-      "commit" => "a8b528aae97c9d40f66aa8ca7a39fc19a07fdc8d",
-      "date" => "2026-11-19T15:40:41Z"
+      "commit" => "a82d8a087240d03723a64c981187ec5cee6d556e",
+      "date" => "2026-11-25T23:26:54Z"
     },
     "teleop" => %{
       "commit" => "2476e5c06a23fb8916ccfcd015a93990316bcbdc",
@@ -439,13 +439,6 @@ defmodule Monty.ModuleMap.Data do
         %{
           status: :implemented,
           file:
-            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/monty_is_done.ex",
-          elixir: "Monty.Experiment.RecognitionStrategy.MontyIsDone",
-          python: "MontyIsDone"
-        },
-        %{
-          status: :implemented,
-          file:
             "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/min_eval_max_total_steps.ex",
           elixir: "Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps",
           python: "MinEvalMaxTotalSteps"
@@ -498,6 +491,21 @@ defmodule Monty.ModuleMap.Data do
             "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/object_recognition.ex",
           elixir: "Monty.Experiment.RecognitionStrategy.ObjectRecognition",
           python: "ObjectRecognition"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/monty_for_graph_matching_set_step_type_and_check_if_done.ex",
+          elixir:
+            "Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone",
+          python: "MontyForGraphMatchingSetStepTypeAndCheckIfDone"
+        },
+        %{
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/experiment/recognition_strategy/monty_base_set_step_type_and_check_if_done.ex",
+          elixir: "Monty.Experiment.RecognitionStrategy.MontyBaseSetStepTypeAndCheckIfDone",
+          python: "MontyBaseSetStepTypeAndCheckIfDone"
         },
         %{
           status: :implemented,
@@ -899,12 +907,6 @@ defmodule Monty.ModuleMap.Data do
           file: "lib/monty/frameworks/environment_utils/transforms/transform.ex",
           elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.Transform",
           python: "Transform"
-        },
-        %{
-          status: :implemented,
-          file: "lib/monty/frameworks/environment_utils/transforms/missing_to_max_depth.ex",
-          elixir: "Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth",
-          python: "MissingToMaxDepth"
         },
         %{
           status: :implemented,

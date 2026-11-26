@@ -5,7 +5,7 @@
 # `dogs/supervised_pretraining_dense` writes. The only thing that differs from
 # that config is the memory, so the two runs' verdicts are one comparison.
 defaults:
-  - /monty: evidencegraph_exp1000_emin_t3
+  - /monty: evidencegraph
   - /monty/motor_system_config: distant_5
   - /monty/learning_module: evidence_tutorial_surf_agent_2obj
   - /monty/sensor_module: camera_dist_noise_raw0
@@ -14,7 +14,7 @@ defaults:
   - /env_interface: eval_dogs_random
   - /env_interface/positioning_procedures_eval: getgoodview_viewfinder_patch
   - /env_interface/transform: missing_depthto3d_sensor2_semantic0
-  - /termination: any1_objectrecognition_t1000_e500_tot5000
+  - /termination: any1_any_mfgm_t3ecexp1000_t1000e500tot5000
   - /logging: basic_warning_wandb_monty_runs
 
 experiment:

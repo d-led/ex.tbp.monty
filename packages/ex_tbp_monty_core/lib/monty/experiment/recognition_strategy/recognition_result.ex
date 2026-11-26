@@ -11,13 +11,18 @@ defmodule Monty.Experiment.RecognitionStrategy.RecognitionResult do
       answer to report.
     * `start_exploring` — switch the model into exploring mode, which is how a
       training episode keeps moving over an object it has already recognised.
+    * `global_time_out` — ask for a global time-out on top of the per-module
+      ones. Monty carries it and nothing reads it yet; it defaults to `true`,
+      and `Any` combines it with `and` so that one strategy asking for the
+      non-default wins.
   """
 
-  defstruct is_done: false, time_out_lms: false, start_exploring: false
+  defstruct is_done: false, time_out_lms: false, start_exploring: false, global_time_out: true
 
   @type t :: %__MODULE__{
           is_done: boolean(),
           time_out_lms: boolean(),
-          start_exploring: boolean()
+          start_exploring: boolean(),
+          global_time_out: boolean()
         }
 end

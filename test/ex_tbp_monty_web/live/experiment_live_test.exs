@@ -2052,7 +2052,7 @@ defmodule ExTbpMontyWeb.ExperimentLiveTest do
     # @package _global_
 
     defaults:
-      - /monty: graph_exp1000_e3_t3
+      - /monty: graph
       - /monty/learning_module: evidence_5lm_nn10_dod003
       - /monty/sensor_module: camera_dist_delta_salience
       - /monty/connectivity: 1lm_1sm

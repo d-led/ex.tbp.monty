@@ -78,7 +78,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
     test "and the points of a view asked for its surface only are the surface's" do
       # Monty's `get_all_points: false` is what a patch asks for: the points of
       # the object under it, not of the whole image. A metre away is not the
-      # object (`MissingToMaxDepth` has already turned "no return" into one).
+      # object (the world has already answered the far plane for a miss).
       depth = [[0.5, 1.0, 0.5], [1.0, 0.5, 1.0], [0.5, 1.0, 0.5]]
 
       %{observations: observations} =
@@ -99,7 +99,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocationsTest do
           world_coord: false
         )
 
-      # `MissingToMaxDepth` has already turned what the camera could not see into
+      # The world has already answered the far plane where the camera could not see
       # a metre, which is why a metre is where the object stops.
       assert surface_mask(observations, "patch") == [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
     end

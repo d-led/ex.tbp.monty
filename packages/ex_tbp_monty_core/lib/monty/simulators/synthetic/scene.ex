@@ -39,6 +39,14 @@ defmodule Monty.Simulators.Synthetic.Scene do
   # that belongs to nothing.
   @no_colour [0.0, 0.0, 0.0, 1.0]
 
+  # What a ray that met nothing is worth, and it is the scene's far plane rather
+  # than Habitat's 0. MuJoCo unprojects its depth buffer against the camera's far
+  # plane (500 m in `Monty.Simulators.ExMujoco.Scene`), so a miss arrives *far* in
+  # the world this stand-in stands in for; answering 0 would make a miss look like
+  # an object at zero distance to any module that reads the image, which is what
+  # Monty's removed `MissingToMaxDepth` transform used to repair.
+  @nothing_seen 500.0
+
   @enforce_keys [:centre, :radius, :rgb]
   defstruct [:centre, :radius, :rgb]
 
@@ -103,12 +111,13 @@ defmodule Monty.Simulators.Synthetic.Scene do
   own code indexes. With one pixel the grid has a single sample at the axis, so
   the field of view does not matter.
 
-  A ray that misses sees nothing: depth 0, which is what a depth image has where
-  the camera saw nothing, and a semantic id of 0. That is a difference from
-  Monty's worlds rather than a simplification — theirs are enclosed, so a camera
-  pointed anywhere sees a floor, a wall or a ceiling at some distance, and a
-  surface agent's search for a lost object relies on that
-  (`docs/monty-differences.md` §1.7). Here there is nothing behind the object.
+  A ray that misses sees nothing, and sees it far away: depth `500` m, the far
+  plane the compiled world's cameras use, and a semantic id of 0. Monty's own
+  worlds are enclosed, so a camera pointed anywhere sees a floor, a wall or a
+  ceiling at some distance, and a surface agent's search for a lost object relies
+  on that (`docs/monty-differences.md` §1.7). Here there is nothing behind the
+  object, so the miss is the furthest the scene draws — which is what the compiled
+  world answers and what a module reading the image expects.
   """
   @spec render(t(), %{position: Rotation.vector(), rotation: Rotation.t()}, keyword()) :: %{
           depth: [[float()]],
@@ -141,7 +150,7 @@ defmodule Monty.Simulators.Synthetic.Scene do
       end
 
     %{
-      depth: Enum.map(rows, fn row -> Enum.map(row, &(&1.depth || 0.0)) end),
+      depth: Enum.map(rows, fn row -> Enum.map(row, &(&1.depth || @nothing_seen)) end),
       rgba: Enum.map(rows, fn row -> Enum.map(row, &(&1.rgba || @no_colour)) end),
       semantic:
         Enum.map(rows, fn row -> Enum.map(row, &if(&1.on_object, do: 1.0, else: 0.0)) end),

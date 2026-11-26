@@ -8,8 +8,6 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
     * `...Transforms.TransformContext` — the stream and the proprioceptive state
       a transform is given;
     * `...Transforms.Transform` — the interface, `call/3`;
-    * `...Transforms.MissingToMaxDepth` — depth where nothing was seen becomes
-      the furthest the sensor can see;
     * `...Transforms.AddNoiseToRawDepthImage` — a noisy camera, drawn from the
       step's stream;
     * `...Transforms.GaussianSmoothing` — the depth image, smoothed;
@@ -59,8 +57,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms do
   @doc """
   Run a list of transforms in the order they were configured.
 
-  Monty's transforms run in sequence, each seeing what the one before it left —
-  `MissingToMaxDepth` then `DepthTo3DLocations`, and never the other way round.
+  Monty's transforms run in sequence, each seeing what the one before it left.
   The proprioceptive state goes with the observations because some transforms
   need to know where the sensor was: a pixel's depth is a distance from
   something.

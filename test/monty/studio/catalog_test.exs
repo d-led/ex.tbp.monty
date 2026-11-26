@@ -29,7 +29,7 @@ defmodule Monty.Studio.CatalogTest do
   @experiment """
   # @package _global_
   defaults:
-    - /monty: graph_exp20_e3_t3
+    - /monty: graph
   experiment:
     _target_: tbp.monty.frameworks.experiments.object_recognition_experiments.MontyObjectRecognitionExperiment
     config:
@@ -63,11 +63,24 @@ defmodule Monty.Studio.CatalogTest do
 
   describe "which experiment writes a memory" do
     test "is the run whose name the memory carries, not the file that configures it" do
-      # `tutorial/surf_agent_2obj_train` files what it learns as
-      # `surf_agent_1lm_2obj_train` — the name the evaluation config reads. A
-      # lookup by file name would answer "nothing trains this" about a memory one
-      # press would produce.
-      assert Catalog.trainer_for("surf_agent_1lm_2obj_train") == "tutorial/surf_agent_2obj_train"
+      # A run files what it learns under its `logging.run_name`, which need not
+      # be the config file's name: `dogs/mine` here writes `a_memory_name`. A
+      # lookup by file name would answer "nothing trains this" about a memory
+      # one press would produce. (Monty's own tutorial used to show the two
+      # differing; since v0.60.0 its run is named after its file, so the
+      # property is pinned on a fixture of ours.)
+      dir =
+        conf_dir([
+          {"dogs/mine",
+           String.replace(
+             @experiment,
+             "n_train_epochs: 3",
+             "n_train_epochs: 3\n    logging:\n      run_name: a_memory_name"
+           )}
+        ])
+
+      assert Catalog.trainer_for("a_memory_name", conf_dir: dir) == "dogs/mine"
+      assert Catalog.trainer_for("mine", conf_dir: dir) == nil
     end
 
     test "is nobody when no run is named after the memory" do

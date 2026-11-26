@@ -8,8 +8,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
   row per pixel with its three coordinates and whether that pixel is on the
   surface in the middle of the view, and `"cam_to_world"`, the frame those
   coordinates are expressed in. This transform is what puts them there, and
-  every one of Monty's experiments configures it directly after
-  `MissingToMaxDepth`.
+  every one of Monty's experiments configures it.
 
   ## On-object is not on-surface
 
@@ -521,8 +520,8 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.DepthTo3DLocations do
 
   # The on-object mask: the semantic sensor's own answer when the experiment
   # reads one, and otherwise the depth image's — a pixel a metre away or more is
-  # not the object, because `MissingToMaxDepth` has already replaced everything
-  # the camera could not see.
+  # not the object, because the world answers the far plane where the camera
+  # could not see.
   #
   # The depth image's own mask and a surface agent's clipping were three walks of
   # four thousand pixels a sensor a step — the mask, the clipped depths, then the

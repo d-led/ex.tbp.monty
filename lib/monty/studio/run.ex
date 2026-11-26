@@ -672,8 +672,20 @@ defmodule Monty.Studio.Run do
   @spec finished?(t()) :: boolean()
   def finished?(%__MODULE__{step: step, steps: steps} = run) do
     decision = decision(run)
-    apply_reactions(run, decision)
-    step >= steps or decision.is_done
+    settling? = settling?(run)
+    unless settling?, do: apply_reactions(run, decision)
+    step >= steps or (decision.is_done and not settling?)
+  end
+
+  # The model's grace (`settle_steps`), which is this port's addition and lives
+  # in the model rather than in a policy: a conclusion has arrived, and the
+  # model is holding the episode open for the modules that have not answered
+  # yet. While it does, the model's own answer is the episode's — a policy that
+  # sees a satisfied criterion would otherwise close the episode before the
+  # stragglers it is waiting for have said anything.
+  defp settling?(%__MODULE__{model: model, model_id: model_id}) do
+    view = model.status(model_id)
+    not view.is_done and not is_nil(view.settle_left)
   end
 
   @doc "Stops the run's processes — the model and the world it steps; safe to call twice."

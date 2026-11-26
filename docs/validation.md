@@ -148,10 +148,14 @@ now asked of it (see §2.16 for what the stand-in world still decides).
 An episode also ends the way Monty's does: `Monty.Runtime.Episode` and the
 studio's run both ask a recognition strategy each step instead of counting to a
 budget, and apply the two reactions a strategy can ask for (`start_exploring`,
-`time_out_lms`). The default is `Any([MontyIsDone, MaxTotalSteps])` —
-Monty's own default unioned with the ceiling, which is what `:max_steps` means —
-and the studio builds the policy its config names, falling back to `MontyIsDone`
-where a config names none, which is Monty's fallback too.
+`time_out_lms`). The default is
+`Any([MontyForGraphMatchingSetStepTypeAndCheckIfDone, MaxTotalSteps])` — the
+model's own step-type rule unioned with the ceiling, which is what `:max_steps`
+means — and the studio builds the policy its config names. Since v0.60.0 that
+policy _is_ the rule Monty's model used to hold: `min_eval_steps`,
+`min_train_steps` and `num_exploratory_steps` are its arguments, and
+`Monty.Studio.Setup` reads them off it to build the model
+(`docs/monty-differences.md` §2.46).
 
 A run also starts with Monty's own pretrained memory when its config names a
 model this machine has exported: `<data>/libraries/<release>/<model>.jsonl.gz`

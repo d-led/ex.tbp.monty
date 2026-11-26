@@ -46,7 +46,9 @@ defmodule Monty.Experiment.RecognitionStrategy.Any do
     %RecognitionResult{
       is_done: result.is_done or answer.is_done,
       time_out_lms: result.time_out_lms or answer.time_out_lms,
-      start_exploring: result.start_exploring or answer.start_exploring
+      start_exploring: result.start_exploring or answer.start_exploring,
+      # False is the non-default, so the union is an `and` here.
+      global_time_out: result.global_time_out and answer.global_time_out
     }
   end
 end

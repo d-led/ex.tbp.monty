@@ -458,7 +458,7 @@ defmodule ExTbpMontyWeb.ExperimentsLiveTest do
     # @package _global_
 
     defaults:
-      - /monty: graph_exp1000_e3_t3
+      - /monty: graph
       - /monty/learning_module: displacement_1lm
       - /monty/sensor_module: camera_dist_raw0
       - /monty/connectivity: 1lm_1sm

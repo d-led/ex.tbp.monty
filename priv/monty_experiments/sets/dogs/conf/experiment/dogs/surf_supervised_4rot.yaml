@@ -6,7 +6,7 @@
 # so this run either closes the eighth name or shows that the miss is not a
 # coverage problem.
 defaults:
-  - /monty: graph_exp500_e3_t3
+  - /monty: graph
   - /monty/motor_system_config: surface_curvature_informed_5_goal0
   - /monty/learning_module: graph_1lm
   - /monty/sensor_module: camera_surf_rgba
@@ -14,7 +14,7 @@ defaults:
   - /environment: mujoco_objaverse_dogs_surf_agent
   - /env_interface: train_dogs_predefined
   - /env_interface/transform: missing_depthto3d_sensor2_semantic0_clip
-  - /termination: any1_train_steps_3_500_tot6000
+  - /termination: any1_any_mfgm_t3e3exp500_steplimit_maxt500e500tot6000
   - /logging: silent_warning_train
 
 experiment:

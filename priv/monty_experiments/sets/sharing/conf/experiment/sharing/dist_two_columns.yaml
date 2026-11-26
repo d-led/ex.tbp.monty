@@ -15,7 +15,7 @@
 # A world that produces a real memory is the only place a "did both modules
 # learn" question can be answered.
 defaults:
-  - /monty: graph_exp500_e3_t3
+  - /monty: graph
   - /monty/motor_system_config: naive_scan_5
   - /monty/learning_module: displacement_2lm
   # Monty's own: five patches on a distant agent. Patches 2–4 mount and feed no
@@ -26,7 +26,7 @@ defaults:
   - /env_interface: tutorial_train_2obj_predefined
   - /env_interface/positioning_procedures_train: getgoodview_viewfinder_patch0
   - /env_interface/transform: missing_depthto3d_sensor6
-  - /termination: any1_naivescan_fixed5_tot6000
+  - /termination: any1_any_mfgm_t3e3exp500_naivescan_fixed5_tot6000
   - /logging: silent_warning_train
   - /telemetry: info
 

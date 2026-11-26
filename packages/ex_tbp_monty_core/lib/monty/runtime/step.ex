@@ -456,6 +456,7 @@ defmodule Monty.Runtime.Step do
       end)
 
     {state, processed?} = advance(state)
+    state = %{state | last_processed?: processed?}
 
     info = %{
       step: state.step,
@@ -881,6 +882,10 @@ defmodule Monty.Runtime.Step do
       is_done: state.done?,
       is_exploring: state.step_type == :exploratory,
       matching_steps: state.matching_steps,
+      processed?: state.last_processed?,
+      min_train_steps: state.min_train_steps,
+      min_eval_steps: state.min_eval_steps,
+      num_exploratory_steps: state.num_exploratory_steps,
       conclusions: Enum.map(state.learning_modules, &Map.get(state.terminal_states, &1.id)),
       terminal_states: state.terminal_states,
       still_believing: state.still_believing,
@@ -1163,6 +1168,7 @@ defmodule Monty.Runtime.Step do
       | step_type: :matching,
         matching_steps: 0,
         exploratory_steps: 0,
+        last_processed?: false,
         terminal_states: %{},
         still_believing: %{},
         settle_left: nil,

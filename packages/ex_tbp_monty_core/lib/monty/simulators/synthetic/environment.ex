@@ -110,8 +110,8 @@ defmodule Monty.Simulators.Synthetic.Environment do
   What the world rendered on its last step, before any transform ran.
 
   A page that shows the object wants the picture the world drew, not the one a
-  transform rewrote: `MissingToMaxDepth` turns "no return" into a metre, and a
-  surface experiment clips everything past five centimetres, which is right for
+  transform rewrote: the world answers the far plane where a ray met nothing, and
+  a surface experiment clips everything past five centimetres, which is right for
   matching and useless for looking at.
   """
   @spec observation(t()) :: map() | nil
@@ -197,9 +197,9 @@ defmodule Monty.Simulators.Synthetic.Environment do
   # that answered a bare number would make any policy that looks at the image
   # fail on this world and work on Monty's.
   #
-  # A ray that missed answers depth 0, which is what Monty's depth images use for
-  # "no return", and an experiment's `MissingToMaxDepth` transform is what turns
-  # that into the furthest the sensor can see (`docs/monty-differences.md` §1.7).
+  # A ray that missed answers the scene's far plane, which is what the compiled
+  # world answers for a miss and what a depth image holds where nothing was seen.
+  # (`MissingToMaxDepth`, which repaired Habitat's 0, went with Habitat.)
   #
   # The surface — its normal and its curvatures — is *not* answered here. A camera
   # reports an image, and a sensor module estimates the surface from it

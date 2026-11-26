@@ -2786,3 +2786,66 @@ sensor's own stream would lift it, at the price `§2.28` names: every noised per
 would be a different patch, and no episode of this port would be the episode Monty
 ran. That is a decision about what the instrument measures, not a refactor, so it is
 left where it is.
+
+## 2.46 The step-type numbers are the recognition strategy's, and the model still acts on them
+
+**In one line:** Monty v0.60.0 moved `_set_step_type_and_check_if_done` out of
+the model and into a strategy; the port writes the strategy and hands its numbers
+to the model it also runs.
+
+**What Monty does.** Until v0.60.0, `MontyForGraphMatching` decided, at the end of
+every step, whether a matching episode switches to exploring or stops, and the
+`monty_config` group carried the numbers it decided with — `min_eval_steps`,
+`min_train_steps`, `num_exploratory_steps`. `MontyIsDone` was the strategy that
+read the answer back. Since v0.60.0 there is no `MontyBase.is_done`: that logic is
+`MontyForGraphMatchingSetStepTypeAndCheckIfDone`, the numbers are _its_ arguments,
+and the shipped termination groups name it with them
+(`termination/any1_any_mfgm_t3e3exp500_…`).
+
+**What this port does.** Both classes are ported whole
+(`Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone`,
+`…MontyBaseSetStepTypeAndCheckIfDone`) and compared, decision for decision, with
+Monty's own classes over 1 224 recorded states
+(`scripts/record_monty_recognition_strategy.py` →
+`test/fixtures/monty_recognition_strategy.json`). `MontyIsDone` is deleted with
+the class it named.
+
+The model still _performs_ the behaviour: `Monty.Runtime.Step` keeps the step-type
+transition and the counter, because those are process calls — asking each module
+to settle its terminal condition, switching the model's step type — and a policy
+here is pure (`§2.17`). So `Monty.Studio.Setup` reads the numbers off the policy
+the config names and gives them to the model
+(`RecognitionStrategy.step_type_args/1` and `match_criterion/1` walk through
+`Any` and the wrappers), which keeps one decision in one place: the config.
+`Run.finished?/1` then asks the policy, and while the model is holding an episode
+open for its grace (`settle_steps`, this port's own option) the model's answer is
+the episode's — a policy that sees a satisfied criterion would otherwise close the
+episode before the stragglers it is waiting for have answered.
+
+**Why the model could not simply be left to decide alone.** A config that names
+`NaiveScan` or `MaxTotalSteps` ends an episode on its own terms, and a run whose
+step type never changes never explores. The strategy is what a config picks, so
+the strategy is what decides.
+
+## 2.47 A miss is the far plane, not zero
+
+**In one line:** Monty deleted `MissingToMaxDepth` with Habitat; this port's worlds
+never needed it, and its stand-in now answers what MuJoCo answers.
+
+**What Monty does.** A Habitat depth image is 0 where no mesh is present, and a
+surface agent's search would read that as an object at zero distance, so Monty
+carried a `MissingToMaxDepth` transform and configured it ahead of
+`DepthTo3DLocations`. v0.60.0 removed the class (`chore!: remove
+MissingToMaxDepth`) along with Habitat; MuJoCo's depth buffer unprojects against
+the camera's far plane, so a miss is already "as far as the scene draws".
+
+**What this port does.** `ex_mujoco` unprojects the same way (the scene's cameras
+are `znear="0.005" zfar="500"`), so a miss arrives at 500 m and no transform is
+needed. The stand-in world used to answer 0 — the Habitat convention — which is
+why it needed the transform; it now answers 500 m
+(`Monty.Simulators.Synthetic.Scene`), so a stand-in run and a compiled-world run
+read a miss the same way, and no config of ours names the deleted class.
+
+**What is therefore not compared.** Nothing, for this change: the transform was a
+world convention, and both worlds now share it. The class stays in the module map
+as Monty's own, marked as removed by the pull.

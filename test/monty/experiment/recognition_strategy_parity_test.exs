@@ -33,6 +33,8 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   alias Monty.Experiment.RecognitionStrategy.MaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinimumLMs
+  alias Monty.Experiment.RecognitionStrategy.MontyBaseSetStepTypeAndCheckIfDone
+  alias Monty.Experiment.RecognitionStrategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone
   alias Monty.Experiment.RecognitionStrategy.NaiveScan
   alias Monty.Experiment.RecognitionStrategy.ObjectRecognition
   alias Monty.Experiment.RecognitionStrategy.RecognitionContext
@@ -56,7 +58,8 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
                %RecognitionResult{
                  is_done: expected["is_done"],
                  time_out_lms: expected["time_out_lms"],
-                 start_exploring: expected["start_exploring"]
+                 start_exploring: expected["start_exploring"],
+                 global_time_out: expected["global_time_out"]
                },
              "policy #{name}, model #{inspect(model)}, counter #{inspect(counter)}"
     end
@@ -91,10 +94,31 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
     |> Map.new(fn name -> {name, policy(name) |> elem_of_ok()} end)
   end
 
-  defp policy("MontyIsDone"), do: Monty.Experiment.RecognitionStrategy.MontyIsDone.new()
-
   defp policy("MaxTotalSteps(20)"),
     do: Monty.Experiment.RecognitionStrategy.MaxTotalSteps.new(max_total_steps: 20)
+
+  defp policy("MontyForGraphMatchingSetStepTypeAndCheckIfDone(20, 20, 100)"),
+    do: graph_matching_policy(min_eval_steps: 20)
+
+  defp policy("MontyForGraphMatchingSetStepTypeAndCheckIfDone(20, 500, 100)"),
+    do: graph_matching_policy(min_eval_steps: 500)
+
+  defp policy("MontyBaseSetStepTypeAndCheckIfDone(20, 20, 100)"),
+    do:
+      MontyBaseSetStepTypeAndCheckIfDone.new(
+        min_train_steps: 20,
+        min_eval_steps: 20,
+        num_exploratory_steps: 100
+      )
+
+  defp graph_matching_policy(min_eval_steps: min_eval) do
+    MontyForGraphMatchingSetStepTypeAndCheckIfDone.new(
+      match_criterion: criterion("AnyLMsMatch(1)"),
+      min_train_steps: 20,
+      min_eval_steps: min_eval,
+      num_exploratory_steps: 100
+    )
+  end
 
   defp policy("MaximumSteps(1000, 500)"),
     do:
@@ -165,12 +189,19 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
         ]
       )
 
-  # `MatchCriteria` takes no configuration; what differs between the two
-  # recordings is the criterion on the model, which the state carries.
-  defp policy("MatchCriteria"), do: Monty.Experiment.RecognitionStrategy.MatchCriteria.new()
+  # `MatchCriteria` carries the criterion itself now (Monty's TODO to move it
+  # off the model has been taken), so the two recordings differ in the policy.
+  defp policy("MatchCriteria"),
+    do:
+      Monty.Experiment.RecognitionStrategy.MatchCriteria.new(
+        match_criterion: criterion("AnyLMsMatch(1)")
+      )
 
   defp policy("MatchCriteria(NamedLMsMatch[lm_2])"),
-    do: Monty.Experiment.RecognitionStrategy.MatchCriteria.new()
+    do:
+      Monty.Experiment.RecognitionStrategy.MatchCriteria.new(
+        match_criterion: criterion("NamedLMsMatch([lm_2])")
+      )
 
   defp policy("MaxTotalSteps(6000)"),
     do: Monty.Experiment.RecognitionStrategy.MaxTotalSteps.new(max_total_steps: 6000)
@@ -189,7 +220,7 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   # the same constructor, given the same impossible arguments, is what has to
   # refuse here.
   defp refusals do
-    done = elem_of_ok(Monty.Experiment.RecognitionStrategy.MontyIsDone.new())
+    done = elem_of_ok(Monty.Experiment.RecognitionStrategy.MaxTotalSteps.new(max_total_steps: 20))
 
     %{
       "MaxTotalSteps" => {MaxTotalSteps, [max_total_steps: 0]},
@@ -223,13 +254,15 @@ defmodule Monty.Experiment.RecognitionStrategyParityTest do
   # module that timed out beside those that did — and `criterion` is the
   # criterion the model carries.
   defp model_view(%{"is_done" => is_done, "is_exploring" => is_exploring} = model) do
-    matched = model["matched_lms"]
-
     %{
       is_done: is_done,
       is_exploring: is_exploring,
       matching_steps: model["matching_steps"],
-      conclusions: Enum.map(0..2, fn index -> if index < matched, do: :match, else: nil end),
+      processed?: model["processed"],
+      conclusions:
+        Enum.map(0..2, fn index ->
+          terminal_state(Map.get(model["terminal_states"], "lm_#{index}"))
+        end),
       terminal_states:
         Map.new(model["terminal_states"], fn {id, state} -> {id, terminal_state(state)} end),
       match_criterion: criterion(model["criterion"])

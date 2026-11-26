@@ -4,9 +4,6 @@
 # closer than that is the plane and not the surface (`cad_plate_objects.yaml`
 # says where the stand-off comes from).
 transform:
-  - _target_: tbp.monty.frameworks.environment_utils.transforms.MissingToMaxDepth
-    agent_id: agent_id_0
-    max_depth: 1
   - _target_: tbp.monty.frameworks.environment_utils.transforms.DepthTo3DLocations
     agent_id: agent_id_0
     sensor_ids:

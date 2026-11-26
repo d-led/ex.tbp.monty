@@ -5,9 +5,9 @@ defmodule Monty.Simulators.Synthetic.CoverageTest do
   Monty's camera module reports `object_coverage` as the fraction of the view
   whose semantic id is not background, and takes `min_depth`/`mean_depth` over
   those pixels only (`sensor_modules.py:213-216`). The difference decides whether
-  a surface agent thinks it is looking at its object or at the scenery — with a
-  `MissingToMaxDepth` transform in front, *every* pixel returns a depth, so a
-  sensor counting returns would report full coverage while looking at a wall.
+  a surface agent thinks it is looking at its object or at the scenery — the
+  world answers a depth for every pixel (a miss is the far plane), so a sensor
+  counting returns would report full coverage while looking at a wall.
   """
 
   use ExUnit.Case, async: true

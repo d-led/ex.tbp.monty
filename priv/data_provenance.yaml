@@ -60,7 +60,7 @@ data:
     source: github.com/thousandbrainsproject/tbp.monty, src/tbp/monty/conf (the commit in priv/monty/inputs.json)
     licence: MIT — Copyright 2025 Thousand Brains Project, Copyright 2021-2024 Numenta Inc.
     produced_by: mix monty.inputs
-    hash: 22bcc5c002d1a8ac6ae2057a923efe3fb036a34890d670464dbac15450426188
+    hash: 7f25fd55c037d8c423eef8c5457260de8f4f9d1741d1457f15ebde64341f30d3
 
   - path: priv/monty/snapshots
     kind: copied
@@ -68,7 +68,7 @@ data:
     source: github.com/thousandbrainsproject/tbp.monty, tests/conf/snapshots (the commit in priv/monty/inputs.json)
     licence: MIT
     produced_by: mix monty.inputs
-    hash: ef905b8f033a6d231ba775884779bb6c46d16b8b75f212b2c332457dea5d74ad
+    hash: 925e780844b69006455ff2a351aa8be6bb3db051d585bd531b1ebf36dd9a60ca
 
   - path: priv/monty/LICENSE
     kind: copied
@@ -83,7 +83,7 @@ data:
     title: which commit the Monty copy is, and how many files arrived from it
     source: the checkout in MONTY_SOURCE, else ../monty-orig
     produced_by: mix monty.inputs
-    hash: a0c4d716e2606546e9ee539f1b2da0b914edc701305206babf24cbab044bf747
+    hash: 7086fc0137d4940a7b61d74b1fe1dc4f129e82c8fb76ee9415b133f6857c42ee
 
   - path: priv/monty/port_census.json
     kind: generated
@@ -97,7 +97,7 @@ data:
     title: which of Monty's classes its own configs name
     source: priv/monty/conf, and the checkout in MONTY_SOURCE
     produced_by: mix monty.target_census --json
-    hash: 223fcec35c9d2d1289a64514759194f1c2a93aa6335739063ec42368590ee7ad
+    hash: 28bc502d190eecb2f1d74fa6104d5c308000a06942e44fbd32bcf223a99d70a5
 
   # This port's own experiments. They are authored here, so their provenance is
   # the commit that wrote them; the hash is here so that a change to a config
@@ -183,7 +183,16 @@ data:
     # following `world_image_from_stream_on_scanned_model`. It lives here rather
     # than in `priv/monty/`, because `mix monty.inputs` deletes every YAML in
     # that mirror which Monty does not ship.
-    hash: 4569292a4c03fd5a2c682ef54f542211ecc59bb1dbc1fc66e9a2544c3563aa6d
+    hash: cf20070f9d7cd19e3d105568f01875d1ebcdd8c355ab427ce4b39a3d0f8375a0
+
+  # One termination group of ours: the union of `monty/graph_exp500_e3_t3` with
+  # Monty's `any1_train_steps_3_500_tot6000`, written because v0.60.0 moved the
+  # step-type numbers out of `monty_config` and no shipped group carries this
+  # pair. Our own config, so its history is the repository's.
+  - path: priv/monty_experiments/conf/termination/any1_any_mfgm_t3e3exp500_steplimit_maxt500e500tot6000.yaml
+    kind: written
+    title: the step limit our supervised pretraining reads
+    hash: 54a59bffdfc2604ce5f3350249d8860d5b7ef1e0e862258901c9738074215ebb
 
   - path: priv/cad_experiments/conf
     kind: written
@@ -237,4 +246,4 @@ data:
     source: a Python environment with Monty in it (MONTY_PYTHON), driving the scenarios in scripts/record_monty_*.py
     licence: MIT — the values are Monty's output
     produced_by: scripts/record_monty_*.py
-    hash: 0c2ac273731d2885e454503f9b95536a35f533fe5a6633182367330f0b4b2e08
+    hash: 4a541834081f80d324292a34b9a22b001863c239643ec9496d0294fe3b4d4d47

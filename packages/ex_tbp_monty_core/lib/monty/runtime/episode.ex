@@ -46,7 +46,7 @@ defmodule Monty.Runtime.Episode do
   alias Monty.Experiment.RecognitionStrategy.{
     Any,
     MaxTotalSteps,
-    MontyIsDone,
+    MontyForGraphMatchingSetStepTypeAndCheckIfDone,
     RecognitionContext
   }
 
@@ -82,7 +82,7 @@ defmodule Monty.Runtime.Episode do
   @spec run(atom() | String.t(), environment(), keyword()) :: result()
   def run(model_id, environment, options \\ []) do
     mode = Keyword.get(options, :mode, :eval)
-    policy = policy(options)
+    policy = policy(model_id, options)
     ctx = Context.new(Keyword.get(options, :seed, 0))
 
     :ok = Model.reset_episode(model_id)
@@ -105,16 +105,18 @@ defmodule Monty.Runtime.Episode do
     Map.put(result, :terminal_states, Model.state(model_id).terminal_states)
   end
 
-  # The default is Monty's own: `MontyIsDone`, unioned with the step ceiling the
-  # experiment allows. `:max_steps` is not a second mechanism — it is that
-  # ceiling, which is exactly `MaxTotalSteps`.
-  defp policy(options) do
+  # The default is Monty's own: the model's step-type rule, unioned with the
+  # step ceiling the experiment allows. `:max_steps` is not a second mechanism —
+  # it is that ceiling, which is exactly `MaxTotalSteps`. The rule's numbers are
+  # the model's, because that is where they live: a config names them on the
+  # policy and the model is built with them (`Monty.Studio.Setup`).
+  defp policy(model_id, options) do
     case Keyword.fetch(options, :policy) do
       {:ok, policy} ->
         policy
 
       :error ->
-        {:ok, done} = MontyIsDone.new()
+        {:ok, done} = MontyForGraphMatchingSetStepTypeAndCheckIfDone.new(step_type_args(model_id))
 
         {:ok, ceiling} =
           MaxTotalSteps.new(max_total_steps: Keyword.get(options, :max_steps, @default_max_steps))
@@ -124,16 +126,33 @@ defmodule Monty.Runtime.Episode do
     end
   end
 
+  # The numbers the model's step-type rule was built with, read off the model
+  # rather than inferred from a config that a bare episode does not have.
+  defp step_type_args(model_id) do
+    view = Model.status(model_id)
+
+    [
+      match_criterion: view.match_criterion,
+      min_train_steps: view.min_train_steps,
+      min_eval_steps: view.min_eval_steps,
+      num_exploratory_steps: view.num_exploratory_steps
+    ]
+  end
+
   # Monty's `while not complete(count)`: ask the policy, do both things it can
   # ask for besides stopping, and only then take another step. Applying the
   # reactions before the check is what makes `start_exploring` reach the next
   # step, and what lets a policy time the lagging modules out and still end.
   defp step_until_done(model_id, environment, ctx, policy, counter, run) do
     decision = RecognitionStrategy.call(policy, view(model_id), counter)
+    # Read before the decision's own reactions: a policy that times the laggards
+    # out ends with every module concluded, so afterwards the model cannot say
+    # whether it had recognised anything.
+    concluded? = Model.done?(model_id)
     apply_reactions(model_id, decision)
 
     if decision.is_done do
-      finish(decision, run)
+      finish(decision, concluded?, run)
     else
       step_once(model_id, environment, ctx, policy, counter, run)
     end
@@ -157,8 +176,14 @@ defmodule Monty.Runtime.Episode do
   # The policy's own word for the ending: `time_out_lms` is what Monty calls
   # `deal_with_time_out`, the ending an episode gets when it ran out of steps
   # rather than recognising anything.
-  defp finish(decision, run) do
-    if decision.time_out_lms do
+  #
+  # The flag alone does not say that, though: `MontyForGraphMatchingSetStepTypeAndCheckIfDone`
+  # answers `time_out_lms` on a *recognised* episode too — it is timing out the
+  # modules that did not conclude before the episode closes. So `concluded?`,
+  # the model's own answer before that ending was applied, is what tells a
+  # recognition from a time-out.
+  defp finish(decision, concluded?, run) do
+    if decision.time_out_lms and not concluded? do
       Logger.warning("episode timed out after #{run.steps} steps")
       %{steps: run.steps, done?: true, timed_out?: true, infos: Enum.reverse(run.infos)}
     else

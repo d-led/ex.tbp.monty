@@ -61,25 +61,20 @@ defmodule Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps do
     wrapped = RecognitionStrategy.call(state.wrapped, model, counter)
 
     cond do
-      model.is_done ->
-        %RecognitionResult{
-          is_done: true,
-          time_out_lms: wrapped.time_out_lms,
-          start_exploring: wrapped.start_exploring
-        }
-
       counter.step >= state.max_total_steps ->
         %RecognitionResult{
           is_done: true,
           time_out_lms: true,
-          start_exploring: wrapped.start_exploring
+          start_exploring: wrapped.start_exploring,
+          global_time_out: wrapped.global_time_out
         }
 
       counter.mode == :eval and counter.matching_steps < state.min_eval_steps ->
         %RecognitionResult{
           is_done: false,
           time_out_lms: wrapped.time_out_lms,
-          start_exploring: wrapped.start_exploring
+          start_exploring: wrapped.start_exploring,
+          global_time_out: wrapped.global_time_out
         }
 
       true ->

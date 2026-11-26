@@ -3,18 +3,20 @@ defmodule Monty.Studio.TransformsTest do
   An experiment's transforms are read from its config and applied to what the
   world renders.
 
-  The one that matters today is `MissingToMaxDepth`: Habitat reports 0 where no
-  mesh is present, a surface agent's search asks whether the middle of its view
-  is nearer than a metre, and a 0 there would be read as an object at zero
-  distance (`docs/monty-differences.md` §1.7). Monty's experiments configure it; a run
-  that skipped it would be a different experiment.
+  `DepthTo3DLocations` is the one that matters: it is what makes a sensor
+  module's input a point cloud rather than an image. Monty also had a
+  `MissingToMaxDepth` transform — a Habitat depth image is 0 where no mesh is
+  present, and the surface agent's search would read that as an object at zero
+  distance — and removed it in v0.60.0 with Habitat. No config here names it
+  any more, and none needs to: `ex_mujoco` unprojects the depth buffer against
+  the scene's far plane, so a miss arrives far rather than at 0
+  (`docs/monty-differences.md` §2.41).
   """
 
   use ExUnit.Case, async: false
 
   alias Monty.Frameworks.EnvironmentUtils.Transforms
   alias Monty.Frameworks.EnvironmentUtils.Transforms.{AddNoiseToRawDepthImage, DepthTo3DLocations}
-  alias Monty.Frameworks.EnvironmentUtils.Transforms.MissingToMaxDepth
 
   alias Monty.Studio.{Run, Setup}
 
@@ -27,16 +29,12 @@ defmodule Monty.Studio.TransformsTest do
 
   test "the setup reads the transforms the experiment configures, in order" do
     assert Enum.map(setup().transforms, &get_in(&1, ["_target_"])) == [
-             "tbp.monty.frameworks.environment_utils.transforms.MissingToMaxDepth",
              "tbp.monty.frameworks.environment_utils.transforms.DepthTo3DLocations"
            ]
   end
 
   test "and builds them, in the order they run" do
-    assert [
-             %MissingToMaxDepth{agent_id: "agent_id_0", max_depth: 1},
-             %DepthTo3DLocations{} = point_cloud
-           ] = Setup.built_transforms(setup())
+    assert [%DepthTo3DLocations{} = point_cloud] = Setup.built_transforms(setup())
 
     # The cameras the config declares: a patch at ten times zoom, a view finder
     # at one. What the world renders is what this unprojects.
@@ -63,7 +61,6 @@ defmodule Monty.Studio.TransformsTest do
 
     test "builds the noise transform its config names" do
       assert [
-               %MissingToMaxDepth{},
                %AddNoiseToRawDepthImage{sigma: 0.001},
                %DepthTo3DLocations{}
              ] = Setup.built_transforms(noisy_setup())
@@ -86,20 +83,22 @@ defmodule Monty.Studio.TransformsTest do
 
   @tag timeout: 300_000
   test "a miss is handed on as the furthest the sensor can see" do
-    # The world answers 0 where a ray missed; the transform turns that into "as
-    # far as the sensor can see" before any module reads it. A patch means a
-    # partial miss is normal: some pixels see the object, some see nothing.
+    # The world answers with its far plane where a ray missed, so no pixel of any
+    # sensor arrives at zero distance — which is the reading a surface agent's
+    # search would take for "the object is right here". A patch means a partial
+    # miss is normal: some pixels see the object, some see nothing.
     #
     # It earns a longer timeout than the default minute because it steps the
     # simulated world 25 times, and that is measured in wall time: on a machine
     # with anything else running, a minute is a coin toss rather than a check.
     {patch, view_finder} = look_for(25)
 
-    # The view finder is not a finger, so a miss is a metre away in it.
+    # The view finder is not a finger, so its misses are somewhere out past a
+    # metre — as far as the scene draws.
     assert Enum.any?(view_finder, fn {depth, semantic_id} ->
-             semantic_id == 0.0 and depth == 1.0
+             semantic_id == 0.0 and depth > 1.0
            end),
-           "no pixel of the view finder missed the object, so nothing was transformed"
+           "no pixel of the view finder missed the object, so nothing was measured"
 
     # The patch is a finger, which reaches five centimetres: a miss is as far as
     # the finger goes, and no pixel of it is ever at zero distance.

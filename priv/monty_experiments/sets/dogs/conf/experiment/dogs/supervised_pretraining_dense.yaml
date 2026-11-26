@@ -11,7 +11,7 @@
 # dozen of them per rotation; at 3° it is 871 samples, so each graph should come
 # out roughly three times as dense for roughly three times the steps.
 defaults:
-  - /monty: graph_exp500_e3_t3
+  - /monty: graph
   - /monty/motor_system_config: naive_scan_3
   - /monty/learning_module: displacement_delta_d0001
   - /monty/sensor_module: camera_dist_raw0

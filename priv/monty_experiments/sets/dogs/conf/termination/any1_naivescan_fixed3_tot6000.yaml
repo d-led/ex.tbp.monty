@@ -1,15 +1,24 @@
 # @package experiment.config
 
-# Monty's `any1_naivescan_fixed5_tot6000` with the scan one step finer, so it
-# agrees with the policy it terminates: an episode ends when the naive scan has
-# walked the view sphere (871 steps at 3°, not 307), or at six thousand steps.
-match_criterion:
-  _target_: tbp.monty.experiment.match_criteria.AnyLMsMatch
-  count: 1
+# Monty's `any1_any_mfgm_t3e3exp500_naivescan_fixed5_tot6000` with the scan one
+# step finer, so it agrees with the policy it terminates: an episode ends when
+# the naive scan has walked the view sphere (871 steps at 3°, not 307), or at six
+# thousand steps.
+#
+# The step-type rules are Monty's own member of the group (since v0.60.0 they
+# are a strategy, not `monty_config`'s keys): the numbers are what this set's
+# `monty/graph` pair used to carry — three training steps, three matching steps,
+# and 500 exploratory steps.
 recognition_strategy:
   _target_: tbp.monty.experiment.recognition_strategy.Any
   strategies:
-    - _target_: tbp.monty.experiment.recognition_strategy.MontyIsDone
+    - _target_: tbp.monty.experiment.recognition_strategy.MontyForGraphMatchingSetStepTypeAndCheckIfDone
+      match_criterion:
+        _target_: tbp.monty.experiment.match_criteria.AnyLMsMatch
+        count: 1
+      min_train_steps: 3
+      min_eval_steps: 3
+      num_exploratory_steps: 500
     - _target_: tbp.monty.experiment.recognition_strategy.NaiveScan
       fixed_amount: 3
     - _target_: tbp.monty.experiment.recognition_strategy.MaxTotalSteps

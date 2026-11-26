@@ -42,7 +42,7 @@ defmodule Monty.Studio.ReadinessTest do
         # @package _global_
 
         defaults:
-          - /monty: graph_exp1000_e3_t3
+          - /monty: graph
           - /monty/learning_module: evidence_1lm_nn5_dod003
           - /environment: mujoco_ycb_dist_agent
 
