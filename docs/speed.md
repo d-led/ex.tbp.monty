@@ -324,7 +324,19 @@ this Mac (Apple M2, 8 cores), `base_infer_cows_small_compositional`, seed 42,
 `--world ex_mujoco`, `--episodes 2` — 121 steps. Each arm was recompiled before
 it was timed (`scripts/compare_builds.sh`: a comparison worktree otherwise
 reuses a `_build` and reports the other arm's numbers), and both report the same
-ladder: `goals 3412263`, `votes 0/0`, every learning module `time_out`.
+ladder: `goals 3412263` and `votes 0/0`.
+
+That zero is the config, not the run, and it is worth saying because this page
+used to call it a failure. `base_infer_cows_small_compositional` sets
+`lm_to_lm_vote_matrix: null`, so `Monty.Runtime.Step` reports a zero vote round by
+construction (`vote_round?: false` on the resolved setup) — there is no lateral
+voting to send a vote. And the episodes do recognise: the parent reports
+`learning_module_2: match 1 of 1` at about step 21, and the two children report
+`time_out` because the episode ends when the parent concludes, cutting them off
+before their own criterion. A run of this config therefore measures a real
+recognition loop — sensor, salience, matching, conclusion — and both arms of the
+comparison below recognise the same objects, which is what makes the timing
+comparable at all.
 
 |                      | before (`5a9d182d`) | after         |           |
 | -------------------- | ------------------- | ------------- | --------- |
