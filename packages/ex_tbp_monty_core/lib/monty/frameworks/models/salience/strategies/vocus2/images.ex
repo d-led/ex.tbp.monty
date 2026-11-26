@@ -168,16 +168,18 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
 
     # Separable, as OpenCV does it: across each row, then down each column. The
     # taps are resolved once — which source index, with what weight — because
-    # every pixel reads the same neighbourhood, and the image is turned into
-    # tuples so reading that neighbourhood is not a walk down a list.
-    across = taps(kernel, width)
-    down = taps(kernel, height)
+    # every pixel reads the same neighbourhood, and both the taps and the image
+    # are tuples so reading that neighbourhood is constant time. As lists, the
+    # per-pixel `Enum.at(across, x)` walked up to a whole row of taps for every
+    # pixel: 48 million `Enum.drop/2` calls in a 256-square blur.
+    across = taps(kernel, width) |> List.to_tuple()
+    down = taps(kernel, height) |> List.to_tuple()
 
     horizontally =
       List.to_tuple(
         for y <- 0..(height - 1) do
           row = elem(rows, y)
-          List.to_tuple(for x <- 0..(width - 1), do: dot(Enum.at(across, x), row))
+          List.to_tuple(for x <- 0..(width - 1), do: dot(elem(across, x), row))
         end
       )
 
@@ -189,7 +191,7 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
       )
 
     for y <- 0..(height - 1) do
-      taps_y = Enum.at(down, y)
+      taps_y = elem(down, y)
 
       for x <- 0..(width - 1), do: dot(taps_y, elem(vertically, x))
     end
