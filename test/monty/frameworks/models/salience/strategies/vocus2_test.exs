@@ -62,6 +62,40 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2Test do
         WeightedMean.call(WeightedMean.new(%{"L" => 0, "a" => 0}), maps)
       end
     end
+
+    # The last pass over a whole map is per-pixel twice — combine, then
+    # normalise — so it is one kernel call now. Parity is exact: the kernel
+    # weights, sums in the order `WeightedMean` reads the maps, and normalises
+    # with the same `(value - low) / range`.
+    test "the native combine and normalise answer the same numbers, bit for bit" do
+      strategy =
+        Vocus2.new(color: ColorChannelSalience.new(operating_limits: NoOperatingLimits.new()))
+
+      maps = %{
+        "L" => plane(8, 8, 0.5),
+        "a" => plane(8, 8, 1.5),
+        "b" => plane(8, 8, -2.0)
+      }
+
+      assert Vocus2.combine_and_normalise(strategy, maps) ==
+               Vocus2.combine_and_normalise_reference(strategy, maps)
+    end
+
+    # A flat map has no range to stretch, which is the clip branch.
+    test "the native combine and normalise agree on a map with no range" do
+      strategy =
+        Vocus2.new(color: ColorChannelSalience.new(operating_limits: NoOperatingLimits.new()))
+
+      maps = %{"L" => List.duplicate(List.duplicate(0.4, 4), 4)}
+
+      assert Vocus2.combine_and_normalise(strategy, maps) ==
+               Vocus2.combine_and_normalise_reference(strategy, maps)
+    end
+
+    defp plane(rows, columns, offset) do
+      for row <- 0..(rows - 1),
+          do: for(column <- 0..(columns - 1), do: offset + (row * 5 + column * 3) / 7)
+    end
   end
 
   describe "normalising a map" do

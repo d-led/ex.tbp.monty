@@ -793,6 +793,83 @@ fn f64s(bytes: &[u8]) -> Result<Vec<f64>, rustler::Error> {
         .collect())
 }
 
+/// The feature maps combined and normalised: the last step of a VOCUS2 map.
+///
+/// `Vocus2.combine_weighted_reference/2` and `Vocus2.range_normalize/1` are the
+/// reference. The weighted mean is `WeightedMean.call/2` — each map scaled by
+/// its weight over the total, then summed in map order starting from `0.0`, so
+/// the addition order is the same as `Enum.sum/1`'s — and the normalisation is
+/// `range_normalize/1`: `(value - low) / range`, or a clip to `[0, 1]` when the
+/// range is smaller than `1.0e-8`.
+///
+/// `maps` is `count` planes of `width * height` little-endian `f64` values,
+/// concatenated; `weights` is one little-endian `f64` per map.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn combine_weighted<'a>(
+    env: Env<'a>,
+    maps: Binary,
+    weights: Binary,
+    width: usize,
+    height: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let weights = f64s(weights.as_slice())?;
+    let values = f64s(maps.as_slice())?;
+    let size = width * height;
+
+    if weights.is_empty() || values.len() != weights.len() * size {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let total = weights.iter().fold(0.0f64, |sum, weight| sum + weight.abs());
+
+    if total == 0.0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let scaled: Vec<f64> = weights.iter().map(|weight| weight / total).collect();
+    let mut out = vec![0.0f64; size];
+
+    for (map, weight) in scaled.iter().enumerate() {
+        let plane = &values[map * size..(map + 1) * size];
+
+        for (index, value) in plane.iter().enumerate() {
+            out[index] += weight * value;
+        }
+    }
+
+    let mut low = out[0];
+    let mut high = out[0];
+
+    for value in &out {
+        if *value < low {
+            low = *value;
+        }
+
+        if *value > high {
+            high = *value;
+        }
+    }
+
+    let range = high - low;
+    let tiny = range.abs() <= 1.0e-8;
+
+    let mut binary = NewBinary::new(env, size * std::mem::size_of::<f64>());
+    let bytes = binary.as_mut_slice();
+
+    for (index, value) in out.iter().enumerate() {
+        let normalised = if tiny {
+            value.max(0.0).min(1.0)
+        } else {
+            (value - low) / range
+        };
+
+        let offset = index * std::mem::size_of::<f64>();
+        bytes[offset..offset + std::mem::size_of::<f64>()].copy_from_slice(&normalised.to_le_bytes());
+    }
+
+    Ok(Term::from(binary))
+}
+
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
 
 /// SLIC's k-means: which seed each pixel belongs to, after at most `max_iter`

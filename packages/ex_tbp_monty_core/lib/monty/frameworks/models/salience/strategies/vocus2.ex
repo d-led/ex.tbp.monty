@@ -27,8 +27,10 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
 
   @behaviour Monty.Frameworks.Models.Salience.Strategies.Protocol.SalienceStrategy
 
+  alias ExTbpMonty.Core.SalienceNif
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.MapCombine
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.WeightedMean
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Pyramids.Pyramid
 
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.{
@@ -178,8 +180,80 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
     features
     |> maybe_add_depth(strategy, ctx, depth)
     |> maybe_add_orientation(strategy, ctx, lightness_pyramid)
+    |> then(&combine_and_normalise(strategy, &1))
+  end
+
+  @doc """
+  The feature maps combined and normalised — the last pass over the whole map.
+
+  Both steps are per-pixel, so the maps are packed once, weighted and summed in
+  the order `WeightedMean` sums them, and normalised: one call instead of four
+  passes. Anything else a config can name — another combiner, another
+  normaliser, a machine with no crate — takes the reference below.
+  """
+  @spec combine_and_normalise(t(), map()) :: [[float()]]
+  def combine_and_normalise(%__MODULE__{} = strategy, features) do
+    with true <- SalienceNif.loaded?(),
+         true <- strategy.normalize == (&__MODULE__.range_normalize/1),
+         %WeightedMean{} = combine <- strategy.combine,
+         {:ok, weighted} <- weighted_planes(features, combine) do
+      by_combine_kernel(weighted)
+    else
+      _other -> combine_and_normalise_reference(strategy, features)
+    end
+  end
+
+  @doc """
+  The Elixir last pass: `combine` then `normalize`, whatever they are.
+
+  Kept public because it is what the kernel is held to, and what runs where the
+  crate was never built or the config names another combiner.
+  """
+  @spec combine_and_normalise_reference(t(), map()) :: [[float()]]
+  def combine_and_normalise_reference(%__MODULE__{} = strategy, features) do
+    features
     |> then(&combine(strategy.combine, &1))
     |> strategy.normalize.()
+  end
+
+  defp by_combine_kernel(weighted) do
+    [first | _rest] = planes = Enum.map(weighted, &elem(&1, 1))
+    height = length(first)
+    width = first |> hd() |> length()
+
+    packed =
+      for plane <- planes, value <- List.flatten(plane), into: <<>> do
+        <<value::float-little-64>>
+      end
+
+    weights =
+      for {weight, _plane} <- weighted, into: <<>>, do: <<weight::float-little-64>>
+
+    packed
+    |> SalienceNif.combine_weighted(weights, width, height)
+    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+    |> Enum.chunk_every(width)
+  end
+
+  # The weights in the order `WeightedMean` reads them off the map, so the sum
+  # happens in the same order: `Enum.map` over the map, then the mean's total.
+  defp weighted_planes(features, %WeightedMean{weights: weights}) do
+    entries = Enum.map(features, fn {name, map} -> {Map.fetch(weights, name), map} end)
+
+    if Enum.all?(entries, &match?({:ok, _weight}, elem(&1, 0))) do
+      scales = Enum.map(entries, fn {{:ok, weight}, _map} -> weight end)
+      total = scales |> Enum.map(&abs/1) |> Enum.sum()
+
+      if total == 0.0 do
+        :error
+      else
+        {:ok,
+         entries
+         |> Enum.map(fn {{:ok, weight}, map} -> {weight / total, map} end)}
+      end
+    else
+      :error
+    end
   end
 
   # A combiner is either a function — Monty's `map_mean` and friends — or one of

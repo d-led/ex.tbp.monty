@@ -59,6 +59,17 @@ defmodule ExTbpMonty.Core.SalienceNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The feature maps combined by their weights and normalised to `[0, 1]`.
+
+  `maps` is the planes concatenated as little-endian `f64` values, `weights` one
+  per map in the same order, and the answer is `width * height` values — the
+  weighted mean summed in that order, then `Vocus2.range_normalize/1`'s
+  `(value - low) / range` or its clip when the range is below `1.0e-8`.
+  """
+  def combine_weighted(_maps, _weights, _width, _height),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   One colour channel's salience map, from the plane to the collapsed map.
 
   Everything `ColorChannelSalience.reference/3` does — the centre and surround
