@@ -146,4 +146,45 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ImagesTest do
       assert Images.resize(plane, {2, 2}, :cubic) == plane
     end
   end
+
+  describe "the native cubic resize" do
+    test "is loaded on this machine, so these cases are about the fast path" do
+      assert ExTbpMonty.Core.SalienceNif.loaded?()
+    end
+
+    # The kernel replaced a loop the step could not afford, and the price of
+    # getting it wrong is a silently different attention map: so the question is
+    # not "close" but "the same number", shape by shape. A pyramid enlarges by
+    # two and a half, the collapse enlarges 1:1 at its finest octave, and the
+    # odd shapes are where a rounding choice in the taps would show.
+    test "answers the same numbers, bit for bit, as the Elixir reference" do
+      shapes = [
+        {{128, 128}, {256, 256}},
+        {{256, 256}, {100, 100}},
+        {{40, 64}, {80, 128}},
+        {{7, 5}, {13, 9}},
+        {{9, 9}, {1, 1}},
+        {{1, 1}, {8, 8}}
+      ]
+
+      for {source, destination} <- shapes do
+        plane = plane(source)
+
+        assert Images.resize(plane, destination, :cubic) ==
+                 Images.cubic_reference(plane, source, destination),
+               "the native resize and the reference disagree on #{inspect(source)} → #{inspect(destination)}"
+      end
+    end
+  end
+
+  # A plane of the given shape whose values are not a smooth ramp: exact halves,
+  # negatives and zero, so a sign or a rounding that only shows on them shows.
+  defp plane({rows, columns}) do
+    for row <- 0..(rows - 1) do
+      for column <- 0..(columns - 1) do
+        value = (row * 7 + column * 13) |> rem(23)
+        (value - 11) / 2
+      end
+    end
+  end
 end

@@ -1,0 +1,1 @@
+/Users/dmitryledentsov/src/ex.tbp.monty/packages/ex_tbp_monty_core/native/salience_nif/target/release/libsalience_nif.dylib: /Users/dmitryledentsov/src/ex.tbp.monty/packages/ex_tbp_monty_core/native/salience_nif/src/lib.rs

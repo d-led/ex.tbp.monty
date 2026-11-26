@@ -32,6 +32,8 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
   @type colour_image :: [[pixel()]]
   @type plane :: [[float()]]
 
+  alias ExTbpMonty.Core.SalienceNif
+
   @doc """
   The image in CIE Lab, shifted and scaled to `[0, 1]`.
 
@@ -268,7 +270,8 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     cond do
       source == destination -> image
       interpolation == :area -> by_area(image, source, destination)
-      true -> by_cubic(image, source, destination)
+      SalienceNif.loaded?() -> by_cubic_native(image, source, destination)
+      true -> cubic_reference(image, source, destination)
     end
   end
 
@@ -327,7 +330,29 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
     end
   end
 
-  defp by_cubic(image, {source_rows, source_columns}, {rows, columns}) do
+  # The fast path: the same resize over one binary, `SalienceNif`. The plane is
+  # 65 536 numbers on a 256-square view, so it crosses as bytes and is turned back
+  # into rows here — the alternative, sixteen taps a pixel in Elixir, is a second
+  # of a five-second step.
+  defp by_cubic_native(image, {source_rows, source_columns}, {rows, columns}) do
+    source = for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
+
+    source
+    |> SalienceNif.enlarge_cubic(source_columns, source_rows, columns, rows)
+    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+    |> Enum.chunk_every(columns)
+  end
+
+  @doc """
+  The Elixir cubic resize: the reference the native kernel is held to.
+
+  OpenCV's cubic with `A = -0.75`, the edge pixel repeated, sampled at the
+  destination pixels' centres. Kept public because it is what the parity test
+  compares against, and what runs on a machine where the crate was not built.
+  """
+  @spec cubic_reference(plane(), {pos_integer(), pos_integer()}, {pos_integer(), pos_integer()}) ::
+          plane()
+  def cubic_reference(image, {source_rows, source_columns}, {rows, columns}) do
     pixels = as_rows(image)
 
     # Taps depend on the destination index and the two lengths, not on the other
