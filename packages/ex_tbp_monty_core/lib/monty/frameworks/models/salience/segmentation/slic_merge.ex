@@ -125,7 +125,39 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   """
   @spec extract_region_colors([[colour()]], [[non_neg_integer()]]) :: [colour()]
   def extract_region_colors(rgb, region_image) do
-    compute_superpixel_mean_colors(region_image, Images.rgb_to_lab(rgb))
+    compute_superpixel_mean_colors(region_image, merge_image(rgb))
+  end
+
+  # `Images.rgb_to_lab/1` over the whole view is sixteen `f64` operations a
+  # pixel for a mean per region, so the kernel answers it where it is loaded.
+  # The rescale is `low: 0.0, span: 255.0`: this call converts the camera's own
+  # values, not a rescaled view.
+  defp merge_image(rgb) do
+    if SalienceNif.loaded?() do
+      height = length(rgb)
+      width = rgb |> hd() |> length()
+
+      packed =
+        for row <- rgb, [red, green, blue | _alpha] <- row, into: <<>> do
+          <<red::float-little-64, green::float-little-64, blue::float-little-64>>
+        end
+
+      raw = SalienceNif.lab_opencv(packed, width * height, 0.0, 255.0)
+      plane_bytes = width * height * 8
+
+      [lightness, a, b] =
+        for plane <- 0..2 do
+          plane_binary = binary_part(raw, plane * plane_bytes, plane_bytes)
+
+          for <<row::binary-size(^width * 8) <- plane_binary>> do
+            for <<value::float-little-64 <- row>>, do: value
+          end
+        end
+
+      weave(lightness, a, b)
+    else
+      Images.rgb_to_lab(rgb)
+    end
   end
 
   @doc """

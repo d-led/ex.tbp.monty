@@ -886,15 +886,34 @@ fn lab<'a>(
     low: f64,
     span: f64,
 ) -> Result<Term<'a>, rustler::Error> {
-    let values = f64s(rgb.as_slice())?;
+    encode_planes(env, lab_values(rgb.as_slice(), count, low, span)?, count, true)
+}
+
+/// The same conversion in OpenCV's own scaling: `L / 100`, `(a + 128) / 255`,
+/// `(b + 128) / 255` — what `Images.rgb_to_lab/1` answers, and what the
+/// superpixel mean colours are taken in.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn lab_opencv<'a>(
+    env: Env<'a>,
+    rgb: Binary,
+    count: usize,
+    low: f64,
+    span: f64,
+) -> Result<Term<'a>, rustler::Error> {
+    encode_planes(env, lab_values(rgb.as_slice(), count, low, span)?, count, false)
+}
+
+/// The three Lab planes, in the wrapper's scaled units.
+fn lab_values(bytes: &[u8], count: usize, low: f64, span: f64) -> Result<Vec<Vec<f64>>, rustler::Error> {
+    let values = f64s(bytes)?;
 
     if values.len() != count * 3 {
         return Err(rustler::Error::BadArg);
     }
 
-    let mut binary = NewBinary::new(env, count * 3 * std::mem::size_of::<f64>());
-    let out = binary.as_mut_slice();
-    let unit = std::mem::size_of::<f64>();
+    let mut lightness = vec![0.0f64; count];
+    let mut a_plane = vec![0.0f64; count];
+    let mut b_plane = vec![0.0f64; count];
 
     for index in 0..count {
         let red = (values[index * 3] - low) / span * 255.0;
@@ -913,15 +932,35 @@ fn lab<'a>(
         let f_y = lab_f(y / WHITE[1]);
         let f_z = lab_f(z / WHITE[2]);
 
-        let lightness = 116.0 * f_y - 16.0;
-        let a = 500.0 * (f_x - f_y);
-        let b = 200.0 * (f_y - f_z);
+        lightness[index] = clip(255.0 * (116.0 * f_y - 16.0) / 100.0, 0.0, 255.0) / 255.0;
+        a_plane[index] = clip(500.0 * (f_x - f_y) + 128.0, 0.0, 255.0) / 255.0;
+        b_plane[index] = clip(200.0 * (f_y - f_z) + 128.0, 0.0, 255.0) / 255.0;
+    }
 
-        for (plane, value) in [(0usize, lightness), (1, a), (2, b)] {
-            let scaled = if plane == 0 {
-                clip(255.0 * value / 100.0, 0.0, 255.0) / 255.0 * 100.0
+    Ok(vec![lightness, a_plane, b_plane])
+}
+
+/// The three planes as one binary, in the wrapper's units or `skimage`'s.
+fn encode_planes<'a>(
+    env: Env<'a>,
+    planes: Vec<Vec<f64>>,
+    count: usize,
+    skimage: bool,
+) -> Result<Term<'a>, rustler::Error> {
+    let unit = std::mem::size_of::<f64>();
+    let mut binary = NewBinary::new(env, count * 3 * unit);
+    let out = binary.as_mut_slice();
+
+    for (plane, values) in planes.iter().enumerate() {
+        for (index, value) in values.iter().enumerate() {
+            let scaled = if skimage {
+                if plane == 0 {
+                    value * 100.0
+                } else {
+                    value * 255.0 - 128.0
+                }
             } else {
-                clip(value + 128.0, 0.0, 255.0) / 255.0 * 255.0 - 128.0
+                *value
             };
 
             let offset = (plane * count + index) * unit;

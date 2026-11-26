@@ -26,6 +26,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Models.Salience.Segmentation.SlicMerge
+  alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images
 
   # skimage 0.26.0's labels for `slic_image(16)` with `SlicMerge`'s parameters.
   @skimage_labels [
@@ -46,6 +47,18 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
     [56, 56, 57, 57, 58, 58, 59, 59, 60, 60, 61, 61, 62, 62, 63, 63],
     [56, 56, 57, 57, 58, 58, 59, 59, 60, 60, 61, 61, 62, 62, 63, 63]
   ]
+
+  # The region mean colours convert the whole view to Lab — sixteen `f64`
+  # operations a pixel — and the kernel does it in one call. Parity is exact:
+  # the same rescale, gamma, matrix, white point, clamps and scaling.
+  test "the native region colours are the Elixir's, value for value" do
+    rgb = gradient_view(32)
+    strategy = SlicMerge.new()
+    region_image = SlicMerge.segment_image(strategy, rgb)
+
+    assert SlicMerge.extract_region_colors(rgb, region_image) ==
+             SlicMerge.compute_superpixel_mean_colors(region_image, Images.rgb_to_lab(rgb))
+  end
 
   describe "the superpixels of a view" do
     test "are the ones skimage finds, label for label" do

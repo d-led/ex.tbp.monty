@@ -72,6 +72,13 @@ defmodule ExTbpMonty.Core.SalienceNif do
   def lab(_rgb, _count, _low, _span), do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  The same conversion in OpenCV's own scaling — `L / 100`, `(a + 128) / 255`,
+  `(b + 128) / 255` — which is what `Images.rgb_to_lab/1` answers and what the
+  superpixel mean colours are taken in.
+  """
+  def lab_opencv(_rgb, _count, _low, _span), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   The feature maps combined by their weights and normalised to `[0, 1]`.
 
   `maps` is the planes concatenated as little-endian `f64` values, `weights` one
