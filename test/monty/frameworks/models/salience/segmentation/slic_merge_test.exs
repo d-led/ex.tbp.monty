@@ -201,6 +201,24 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMergeTest do
     end
   end
 
+  describe "the native k-means" do
+    test "is loaded on this machine, so these cases are about the fast path" do
+      assert ExTbpMonty.Core.SalienceNif.loaded?()
+    end
+
+    # The kernel answers the same label field, not a similar one: a different
+    # tie, a different window edge or a different re-centring order would show up
+    # as a pixel here. Small and large, smooth and with regions that end.
+    test "answers the same labels as the Elixir loop, view for view" do
+      for view <- [slic_image(16), gradient_view(64), gradient_view(128), disc_view(128)] do
+        strategy = SlicMerge.new()
+
+        assert SlicMerge.segment_image(strategy, view) ==
+                 SlicMerge.segment_image_reference(strategy, view)
+      end
+    end
+  end
+
   # A sixteen by sixteen view of four colour ramps, one per quadrant. Written
   # the way the reference generation wrote it, so the two images are the same
   # image and not merely similar.

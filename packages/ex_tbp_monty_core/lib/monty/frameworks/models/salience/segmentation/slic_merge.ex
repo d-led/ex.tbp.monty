@@ -48,6 +48,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   @behaviour Monty.Frameworks.Models.Salience.Segmentation.Strategy.SegmentationStrategy
 
+  alias ExTbpMonty.Core.SalienceNif
   alias Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images
 
   # `DBL_MAX`: the distance every pixel starts at, so the first seed to reach a
@@ -281,6 +282,23 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   """
   @spec segment_image(t(), [[colour()]]) :: [[non_neg_integer()]]
   def segment_image(%__MODULE__{} = strategy, rgb) do
+    if SalienceNif.loaded?(),
+      do: segment(strategy, rgb, :native),
+      else: segment(strategy, rgb, :reference)
+  end
+
+  @doc """
+  The same segmentation with the Elixir k-means, whatever is loaded.
+
+  The reference the native kernel is held to by a parity case, and what runs
+  where the crate was never built. The rest of the algorithm — the colour
+  conversion, the Gaussian, the connectivity pass — is shared.
+  """
+  @spec segment_image_reference(t(), [[colour()]]) :: [[non_neg_integer()]]
+  def segment_image_reference(%__MODULE__{} = strategy, rgb),
+    do: segment(strategy, rgb, :reference)
+
+  defp segment(%__MODULE__{} = strategy, rgb, k_means) do
     height = length(rgb)
     width = length(hd(rgb))
     {steps, seeds} = grid_centroids({1, height, width}, strategy.n_seeds)
@@ -291,7 +309,7 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
       |> smooth(strategy.sigma)
       |> pixels(1.0 / strategy.compactness)
 
-    {labels, _seeds} = k_means(pixels, width, seeds, steps, strategy.max_iter)
+    {labels, _seeds} = labels(pixels, width, seeds, steps, strategy.max_iter, k_means)
     segment_size = height * width / length(seeds)
 
     labels
@@ -424,6 +442,42 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
 
   # -- k-means --------------------------------------------------------------
 
+  # The label field, from the kernel or from the loop below. The kernel answers
+  # the same numbers — the parity case compares the two — as one `u32` per pixel
+  # in one binary, because the work is 7.8 million comparisons on a 256-square
+  # view and encoding them as lists on the way in and out was a tenth of it.
+  defp labels(pixels, width, seeds, steps, max_iter, :native) do
+    window = window_steps(steps)
+
+    flat =
+      for index <- 0..(tuple_size(pixels) - 1), {l, a, b} = elem(pixels, index), into: <<>> do
+        <<l::float-little-64, a::float-little-64, b::float-little-64>>
+      end
+
+    packed =
+      for %{y: y, x: x, colour: {l, a, b}} <- seeds, into: <<>> do
+        <<y::float-little-64, x::float-little-64, l::float-little-64, a::float-little-64,
+          b::float-little-64>>
+      end
+
+    flat
+    |> SalienceNif.slic_labels(
+      width,
+      packed,
+      Enum.at(window, 1),
+      Enum.at(window, 2),
+      1.0 / :math.pow(Enum.max(steps), 2),
+      max_iter
+    )
+    |> then(fn raw ->
+      labels = for <<label::little-32 <- raw>>, do: label
+      {:array.from_list(labels, 0), seeds}
+    end)
+  end
+
+  defp labels(pixels, width, seeds, steps, max_iter, :reference),
+    do: k_means(pixels, width, seeds, steps, max_iter)
+
   defp k_means(pixels, width, seeds, steps, max_iter) do
     iterate(pixels, width, seeds, steps, max_iter, :array.new(tuple_size(pixels), default: 0))
   end
@@ -487,7 +541,11 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     colour = elem(pixels, index)
 
     # A view is one pixel deep, so `skimage`'s `z` term is nought either way.
-    spatial = (:math.pow(seed.y - y, 2) + :math.pow(seed.x - x, 2)) * spatial_factor
+    # Written as a product rather than `:math.pow(_, 2)` because the native
+    # kernel does the same: one definition of the number, two implementations.
+    dy = seed.y - y
+    dx = seed.x - x
+    spatial = (dy * dy + dx * dx) * spatial_factor
 
     distance = spatial + squared_distance(colour, seed.colour)
 

@@ -44,4 +44,17 @@ defmodule ExTbpMonty.Core.SalienceNif do
   """
   def enlarge_cubic(_source, _source_width, _source_height, _width, _height),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  SLIC's k-means: one label per pixel, as the `SlicMerge` reference computes it.
+
+  `pixels` is `width * height` colours of three little-endian `f64`s, already
+  scaled by `1/compactness`; `seeds` is five `f64` each — `y`, `x`, `r`, `g`,
+  `b`. `step_y`/`step_x` are the seed grid's steps, truncated as the window uses
+  them, and `spatial_factor` is `1 / max(steps)²`.
+
+  The answer is `width * height` little-endian `u32` labels.
+  """
+  def slic_labels(_pixels, _width, _seeds, _step_y, _step_x, _spatial_factor, _max_iter),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

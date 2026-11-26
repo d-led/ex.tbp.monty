@@ -147,3 +147,184 @@ fn cubic_weights(x: f64) -> [f64; 4] {
 }
 
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
+
+/// SLIC's k-means: which seed each pixel belongs to, after at most `max_iter`
+/// passes, as one `u32` per pixel.
+///
+/// `SlicMerge`'s own loop is the reference (`SlicMerge.segment_image_reference/2`).
+/// The arithmetic is the same in both — the same window (`trunc(centre) ±
+/// 2 * step`), the same strictly-greater test against the distance so far, the
+/// same `(dy * dy + dx * dx) * spatial_factor + colour distance`, the same
+/// re-centring in pixel order — and a parity case holds the two label fields to
+/// each other on views of several shapes.
+///
+/// `pixels` is `width * height` colours of three `f64`s, already scaled by
+/// `1/compactness`; `seeds` is five `f64` each (`y`, `x`, `r`, `g`, `b`).
+#[rustler::nif(schedule = "DirtyCpu")]
+fn slic_labels<'a>(
+    env: Env<'a>,
+    pixels: Binary,
+    width: usize,
+    seeds: Binary,
+    step_y: i64,
+    step_x: i64,
+    spatial_factor: f64,
+    max_iter: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let bytes_per_pixel = std::mem::size_of::<f64>() * 3;
+
+    if width == 0 || pixels.len() % (width * bytes_per_pixel) != 0 || seeds.len() % 40 != 0 {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let height = pixels.len() / (width * bytes_per_pixel);
+    let points: Vec<f64> = pixels
+        .as_slice()
+        .chunks_exact(std::mem::size_of::<f64>())
+        .map(|bytes| f64::from_le_bytes(bytes.try_into().expect("eight bytes")))
+        .collect();
+
+    let mut centres: Vec<Seed> = seeds
+        .as_slice()
+        .chunks_exact(5 * std::mem::size_of::<f64>())
+        .map(|chunk| {
+            let mut numbers = [0.0f64; 5];
+            for (slot, bytes) in chunk.chunks_exact(std::mem::size_of::<f64>()).enumerate() {
+                numbers[slot] = f64::from_le_bytes(bytes.try_into().expect("eight bytes"));
+            }
+            Seed { y: numbers[0], x: numbers[1], colour: [numbers[2], numbers[3], numbers[4]], dead: false }
+        })
+        .collect();
+
+    let labels = k_means(&points, width, height, &mut centres, step_y, step_x, spatial_factor, max_iter);
+
+    let mut binary = NewBinary::new(env, labels.len() * std::mem::size_of::<u32>());
+    let out = binary.as_mut_slice();
+
+    for (index, label) in labels.iter().enumerate() {
+        let offset = index * std::mem::size_of::<u32>();
+        out[offset..offset + std::mem::size_of::<u32>()].copy_from_slice(&(*label as u32).to_le_bytes());
+    }
+
+    Ok(Term::from(binary))
+}
+
+struct Seed {
+    y: f64,
+    x: f64,
+    colour: [f64; 3],
+    dead: bool,
+}
+
+/// `DBL_MAX`: the distance every pixel starts at, so the first seed to reach a
+/// pixel takes it.
+const UNCLAIMED: f64 = f64::MAX;
+
+#[allow(clippy::too_many_arguments)]
+fn k_means(
+    points: &[f64],
+    width: usize,
+    height: usize,
+    centres: &mut [Seed],
+    step_y: i64,
+    step_x: i64,
+    spatial_factor: f64,
+    max_iter: usize,
+) -> Vec<u32> {
+    let mut labels = vec![0u32; width * height];
+    let mut distances = vec![UNCLAIMED; width * height];
+
+    for _ in 0..max_iter {
+        distances.fill(UNCLAIMED);
+        let mut changed = false;
+
+        for (k, seed) in centres.iter().enumerate() {
+            if seed.dead {
+                continue;
+            }
+
+            let Some((low_y, high_y)) = window(seed.y, step_y, height) else { continue };
+            let Some((low_x, high_x)) = window(seed.x, step_x, width) else { continue };
+
+            for y in low_y..=high_y {
+                for x in low_x..=high_x {
+                    let index = y * width + x;
+                    let colour = [
+                        points[index * 3],
+                        points[index * 3 + 1],
+                        points[index * 3 + 2],
+                    ];
+
+                    let dy = seed.y - y as f64;
+                    let dx = seed.x - x as f64;
+                    let distance = (dy * dy + dx * dx) * spatial_factor + squared_distance(&colour, &seed.colour);
+
+                    if distances[index] > distance {
+                        labels[index] = k as u32;
+                        distances[index] = distance;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if !changed {
+            break;
+        }
+
+        recentre(points, width, height, centres, &labels);
+    }
+
+    labels
+}
+
+/// `[centre - 2*step, centre + 2*step]`, clipped to the plane; `None` when the
+/// clipping leaves nothing.
+fn window(centre: f64, step: i64, size: usize) -> Option<(usize, usize)> {
+    let centre = centre as i64;
+    let low = (centre - 2 * step).max(0);
+    let high = (centre + 2 * step + 1).min(size as i64) - 1;
+
+    if high < low {
+        None
+    } else {
+        Some((low as usize, high as usize))
+    }
+}
+
+fn squared_distance(left: &[f64; 3], right: &[f64; 3]) -> f64 {
+    let dr = left[0] - right[0];
+    let dg = left[1] - right[1];
+    let db = left[2] - right[2];
+
+    dr * dr + dg * dg + db * db
+}
+
+/// Every centroid becomes the mean of the pixels it won; one that won none is
+/// dead, exactly as the reference marks it.
+fn recentre(points: &[f64], width: usize, height: usize, centres: &mut [Seed], labels: &[u32]) {
+    let mut totals: std::collections::HashMap<u32, (f64, f64, f64, [f64; 3])> =
+        std::collections::HashMap::new();
+
+    for index in 0..width * height {
+        let total = totals.entry(labels[index]).or_insert((0.0, 0.0, 0.0, [0.0; 3]));
+
+        total.0 += 1.0;
+        total.1 += (index / width) as f64;
+        total.2 += (index % width) as f64;
+        total.3[0] += points[index * 3];
+        total.3[1] += points[index * 3 + 1];
+        total.3[2] += points[index * 3 + 2];
+    }
+
+    for (k, seed) in centres.iter_mut().enumerate() {
+        match totals.get(&(k as u32)) {
+            None => seed.dead = true,
+            Some((count, y, x, colour)) => {
+                seed.y = y / count;
+                seed.x = x / count;
+                seed.colour = [colour[0] / count, colour[1] / count, colour[2] / count];
+            }
+        }
+    }
+}
