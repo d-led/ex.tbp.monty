@@ -186,14 +186,19 @@ defmodule Monty.Frameworks.Utils.EdgeDetection.EdgeDetector do
     center_row = div(height, 2)
     center_column = div(width, 2)
 
+    # The two gradients as tuples: `Enum.at(Enum.at(plane, row), column)` walks a
+    # row from the front for every pixel, and this is one such read pair for
+    # every pixel of the patch.
+    grad_x = grad_x |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
+    grad_y = grad_y |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
+
     weights =
       for row <- 0..(height - 1)//1 do
         for column <- 0..(width - 1)//1 do
           radial = radial_weight(detector, row - center_row, column - center_column)
 
           radial *
-            (Enum.at(Enum.at(grad_x, row), column) ** 2 +
-               Enum.at(Enum.at(grad_y, row), column) ** 2)
+            (elem(elem(grad_x, row), column) ** 2 + elem(elem(grad_y, row), column) ** 2)
         end
       end
 
