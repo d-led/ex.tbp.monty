@@ -255,6 +255,7 @@ defmodule Monty.Studio.Memory do
     case :persistent_term.get(key, nil) do
       nil ->
         :persistent_term.put(key, read!(path, module_index))
+        hold(key, path)
         # Read back, so the caller holds the term the cache holds: a term in
         # `:persistent_term` is shared with every process it is sent to, where
         # the heap copy just written would be copied again onto every task that
@@ -263,6 +264,26 @@ defmodule Monty.Studio.Memory do
 
       built ->
         built
+    end
+  end
+
+  # A cache entry is never reclaimed — `:persistent_term` has no eviction — and
+  # every entry is keyed by a path, so a run that reads libraries from a
+  # temporary directory leaves the whole library behind for the life of the VM.
+  # A quarter of the suite did exactly that, one temp library per test, and ran
+  # out of memory at the next module load (`literal_alloc`).
+  #
+  # So an entry is remembered, and an entry whose file is gone is dropped when the
+  # next one is written: a path nobody can ask for again is not a cache.
+  @held_key {__MODULE__, :libraries_held}
+
+  defp hold(key, path) do
+    held = :persistent_term.get(@held_key, [])
+
+    unless List.keymember?(held, key, 0) do
+      {kept, gone} = Enum.split_with([{key, path} | held], fn {_key, at} -> File.exists?(at) end)
+      Enum.each(gone, fn {gone_key, _at} -> :persistent_term.erase(gone_key) end)
+      :persistent_term.put(@held_key, kept)
     end
   end
 

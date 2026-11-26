@@ -404,6 +404,35 @@ defmodule Monty.Studio.MemoryTest do
     end
   end
 
+  describe "the cache this node keeps" do
+    # `:persistent_term` is never reclaimed, and every entry is keyed by a path:
+    # a library read from a temporary directory stayed in the node for its whole
+    # life, which is how a quarter of the suite ran out of memory at the next
+    # module load. A path whose file is gone is dropped when the next one is
+    # written.
+    test "does not keep a library whose file is gone" do
+      first = Tmp.dir("held-first")
+      second = Tmp.dir("held-second")
+
+      :ok = Memory.save(GraphMemory.new(), "a_model", "pretrained_held", first)
+      assert {:ok, _memory} = Memory.load("a_model", "pretrained_held", first)
+
+      File.rm_rf!(first)
+
+      :ok = Memory.save(GraphMemory.new(), "a_model", "pretrained_held", second)
+      assert {:ok, _memory} = Memory.load("a_model", "pretrained_held", second)
+
+      assert [] == cached_at(first)
+      assert [_one_entry] = cached_at(second)
+    end
+
+    defp cached_at(dir) do
+      for {{Monty.Studio.Memory, :library, at, _index}, _library} <- :persistent_term.get(),
+          at == Path.join([dir, "pretrained_held", "a_model.jsonl.gz"]),
+          do: at
+    end
+  end
+
   describe "a directory that holds libraries" do
     test "lists the models each release exports, and nothing that is not one" do
       dir = Tmp.dir("libraries")
