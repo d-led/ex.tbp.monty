@@ -366,12 +366,21 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   def step(observation, false, ctx, %__MODULE__{} = sm) do
+    # The segmentation reads the view's pixels and nothing the salience map says,
+    # so the two halves of a step share no input but the observation: the
+    # segmenter runs while the map is being computed. Both are pure — only the
+    # dither draws from the episode's stream, and it stays in this process — so
+    # the step's numbers do not depend on who finishes first.
+    segmentation_task = Task.async(fn -> segment(sm, ctx, observation) end)
+
     salience_map = score(sm, ctx, observation)
     view = OnObjectObservation.from(observation, salience_map)
     {inhibition, inhibitor} = return_inhibitor(sm, view.centre_location, view.locations)
     salience = weight_salience(ctx, sm.sensor_module_id, view.salience, inhibition)
     goals = goals_for(sm, view.locations, salience)
-    {region, segmentation, segmentation_map} = segment_region(sm, ctx, observation, view)
+
+    {region, segmentation, segmentation_map} =
+      sm |> segmentation_bound(view, Task.await(segmentation_task, :infinity))
 
     telemetry =
       sm.telemetry
@@ -485,23 +494,25 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   # A segmentation is optional: without one the module says where to look and not
   # how much of the surface to attend to, which is what Monty's does without a
   # strategy too.
-  defp segment_region(%__MODULE__{segmentation_strategy: nil}, _ctx, _observation, _view),
-    do: {AttentionRegion.empty(), nil, nil}
+  defp segment(%__MODULE__{segmentation_strategy: nil}, _ctx, _observation), do: nil
 
-  defp segment_region(
-         %__MODULE__{segmentation_strategy: {module, strategy}},
-         ctx,
-         observation,
-         view
-       ) do
+  defp segment(%__MODULE__{segmentation_strategy: {module, strategy}}, ctx, observation) do
     {segmentation_map, strategy} = module.call(strategy, ctx, colour(observation))
 
+    {{module, strategy}, segmentation_map}
+  end
+
+  # What the answer of the segmenter means to the view: the region is the pixels
+  # both segmented and on the object, and a module without a strategy has none.
+  defp segmentation_bound(_sm, _view, nil), do: {AttentionRegion.empty(), nil, nil}
+
+  defp segmentation_bound(_sm, view, {segmentation, segmentation_map}) do
     region =
       view
       |> region_locations(segmentation_map)
       |> then(&AttentionRegion.uniform(&1, AttentionRegion.max_weight()))
 
-    {region, {module, strategy}, segmentation_map}
+    {region, segmentation, segmentation_map}
   end
 
   # The pixels both segmented and on the object, as locations: a region is about

@@ -263,14 +263,19 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
 
   defp rgb(rgba), do: Enum.map(rgba, fn row -> Enum.map(row, &Enum.take(&1, 3)) end)
 
+  # The three channels are independent — same strategy, three planes, no shared
+  # state and no draw from the episode's stream — so they run at once. The order
+  # the results are taken in is the order the planes are in, so the map does not
+  # depend on which channel finished first.
   defp colour_features(image, strategy, ctx) do
     [lightness, other_a, other_b] = channels(image)
 
-    {lightness_map, lightness_pyramid} =
-      ColorChannelSalience.process(strategy.color, ctx, lightness)
-
-    {a_map, _a_pyramid} = ColorChannelSalience.process(strategy.color, ctx, other_a)
-    {b_map, _b_pyramid} = ColorChannelSalience.process(strategy.color, ctx, other_b)
+    [{lightness_map, lightness_pyramid}, {a_map, _a_pyramid}, {b_map, _b_pyramid}] =
+      [lightness, other_a, other_b]
+      |> Enum.map(fn plane ->
+        Task.async(fn -> ColorChannelSalience.process(strategy.color, ctx, plane) end)
+      end)
+      |> Enum.map(&Task.await(&1, :infinity))
 
     {%{"L" => lightness_map, "a" => a_map, "b" => b_map}, lightness_pyramid}
   end
