@@ -161,6 +161,37 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images do
   def gaussian_blur(image, sigma, truncate \\ 2.5)
 
   def gaussian_blur(image, sigma, truncate) do
+    if SalienceNif.loaded?() do
+      by_blur_native(image, sigma, truncate)
+    else
+      gaussian_blur_reference(image, sigma, truncate)
+    end
+  end
+
+  # The whole plane crosses as one binary and comes back the same way: three
+  # colour channels and SLIC's smoothing call this on a 256-square plane, where
+  # 21.6 ms of Elixir arithmetic is a tenth of the step.
+  defp by_blur_native(image, sigma, truncate) do
+    rows = as_rows(image)
+    height = tuple_size(rows)
+    width = tuple_size(elem(rows, 0))
+
+    plane = for row <- image, value <- row, into: <<>>, do: <<value::float-little-64>>
+
+    plane
+    |> SalienceNif.blur(width, height, sigma * 1.0, truncate * 1.0)
+    |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+    |> Enum.chunk_every(width)
+  end
+
+  @doc """
+  The Elixir Gaussian blur: the reference the native kernel is held to.
+
+  Kept public because it is what the parity test compares against, and what runs
+  on a machine where the crate was not built.
+  """
+  @spec gaussian_blur_reference(plane(), float(), float()) :: plane()
+  def gaussian_blur_reference(image, sigma, truncate) do
     kernel = kernel(sigma, truncate)
     rows = as_rows(image)
     height = tuple_size(rows)

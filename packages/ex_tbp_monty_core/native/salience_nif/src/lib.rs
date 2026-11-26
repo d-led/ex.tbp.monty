@@ -1,4 +1,6 @@
-//! The bicubic enlargement a salience pyramid spends its seconds on.
+//! The per-pixel kernels a salience pyramid spends its seconds on: the bicubic
+//! enlargement, SLIC's k-means, and the Gaussian blur every channel passes
+//! through.
 //!
 //! `Images.resize/3` with `:cubic` is called once per octave when a pyramid is
 //! collapsed, and each call is sixteen multiply-adds for every destination
@@ -51,16 +53,7 @@ fn enlarge_cubic<'a>(
     width: usize,
     height: usize,
 ) -> Result<Term<'a>, rustler::Error> {
-    let values = source.as_slice();
-
-    if values.len() != source_width * source_height * std::mem::size_of::<f64>() {
-        return Err(rustler::Error::BadArg);
-    }
-
-    let pixels: Vec<f64> = values
-        .chunks_exact(std::mem::size_of::<f64>())
-        .map(|bytes| f64::from_le_bytes(bytes.try_into().expect("eight bytes")))
-        .collect();
+    let pixels = decode(source.as_slice(), source_width * source_height)?;
 
     let mut binary = NewBinary::new(env, width * height * std::mem::size_of::<f64>());
     let out = binary.as_mut_slice();
@@ -144,6 +137,148 @@ fn cubic_weights(x: f64) -> [f64; 4] {
     let third = ((CUBIC_A + 2.0) * (1.0 - x) - (CUBIC_A + 3.0)) * (1.0 - x) * (1.0 - x) + 1.0;
 
     [first, second, third, 1.0 - first - second - third]
+}
+
+/// A `width` by `height` plane blurred with a Gaussian of `sigma`.
+///
+/// The kernel is sized as Monty sizes it — `round(2 * truncate * sigma + 1)`,
+/// forced odd — and applied as OpenCV applies it: across each row, then down
+/// each column, with the edge pixel repeated outward. Three colour channels and
+/// SLIC's smoothing call it; on a 256-square plane the Elixir takes 21.6 ms.
+///
+/// `Images.gaussian_blur_reference/3` is the reference, and every number here is
+/// the same `f64` operation in the same order: the same weights, normalised by
+/// the same left-to-right total, the same folded symmetric pairs, the same
+/// `centre + weight * (left + right)` accumulation. The two planes are bit for
+/// bit equal, which a parity case holds them to on several shapes.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn blur<'a>(
+    env: Env<'a>,
+    plane: Binary,
+    width: usize,
+    height: usize,
+    sigma: f64,
+    truncate: f64,
+) -> Result<Term<'a>, rustler::Error> {
+    let pixels = decode(plane.as_slice(), width * height)?;
+
+    let kernel = gaussian_kernel(sigma, truncate);
+    let across = windows(&kernel, width);
+    let down = windows(&kernel, height);
+
+    let mut horizontal = vec![0.0f64; width * height];
+
+    for row in 0..height {
+        let line = &pixels[row * width..(row + 1) * width];
+
+        for column in 0..width {
+            horizontal[row * width + column] = blurred(&across[column], line, 1);
+        }
+    }
+
+    let mut binary = NewBinary::new(env, width * height * std::mem::size_of::<f64>());
+    let out = binary.as_mut_slice();
+
+    for row in 0..height {
+        for column in 0..width {
+            // The column's values from the first pass, read with the width as
+            // the stride: `values[index]` is `horizontal[index][column]`.
+            let value = blurred(&down[row], &horizontal[column..], width);
+
+            let offset = (row * width + column) * std::mem::size_of::<f64>();
+            out[offset..offset + std::mem::size_of::<f64>()].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+
+    Ok(Term::from(binary))
+}
+
+/// The plane as `f64`s, or `:badarg` — a binary of the wrong length would
+/// otherwise read past its end.
+fn decode(values: &[u8], pixels: usize) -> Result<Vec<f64>, rustler::Error> {
+    if values.len() != pixels * std::mem::size_of::<f64>() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    Ok(values
+        .chunks_exact(std::mem::size_of::<f64>())
+        .map(|bytes| f64::from_le_bytes(bytes.try_into().expect("eight bytes")))
+        .collect())
+}
+
+/// Monty's Gaussian: sampled at integer offsets, then normalised by its own
+/// total, summed left to right as `Enum.sum/1` sums it.
+fn gaussian_kernel(sigma: f64, truncate: f64) -> Vec<f64> {
+    let mut size = (2.0 * truncate * sigma + 1.0).round() as isize;
+
+    if size % 2 == 0 {
+        size += 1;
+    }
+
+    let pad = (size / 2).max(0);
+
+    let mut weights: Vec<f64> = (-pad..=pad)
+        .map(|offset| {
+            let offset = offset as f64;
+            (-(offset * offset) / (2.0 * sigma * sigma)).exp()
+        })
+        .collect();
+
+    let total = weights.iter().fold(0.0f64, |sum, weight| sum + weight);
+
+    for weight in &mut weights {
+        *weight /= total;
+    }
+
+    weights
+}
+
+/// One position's window: the centre tap, and the symmetric pairs around it,
+/// each clamped to the edge — `BORDER_REPLICATE`, the edge pixel repeated.
+struct Window {
+    middle: usize,
+    middle_weight: f64,
+    pairs: Vec<(usize, usize, f64)>,
+}
+
+fn windows(weights: &[f64], length: usize) -> Vec<Window> {
+    let pad = weights.len() / 2;
+    let last = length as isize - 1;
+    let at = |position: isize| clamp(position, 0, last) as usize;
+
+    (0..length)
+        .map(|position| {
+            let position = position as isize;
+
+            Window {
+                middle: at(position),
+                middle_weight: weights[pad],
+                pairs: (0..pad)
+                    .map(|tap| {
+                        let tap = tap as isize;
+
+                        (
+                            at(position + tap - pad as isize),
+                            at(position + (2 * pad as isize - tap) - pad as isize),
+                            weights[tap as usize],
+                        )
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
+/// The centre term plus each symmetric pair: the same sum as the windowed dot
+/// product, with half the work.
+fn blurred(window: &Window, values: &[f64], step: usize) -> f64 {
+    let mut sum = window.middle_weight * values[window.middle * step];
+
+    for (left, right, weight) in &window.pairs {
+        sum += weight * (values[left * step] + values[right * step]);
+    }
+
+    sum
 }
 
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");

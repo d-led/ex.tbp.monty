@@ -1,7 +1,8 @@
 defmodule ExTbpMonty.Core.SalienceNif do
   @moduledoc """
-  The native bicubic resize `Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images`
-  uses when it can.
+  The native kernels `Monty.Frameworks.Models.Salience.Strategies.Vocus2.Images`
+  and `SlicMerge` use when they can: the bicubic resize, SLIC's k-means, and the
+  Gaussian blur.
 
   A pyramid's collapse resamples every octave back to the view's size, and each
   pixel is sixteen taps: 16.8 million of them in a 256-square salience step, at
@@ -43,6 +44,18 @@ defmodule ExTbpMonty.Core.SalienceNif do
   row-major. The answer is the same encoding, row-major, `width * height` values.
   """
   def enlarge_cubic(_source, _source_width, _source_height, _width, _height),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  A `width` by `height` plane blurred with a Gaussian of `sigma`, exactly as
+  `Images.gaussian_blur_reference/3` computes it.
+
+  The kernel is Monty's — `round(2 * truncate * sigma + 1)`, forced odd — and the
+  two passes are OpenCV's: across each row, then down each column, the edge pixel
+  repeated outward. `plane` is `width * height` little-endian `f64` values,
+  row-major, and the answer is the same encoding.
+  """
+  def blur(_plane, _width, _height, _sigma, _truncate),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """

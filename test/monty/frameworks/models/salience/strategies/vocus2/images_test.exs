@@ -177,6 +177,32 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.ImagesTest do
     end
   end
 
+  describe "the native Gaussian blur" do
+    # Same question as the resize: a blur that is merely close is a different
+    # attention map a step later. The sigmas and shapes are the ones a pyramid
+    # asks for — a channel blurs at `sigma`, SLIC smooths a view, and the small
+    # and thin planes are where a kernel that came out one tap too wide shows.
+    test "answers the same numbers, bit for bit, as the Elixir reference" do
+      cases = [
+        {{128, 128}, 1.0, 2.5},
+        {{128, 128}, 0.7, 2.5},
+        {{40, 64}, 1.6, 2.5},
+        {{7, 5}, 1.0, 2.5},
+        {{1, 9}, 1.0, 2.5},
+        {{9, 1}, 2.0, 2.5},
+        {{6, 6}, 0.3, 1.0}
+      ]
+
+      for {shape, sigma, truncate} <- cases do
+        plane = plane(shape)
+
+        assert Images.gaussian_blur(plane, sigma, truncate) ==
+                 Images.gaussian_blur_reference(plane, sigma, truncate),
+               "the native blur and the reference disagree on #{inspect(shape)} at sigma #{sigma}"
+      end
+    end
+  end
+
   # A plane of the given shape whose values are not a smooth ramp: exact halves,
   # negatives and zero, so a sign or a rounding that only shows on them shows.
   defp plane({rows, columns}) do
