@@ -326,11 +326,19 @@ it was timed (`scripts/compare_builds.sh`: a comparison worktree otherwise
 reuses a `_build` and reports the other arm's numbers), and both report the same
 ladder: `goals 3412263`, `votes 0/0`, every learning module `time_out`.
 
-|                           | before (`5a9d182d`) | after         |           |
-| ------------------------- | ------------------- | ------------- | --------- |
-| the model, 121 steps      | 595 999 992 µs      | 41 540 612 µs | **14.3×** |
-| the whole run, wall clock | 623 s               | 69 s          | **9.0×**  |
-| one step                  | 4 926 ms            | 343 ms        | 14.3×     |
+|                      | before (`5a9d182d`) | after         |           |
+| -------------------- | ------------------- | ------------- | --------- |
+| the model, 121 steps | 609 353 490 µs      | 31 115 430 µs | **19.6×** |
+| the world, 121 steps | 16 977 645 µs       | 9 156 848 µs  | **1.85×** |
+| one step             | 5 036 ms            | 257 ms        | 19.6×     |
+
+Both figures come from one invocation of the script, which rebuilds each arm
+first:
+
+```bash
+scripts/compare_builds.sh 5a9d182d 1 -- base_infer_cows_small_compositional \
+  --episodes 2 --no-record --quiet --world ex_mujoco
+```
 
 The sensor's own phases, cumulative over the same 121 steps (`:timer.tc` around
 each, an accumulator in `:persistent_term` — the instrument inflates a phase's

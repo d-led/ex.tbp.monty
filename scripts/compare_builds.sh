@@ -38,11 +38,32 @@ trap 'git -C "$here" worktree remove --force "$worktree" 2>/dev/null || true' EX
 git -C "$here" worktree add --detach "$worktree" "$ref" >/dev/null
 [ -e "$worktree/deps" ] || ln -s "$here/deps" "$worktree/deps"
 
-# The old arm must be the old code. `mix deps.compile --force` rebuilds the path
-# package under comparison; `mix compile --force` rebuilds the app around it.
+# The core package is a project of its own — its own `mix.exs`, its own `deps/`,
+# its own `_build/` — and a fresh worktree has neither directory. Without them
+# `mix deps.compile ex_tbp_monty_core` dies on `module Rustler is not loaded`,
+# and without a forced build of *it* the app's run silently uses whatever beams
+# `_build` already links to: that is how a ten-kernel campaign once measured as
+# having bought nothing.
+[ -e "$worktree/packages/ex_tbp_monty_core/deps" ] ||
+  ln -s "$here/packages/ex_tbp_monty_core/deps" "$worktree/packages/ex_tbp_monty_core/deps"
+
+# The *sources* are what is being compared, so both arms run on one dependency
+# set: `deps/` is shared and cannot be fetched per ref from this box, and a ref
+# whose lockfile names other versions would otherwise fail on "lock mismatch"
+# before it ran at all.
+cp "$here/mix.lock" "$worktree/mix.lock"
+
+if [ -e "$here/packages/ex_tbp_monty_core/mix.lock" ]; then
+  cp "$here/packages/ex_tbp_monty_core/mix.lock" "$worktree/packages/ex_tbp_monty_core/mix.lock"
+fi
+
+(
+  cd "$worktree/packages/ex_tbp_monty_core"
+  env MIX_ENV=test mix compile --force >/dev/null
+)
+
 (
   cd "$worktree"
-  env MIX_ENV=test mix deps.compile ex_tbp_monty_core --force >/dev/null
   env MIX_ENV=test mix compile --force >/dev/null
 )
 
