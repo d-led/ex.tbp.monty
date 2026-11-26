@@ -221,13 +221,21 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2.OrientationSalience
   end
 
   # The border OpenCV reflects: mirror about the edge pixel without repeating it.
+  #
+  # The indices a padded axis reads are resolved once, and the plane is read
+  # through tuples: as lists, `Enum.at/2` walked up to a whole row for every
+  # pixel, which was 28 million `Enum.drop/2` calls — the largest single cost in
+  # a cows step, ahead of every kernel.
   defp pad(rows, pad_y, pad_x) do
     height = length(rows)
-    vertical = for y <- -pad_y..(height + pad_y - 1), do: Enum.at(rows, reflect(y, height))
+    stored = rows |> Enum.map(&List.to_tuple/1) |> List.to_tuple()
 
-    Enum.map(vertical, fn row ->
-      width = length(row)
-      for x <- -pad_x..(width + pad_x - 1), do: Enum.at(row, reflect(x, width))
+    down = for y <- -pad_y..(height + pad_y - 1), do: elem(stored, reflect(y, height))
+
+    Enum.map(down, fn row ->
+      width = tuple_size(row)
+      across = for x <- -pad_x..(width + pad_x - 1), do: reflect(x, width)
+      for column <- across, do: elem(row, column)
     end)
   end
 

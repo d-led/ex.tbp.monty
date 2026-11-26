@@ -59,6 +59,17 @@ defmodule ExTbpMonty.Core.SalienceNif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
+  SLIC's connectivity pass: every label becomes one connected blob, and a blob
+  smaller than `min_size` is absorbed into the label it borders, exactly as
+  `SlicMerge.enforce_connectivity_reference/4` walks it.
+
+  `labels` is `width * height` little-endian `u32` labels, row-major; the answer
+  is the same encoding.
+  """
+  def enforce_connectivity(_labels, _width, _height, _min_size, _max_size),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
   SLIC's k-means: one label per pixel, as the `SlicMerge` reference computes it.
 
   `pixels` is `width * height` colours of three little-endian `f64`s, already

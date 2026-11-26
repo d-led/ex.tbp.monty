@@ -201,11 +201,22 @@ defmodule Monty.Frameworks.Models.Salience.Strategies.Vocus2 do
     {%{"L" => lightness_map, "a" => a_map, "b" => b_map}, lightness_pyramid}
   end
 
-  # One plane per channel: the pixels' first elements, then their second, ...
+  # One plane per channel, in a single pass over the image. Reading them apart —
+  # `Enum.at(pixel, index)` for each channel — walked every pixel's list from the
+  # front three times, and `Enum.at/2` on a list is a slice, not an index.
   defp channels(image) do
-    for index <- 0..2 do
-      Enum.map(image, fn row -> Enum.map(row, &Enum.at(&1, index)) end)
-    end
+    {lightness, other_a, other_b} =
+      Enum.reduce(image, {[], [], []}, fn row, {lightness, other_a, other_b} ->
+        {l_row, a_row, b_row} =
+          Enum.reduce(row, {[], [], []}, fn
+            [l, a, b], {l_row, a_row, b_row} -> {[l | l_row], [a | a_row], [b | b_row]}
+          end)
+
+        {[Enum.reverse(l_row) | lightness], [Enum.reverse(a_row) | other_a],
+         [Enum.reverse(b_row) | other_b]}
+      end)
+
+    [lightness, other_a, other_b] |> Enum.map(&Enum.reverse/1)
   end
 
   defp maybe_add_depth(features, %__MODULE__{depth: nil}, _ctx, _depth), do: features

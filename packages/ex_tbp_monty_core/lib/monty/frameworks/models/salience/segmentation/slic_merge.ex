@@ -316,7 +316,9 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
     |> enforce_connectivity(
       trunc(strategy.min_size_factor * segment_size),
       trunc(strategy.max_size_factor * segment_size),
-      width
+      width,
+      height,
+      k_means
     )
     |> to_rows(height, width)
   end
@@ -469,14 +471,29 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
       1.0 / :math.pow(Enum.max(steps), 2),
       max_iter
     )
-    |> then(fn raw ->
-      labels = for <<label::little-32 <- raw>>, do: label
-      {:array.from_list(labels, 0), seeds}
-    end)
+    |> then(&{&1, seeds})
   end
 
-  defp labels(pixels, width, seeds, steps, max_iter, :reference),
-    do: k_means(pixels, width, seeds, steps, max_iter)
+  defp labels(pixels, width, seeds, steps, max_iter, :reference) do
+    {labels, seeds} = k_means(pixels, width, seeds, steps, max_iter)
+
+    {packed_labels(labels), seeds}
+  end
+
+  # One label field, one shape downstream of the k-means: one little-endian
+  # `u32` per pixel. The loop above works on an `:array`, so this is where the
+  # reference path pays for it — which is what makes the two paths comparable
+  # stage by stage.
+  defp packed_labels(labels) do
+    for index <- 0..(:array.size(labels) - 1), into: <<>> do
+      <<:array.get(index, labels)::little-32>>
+    end
+  end
+
+  defp unpacked_labels(binary) do
+    labels = for <<label::little-32 <- binary>>, do: label
+    :array.from_list(labels, 0)
+  end
 
   defp k_means(pixels, width, seeds, steps, max_iter) do
     iterate(pixels, width, seeds, steps, max_iter, :array.new(tuple_size(pixels), default: 0))
@@ -607,7 +624,30 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # `_enforce_label_connectivity_cython`: in raster order, a breadth-first search
   # for each blob, and a blob smaller than `min_size` handed to the neighbour it
   # touches. A blob that reaches `max_size` keeps a label of its own.
-  defp enforce_connectivity(labels, min_size, max_size, width) do
+  defp enforce_connectivity(labels, min_size, max_size, width, height, :native),
+    do: SalienceNif.enforce_connectivity(labels, width, height, min_size, max_size)
+
+  defp enforce_connectivity(labels, min_size, max_size, width, _height, :reference) do
+    labels
+    |> unpacked_labels()
+    |> enforce_connectivity_reference(min_size, max_size, width)
+    |> packed_labels()
+  end
+
+  @doc """
+  The Elixir connectivity pass: the reference the native kernel is held to.
+
+  Kept public because it is what a parity case compares against, and what runs
+  where the crate was never built.
+  """
+  @spec enforce_connectivity_reference(
+          term(),
+          non_neg_integer(),
+          non_neg_integer(),
+          pos_integer()
+        ) ::
+          term()
+  def enforce_connectivity_reference(labels, min_size, max_size, width) do
     size = :array.size(labels)
 
     {connected, _next_label} =
@@ -707,9 +747,10 @@ defmodule Monty.Frameworks.Models.Salience.Segmentation.SlicMerge do
   # -- answers --------------------------------------------------------------
 
   defp to_rows(labels, height, width) do
-    for row <- 0..(height - 1) do
-      for column <- 0..(width - 1), do: :array.get(row * width + column, labels)
-    end
+    labels
+    |> then(fn binary -> for <<label::little-32 <- binary>>, do: label end)
+    |> Enum.chunk_every(width)
+    |> Enum.take(height)
   end
 
   defp transpose([]), do: []

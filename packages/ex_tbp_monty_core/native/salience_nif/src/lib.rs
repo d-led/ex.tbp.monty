@@ -281,6 +281,111 @@ fn blurred(window: &Window, values: &[f64], step: usize) -> f64 {
     sum
 }
 
+/// SLIC's connectivity pass: every label becomes one connected blob, and a blob
+/// smaller than `min_size` is absorbed into the neighbour it borders.
+///
+/// `SlicMerge.enforce_connectivity_reference/5` is the reference and holds the
+/// same walk: index order, the `+x, -x, +y, -y` neighbour order, the
+/// `max_size` cut that discards the rest of the queue, and `min_size` deciding
+/// between "absorb" and "next label". The two differences are shape, not
+/// numbers: a queue that advances instead of two lists appended on every pixel
+/// (which was O(n²) a blob) and no persistent array (whose every write copies a
+/// path).
+#[rustler::nif(schedule = "DirtyCpu")]
+fn enforce_connectivity<'a>(
+    env: Env<'a>,
+    labels: Binary,
+    width: usize,
+    height: usize,
+    min_size: usize,
+    max_size: usize,
+) -> Result<Term<'a>, rustler::Error> {
+    let size = width * height;
+
+    if labels.as_slice().len() != size * std::mem::size_of::<u32>() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let label_of: Vec<u32> = labels
+        .as_slice()
+        .chunks_exact(std::mem::size_of::<u32>())
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().expect("four bytes")))
+        .collect();
+
+    let mut connected: Vec<i64> = vec![-1; size];
+    let mut next_label: i64 = 0;
+    let mut coordinates: Vec<usize> = Vec::new();
+    let mut queue: std::collections::VecDeque<usize> = std::collections::VecDeque::new();
+
+    for index in 0..size {
+        if connected[index] > -1 {
+            continue;
+        }
+
+        let label = label_of[index];
+        let new_label = next_label;
+
+        connected[index] = new_label;
+        coordinates.clear();
+        queue.clear();
+        coordinates.push(index);
+        queue.push_back(index);
+
+        let mut adjacent = new_label;
+
+        while !queue.is_empty() && coordinates.len() < max_size {
+            let from = queue.pop_front().expect("the queue is not empty");
+
+            for neighbour in neighbours(from, width) {
+                let claimed = connected[neighbour];
+
+                if claimed == -1 && label_of[neighbour] == label {
+                    connected[neighbour] = new_label;
+                    coordinates.push(neighbour);
+                    queue.push_back(neighbour);
+                } else if claimed > -1 && claimed != new_label {
+                    adjacent = claimed;
+                }
+            }
+        }
+
+        if coordinates.len() < min_size {
+            for &coordinate in &coordinates {
+                connected[coordinate] = adjacent;
+            }
+        } else {
+            next_label += 1;
+        }
+    }
+
+    let mut binary = NewBinary::new(env, size * std::mem::size_of::<u32>());
+    let out = binary.as_mut_slice();
+
+    for (index, &label) in connected.iter().enumerate() {
+        let offset = index * std::mem::size_of::<u32>();
+        out[offset..offset + std::mem::size_of::<u32>()]
+            .copy_from_slice(&(label as u32).to_le_bytes());
+    }
+
+    Ok(Term::from(binary))
+}
+
+/// `+x, -x, +y, -y` in that order: `skimage`'s order with the two z neighbours
+/// dropped, because a view is one pixel deep. The bounds are checked against
+/// `width` on both axes, as the reference checks them — a view is square.
+fn neighbours(index: usize, width: usize) -> Vec<usize> {
+    let row = (index / width) as isize;
+    let column = (index % width) as isize;
+    let last = width as isize - 1;
+
+    [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        .iter()
+        .map(|(d_row, d_column)| (row + d_row, column + d_column))
+        .filter(|(r, c)| *r >= 0 && *r <= last && *c >= 0 && *c <= last)
+        .map(|(r, c)| (r * width as isize + c) as usize)
+        .collect()
+}
+
 rustler::init!("Elixir.ExTbpMonty.Core.SalienceNif");
 
 /// SLIC's k-means: which seed each pixel belongs to, after at most `max_iter`
