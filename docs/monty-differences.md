@@ -2849,3 +2849,55 @@ read a miss the same way, and no config of ours names the deleted class.
 **What is therefore not compared.** Nothing, for this change: the transform was a
 world convention, and both worlds now share it. The class stays in the module map
 as Monty's own, marked as removed by the pull.
+
+## 2.48 The two MuJoCo worlds do not render the same picture
+
+**In one line:** the compiled world and the Python world agree about where
+everything is and disagree about what it looks like, by about a tenth of the
+range — and that is enough to make one of them recognise an object where the
+other times out.
+
+**How it was found.** `scripts/probe_world_parity.exs` steps both worlds with the
+same four moves and compares every image. On
+`base_infer_cows_small_compositional` (`--world` of each, MuJoCo 4.0.1 on both
+sides):
+
+    patch_0/1/2 rgba     12 288 of 16 384 values differ, widest 25
+    view_finder rgba     27 648 of 262 144 differ, widest 25
+    view_finder depth    the near value is identical (0.146) and the far value is
+                         143.108 against 792.233
+    semantic ids         identical
+    every pose, the agent's position and rotation   identical
+
+The colour difference is not noise: the pairs run (169→148), (181→157),
+(153→135), (133→117) — a constant ratio of about 0.874 in all three channels,
+alpha identical. A constant ratio on every lit pixel is a lighting difference,
+not a rounding one.
+
+**What the two far values say.** Both worlds set `vis.map.zfar` the way Monty's
+simulator does (`world.py`'s `_configure_spec_settings/1` and `Scene.settings/1`
+both write `znear="0.005" zfar="500"`), and MuJoCo multiplies that by
+`stat.extent`. Read back through that formula the two models hold different
+extents — the two builders do not compile the same scene, not merely the same
+scene lit differently.
+
+**Why it matters.** On episode 1 of that config (seed 1170100843, `001_cube`) the
+port's `learning_module_2` reaches `match` at step 21 and names the cube, where
+Monty's runs to its 100-step cap with `confused_mlh`. Monty's
+`update_terminal_condition` (`graph_matching.py`) and this port's
+`check_terminal_condition` (`evidence_graph_lm.ex`) are identical branch for
+branch, so the two are not disagreeing about how to conclude — they are looking
+at different pixels.
+
+**What is not yet compared.** Which builder is wrong, and whether the difference
+is a light, a material, an extent, or all three: the two are built by different
+code (`Monty.Simulators.ExMujoco.Scene` writes MJCF text;
+`priv/monty_py/world.py` assembles an `MjSpec` and applies Monty's own settings,
+including one added directional light). Until they compile the same numbers, a
+recognition comparison between them is a comparison of two experiments.
+
+**A second, separate gap.** Monty pins `mujoco>=3.13` — 3.13.0 in its `uv.lock` —
+while both of this port's worlds are 4.0.1: the Python one because
+`config/pythonx.exs` declares bare `"mujoco"` and uv resolves the latest, the
+compiled one because `ex.mujoco/mujoco.version` is 4.0.1. Matching Monty's
+version is a prerequisite for comparing percepts at all, and it is two pins.
