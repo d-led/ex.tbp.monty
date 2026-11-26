@@ -164,4 +164,18 @@ defmodule ExTbpMonty.Core.SalienceNif do
   `DecayField.weights_reference/2` is the reference the answer is held to.
   """
   def inhibition_weights(_kernels, _points, _count), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+  `cv2.GaussianBlur` on an RGBA image's colour channels, with the alpha channel
+  carried through — Monty's `GaussianBlurRGB`, which is one OpenCV call.
+
+  `rgba` is `width * height` pixels of four little-endian `f64`s; `kernel` is the
+  weights, little-endian `f64`, odd length. The answer is the same encoding as
+  `rgba`, in the same floats: the representation it goes back into is the
+  transform's own rule (`as_written/2`), not the kernel's.
+
+  `GaussianBlurRGB.blur_channel/2` is the reference the answer is held to.
+  """
+  def gaussian_blur_rgba(_rgba, _width, _height, _kernel),
+    do: :erlang.nif_error(:nif_not_loaded)
 end

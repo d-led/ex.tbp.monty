@@ -31,6 +31,7 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
 
   @behaviour Monty.Frameworks.EnvironmentUtils.Transforms.Transform
 
+  alias ExTbpMonty.Core.SalienceNif
   alias Monty.Frameworks.EnvironmentUtils.Transforms.TransformContext
 
   @default_sigma 1.0
@@ -109,22 +110,36 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
       Map.new(sensors(agent, transform), fn {sensor_id, observation} ->
         rgba = rgba!(observation, sensor_id)
 
-        {sensor_id,
-         Map.put(
-           observation,
-           "rgba",
-           rgba
-           |> blur_channel(transform)
-           |> Enum.zip(rgba)
-           |> Enum.map(fn {blurred_row, original_row} ->
-             Enum.zip_with([blurred_row, original_row], fn [pixel, original] ->
-               pixel ++ [List.last(original)]
-             end)
-           end)
-         )}
+        {sensor_id, Map.put(observation, "rgba", blur(rgba, transform))}
       end)
 
     Map.put(observations, transform.agent_id, Map.merge(agent, blurred))
+  end
+
+  # Monty makes one OpenCV call here, and so does this: the same kernel, the same
+  # reflection, the same order of taps, in one crossing. `blur_channel/2` is the
+  # reference it is held to — and, on this config's `patch_1`, a 64-square image
+  # with a 41-tap kernel, it was 1.3 million Elixir multiply-adds a step.
+  defp blur(rgba, %__MODULE__{kernel: kernel}) do
+    if SalienceNif.loaded?() do
+      height = length(rgba)
+      width = rgba |> hd() |> length()
+
+      packed =
+        for row <- rgba, pixel <- row, value <- pixel, into: <<>> do
+          <<value * 1.0::float-little-64>>
+        end
+
+      weights = for weight <- kernel, into: <<>>, do: <<weight::float-little-64>>
+
+      SalienceNif.gaussian_blur_rgba(packed, width, height, weights)
+      |> then(fn raw -> for <<value::float-little-64 <- raw>>, do: value end)
+      |> Enum.chunk_every(width * 4)
+      |> Enum.map(&Enum.chunk_every(&1, 4))
+      |> as_written(rgba)
+    else
+      blur_reference(rgba, kernel)
+    end
   end
 
   defp sensors(agent, %__MODULE__{sensor_ids: nil}), do: agent
@@ -152,7 +167,16 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
   end
 
   # The three colour channels of every pixel, blurred.
-  defp blur_channel(rgba, %__MODULE__{kernel: kernel}) do
+  @doc """
+  The Elixir blur: the reference the kernel is held to, and what runs where the
+  crate was never built.
+
+  `BORDER_REFLECT_101` on both axes, the transform's own kernel, the taps summed
+  in kernel order, and the answer back in the representation the image arrived
+  in — which, for an 8-bit camera, is an 8-bit picture again.
+  """
+  @spec blur_reference([[[number()]]], [float()]) :: [[[number()]]]
+  def blur_reference(rgba, kernel) do
     pad = div(length(kernel), 2)
 
     rgba
@@ -161,6 +185,17 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB do
     |> then(fn rows -> Enum.map(rows, &convolve(&1, kernel)) end)
     |> then(fn rows -> rows |> transpose() |> Enum.map(&convolve(&1, kernel)) |> transpose() end)
     |> then(&as_written(&1, rgba))
+    |> with_alpha(rgba)
+  end
+
+  # The blurred colour channels, and each pixel's own alpha beside them: Monty
+  # concatenates the untouched alpha channel back on.
+  defp with_alpha(rows, rgba) do
+    Enum.zip_with([rows, rgba], fn [blurred_row, original_row] ->
+      Enum.zip_with([blurred_row, original_row], fn [pixel, original] ->
+        pixel ++ [List.last(original)]
+      end)
+    end)
   end
 
   # `cv2.GaussianBlur` answers the image's own dtype: a blurred 8-bit picture is

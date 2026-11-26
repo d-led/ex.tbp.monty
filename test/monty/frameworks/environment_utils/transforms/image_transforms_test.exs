@@ -222,6 +222,29 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.ImageTransformsTest do
       assert red > 0 and red < 200
     end
 
+    test "the native blur answers what the Elixir blur answers" do
+      # `cv2.GaussianBlur` is one call in Monty and one kernel here, so the two
+      # paths must agree exactly — over an odd size, a kernel wider than the
+      # image, a single row, and an 8-bit picture as well as a float one.
+      for image <- [
+            [[[200, 100, 50, 255], [0, 0, 0, 255]], [[10, 20, 30, 255], [255, 255, 255, 255]]],
+            [[[0.5, 0.25, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0]]],
+            [[[7, 8, 9, 255]]],
+            for(
+              row <- 0..4,
+              do: for(column <- 0..4, do: [row * 10, column * 10, row + column, 255])
+            )
+          ],
+          sigma <- [1.0, 2.0, 5.0] do
+        transform = GaussianBlurRGB.new(agent_id: @agent, sigma: sigma)
+
+        %{@agent => %{"patch" => %{"rgba" => blurred}}} =
+          GaussianBlurRGB.call(observations(%{"patch" => %{"rgba" => image}}), transform, ctx())
+
+        assert blurred == GaussianBlurRGB.blur_reference(image, transform.kernel)
+      end
+    end
+
     test "refuses a kernel size it cannot mean" do
       # Monty validates these in its constructor and so does the port: an even
       # kernel has no centre pixel, and a sigma of zero with an auto kernel has

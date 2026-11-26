@@ -314,6 +314,111 @@ fn blur<'a>(
     Ok(Term::from(binary))
 }
 
+/// `cv2.GaussianBlur` on the colour channels of an RGBA image, with the alpha
+/// channel carried through — Monty's `GaussianBlurRGB`, which is one OpenCV call.
+///
+/// `Monty.Frameworks.EnvironmentUtils.Transforms.GaussianBlurRGB.blur_channel/2`
+/// is the reference, and every number here is its arithmetic: the kernel the
+/// transform built, `BORDER_REFLECT_101` on both axes (a position outside folds
+/// back with period `2 * (n - 1)`), the taps summed in kernel order from zero,
+/// and the answer rounded the way `as_written/2` rounds it when the image
+/// arrived as integers.
+///
+/// It is the last quadratic Elixir image path in a step: this config blurs
+/// `patch_1` alone, a 64-square image with a 41-tap kernel, and that was 1.3
+/// million multiply-adds a step and most of the world's time.
+///
+/// `rgba` is `width * height` pixels of four little-endian `f64`s; `kernel` is
+/// the weights, little-endian `f64`, odd length. The answer is the same encoding
+/// as `rgba`, in the same floats — the representation it goes back into is the
+/// transform's own rule (`as_written/2`), not the kernel's.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn gaussian_blur_rgba<'a>(
+    env: Env<'a>,
+    rgba: Binary,
+    width: usize,
+    height: usize,
+    kernel: Binary,
+) -> Result<Term<'a>, rustler::Error> {
+    let unit = std::mem::size_of::<f64>();
+    let values = f64s(rgba.as_slice())?;
+    let weights = f64s(kernel.as_slice())?;
+
+    if width == 0 || height == 0 || values.len() != width * height * 4 || weights.is_empty() {
+        return Err(rustler::Error::BadArg);
+    }
+
+    let pad = weights.len() / 2;
+    let last_row = height as isize - 1;
+    let last_column = width as isize - 1;
+
+    // `BORDER_REFLECT_101`: mirror about the edge pixel without repeating it.
+    // `rem_euclid` is Elixir's `Integer.mod/2`; an axis of one pixel reflects
+    // onto nothing and stays that pixel.
+    let reflect = |position: isize, last: isize| -> usize {
+        if last <= 0 {
+            return 0;
+        }
+
+        let period = 2 * last;
+        let folded = position.rem_euclid(period);
+
+        if folded > last {
+            (period - folded) as usize
+        } else {
+            folded as usize
+        }
+    };
+
+    // The rows first: every row of the vertically padded image, horizontally
+    // blurred. `row` counts the padding, so it runs `height + 2 * pad` long.
+    let rows = height + 2 * pad;
+    let mut horizontal = vec![0.0f64; rows * width * 3];
+
+    for row in 0..rows {
+        let source = reflect(row as isize - pad as isize, last_row);
+
+        for column in 0..width {
+            for channel in 0..3 {
+                let mut sum = 0.0f64;
+
+                for (tap, weight) in weights.iter().enumerate() {
+                    let at = reflect(column as isize + tap as isize - pad as isize, last_column);
+                    sum += values[(source * width + at) * 4 + channel] * weight;
+                }
+
+                horizontal[(row * width + column) * 3 + channel] = sum;
+            }
+        }
+    }
+
+    let mut binary = NewBinary::new(env, width * height * 4 * unit);
+    let out = binary.as_mut_slice();
+
+    for row in 0..height {
+        for column in 0..width {
+            for channel in 0..3 {
+                let mut sum = 0.0f64;
+
+                for (tap, weight) in weights.iter().enumerate() {
+                    sum += horizontal[((row + tap) * width + column) * 3 + channel] * weight;
+                }
+
+                let value = sum;
+                let offset = (row * width + column) * 4 * unit + channel * unit;
+                out[offset..offset + unit].copy_from_slice(&value.to_le_bytes());
+            }
+
+            // Alpha is not blurred: the transform puts the original back.
+            let alpha_offset = (row * width + column) * 4 * unit + 3 * unit;
+            let alpha = values[(row * width + column) * 4 + 3];
+            out[alpha_offset..alpha_offset + unit].copy_from_slice(&alpha.to_le_bytes());
+        }
+    }
+
+    Ok(Term::from(binary))
+}
+
 /// The plane as `f64`s, or `:badarg` — a binary of the wrong length would
 /// otherwise read past its end.
 fn decode(values: &[u8], pixels: usize) -> Result<Vec<f64>, rustler::Error> {
