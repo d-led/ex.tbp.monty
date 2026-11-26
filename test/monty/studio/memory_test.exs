@@ -29,6 +29,27 @@ defmodule Monty.Studio.MemoryTest do
 
   defp monty_path(release, model), do: "/models/#{release}/#{model}/pretrained/"
 
+  # A manifest with one archive in it, carrying one release's models.
+  defp manifest_carrying(release) do
+    path = Path.join(Tmp.dir("release-warning"), "prerequisites.yaml")
+    id = String.replace(release, "pretrained_", "")
+
+    File.write!(path, """
+    prerequisites:
+      - id: #{id}
+        title: YCB models (v99)
+        url: https://example.test/#{id}.tgz
+        root: MONTY_MODELS
+        target: #{release}.tgz
+        extract: true
+        unpacks_to: #{release}
+        provides:
+          - surf_agent_1lm_10distinctobj
+    """)
+
+    path
+  end
+
   describe "reading a config's model name" do
     test "is the model's own directory" do
       path = monty_path("pretrained_ycb_v10", "surf_agent_1lm_10distinctobj")
@@ -336,6 +357,50 @@ defmodule Monty.Studio.MemoryTest do
       refute message =~ "No archive carries it"
 
       assert link == %{label: "Make it", href: "/prerequisites?fetch=cad_part_memories"}
+    end
+
+    # A warning nobody can act on is a warning that ends in "and then?". The
+    # release this config names is in an archive the prerequisites page can
+    # fetch, so the finding offers that fetch rather than sending a reader to
+    # the page to find the row.
+    test "offers the download when an archive carries the release the config names" do
+      Tmp.system_env("MONTY_MODELS", Path.join(Tmp.dir("release-warning-models"), "models"))
+      Tmp.app_env(:prerequisites_manifest, manifest_carrying("pretrained_ycb_v99"))
+
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("pretrained_ycb_v99", "surf_agent_1lm_10distinctobj")
+      }
+
+      assert [%{code: :memory_from_another_release, message: message, link: link}] =
+               Setup.memory_findings(setup)
+
+      assert message =~ "YCB models (v99)"
+      assert message =~ "Download it"
+      assert link == %{label: "Download it", href: "/prerequisites?fetch=ycb_v99"}
+    end
+
+    # The state the v13 download left a page in: the archive unpacked and only
+    # the memory missing. The same click, named for what it does there.
+    test "offers to read the memory when the archive is here and it is not" do
+      models = Tmp.dir("release-warning-models-here")
+      Tmp.system_env("MONTY_MODELS", models)
+      Tmp.app_env(:prerequisites_manifest, manifest_carrying("pretrained_ycb_v99"))
+
+      land = Path.join(models, "pretrained_ycb_v99")
+      File.mkdir_p!(land)
+      File.write!(Path.join(land, "README.md"), "")
+
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("pretrained_ycb_v99", "surf_agent_1lm_10distinctobj")
+      }
+
+      assert [%{code: :memory_from_another_release, message: message, link: link}] =
+               Setup.memory_findings(setup)
+
+      assert message =~ "its memory is not read"
+      assert link == %{label: "Export memory", href: "/prerequisites?fetch=ycb_v99"}
     end
   end
 

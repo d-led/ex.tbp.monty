@@ -223,6 +223,52 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
       assert render(view) =~ "present"
       assert land =~ "models"
     end
+
+    # The row that made a person ask "and when, then?": the archive was here
+    # and its memories were not, so it wore a green "present" badge over a list
+    # that said none of the models had been written — with no click between
+    # them. One rule now answers both (the run's own, `absent_memories/1`), so
+    # the badge says what is true and the button beside it is the work.
+    test "says its memory is not read when the models it promises are missing", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      manifest = Path.join(tmp, "provided.yaml")
+
+      File.write!(manifest, """
+      prerequisites:
+        - id: cows
+          title: Compositional models
+          url: https://example.test/cows.tgz
+          root: MONTY_MODELS
+          target: cows.tgz
+          extract: true
+          unpacks_to: pretrained_compositional_objects_v13
+          provides:
+            - supervised_pre_training_cows_small_compositional
+      """)
+
+      Tmp.app_env(:prerequisites_manifest, manifest)
+
+      land = Prerequisites.where_it_lands(Prerequisites.get("cows", manifest))
+
+      pickle =
+        Path.join([
+          land,
+          "supervised_pre_training_cows_small_compositional",
+          "pretrained",
+          "model.pt"
+        ])
+
+      File.mkdir_p!(Path.dirname(pickle))
+      File.write!(pickle, "not a torch save")
+
+      {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+      assert view |> element("#prereq-cows") |> render() =~ "memory not read"
+      assert view |> element("#download-cows") |> render() =~ "Export memory"
+      refute has_element?(view, "#missing-cows")
+    end
   end
 
   # "What is available here?" is the question the page is open for, so the
@@ -339,5 +385,37 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     assert render(view) =~ "present"
+  end
+
+  # An archive whose bytes arrived and whose unpack did not: the row that called
+  # that "not downloaded" was asking a person to wait for a file already on the
+  # disk. What is left is the unpack, and the click says so.
+  test "an archive whose bytes arrived and are not unpacked says which work is left", %{
+    conn: conn,
+    tmp: tmp
+  } do
+    manifest = Path.join(tmp, "arrived.yaml")
+
+    File.write!(manifest, """
+    prerequisites:
+      - id: arrived
+        title: Arrived archive
+        url: https://example.test/arrived.tgz
+        root: MONTY_DATA
+        target: arrived.tgz
+        extract: true
+        unpacks_to: arrived
+    """)
+
+    Tmp.app_env(:prerequisites_manifest, manifest)
+
+    path = Prerequisites.target_path(Prerequisites.get("arrived", manifest))
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "the bytes were fetched")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert view |> element("#prereq-arrived") |> render() =~ "not unpacked"
+    assert view |> element("#download-arrived") |> render() =~ "Unpack"
   end
 end

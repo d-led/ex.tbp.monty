@@ -27,6 +27,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     memory_not_read: "memory not read",
     present: "present",
     not_downloaded: "not downloaded",
+    not_unpacked: "not unpacked",
     queued: "queued",
     downloading: "downloading",
     building: "building",
@@ -212,7 +213,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                   id={"missing-#{prerequisite.id}"}
                   class="font-mono text-xs text-warning"
                 >
-                  not written yet: {Enum.join(missing_provided(prerequisite), ", ")}
+                  not written yet: {Enum.join(missing_provided(prerequisite), ", ")} — the
+                  Make button writes them.
                 </p>
                 <%!-- Where it comes from, on what terms, and which bytes. A
                 person about to wait for two gigabytes is entitled to the three,
@@ -557,13 +559,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp making(%{built: %{} = built}), do: built
   defp making(_progress), do: nil
 
-  # The word on the button says what the click does: an archive is downloaded, a
-  # memory inside one is exported out of it, and an input this application
-  # produces is made.
-  # A row's button says what the click does: fetch an archive, read a memory out
-  # of one that arrived, or make what this application can only make itself.
+  # The word on the button says what the click does: fetch an archive, unpack
+  # one whose bytes arrived, read a memory out of one that was unpacked, or make
+  # what this application can only make itself.
   defp action_label(%{build: build}, _present?) when is_binary(build), do: "Make"
   defp action_label(_prerequisite, true), do: "Export memory"
+
+  defp action_label(%{extract: true} = prerequisite, false) do
+    if Prerequisites.downloaded?(prerequisite), do: "Unpack", else: "Download"
+  end
+
   defp action_label(_prerequisite, _absent), do: "Download"
 
   # What the exporter is reading right now: a model by name, and where it is in
@@ -588,9 +593,15 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
       (not present? or pending?)
   end
 
+  # An archive's memories are read out of it after it lands, and `provides` is
+  # what it says it carries — so "its memory is not here" is the run's own
+  # question (`absent_memories/1`), not the exporter's walk alone. Two answers to
+  # one fact is how a row wore a green "present" badge over a line saying nothing
+  # had been written, with no click between them.
   defp memory_pending?(%{extract: true} = prerequisite) do
     Prerequisites.present?(prerequisite) and
-      Pretrained.pending?(Prerequisites.where_it_lands(prerequisite))
+      (Prerequisites.absent_memories(prerequisite) != [] or
+         Pretrained.pending?(Prerequisites.where_it_lands(prerequisite)))
   end
 
   defp memory_pending?(_prerequisite), do: false
@@ -629,7 +640,13 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp standing(_prerequisite, nil, true, true), do: :memory_not_read
   defp standing(_prerequisite, nil, true, false), do: :present
-  defp standing(_prerequisite, nil, false, _pending?), do: :not_downloaded
+
+  # An archive whose bytes are here and whose unpack never happened is not "not
+  # downloaded" — that asks a person to wait for a file they already have. The
+  # work left is the unpack, and the row's click does it.
+  defp standing(prerequisite, nil, false, _pending?) do
+    if Prerequisites.downloaded?(prerequisite), do: :not_unpacked, else: :not_downloaded
+  end
 
   defp max_bytes(%{total: nil, bytes: bytes}), do: max(bytes, 1)
   defp max_bytes(%{total: total}), do: total
@@ -673,7 +690,14 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # (`Monty.Prerequisites.absent_memories/1`): a row and a run that disagreed
   # about "is it finished" is how a page said "present" while a run said it had
   # no memory.
-  defp missing_provided(prerequisite), do: Prerequisites.absent_memories(prerequisite)
+  #
+  # A build only, and the click is named: the row beside this line says "Make",
+  # so the sentence answers "and when?" without a reader having to reason about
+  # what a badge colour means.
+  defp missing_provided(%{build: build} = prerequisite) when is_binary(build),
+    do: Prerequisites.absent_memories(prerequisite)
+
+  defp missing_provided(_prerequisite), do: []
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
   # read off the manifest rather than written here, so a page cannot say

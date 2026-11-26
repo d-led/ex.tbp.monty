@@ -3125,15 +3125,7 @@ defmodule Monty.Studio.Setup do
         stale_memory_findings(setup)
 
       Memory.releases_for(name) != [] ->
-        [
-          Finding.new(
-            :warning,
-            :memory_from_another_release,
-            another_release(name, release),
-            "model_name_or_path"
-          )
-          |> with_trainer_link(name)
-        ]
+        [another_release_finding(name, release)]
 
       true ->
         [
@@ -3274,11 +3266,40 @@ defmodule Monty.Studio.Setup do
     end
   end
 
+  # A finding that lists a download and leaves a reader to find the button is a
+  # finding that half-answers — "it learns from another release's graphs, and
+  # then?" was a warning with nothing to click. The action is the archive that
+  # carries the release the config names, when one does: the page's own row
+  # fetches it, or reads its memory when the archive is already here.
+  defp another_release_finding(name, release) do
+    archive = Prerequisites.for_model(name, release)
+
+    Finding.new(
+      :warning,
+      :memory_from_another_release,
+      another_release(name, release, archive),
+      "model_name_or_path"
+    )
+    |> with_release_link(name, archive)
+  end
+
+  # The archive is the click when there is one; a memory a run here trained is
+  # the other case, and its experiment page is the click.
+  defp with_release_link(finding, name, nil), do: with_trainer_link(finding, name)
+
+  defp with_release_link(finding, _name, archive) do
+    href = "/prerequisites?fetch=#{archive.id}"
+
+    if Prerequisites.present?(archive),
+      do: Finding.with_link(finding, "Export memory", href),
+      else: Finding.with_link(finding, "Download it", href)
+  end
+
   # The other case, said in one sentence: which memory the run will use, and the
   # release the config asked for that it is not. A page that told a reader to
   # re-export the model would be asking them to check out this repository — the
   # same page, in a container, has no `scripts/` to run.
-  defp another_release(name, release) do
+  defp another_release(name, release, archive) do
     exported = Memory.releases_for(name)
 
     # `trained` is not a Monty release: it is what a run of this application
@@ -3287,14 +3308,33 @@ defmodule Monty.Studio.Setup do
     # second-to-last segment is a folder rather than a release. Naming that path
     # answers a question nobody asked; naming the file it *will* read answers
     # the one they did.
-    if exported == [Learned.release()] do
-      "It learns from the memory a run here trained: #{library_file(name)}. " <>
-        "Nothing to download or train: run it."
+    cond do
+      exported == [Learned.release()] ->
+        "It learns from the memory a run here trained: #{library_file(name)}. " <>
+          "Nothing to download or train: run it."
+
+      archive != nil ->
+        "It learns from #{list(exported)}'s graphs, not from #{release}'s. " <>
+          "#{where_the_release_is(archive, release)} Until then the run works, on " <>
+          "#{list(exported)}'s graphs."
+
+      true ->
+        "It learns from #{list(exported)}'s graphs, not from #{release}'s. This config names " <>
+          "the memory #{release} trained; #{list(exported)} is what this installation has " <>
+          "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
+          "are the ones those graphs give."
+    end
+  end
+
+  # Said with the word the row's button carries, so the click the link offers is
+  # the one a reader would have looked for on the page.
+  defp where_the_release_is(archive, release) do
+    if Prerequisites.present?(archive) do
+      "#{archive.title} is here and its memory is not read — Export memory turns " <>
+        "#{release}'s models into the memory this config names."
     else
-      "It learns from #{list(exported)}'s graphs, not from #{release}'s. This config names " <>
-        "the memory #{release} trained; #{list(exported)} is what this installation has " <>
-        "exported for #{name}.#{unexported(name, release)} The run works — its numbers " <>
-        "are the ones those graphs give."
+      "#{archive.title} carries #{release}'s models and is one download away — Download " <>
+        "it, and the memory this config names is read out of it."
     end
   end
 
