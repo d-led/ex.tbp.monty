@@ -553,6 +553,14 @@ episodes, not the parts: a divided run is a quarter of the clock at four parts
 only while there are episodes enough to fill them, and a single expensive episode
 divides not at all.
 
+**Measured again** after the salience kernels, `base_infer_cows_small_compositional`
+with `ex_mujoco`, seed 42, eight episodes (734 steps): **one part 285 s, four
+parts 138 s (2.07×), eight parts 149 s (1.91×)** — so the best division is not
+"one part a core". An episode of this family is already two to three cores wide
+(the view finder's score runs three channels beside a segmenter), so four parts
+on eight cores is the sweet spot and eight parts only queue behind each other.
+Divide by the cores an episode leaves spare, not by the cores the box has.
+
 ## The open decision: one crossing
 
 A matching burst walks the hypothesis set many times: with an index, through
