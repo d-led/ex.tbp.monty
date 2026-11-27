@@ -46,7 +46,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
-  alias Monty.Geometry.SurfacePoseVectors
+  alias Monty.Geometry.{OrientationMatrix, SurfacePoseVectors}
 
   defstruct graph_memory: nil,
             displacer: nil,
@@ -296,18 +296,46 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     locations = GraphMemory.get_locations_in_graph(updater.graph_memory, graph_id, input_channel)
 
     rotations =
-      sensed_channel_features
-      |> sensed_pose_vectors()
-      |> GraphMatchingUtils.possible_sensed_directions(
-        per_node(updater, sensed_channel_features)
-      )
-      |> Enum.flat_map(fn sensed ->
-        # Matrices, not rotations: a stored frame is only nearly orthonormal and
-        # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
-        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(node_directions, sensed)
-      end)
+      informed_rotations(updater, node_directions, sensed_channel_features)
 
     {locations, rotations}
+  end
+
+  # Monty's `_get_all_informed_possible_poses` dispatch. A surface pose vector
+  # allows one rotation per possible sensed direction — two when the pose is
+  # fully defined, `umbilical_num_poses` when it is not. An orientation matrix is
+  # already a frame, so it is aligned against every stored one as it stands. And
+  # anything else is a type the updater cannot use: Monty raises a `TypeError`
+  # naming it, and a struct-based port names it in an `ArgumentError`.
+  #
+  # How many directions a surface pose allows is asked for only in the branch that
+  # uses it, as Monty asks: an orientation matrix carries no `pose_fully_defined`
+  # flag to read.
+  defp informed_rotations(updater, node_directions, sensed_channel_features) do
+    case pose_vectors(sensed_channel_features) do
+      %OrientationMatrix{value: matrix} ->
+        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(
+          node_directions,
+          matrix
+        )
+
+      %SurfacePoseVectors{} = vectors ->
+        vectors
+        |> GraphMatchingUtils.possible_sensed_directions(
+          per_node(updater, sensed_channel_features)
+        )
+        |> Enum.flat_map(fn sensed ->
+          # Matrices, not rotations: a stored frame is only nearly orthonormal and
+          # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
+          SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(
+            node_directions,
+            sensed
+          )
+        end)
+
+      unsupported ->
+        raise ArgumentError, "Unsupported pose_vector type: #{inspect(unsupported)}"
+    end
   end
 
   # What the first observation already says about each node: hypotheses start
@@ -337,13 +365,23 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
     )
   end
 
-  defp sensed_pose_vectors(features) do
-    features
-    |> Map.fetch!("pose_vectors")
-    |> Enum.chunk_every(3)
-    |> then(fn [normal, curvature_1, curvature_2] ->
-      SurfacePoseVectors.new(normal, curvature_1, curvature_2)
-    end)
+  # The channel's `pose_vectors`: the nine numbers Monty's features carry, or the
+  # struct a synthetic learning module builds. Both are what the dispatch reads.
+  defp pose_vectors(features) do
+    case Map.fetch!(features, "pose_vectors") do
+      %module{} = vectors when module in [SurfacePoseVectors, OrientationMatrix] ->
+        vectors
+
+      value when is_list(value) ->
+        value
+        |> Enum.chunk_every(3)
+        |> then(fn [normal, curvature_1, curvature_2] ->
+          SurfacePoseVectors.new(normal, curvature_1, curvature_2)
+        end)
+
+      value ->
+        value
+    end
   end
 
   # A well-defined pose has a mirror twin; an undefined one is sampled around
