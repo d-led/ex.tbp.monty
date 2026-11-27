@@ -83,23 +83,44 @@ the triangles from `MontyCad.Export`.
 
 ## Where a part comes from
 
-`$MONTY_DATA/parts/` — `bracket.step` or `bracket.stp`, plain or gzipped — is the
-same place MuJoCo's object sets come from, and `MONTY_CAD_PART` names one by name
-rather than by path (`MontyCad.Inputs.part_path/1`). A path to a file that exists
-still works, for a part that should not have to be moved first.
+A person brings one on `/cad`, which installs it under `$MONTY_DATA/parts/` —
+`bracket.step` or `bracket.stp` — the same place MuJoCo's object sets come from.
+The name it takes there is the name everything else uses: an experiment's
+`object_names`, the part file `MontyCad.Inputs.part_path/1` resolves, the object
+directory the build writes, and the head of the memory's name (`bracket_part`).
+`MONTY_CAD_PART` names one by name rather than by path, and a path to a file that
+exists still works, for a part that should not have to be moved first.
 
-A _set_ of parts is what a pretraining run needs, and a run currently opens the one
-part the variable names. That is the first thing stage 1 has to grow.
+A part's experiment is generated per part on `/cad`, and one memory can hold
+several parts (`cad/parts_set_eval`); a pretraining run learns a part from its
+own percepts instead of the teacher's (`cad/plate_pretrain`).
 
 ## How to run one
 
-Two clicks, in this order, and no shell:
+Three clicks, in this order, and no shell. The first is what makes a part a run;
+a part the application already ships can start at the second.
 
-1. **`/prerequisites` → "CAD part memories and meshes" → Make.** One memory and
-   one object set per part this application's configurations name, taught from
-   the STEP file each part ships and meshed into `cad_objects` under the data
-   folder. A part whose memory was never written is a part a run has nothing to
-   match against, and the page says so on the experiment's own checks.
+1. **`/cad` → bring the STEP file → “Make it a run”.** The page installs the file
+   under `$MONTY_DATA/parts/` and quiddity says what it is — its size, its faces,
+   the features the recognition found. “Make it a run” writes the experiment
+   (`cad/<part>_part_eval`) and the interface that names its object, as a set of
+   the part's own under `priv/monty_experiments/sets/brought/conf`. The part's
+   name is the name of everything downstream: the object directory, the memory
+   (`<part>_part`) and the experiment.
+
+   The same bytes under a used name are the same part; other bytes are refused,
+   because every memory of that name describes the file that was there when it
+   was taught. A generated set is an ordinary set: `/experiments` lists it, the
+   builder offers it, and the Make click plans it. It is the application's output
+   rather than a source (`.gitignore` keeps it out of a commit); a deployment that
+   cannot write `priv/` points `:cad_sets_dir` at a writable directory.
+
+2. **`/prerequisites` → "CAD part memories and meshes" → Make.** One memory and
+   one object set per CAD experiment this machine has — the sets the application
+   ships and the one a part you brought generated — taught from each part's STEP
+   file and meshed into `cad_objects` under the data folder. A part whose memory
+   was never written is a part a run has nothing to match against, and the page
+   says so on the experiment's own checks.
 
    The click is idempotent: each memory keeps a note of the part file's bytes,
    the optics and the sampling it was written from, so a second click teaches
@@ -109,16 +130,18 @@ Two clicks, in this order, and no shell:
    the second, with the same node counts (1 435, 14 713, 34 018, 5 835, 2 113),
    so what a skip saves is the geometry and not the answer.
 
-2. **`/experiments/cad/plate_part_eval` → Run it.** One episode per object the
+3. **`/experiments/cad/plate_part_eval` → Run it.** One episode per object the
    config names, in the world that config names, with the patch's own pictures
-   beside the evidence per object, step by step.
+   beside the evidence per object, step by step. A generated part's experiment
+   is at `/experiments/cad/<part>_part_eval`, and its page is the same one.
 
 The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
 whole setup — no checkout has to sit beside this one, and no build path has to be
-appended. The experiment lives in `priv/monty_experiments/sets/cad/conf`, and
-that set's own README is the same walk-through written down.
+appended. The shipped experiments live in `priv/monty_experiments/sets/cad/conf`,
+a generated one in `sets/brought/conf` beside it, and that set's own README is
+the same walk-through written down.
 
-Measured on this Mac (2026-11-19), those two clicks and nothing else: the plate's
+Measured on this Mac (2026-11-19), `Make` and `Run it` and nothing else: the plate's
 three evaluation episodes concluded in 97, 184 and 351 steps, and each answered
 `plate` where the target was `plate` — `correct` in all three, at the highest
 evidence of 26.49, 11.02 and 19.72; `cad/blend_part_eval` concluded in 178 steps,
@@ -240,64 +263,37 @@ MONTY_CAD_LABELS=features MONTY_CAD_PART=bracket mix run scripts/cad_experiment.
    (`MontyCad.Scene.new/2` then `render/3` at each placement), and a config has to
    name that one object.
 
-   Both halves are wired now, and the arm runs. `cad/plate_pair_eval` names one
-   object, `plate_pair_assembly`, and its world (`environment/
-cad_plate_pair_objects`) carries an `assembly` list — which parts, where each
-   sits — that `Monty.Studio.Cad.Preparation` teaches the memory from and meshes
-   into the object the run steps (`MontyCad.Assembly.meshes/2`, with the merged
-   mesh named after the object rather than the first instance). One episode over
-   MuJoCo spends its 400 steps and 34 goals without concluding: the arrangement is
-   recognised by nothing yet. That is a budget-or-size question now, not a missing
-   piece — the same pair of plates is 4 226 nodes against the single part's 2 113,
-   and the patch reads a 60 mm arrangement in the same steps it read one part.
+   Both halves are wired, and the arm runs. `cad/plate_pair_eval` names one
+   object, `plate_pair_assembly`, and its world (`environment/cad_plate_pair_objects`)
+   carries an `assembly` list — which parts, where each sits — that
+   `Monty.Studio.Cad.Preparation` teaches the memory from and meshes into the
+   object the run steps (`MontyCad.Assembly.meshes/2`, with the merged mesh named
+   after the object rather than the first instance). All three of its episodes
+   conclude, in 547 steps (`docs/cad-results.md`): an arrangement whose parts are
+   memories of their own is recognised from the mesh. The first reading of this
+   arm was a 400-step budget that ended with the arrangement recognised by
+   nothing — the budget, not a missing piece, was what it measured.
 
-2. **A set of parts, taught and loaded but not yet told apart.** One memory can
-   now hold several parts: a memory whose name ends in `_set` is taught from the
-   objects its experiment names (`Monty.Studio.Cad.Preparation` reads
+2. **A set of parts in one memory, and the pair a patch cannot tell apart.** One
+   memory can hold several parts: a memory whose name ends in `_set` is taught
+   from the objects its experiment names (`Monty.Studio.Cad.Preparation` reads
    `object_names`), and `cad/parts_set_eval` is the first one — the plate and the
    blend in one file, each stepped as its own episode, which is the CAD
-   counterpart of the distinct-object configs the YCB benchmarks use.
+   counterpart of the distinct-object configs the YCB benchmarks use. Six
+   episodes, six of them concluded, in 1 142 steps (`docs/cad-results.md`).
 
-   What it measures so far, on this Mac on 2026-11-19, world `ex_mujoco`, two
-   episodes of 500 steps at the blend's own 8 mm stand-off: the memory is written
-   (34 018 nodes over the two parts, 467 s of teaching, which is most of the
-   twelve minutes one Make click now takes), and both episodes narrow to _one_
-   possible object and never conclude — the one they name is `plate`, including
-   the episode whose target is the blend. Two parts in one file therefore do not
-   yet separate: the memory is fine-grained enough for either to match, and what
-   decides between them is not in it.
-
-   The teaching itself is not what fails, and that is worth knowing before
-   touching it: the blend's record inside `parts_set` holds exactly the same
-   `positions` and `features` as the `blend_part` memory that recognises the
-   blend on its own (compared record by record, 2026-11-19). The only difference
-   between the memory that works and the memory that does not is the plate's
-   record beside it. So the question is competition, and it is a percept question
-   of the same kind as the feature wall above: one part per memory still
-   concludes, three times over.
-
-   Run the same way from the experiment page — two episodes, 500 steps each, one
-   node, `ex_mujoco` — and the run's own `eval_stats.csv` adds one fact: of the
-   500 steps each episode took, the sensor fed a percept on 110 of the plate's and
-   72 of the blend's (`num_steps`, the column the page labels "sensor steps"), and
-   the row carries `patch_off_object`. That is not by itself what fails: the
-   single-part run that works, `cad/blend_part_eval` started from the same page,
-   feeds 25 of its 178 steps and still concludes `blend`, correct. Sparse feeding
-   is how this optics behaves; what the set lacks is the conclusion, and the
-   belief standing when the patch last saw the part is reported 500 steps later —
-   `plate` in both episodes.
-
-   The stand-off is the set's cost driver: memory sampling follows the patch, so
-   a two-part memory at 8 mm is four times the nodes of the same parts at 16 mm
+   The teaching is what a two-part memory costs: memory sampling follows the
+   patch, so the pair at 8 mm is four times the nodes of the same parts at 16 mm
    — 34 018 against 8 535, 467 s against 74 s of teaching, both measured on this
-   Mac on 2026-11-19. It is not the lever for separation. A one-off config at
-   16 mm with a 2 mm/2° gait, stepped over the same two episodes, answers the
-   same way: `plate`, one possible object, no conclusion. So the cost cannot be
-   bought back that way, and what decides between the two parts is not the
-   patch's size but which patch the policy collects: a flat face is a flat face,
-   and the plate has 2.3 times the blend's nodes of it. That is the same percept
-   question as the feature wall above — an edge has to be held long enough to be
-   named — and it is why a set is not a config change away.
+   Mac on 2026-11-19 — and that is most of the twelve minutes one Make click now
+   takes. Nothing is bought back by standing further off: a one-off config at
+   16 mm with a 2 mm/2° gait answered the same way on the same episodes.
+
+   An earlier reading of this arm — both episodes narrowing to _one_ possible
+   object and never concluding — is kept in `docs/cad-results.md` as the history
+   it is. Between the two readings the memory writer changed to skip a visit
+   whose percept a learning module would refuse, and the set's own numbers are
+   what closed the arm; which of the two it was is not claimed here.
 
 3. **The pretraining configs, and the wall in front of them.** `cad_feature_pretrain_*`
    (children) and the `_compositional` / `_monolithic` pair, which differ only in
