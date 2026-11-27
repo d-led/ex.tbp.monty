@@ -34,6 +34,7 @@ headings below are the grouping.
 | -------------------------------------------------- | --------------------------------------------------------------- |
 | [features.md](features.md)                         | what works, and what proves it                                  |
 | [module-map.md](module-map.md)                     | where would Monty's `a/b.py::C` live here?                      |
+| [test-map.md](test-map.md)                         | where did Monty's `test_*.py` case go, and where will it never? |
 | [from-monty.md](from-monty.md)                     | what is copied from Monty, where it lands, which task writes it |
 | [config-compatibility.md](config-compatibility.md) | how far Hydra parity goes                                       |
 | [readiness.md](readiness.md)                       | which experiments run here, and what the rest need              |

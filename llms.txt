@@ -12,6 +12,7 @@ Streamable HTTP. A terminal has `mix monty.run` and `mix monty.bench`.
 - [MCP server](docs/mcp.md): every tool, its arguments and what it answers.
 - [Features](docs/features.md): what works, each claim linked to its proof. Generated; do not edit.
 - [Module map](docs/module-map.md): the one rule that maps Python `a/b.py::C` to an Elixir module.
+- [Test map](docs/test-map.md): where each of Monty's unit cases went, which the port cannot have, and why. Generated; do not edit.
 - [Config compatibility](docs/config-compatibility.md): which Hydra features are implemented and how far parity goes.
 - [From Monty](docs/from-monty.md): every copied path and glob, and the task that writes it.
 - [Readiness](docs/readiness.md): which experiments run here, and what each missing piece unblocks.

@@ -164,9 +164,7 @@ defmodule Mix.Tasks.Monty.TestMap do
     comment or in its title. Naming is the record of a translation, not proof of
     one: the test itself says whether it asserts the same behaviour.
 
-    #{coverage.named} of #{coverage.total} of Monty's unit cases are named here, and
-    #{coverage.excluded} more the port cannot have are excluded, each with its reason
-    below.
+    #{accounted_for(coverage)}
 
     ## By Monty's file
 
@@ -177,6 +175,22 @@ defmodule Mix.Tasks.Monty.TestMap do
 
     #{module_excluded_section(by_module)}
     """
+  end
+
+  # A finished ledger says so in one sentence; an unfinished one also names the
+  # work left, because that number is the list to translate.
+  defp accounted_for(%{named: named, excluded: excluded, total: total})
+       when named + excluded == total do
+    "Every one of Monty's #{total} unit cases is accounted for: #{named} are named\n" <>
+      "here, and #{excluded} more the port cannot have are excluded, each with its\n" <>
+      "reason below."
+  end
+
+  defp accounted_for(coverage) do
+    "#{coverage.named} of #{coverage.total} of Monty's unit cases are named here,\n" <>
+      "#{coverage.excluded} more the port cannot have are excluded, each with its\n" <>
+      "reason below, and #{coverage.total - coverage.named - coverage.excluded} are\n" <>
+      "still to translate."
   end
 
   # The exclusions a module map entry already made, grouped by its reason: a case

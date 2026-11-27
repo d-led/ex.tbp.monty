@@ -7,9 +7,9 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-637 of 717 of Monty's unit cases are named here, and
-80 more the port cannot have are excluded, each with its reason
-below.
+Every one of Monty's 717 unit cases is accounted for: 637 are named
+here, and 80 more the port cannot have are excluded, each with its
+reason below.
 
 ## By Monty's file
 
