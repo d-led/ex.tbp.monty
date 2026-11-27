@@ -327,6 +327,12 @@ defmodule ExTbpMontyWeb.Layouts do
             label="Prerequisites"
             icon="hero-arrow-down-tray-mini"
           />
+          <.sidebar_link
+            id="nav-cad"
+            navigate={~p"/cad"}
+            label="CAD parts"
+            icon="hero-cube-mini"
+          />
           <.sidebar_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
           <.sidebar_link
             id="nav-modules"

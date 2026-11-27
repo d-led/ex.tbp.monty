@@ -84,6 +84,10 @@ defmodule ExTbpMontyWeb.Router do
     # the list a colleague was sent.
     live "/jobs", RunHistoryLive, :index
     live "/prerequisites", PrerequisitesLive, :index
+    # Parts a person brought: the one page whose first step is a file rather than
+    # a button, because a STEP part is the only input this studio cannot name in
+    # advance (`docs/cad.md`).
+    live "/cad", CadLive, :index
     # Monty's classes and this application's, from the generated map: the one
     # page that answers "what is written and what still has to be".
     live "/modules", ModulesLive, :index
