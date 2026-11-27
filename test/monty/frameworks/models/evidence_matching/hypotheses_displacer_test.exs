@@ -4,6 +4,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -11,6 +12,13 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   alias Monty.Geometry.Rotation
 
   @pose [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+  # The same frame turned half a turn about z: the normal is unchanged and the
+  # two curvature directions point the other way.
+  @pose_turned [0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0]
+  # An object orientation, as nine numbers row by row: the frame itself, and the
+  # same frame turned half a turn about z.
+  @identity_orientation [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  @half_turned_orientation [-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0]
   @identity Rotation.to_matrix(Rotation.identity())
 
   # Two nodes a decimetre apart unless the test asks for other places, both
@@ -223,6 +231,46 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
       assert_in_delta hd(Hypotheses.evidence(updated)), -1.0, 1.0e-9
     end
 
+    # test_clamps_neighbors_to_channel_node_count
+    test "a channel with fewer nodes than the neighbour count is judged on the nodes it has" do
+      # Two nodes, five neighbours asked for: the comparison is the one the two
+      # of them give, and asking for one changes nothing either — a neighbour
+      # count above the graph reaches nothing past it.
+      assert earned(displacer(max_nneighbors: 5), features()) ==
+               earned(displacer(max_nneighbors: 1), features())
+    end
+
+    # test_prediction_error_computed_from_summed_evidence
+    test "the prediction error is what both channels earned between them" do
+      # Channel a's node is where the hypothesis is, so a matches and earns 2;
+      # channel b's node is a metre off with a half-metre reach, so b earns -1.
+      # Two channels can earn four between them and this hypothesis earned one,
+      # so half the range is missing: 0.5.
+      {_updated, telemetry} =
+        HypothesesDisplacer.compute_evidence(
+          asymmetric_displacer(),
+          %{"a" => channel_features(), "b" => channel_features()},
+          0.0,
+          "mug",
+          hypotheses([5.0], [[0.0, 0.0, 0.0]])
+        )
+
+      assert telemetry.mlh_prediction_error == 0.5
+
+      # Channel a alone is a perfect match. What moves the error is b's
+      # contribution, and it moves it by being summed.
+      {_one, alone} =
+        HypothesesDisplacer.compute_evidence(
+          asymmetric_displacer(),
+          %{"a" => channel_features()},
+          0.0,
+          "mug",
+          hypotheses([5.0], [[0.0, 0.0, 0.0]])
+        )
+
+      assert alone.mlh_prediction_error == 0.0
+    end
+
     # What a run does to a wrong object: its hypotheses are carried along by the
     # sensor, and once the walk has taken them off the graph they earn nothing —
     # that is the evidence decay the slope tracker deletes them on, and without
@@ -278,20 +326,133 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   # what each channel earned. Monty stubs the per-channel evidence out; here two
   # channels over the same graph earn it for real, one channel at a time and
   # then both, and the total has to be the sum.
-  # Three of Monty's cases are **parked**, not dropped:
   #
-  #   test_calculate_evidence_for_new_locations_invoke_custom_distances_for_surface_pose_vectors
-  #   test_calculate_evidence_for_new_locations_invoke_euclidean_distances_for_orientation_matrix_pose_vectors
-  #   test_calculate_evidence_for_new_locations_invokes_object_pose_evidence_for_orientation_matrix_pose_vectors
-  #
-  # They record a dispatch this port does not have: Monty picks the distance
-  # rule by the channel's pose type — curvature-aware `custom_distances` for a
-  # `SurfacePoseVectors`, plain `euclidean_distances` for an `OrientationMatrix`,
-  # and `_object_pose_evidence` when a distant agent's pose is an object
-  # orientation. `neighbour_evidence/5` here always calls
-  # `GraphMatchingUtils.custom_distance/4`, and `object_pose_evidence/2` is
-  # defined but nothing calls it. The cases follow the dispatch, in
-  # `docs/monty-differences.md` §2.50.
+  # The three `_calculate_evidence_for_new_locations_*` cases below belong to the
+  # same group in Monty's file and record a dispatch: the distance rule and the
+  # pose evidence are chosen by the channel's pose type (§2.50). Monty asserts it
+  # by patching the three functions and counting calls; a patched function says
+  # nothing about the numbers, so each case here is the number only that rule can
+  # produce — the same geometry scored by the rule Monty's branch would not have
+  # taken.
+  describe "the rule a channel's distance and pose evidence follow (§2.50)" do
+    # test_calculate_evidence_for_new_locations_invoke_custom_distances_for_surface_pose_vectors
+    test "a surface channel measures in its tangent plane, so five centimetres off a flat surface is out of reach" do
+      # Curvature zero is a flat surface: the penalty for leaving its plane is
+      # the strongest there is, and this node sits five centimetres above it with
+      # a reach of ten.
+      {updated, _telemetry} =
+        HypothesesDisplacer.compute_evidence(
+          displacer_over(@pose, 0.1),
+          surface_features(),
+          0.0,
+          "mug",
+          hypotheses([0.0], [[0.0, 0.0, 0.05]])
+        )
+
+      assert Hypotheses.evidence(updated) == [-1.0]
+    end
+
+    # test_calculate_evidence_for_new_locations_invoke_euclidean_distances_for_orientation_matrix_pose_vectors
+    test "an orientation channel measures the plain distance, so the same five centimetres is a match" do
+      {updated, _telemetry} =
+        HypothesesDisplacer.compute_evidence(
+          displacer_over(@identity_orientation, 0.1),
+          orientation_features(),
+          0.0,
+          "mug",
+          hypotheses([0.0], [[0.0, 0.0, 0.05]])
+        )
+
+      assert [earned] = Hypotheses.evidence(updated)
+      assert earned > 0.0
+    end
+
+    # test_calculate_evidence_for_new_locations_invokes_object_pose_evidence_for_orientation_matrix_pose_vectors
+    test "an orientation channel scores the rotation, which a surface channel cannot see" do
+      # Two stored frames that differ by half a turn about z. As rotations they
+      # are as far apart as two rotations can be, so the orientation channel is
+      # worth two less against one than against the other.
+      against_identity =
+        earned(displacer_over(@identity_orientation, 0.5), orientation_features())
+
+      against_turned =
+        earned(displacer_over(@half_turned_orientation, 0.5), orientation_features())
+
+      assert against_identity - against_turned == 2.0
+
+      # A surface reads the same two frames as equal — the normal is unchanged,
+      # and a curvature direction has no sign — so it sees no difference at all.
+      assert earned(displacer_over(@pose, 0.5), surface_features()) ==
+               earned(displacer_over(@pose_turned, 0.5), surface_features())
+    end
+  end
+
+  defp earned(displacer, features) do
+    {updated, _telemetry} =
+      HypothesesDisplacer.compute_evidence(
+        displacer,
+        features,
+        0.0,
+        "mug",
+        hypotheses([0.0], [[0.0, 0.0, 0.0]])
+      )
+
+    [earned] = Hypotheses.evidence(updated)
+    earned
+  end
+
+  # One node at the origin carrying `pose_row`, and a displacer over it that
+  # reaches `max_match_distance`.
+  defp displacer_over(pose_row, max_match_distance) do
+    model =
+      GraphObjectModel.new("mug")
+      |> GraphObjectModel.build_model(
+        [[0.0, 0.0, 0.0]],
+        %{
+          "pose_vectors" => [pose_row],
+          "pose_fully_defined" => [[1.0]],
+          "rgba" => [[0.2]]
+        },
+        nil,
+        nil
+      )
+
+    memory =
+      GraphMemory.new(
+        features_to_use: %{"patch" => ["pose_vectors", "pose_fully_defined", "rgba"]}
+      )
+      |> GraphMemory.add_graph_to_memory(%{"patch" => model}, "mug")
+      |> GraphMemory.initialize_feature_arrays()
+
+    HypothesesDisplacer.new(memory,
+      feature_weights: %{"patch" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0}},
+      max_match_distance: max_match_distance,
+      tolerances: %{"patch" => %{"rgba" => 0.1}}
+    )
+  end
+
+  defp surface_features do
+    %{
+      "patch" => %{
+        "pose_vectors" => @pose,
+        "pose_fully_defined" => true,
+        "rgba" => [0.2],
+        "principal_curvatures_log" => [0.0, 0.0],
+        PoseKind.key() => :surface_pose_vectors
+      }
+    }
+  end
+
+  defp orientation_features do
+    %{
+      "patch" => %{
+        "pose_vectors" => @identity_orientation,
+        "pose_fully_defined" => true,
+        "rgba" => [0.2],
+        PoseKind.key() => :orientation_matrix
+      }
+    }
+  end
 
   describe "Monty's multi-channel case" do
     # test_multi_channel_evidence_sums
@@ -372,6 +533,44 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
 
   defp channel_features,
     do: %{"pose_vectors" => @pose, "pose_fully_defined" => true, "rgba" => [0.2]}
+
+  # Two channels whose nodes are a metre apart: a hypothesis at the origin sits
+  # on channel a's node and is out of reach of channel b's.
+  defp asymmetric_displacer do
+    node_at = fn location ->
+      GraphObjectModel.new("mug")
+      |> GraphObjectModel.build_model(
+        [location],
+        %{"pose_vectors" => [@pose], "pose_fully_defined" => [[1.0]], "rgba" => [[0.2]]},
+        nil,
+        nil
+      )
+    end
+
+    features_to_use = %{
+      "a" => ["pose_vectors", "pose_fully_defined", "rgba"],
+      "b" => ["pose_vectors", "pose_fully_defined", "rgba"]
+    }
+
+    memory =
+      GraphMemory.new(features_to_use: features_to_use)
+      |> GraphMemory.add_graph_to_memory(
+        %{"a" => node_at.([0.0, 0.0, 0.0]), "b" => node_at.([1.0, 0.0, 0.0])},
+        "mug"
+      )
+      |> GraphMemory.initialize_feature_arrays()
+
+    HypothesesDisplacer.new(memory,
+      feature_weights: %{
+        "a" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0},
+        "b" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0}
+      },
+      max_match_distance: 0.5,
+      tolerances: %{"a" => %{"rgba" => 0.1}, "b" => %{"rgba" => 0.1}},
+      past_weight: 0,
+      present_weight: 1
+    )
+  end
 
   # Monty's `ObjectPoseEvidenceTest` — the `` clause of PR #1266: a channel whose
   # pose is an object orientation is scored by how far two rotations are apart,

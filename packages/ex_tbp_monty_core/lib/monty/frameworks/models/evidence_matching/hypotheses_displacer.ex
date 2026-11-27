@@ -31,6 +31,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer.HypothesisDisplacerTelemetry
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -369,11 +370,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         GraphMemory.get_num_nodes_in_graph(displacer.graph_memory, graph_id, input_channel)
       )
 
-    # The graph's own arrays are read from memory rather than rebuilt: where every
-    # node is, how its frame sits and whether that frame was defined are what the
-    # graph holds when an episode starts, and they are flattened once with its
-    # feature rows rather than once a step.
-    with true <- MatcherNif.loaded?(),
+    # The kernel answers the surface rule; a channel whose pose is an object
+    # orientation takes the reference below, which is where that rule lives
+    # (§2.50).
+    with :surface_pose_vectors <- pose_kind(channel_features),
+         true <- MatcherNif.loaded?(),
          {nodes, node_poses, node_defined} when is_binary(nodes) <-
            GraphMemory.get_node_arrays(displacer.graph_memory, graph_id, input_channel),
          {ids, k} when is_binary(ids) and k > 0 <-
@@ -475,24 +476,29 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
       )
 
     # Only the normal and the first curvature direction are ever read off the
-    # rotated pose, so turning one and judging that hypothesis' neighbours is one
-    # pass: the turned directions are not three more hypothesis-sized lists.
+    # rotated surface pose, so turning one and judging that hypothesis' neighbours
+    # is one pass: the turned directions are not three more hypothesis-sized
+    # lists. An object-orientation channel reads the whole turned frame, because
+    # its evidence is the rotation itself.
     channel_feature_vectors = channel_features["pose_vectors"]
     curvature = GraphMatchingUtils.relevant_curvature(channel_features)
+    kind = pose_kind(channel_features)
 
     node_feature_evidence = List.to_tuple(evidence_values(node_feature_evidence))
 
     # Every hypothesis reads the pose features of its neighbours, so they are
     # read once for the whole graph rather than once per hypothesis.
-    {all_node_poses, all_node_pose_flags} =
+    {all_node_poses, all_node_pose_flags, all_node_rows} =
       node_poses(displacer, graph_id, input_channel, tuple_size(channel_locations))
 
     comparison = %{
+      pose_kind: kind,
       weights: pose_weights(displacer, input_channel, channel_features["pose_fully_defined"]),
       fully_defined?: channel_features["pose_fully_defined"],
       locations: channel_locations,
       flatness: GraphMatchingUtils.flatness(curvature),
       node_poses: all_node_poses,
+      node_rows: all_node_rows,
       node_defined: all_node_pose_flags,
       node_feature_evidence: node_feature_evidence,
       max_match_distance: displacer.max_match_distance
@@ -500,11 +506,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
 
     Enum.zip_with([poses, nearest, search_locations], fn one ->
       [pose, node_ids, search_location] = one
-      {normal, curvature_1} = rotate_normal_and_curvature(channel_feature_vectors, pose)
-      best_of_neighbours(node_ids, search_location, normal, curvature_1, comparison)
+      turned = turned_pose(kind, channel_feature_vectors, pose)
+      best_of_neighbours(node_ids, search_location, turned, comparison)
     end)
     |> encode_floats()
   end
+
+  # What a hypothesis turns the sensed pose into. A surface pose is read through
+  # the two directions the surface comparison uses; an object orientation is the
+  # whole frame, because its evidence is how far two rotations are apart.
+  defp turned_pose(:orientation_matrix, pose_vectors, pose) do
+    [p1, p2, p3, p4, p5, p6, p7, p8, p9 | _unread] = pose_vectors
+    Geometry.mul(pose, [[p1, p2, p3], [p4, p5, p6], [p7, p8, p9]])
+  end
+
+  defp turned_pose(:surface_pose_vectors, pose_vectors, pose),
+    do: rotate_normal_and_curvature(pose_vectors, pose)
+
+  # Monty raises for a pose it cannot compare, naming the type it was given.
+  defp turned_pose(:unsupported, pose_vectors, _pose) do
+    raise ArgumentError, "Can't calculate evidence for pose type #{inspect(pose_vectors)}"
+  end
+
+  # The type a pose arrived as, recorded beside its numbers by the selector.
+  defp pose_kind(channel_features), do: PoseKind.of(channel_features)
 
   # The bytes a kernel reads that this step has to build: the observation's own
   # surface normal and first curvature direction. The graph's arrays and the
@@ -538,74 +563,81 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
   # walked once and the best kept. Everything a neighbour is judged by — where it
   # sits, what it looks like, what it is worth — is read by id, so no list of
   # node locations, of distances or of evidence is built per hypothesis.
-  defp best_of_neighbours(
-         [node_id | ids],
-         search_location,
-         normal,
-         curvature_1,
-         comparison
-       ) do
+  defp best_of_neighbours([node_id | ids], search_location, turned, comparison) do
     best_of_neighbours(
       ids,
       search_location,
-      normal,
-      curvature_1,
+      turned,
       comparison,
-      neighbour_evidence(node_id, search_location, normal, curvature_1, comparison)
+      neighbour_evidence(node_id, search_location, turned, comparison)
     )
   end
 
-  defp best_of_neighbours([], _search_location, _normal, _curvature_1, _comparison, best),
-    do: best
+  defp best_of_neighbours([], _search_location, _turned, _comparison, best), do: best
 
-  defp best_of_neighbours(
-         [node_id | ids],
-         search_location,
-         normal,
-         curvature_1,
-         comparison,
-         best
-       ) do
+  defp best_of_neighbours([node_id | ids], search_location, turned, comparison, best) do
     best_of_neighbours(
       ids,
       search_location,
-      normal,
-      curvature_1,
+      turned,
       comparison,
-      max(best, neighbour_evidence(node_id, search_location, normal, curvature_1, comparison))
+      max(best, neighbour_evidence(node_id, search_location, turned, comparison))
     )
   end
 
   # A neighbour beyond `max_match_distance` is no neighbour at all: it says the
   # sensor's location has nothing to do with this hypothesis, which is the worst
   # evidence there is.
-  defp neighbour_evidence(node_id, search_location, normal, curvature_1, comparison) do
-    distance =
-      GraphMatchingUtils.custom_distance(
-        elem(comparison.locations, node_id),
-        search_location,
-        normal,
-        comparison.flatness
-      )
+  defp neighbour_evidence(node_id, search_location, turned, comparison) do
+    distance = distance(comparison, node_id, search_location, turned)
 
     if (comparison.max_match_distance - distance) / comparison.max_match_distance <= 0 do
       @min_evidence
     else
-      {stored_normal, stored_curvature} = elem(comparison.node_poses, node_id)
-
-      pose_evidence(
-        comparison,
-        normal,
-        curvature_1,
-        stored_normal,
-        stored_curvature,
-        elem(comparison.node_defined, node_id) != 0.0
-      ) + elem(comparison.node_feature_evidence, node_id)
+      radius_evidence(comparison, node_id, turned) +
+        elem(comparison.node_feature_evidence, node_id)
     end
   end
 
-  # One stored pose, cut into the two directions the comparison reads: the
-  # normal and the first curvature direction. Where a pose is stored end to end
+  # Monty's dispatch: a surface is measured in its tangent plane, an object
+  # orientation by the plain distance, because a distant agent's camera has no
+  # surface to flatten against.
+  defp distance(%{pose_kind: :orientation_matrix} = comparison, node_id, search_location, _turned) do
+    SpatialArithmetics.magnitude(
+      SpatialArithmetics.subtract(elem(comparison.locations, node_id), search_location)
+    )
+  end
+
+  defp distance(comparison, node_id, search_location, {normal, _curvature_1}) do
+    GraphMatchingUtils.custom_distance(
+      elem(comparison.locations, node_id),
+      search_location,
+      normal,
+      comparison.flatness
+    )
+  end
+
+  # And the same dispatch for what the pose is worth: a surface pose against the
+  # stored surface, an object orientation against the stored orientation.
+  defp radius_evidence(%{pose_kind: :orientation_matrix} = comparison, node_id, turned) do
+    object_pose_angle_evidence(turned, elem(comparison.node_rows, node_id))
+  end
+
+  defp radius_evidence(comparison, node_id, {normal, curvature_1}) do
+    {stored_normal, stored_curvature} = elem(comparison.node_poses, node_id)
+
+    pose_evidence(
+      comparison,
+      normal,
+      curvature_1,
+      stored_normal,
+      stored_curvature,
+      elem(comparison.node_defined, node_id) != 0.0
+    )
+  end
+
+  # One stored pose, cut into the two directions the surface comparison reads, and
+  # kept whole for the object-orientation one. Where a pose is stored end to end
   # the cut is the same for every node, so it belongs to the graph rather than to
   # the hypothesis that happens to ask.
   defp node_poses(displacer, graph_id, input_channel, num_nodes) do
@@ -618,13 +650,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer do
         ["pose_vectors", "pose_fully_defined"]
       )
 
-    {features
-     |> Map.fetch!("pose_vectors")
+    rows = features |> Map.fetch!("pose_vectors") |> Enum.map(&List.flatten/1)
+
+    {rows
      |> Enum.map(fn [normal_a, normal_b, normal_c, curvature_a, curvature_b, curvature_c | _] ->
        {[normal_a, normal_b, normal_c], [curvature_a, curvature_b, curvature_c]}
      end)
      |> List.to_tuple(),
-     features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple()}
+     features |> Map.fetch!("pose_fully_defined") |> Enum.map(&hd/1) |> List.to_tuple(),
+     List.to_tuple(rows)}
   end
 
   @doc """

@@ -10,6 +10,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Models.ObjectModel.GraphObjectModel
   alias Monty.Geometry
@@ -873,5 +874,106 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
       assert Map.keys(one.evidence_slope_trackers) == ["mug"]
       assert GraphMemory.get_memory_ids(one.graph_memory) == ["mug"]
     end
+  end
+
+  # Monty's `BurstSamplingNumHypsPerNodeTest`: how many hypotheses a node starts
+  # with. Monty drives the private `_num_hyps_per_node` with a mocked updater and
+  # asserts the number it returns; here the number is asked of the space the
+  # first step actually builds, which is the same question with something to
+  # count — and the pose type it branches on is carried beside the pose's
+  # numbers, as Monty's feature dict carries it in the object (§2.50).
+  describe "the number of hypotheses a node starts with" do
+    # test_returns_len_initial_possible_poses_if_not_none
+    test "a named pose set wins over what the pose allows" do
+      poses = for index <- 0..2, do: inverse_rotation([0.0, 0.0, index * 120.0])
+
+      assert started_with(
+               starting_updater(initial_possible_poses: poses),
+               features()
+             ) ==
+               nodes() * length(poses)
+    end
+
+    # test_returns_one_if_pose_vector_is_orientation_matrix
+    test "an object orientation starts one hypothesis a node, because a frame is a frame" do
+      assert started_with(starting_updater(), orientation_features()) == nodes()
+    end
+
+    # test_returns_two_if_pose_vector_is_surface_pose_vector_and_pose_fully_defined
+    test "a defined surface pose starts two, because a normal has a mirror twin" do
+      assert started_with(starting_updater(), surface_features(true)) == nodes() * 2
+    end
+
+    # test_returns_umbilical_num_poses_if_pose_vector_is_surface_pose_vector_and_pose_not_fully_defined
+    test "an undefined surface pose is sampled around its normal, umbilical_num_poses times" do
+      assert started_with(
+               starting_updater(umbilical_num_poses: 3),
+               surface_features(false)
+             ) ==
+               nodes() * 3
+    end
+
+    # test_raises_type_error_if_pose_vector_is_unsupported
+    test "a pose the updater cannot use is named in the refusal" do
+      features = %{
+        "patch" => %{
+          "pose_vectors" => :not_a_pose,
+          "pose_fully_defined" => true,
+          "rgba" => [0.2]
+        }
+      }
+
+      assert_raise ArgumentError, ~r/Unsupported pose_vector type/, fn ->
+        started_with(starting_updater(), features)
+      end
+    end
+  end
+
+  # A burst wide enough that the per-node count is never capped by the
+  # multiplier: Monty's case asks `_num_hyps_per_node` itself, so nothing else
+  # may bind. The burst is set on the struct, which is how the rest of this file
+  # puts the updater into a burst.
+  defp starting_updater(options \\ []) do
+    updater(Keyword.merge([sampling_multiplier: 10.0], options))
+    |> Map.put(:sampling_burst_steps, 5)
+  end
+
+  defp nodes, do: length(GraphMemory.get_locations_in_graph(memory(), "mug", "patch"))
+
+  # The hypothesis space a burst starts, as a count: Monty asks for the number a
+  # node starts with, and this is that number with something to count.
+  defp started_with(updater, features) do
+    {_updater, updated, _telemetry} =
+      BurstSamplingHypothesesUpdater.update_evidence(
+        updater,
+        Hypotheses.empty(),
+        features,
+        "mug",
+        0.0
+      )
+
+    Hypotheses.count(updated)
+  end
+
+  defp surface_features(pose_fully_defined) do
+    %{
+      "patch" => %{
+        "pose_vectors" => @pose,
+        "pose_fully_defined" => pose_fully_defined,
+        "rgba" => [0.2],
+        PoseKind.key() => :surface_pose_vectors
+      }
+    }
+  end
+
+  defp orientation_features do
+    %{
+      "patch" => %{
+        "pose_vectors" => List.flatten(@identity),
+        "pose_fully_defined" => true,
+        "rgba" => [0.2],
+        PoseKind.key() => :orientation_matrix
+      }
+    }
   end
 end

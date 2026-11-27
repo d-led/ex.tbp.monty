@@ -2981,32 +2981,33 @@ Three things have no Elixir counterpart, and the port answers them its own way:
 
 Monty's `DefaultHypothesesDisplacer._calculate_evidence_for_new_locations`
 branches on the channel's pose type before it measures how far a search location
-is from a stored node:
+is from a stored node, and again before it asks what the pose there is worth:
 
 - a `SurfacePoseVectors` pose is measured with `custom_distances` — the distance
-  in the tangent plane, plus a penalty for height off it, scaled by curvature;
+  in the tangent plane, plus a penalty for height off it, scaled by curvature
+  (`1 / (|curvature| + MINIMUM_CURVATURE)`, so a *flat* surface is the strictest
+  one and a strongly curved one is nearly plain distance) — and scored with
+  `_sensory_pose_evidence` against the stored normal and curvature direction;
 - an `OrientationMatrix` pose with `euclidean_distances` — a distant agent's
-  camera has no surface, so a metre is a metre;
-- and with `use_object_pose_evidence` set, an orientation is scored by
-  `_object_pose_evidence` instead: how far apart two rotations are, scaled so
-  0° is 1 and 180° is −1.
+  camera has no surface, so a metre is a metre — and scored with
+  `_object_pose_evidence`, how far apart two rotations are, scaled so 0° is 1 and
+  180° is −1.
 
-This port's `neighbour_evidence/5` calls `GraphMatchingUtils.custom_distance/4`
-for every channel, whatever its pose, and `object_pose_evidence/2` — which is
-ported and tested against Monty's `ObjectPoseEvidenceTest` property — has no
-caller. Three of Monty's cases record the dispatch and are parked in
-`test/monty/frameworks/models/evidence_matching/hypotheses_displacer_test.exs`
-until it exists:
+The port does the same, and `test/…/hypotheses_displacer_test.exs` names Monty's
+three cases with the numbers each rule alone produces. One thing has to be
+carried that Python does not need: Monty's feature dict holds a value that is
+both an array and a type, and here the numbers are a list, so
+`select_features_to_use/2` records the type beside them under
+`pose_vectors_kind`. A caller that hands over numbers alone is a surface channel,
+which is what every config in `conf/` asks for.
 
-    test_calculate_evidence_for_new_locations_invoke_custom_distances_for_surface_pose_vectors
-    test_calculate_evidence_for_new_locations_invoke_euclidean_distances_for_orientation_matrix_pose_vectors
-    test_calculate_evidence_for_new_locations_invokes_object_pose_evidence_for_orientation_matrix_pose_vectors
-
-What it costs today: for a surface agent the rule is Monty's, and for a flat
-surface (`curvature = 0`) the port's `custom_distance` is the euclidean distance,
-so a distant agent's numbers agree while its percept is flat. They stop agreeing
-as soon as a channel carries an orientation matrix against curved stored poses,
-and the object-pose-evidence path is not exercised at all.
+What is still not Monty's is where the answer is computed, not what it is: the
+kernel (`ExTbpMontyCore.MatcherNif.neighbour_evidence`) answers the surface rule
+only, so an orientation channel takes the reference path — same numbers, no
+kernel, which for a graph of a few hundred nodes is microseconds and for a
+seventy-seven-object run would be the difference the round exists to avoid. A
+run whose sensor carries an orientation matrix is therefore correct and slower;
+the surface runs every experiment here uses never leave the kernel.
 
 ## 2.51 A fly's eye is a percept of this port's own making
 

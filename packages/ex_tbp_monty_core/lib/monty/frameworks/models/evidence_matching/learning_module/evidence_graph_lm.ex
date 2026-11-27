@@ -77,6 +77,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
 
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypothesesUpdater
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule
   alias Monty.Frameworks.Models.GoalGeneration
@@ -913,7 +914,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   the hypothesis space of every node.
 
   Pose vectors arrive as a matrix and are read as nine numbers, which is the
-  shape the comparison works on.
+  shape the comparison works on; the type they arrived as is kept beside those
+  numbers, because the comparison chooses its distance rule and its pose
+  evidence by it (§2.50).
   """
   @spec select_features_to_use(t(), [Message.t()]) :: %{optional(String.t()) => map()}
   def select_features_to_use(%__MODULE__{} = lm, percepts) do
@@ -930,6 +933,19 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphL
   defp matching_features(features, tolerances) do
     for {name, value} <- features, matchable?(name, tolerances), into: %{} do
       {name, flattened(value)}
+    end
+    |> pose_kind_of(features)
+  end
+
+  # Monty's feature dict holds the pose *type* as much as its numbers: the
+  # comparison asks `isinstance(...)` which distance rule and which pose evidence
+  # a channel gets (§2.50). Flattening keeps the numbers and would lose the type,
+  # so the type travels beside them under a key no feature can have.
+  defp pose_kind_of(selected, features) do
+    case Map.get(features, "pose_vectors") do
+      %SurfacePoseVectors{} -> Map.put(selected, PoseKind.key(), :surface_pose_vectors)
+      %OrientationMatrix{} -> Map.put(selected, PoseKind.key(), :orientation_matrix)
+      _already_numbers -> selected
     end
   end
 

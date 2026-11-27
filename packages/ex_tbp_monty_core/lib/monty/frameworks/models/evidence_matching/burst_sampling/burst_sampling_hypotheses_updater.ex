@@ -37,10 +37,11 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
-  alias Monty.Geometry.SurfacePoseVectors
+  alias Monty.Geometry.{OrientationMatrix, SurfacePoseVectors}
   alias Monty.Trace
 
   defstruct graph_memory: nil,
@@ -355,8 +356,20 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
   # A well-defined pose has a mirror twin; an undefined one is sampled around
   # the normal; fixed poses are however many the experiment named.
+  # Monty's `_num_hyps_per_node`: a frame is a frame, so one; a well-defined
+  # surface normal has a mirror twin, so two; an undefined one is sampled around
+  # its normal. A pose the updater cannot use is named in the refusal.
   defp num_hyps_per_node(%__MODULE__{initial_possible_poses: nil} = updater, features) do
-    if features["pose_fully_defined"], do: 2, else: updater.umbilical_num_poses
+    case PoseKind.of(features) do
+      :orientation_matrix ->
+        1
+
+      :surface_pose_vectors ->
+        if features["pose_fully_defined"], do: 2, else: updater.umbilical_num_poses
+
+      :unsupported ->
+        raise ArgumentError, "Unsupported pose_vector type: #{inspect(features["pose_vectors"])}"
+    end
   end
 
   defp num_hyps_per_node(%__MODULE__{initial_possible_poses: poses}, _features),
@@ -523,12 +536,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
 
     features
     |> sensed_pose_vectors()
-    |> GraphMatchingUtils.possible_sensed_directions(per_node)
-    |> Enum.flat_map(fn sensed ->
-      # Matrices, not rotations: a stored frame is only nearly orthonormal and
-      # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
-      SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(directions, sensed)
-    end)
+    |> case do
+      %OrientationMatrix{value: matrix} ->
+        # A frame is already a set of directions: every node is turned onto it as
+        # it stands, once.
+        SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(directions, matrix)
+
+      %SurfacePoseVectors{} = sensed ->
+        sensed
+        |> GraphMatchingUtils.possible_sensed_directions(per_node)
+        |> Enum.flat_map(fn turned ->
+          # Matrices, not rotations: a stored frame is only nearly orthonormal and
+          # Monty keeps that — see `align_multiple_orthonormal_vectors_as_matrices/2`.
+          SpatialArithmetics.align_multiple_orthonormal_vectors_as_matrices(directions, turned)
+        end)
+    end
   end
 
   defp rotations(
@@ -542,13 +564,17 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     Enum.flat_map(poses, fn pose -> List.duplicate(pose, length(top_indices)) end)
   end
 
+  # The sensed pose as the type it arrived as — a struct a synthetic module built,
+  # or the numbers an observation's selector flattened and recorded the type
+  # beside (§2.50).
   defp sensed_pose_vectors(features) do
-    features
-    |> Map.fetch!("pose_vectors")
-    |> Enum.chunk_every(3)
-    |> then(fn [normal, curvature_1, curvature_2] ->
-      SurfacePoseVectors.new(normal, curvature_1, curvature_2)
-    end)
+    case PoseKind.of(features) do
+      kind when kind in [:surface_pose_vectors, :orientation_matrix] ->
+        PoseKind.vectors(kind, Map.fetch!(features, "pose_vectors"))
+
+      :unsupported ->
+        raise ArgumentError, "Unsupported pose_vector type: #{inspect(features["pose_vectors"])}"
+    end
   end
 
   defp tracker_for(updater, graph_id) do

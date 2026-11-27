@@ -43,6 +43,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacer
   alias Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater
+  alias Monty.Frameworks.Models.EvidenceMatching.PoseKind
   alias Monty.Frameworks.Models.GraphMatching.GraphMemory
   alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -366,18 +367,15 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesUpdater.DefaultHypo
   end
 
   # The channel's `pose_vectors`: the nine numbers Monty's features carry, or the
-  # struct a synthetic learning module builds. Both are what the dispatch reads.
+  # struct a synthetic learning module builds. Both are what the dispatch reads —
+  # the numbers because the type travels beside them.
   defp pose_vectors(features) do
     case Map.fetch!(features, "pose_vectors") do
       %module{} = vectors when module in [SurfacePoseVectors, OrientationMatrix] ->
         vectors
 
       value when is_list(value) ->
-        value
-        |> Enum.chunk_every(3)
-        |> then(fn [normal, curvature_1, curvature_2] ->
-          SurfacePoseVectors.new(normal, curvature_1, curvature_2)
-        end)
+        PoseKind.vectors(PoseKind.of(features), value)
 
       value ->
         value
