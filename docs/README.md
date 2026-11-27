@@ -9,11 +9,13 @@ headings below are the grouping.
 
 ## Learn it
 
-| Page                                                   | Walks through                                        |
-| ------------------------------------------------------ | ---------------------------------------------------- |
-| [../README.md](../README.md)                           | the studio in Docker, then the first experiment      |
-| [cad.md](cad.md)                                       | a STEP part becoming a memory, then being recognised |
-| [experiments/cad/README.md](experiments/cad/README.md) | the same part, click by click, in screenshots        |
+| Page                                                             | Walks through                                            |
+| ---------------------------------------------------------------- | -------------------------------------------------------- |
+| [../README.md](../README.md)                                     | the studio in Docker, then the first experiment          |
+| [cad.md](cad.md)                                                 | a STEP part becoming a memory, then being recognised     |
+| [experiments/cad/README.md](experiments/cad/README.md)           | the same part, click by click, in screenshots            |
+| [experiments/dogs/README.md](experiments/dogs/README.md)         | a dog recognised from its scans, and the run's judgement |
+| [experiments/flyverse/README.md](experiments/flyverse/README.md) | a connectome steering a run, and what the run says       |
 
 ## Do a task
 

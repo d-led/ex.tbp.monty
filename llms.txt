@@ -23,6 +23,8 @@ Streamable HTTP. A terminal has `mix monty.run` and `mix monty.bench`.
 - [Start](README.md): the quickstart compose file, then the first experiment.
 - [A CAD part in a run](docs/cad.md): STEP part, memory, recognition.
 - [A CAD part, click by click](docs/experiments/cad/README.md): the same walk-through with screenshots of every page it passes.
+- [A dog recognised from its scans](docs/experiments/dogs/README.md): the Objaverse corpus, the memory a training run wrote, and the run's own judgement.
+- [A connectome steering a run](docs/experiments/flyverse/README.md): a plugin's experiment, the policy that steps it, and the run's own record.
 
 ## How-to guides (specific tasks)
 
