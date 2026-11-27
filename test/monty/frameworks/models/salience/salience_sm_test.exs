@@ -374,4 +374,31 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
 
     get_in(tree, ["experiment", "config", "monty_config", "sensor_modules", "sensor_module_1"])
   end
+
+  # Monty's three `_normalize_salience` and `_weight_salience` cases. They drive
+  # the private steps one at a time; here the two steps are the public functions
+  # the step itself composes, which is the same question asked of the same code.
+  describe "normalize_salience/1 and weight_salience/4" do
+    # test_normalize_salience_does_clips_uniform_salience_between_0_and_1
+    test "salience that does not vary has no scale, so it is clipped into the range" do
+      assert SalienceSM.normalize_salience(List.duplicate(2.0, 10)) == List.duplicate(1.0, 10)
+    end
+
+    # test_normalize_salience_normalizes_empty_salience
+    test "nothing scored is still nothing" do
+      assert SalienceSM.normalize_salience([]) == []
+    end
+
+    # test_weight_salience_decays_randomizes_and_normalizes_salience_in_that_order
+    test "a visit decays a cell before anything else happens to it" do
+      # A cell the sensor has just visited is inhibited by one, which takes three
+      # quarters of its salience: it scores 1.0 and comes out at 0.25, below a
+      # cell that scored 0.4 and was not visited. Rescaling first and decaying
+      # after would put them the other way round, so the order is what this says.
+      weighted = SalienceSM.weight_salience(ctx(), "SM_0", [1.0, 0.4], [1.0, 0.0])
+
+      assert [visited, unvisited] = weighted
+      assert visited < unvisited
+    end
+  end
 end

@@ -439,13 +439,21 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   # A visit takes three quarters of a pixel's salience away; the dither moves the
-  # result by a twentieth of a unit; and what is left is rescaled into `[0, 1]`,
-  # which is the range a goal's confidence may carry.
-  defp weight_salience(ctx, sensor_module_id, salience, inhibition) do
+  # the result by a twentieth of a unit; and what is left is rescaled into `[0,
+  # 1]`, which is the range a goal's confidence may carry.
+  @doc """
+  Decay, dither and rescale the salience a step scored, in that order.
+
+  Monty's `_weight_salience`. Public because Monty's own cases reach for the
+  three steps one at a time, and a case about the order of a pipeline is about
+  the pipeline rather than about a step that happens to run it.
+  """
+  @spec weight_salience(map(), String.t(), [number()], [number()]) :: [float()]
+  def weight_salience(ctx, sensor_module_id, salience, inhibition) do
     salience
     |> Enum.zip_with(inhibition, fn score, weight -> score - @decay_factor * weight end)
     |> dither(ctx, sensor_module_id)
-    |> normalize()
+    |> normalize_salience()
   end
 
   defp dither([], _ctx, _id), do: []
@@ -459,9 +467,17 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
     Enum.zip_with([scores, noise], fn [score, amount] -> score + amount end)
   end
 
-  defp normalize([]), do: []
+  @doc """
+  Salience rescaled into `[0, 1]`, which is the range a goal's confidence carries.
 
-  defp normalize(scores) do
+  Monty's `_normalize_salience`: salience that does not vary — all of it, or one
+  value — has no scale to divide by, so it is clipped instead, and nothing scored
+  stays nothing.
+  """
+  @spec normalize_salience([number()]) :: [float()]
+  def normalize_salience([]), do: []
+
+  def normalize_salience(scores) do
     {lowest, highest} = Enum.min_max(scores)
     scale = highest - lowest
 

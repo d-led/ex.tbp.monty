@@ -7,7 +7,7 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-629 of 717 of Monty's unit cases are named here, and
+632 of 717 of Monty's unit cases are named here, and
 78 more the port cannot have are excluded, each with its reason
 below.
 
@@ -50,7 +50,7 @@ below.
 | 6/6 | 0 | `frameworks/models/salience/on_object_observation_test.py` |
 | 17/17 | 0 | `frameworks/models/salience/return_inhibitor_test.py` |
 | 12/12 | 0 | `frameworks/models/salience/segmentation/slic_merge_test.py` |
-| 8/12 | 0 | `frameworks/models/salience/sensor_module_test.py` |
+| 11/12 | 0 | `frameworks/models/salience/sensor_module_test.py` |
 | 23/23 | 0 | `frameworks/models/salience/strategies/vocus2/pyramids_test.py` |
 | 20/20 | 0 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
 | 2/2 | 0 | `frameworks/models/sensor_modules_test.py` |
@@ -79,10 +79,10 @@ below.
 - **an action has no actuator to delegate to** — `test_delegates_to_actuate_look_down`, `test_delegates_to_actuate_look_up`, `test_delegates_to_actuate_move_forward`, `test_delegates_to_actuate_move_tangentially`, `test_delegates_to_actuate_orient_horizontal`, `test_delegates_to_actuate_orient_vertical`, `test_delegates_to_actuate_set_agent_pitch`, `test_delegates_to_actuate_set_agent_pose`, `test_delegates_to_actuate_set_sensor_pitch`, `test_delegates_to_actuate_set_sensor_pose`, `test_delegates_to_actuate_set_sensor_rotation`, `test_delegates_to_actuate_set_yaw`, `test_delegates_to_actuate_turn_left`, `test_delegates_to_actuate_turn_right`
 - **an action has no sampler to delegate to** — `test_delegates_to_sample_look_down`, `test_delegates_to_sample_look_up`, `test_delegates_to_sample_move_forward`, `test_delegates_to_sample_move_tangentially`, `test_delegates_to_sample_orient_horizontal`, `test_delegates_to_sample_orient_vertical`, `test_delegates_to_sample_set_agent_pitch`, `test_delegates_to_sample_set_agent_pose`, `test_delegates_to_sample_set_sensor_pitch`, `test_delegates_to_sample_set_sensor_pose`, `test_delegates_to_sample_set_sensor_rotation`, `test_delegates_to_sample_set_yaw`, `test_delegates_to_sample_turn_left`, `test_delegates_to_sample_turn_right`
 - **Python's base-class order** — `test_missing_experiment_base_raises_error`, `test_non_leftmost_subclassing_raises_error`
+- **Monty's own FIXME (§2.2)** — `test_fixme_provide_motor_system_calls_fixme_provide_motor_system_on_policy`
 - **Python's base-class order; Elixir composes by `use`** — `test_leftmost_subclassing_does_not_error`
 - **Python's order picks it; protocols pick here** — `test_encode_uses_method_resolution_order_encoder`
 - **`new/3` validates voxels and weights** — `test_init_validates_input_using_validate_dataframe`
-- **a FIXME-named method this port does not have (§2.2)** — `test_fixme_provide_motor_system_calls_fixme_provide_motor_system_on_policy`
 - **a grid always has weights** — `test_raises_value_error_if_dataframe_does_not_have_a_weight_column`
 - **a list cannot be two-dimensional** — `test_raises_value_error_if_weight_column_not_1d`
 - **a numpy array is a list here** — `test_buffer_encoder_encodes_numpy_ndarray_by_default`
