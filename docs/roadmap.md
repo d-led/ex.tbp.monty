@@ -15,13 +15,13 @@ a trade-off:
    read like their Python; `Monty.Runtime.*` only routes, holds state and
    measures. Determinism is a feature: one RNG stream per episode.
 4. **A module arrives with Monty's own test for it, translated.** One case in
-   `tests/unit/**/test_*.py` becomes one ExUnit test that names the case it
-   translates; where Monty drove a private method, ours drives the nearest
-   public entry point and says so. A hand-written behaviour test states intent,
-   never parity, and is not counted as such. Re-measure the count by listing
-   Monty's `def test_` names (`monty-orig/tests/unit/**/test_*.py`) and grepping
-   ours for them. The number is the command's to print and this file does not
-   quote it: a count in prose is stale the week after it is written.
+   `tests/unit/**` becomes one ExUnit test that names the case it translates;
+   where Monty drove a private method, ours drives the nearest public entry point
+   and says so. A hand-written behaviour test states intent, never parity, and is
+   not counted as such. Monty names its modules `<thing>_test.py` (older releases
+   used `test_<thing>.py`), and the count is `scripts/test_map.py`'s to print —
+   `--missing` names every case that has no translator yet. The file does not
+   quote the number: a count in prose is stale the week after it is written.
 
 ## Where the port stands
 
