@@ -59,7 +59,17 @@ defmodule LoopMap do
       # `_add_votes_to_buffer_stats` holds `pass` and a commented-out body: Monty
       # decided the vote data would clutter the buffer, so there is nothing to
       # port and nothing to call.
-      "add_votes_to_buffer_stats" => "nothing: Monty's is `pass`"
+      "add_votes_to_buffer_stats" => "nothing: Monty's is `pass`",
+      # Monty's per-object percept update. It is a private step here, inlined
+      # beside the loop that walks the objects: `update_one/5` hands one object's
+      # hypotheses to the updater's `update_evidence` callback, which is where
+      # the arithmetic lives in both.
+      "update_evidence" => "inlined as `update_one/5`, one object's evidence a call",
+      # Monty's array of weights over a list of distances. Only one of them is
+      # ever read — the vote the loop is holding — so this port computes that one:
+      # `weight/2`, the same `(max - distance) / max` and the same `-1` where
+      # Monty's would be `-inf`.
+      "get_node_distance_weights" => "inlined as `weight/2`, for the one distance read"
     },
     "frameworks/models/evidence_matching/model.py" => %{
       # The class's constructor forwards to its base class and does nothing else.
@@ -91,6 +101,13 @@ defmodule LoopMap do
       "snapshot_monty" => "absent: no recreation mode; Monty.Studio.Run.memories/1 carries memory between episodes",
       "restore_monty" => "absent: the same, an episode starts by resetting the model's short-term memory",
       "check_if_any_lms_updated" => "Monty.Runtime.Step: a step says what it processed",
+      # Monty asks the model whether any LM updated and counts the step only then.
+      # The answer travels with the step here and the counting is the context's:
+      # `RecognitionContext.count_step/3` takes `updated?` and `is_exploring?`, so
+      # `step` always advances and `matching_steps`/`exploring_steps` only when
+      # something was actually perceived.
+      "should_update_step_counter" =>
+        "Monty.Experiment.RecognitionStrategy.RecognitionContext.count_step/3 applies it",
       "fixme_generate_live_plot_frame" => "Monty.Studio.RunStream.publish/3 draws the frame",
       "pre_epoch" => "absent: the phase's mode and objects are chosen once, by Monty.Studio.Setup",
       "post_epoch" => "absent: the memory is kept once per run, Monty.Studio.Learned.keep/5; nothing is saved per epoch",
@@ -114,6 +131,26 @@ defmodule LoopMap do
   # write there and a returned value here; its model is an object the experiment
   # holds, so asking it anything is a method call there and a process call here.
   @port %{
+    # Monty mutates one updater object as it goes; a step here starts from an
+    # immutable value, so the second sensor's work and the first's arrive as two
+    # values that have to be joined. `merge_step/3` joins them, and `merge_changed/3`
+    # is the per-field half it delegates to.
+    "merge_step" => "a step's updater joined with the one it began from, which Monty mutates",
+    "merge_changed" => "the per-field half of that join, which an in-place update never needs",
+    # A memory narrowed to one graph is a new value here and an in-place
+    # selection in Monty (`graph_memory.set_graph_id`), so the updater that owns
+    # the memory, the displacer and the scorer each narrow themselves.
+    "narrow" => "keeps one graph's hypotheses, where Monty narrows its memory in place",
+    # The native top-k selection's answer in Elixir, over the same column: the
+    # kernel partitions at the boundary and sorts the tail, this sorts and takes
+    # the end, and the parity test asserts the same bytes.
+    "reference_top_indices" => "the Elixir reference `MatcherNif.top_indices` is checked against",
+    # An episode that concluded nothing drops its hypotheses before the memory is
+    # written; Monty's buffer is reset for the next episode instead.
+    "clear_hypotheses" => "drops an episode's hypotheses before the write, which Monty resets",
+    # Whether modules share one round per object — a concurrency mode this port
+    # has and Monty's serial loop has no name for (`docs/monty-differences.md` §2.45).
+    "graph_round" => "whether a step's objects share one round, a mode Monty's loop lacks",
     # Monty's `train`/`evaluate` each loop their epochs calling `run_epoch`;
     # here the epoch loop is one function because the phase plan is the studio's.
     "run_epochs" => "the epoch loop inside Monty's train/evaluate, split out",
