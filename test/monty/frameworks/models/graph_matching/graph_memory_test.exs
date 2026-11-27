@@ -369,11 +369,11 @@ defmodule Monty.Frameworks.Models.GraphMatching.GraphMemoryTest do
       assert GraphMemory.get_input_channels_in_graph(extended, "mug") == ["patch"]
     end
 
-    # Monty: "test_if_known_object_and_unknown_channel_builds_graph_from_rotated_
-    # features" — a channel first seen in a *later* episode. Without the transform,
-    # this channel's nodes are in the body's frame while the object's other
-    # channels are in the model's, and the two never line up: that misalignment is
-    # PR #1280.
+    # Monty's test_if_known_object_and_unknown_channel_builds_graph_from_rotated_features
+    # — a channel first seen in a *later* episode. Without the transform, this
+    # channel's nodes are in the body's frame while the object's other channels
+    # are in the model's, and the two never line up: that misalignment is PR
+    # #1280.
     test "a known object's new channel is transformed into the object's frame" do
       # A map of what this experiment reads, with both channels named: the second
       # one is only in the map because a later episode is about to bring it.

@@ -461,6 +461,13 @@ jobs:
       - name: Module map
         run: mix monty.module_map.verify
 
+      # Every case name a port test attributes has to be one Monty defines, so a
+      # typo or a case renamed upstream is caught rather than counted. The case
+      # table is committed (Monty.ModuleMap.TestMap.Data), so this needs no
+      # Monty checkout.
+      - name: Test map
+        run: mix monty.test_map --check
+
       # The version is written in three places and the tag is refused when they
       # disagree — which is how `0.1.2` sat in two files and `0.1.1` in the third
       # until someone tried to tag. One second here, and
