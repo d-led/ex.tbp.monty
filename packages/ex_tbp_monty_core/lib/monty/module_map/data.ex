@@ -3150,12 +3150,13 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Telemetry.Formatters",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "packages/ex_tbp_monty_core/lib/monty/telemetry/formatters/json_formatter.ex",
           elixir: "Monty.Telemetry.Formatters.JsonFormatter",
           python: "JsonFormatter"
         }
@@ -3164,12 +3165,14 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Telemetry.Publishers",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file:
+            "packages/ex_tbp_monty_core/lib/monty/telemetry/publishers/telemetry_publisher.ex",
           elixir: "Monty.Telemetry.Publishers.TelemetryPublisher",
           python: "TelemetryPublisher"
         }
@@ -3178,17 +3181,19 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Telemetry.Schemas",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :implemented,
+          file: "packages/ex_tbp_monty_core/lib/monty/telemetry/schemas/telemetry_schema.ex",
           elixir: "Monty.Telemetry.Schemas.TelemetrySchema",
           python: "TelemetrySchema"
         },
         %{
-          status: :planned,
+          status: :implemented,
+          file: "packages/ex_tbp_monty_core/lib/monty/telemetry/schemas/telemetry_event.ex",
           elixir: "Monty.Telemetry.Schemas.TelemetryEvent",
           python: "TelemetryEvent"
         }
@@ -3197,7 +3202,7 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Telemetry.Telemeter",
       package: "monty",
       classes: [],

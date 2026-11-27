@@ -2943,3 +2943,36 @@ generated from are 3.13.0 (3013000)`. A probe that starts Python first — which
   the other order came back black (a patch's mean of 0.333 against 151.5), and the
   world-parity probe that reports real numbers is the one that touches
   `ExMujoco` first.
+
+## 2.49 Telemetry is a stream a run keeps, not a logger a process owns
+
+Monty's `tbp/monty/telemetry` puts a `TelemetrySchema` in the message slot of a
+`logging` record: `TelemetryPublisher` is a `logging.Logger` whose name starts
+`telemetry.`, handlers receive the event as `record.msg`, and
+`JsonFormatter.format` writes the record out as one JSON object. Monty's
+dashboard is one such handler, reading the events off a ZMQ publisher
+(`contrib/liveview_experiment` in the fork).
+
+Ported as far as the shapes are the same: `Monty.Telemetry.Schemas.TelemetrySchema`
+and `...TelemetryEvent` keep the kind (an empty one is the schema's own name),
+the version, and the call site's own fields; `...Formatters.JsonFormatter`
+answers the same JSON object from a *record map*
+(`%{level:, name:, func_name:, lineno:, msg:}`) and refuses a message that is
+not a schema with Monty's sentence; `...Publishers.TelemetryPublisher` keeps the
+`telemetry.` prefix once and does not propagate; `...Telemeter.get_telemeter/1`
+is `getTelemeter`.
+
+Three things have no Elixir counterpart, and the port answers them its own way:
+
+- **There is no `logging` module to ride on.** A record is a map and the
+  publisher is a value (its name, its level), not a global logger. The eight
+  cases in `telemetry_test.py` still hold case for case, because what they
+  assert is the record's message, its level, the prefix, and the JSON.
+- **A handler is a process here.** `Monty.Telemetry.Collector` is the port's
+  own — Monty has no equivalent — and it is what makes a run's events readable
+  without a socket: records in the order they were emitted, per publisher, with
+  a bounded tail (ten thousand by default) and a count of what was dropped, so a
+  page showing the last few minutes cannot grow without limit.
+- **Emitting does not require a collector.** `Collector.record/1` answers
+  `:no_collector` when none is running: a run nobody is watching starts no
+  process and pays nothing.
