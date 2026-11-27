@@ -38,6 +38,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Memory,
     Panel,
     Partition,
+    PluginExperiment,
     Parts,
     RemotePolicy,
     Replay,
@@ -497,6 +498,21 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             title="Open a copy of this experiment in the builder"
           >
             <.icon name="hero-pencil-square-mini" class="size-3.5" /> adjust a copy
+          </.link>
+          <%!-- A plugin's experiment has no file here, but its definition names the
+          config it steps — and that config *is* one this node has, because it is
+          what the catalogue read the row from. So the copy a person edits is that
+          config, and the link says which one rather than pretending there is
+          nothing to open. --%>
+          <.link
+            :if={@opened.source == :plugin and PluginExperiment.base_of(@opened)}
+            id="adjust-experiment-base"
+            navigate={~p"/build?#{[base: PluginExperiment.base_of(@opened)]}"}
+            class="btn btn-ghost btn-xs gap-1.5 font-normal"
+            title="Open the config this plugin's experiment steps in the builder"
+          >
+            <.icon name="hero-pencil-square-mini" class="size-3.5" />
+            adjust {PluginExperiment.base_of(@opened)}
           </.link>
         </div>
         <p class="max-w-3xl text-base-content/70">

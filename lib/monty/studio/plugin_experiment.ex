@@ -41,6 +41,21 @@ defmodule Monty.Studio.PluginExperiment do
   @catalogue_timeout 1_000
 
   @doc """
+  The config a plugin's experiment steps, from an `open/2` answer.
+
+  The one name in a plugin's definition this node can act on: the definition
+  names a config the catalogue can read, so a person can take that config into
+  the builder even though the experiment itself lives on another node. `nil`
+  when the definition names none — a definition no catalogue row was built from.
+  """
+  @spec base_of(map()) :: String.t() | nil
+  def base_of(%{plugin: %{definition: %{"base" => base}}})
+      when is_binary(base) and base != "",
+      do: base
+
+  def base_of(_opened), do: nil
+
+  @doc """
   Opens the experiment `name` offers, or says why it cannot be started.
 
   Options are `open/2`'s — `:world_simulator` and `:pretrained_dir` — and

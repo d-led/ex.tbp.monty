@@ -162,6 +162,22 @@ defmodule Monty.Studio.PluginExperimentTest do
     test "is left out for an experiment no host offers", %{hosts: hosts} do
       assert PluginExperiment.bases([%{name: "nobody.offers_this"}], hosts: hosts) == %{}
     end
+
+    # The page offers that config to the builder — a plugin's experiment lives on
+    # another node, but the config it steps is one this node has, so a copy of it
+    # is a copy a person can edit.
+    test "is what an opened experiment says to adjust", %{hosts: hosts} do
+      offer_experiment(%{"base" => "base_10simobj_surf_agent", "learning_modules" => []})
+
+      {:ok, opened} = PluginExperiment.open(@experiment, hosts: hosts)
+
+      assert PluginExperiment.base_of(opened) == "base_10simobj_surf_agent"
+    end
+
+    test "is nothing to adjust when a definition names no base" do
+      assert PluginExperiment.base_of(%{plugin: %{definition: %{"learning_modules" => []}}}) ==
+               nil
+    end
   end
 
   defp host, do: %{node: node(), name: "this host", address: to_string(node())}
