@@ -190,13 +190,27 @@ defmodule Monty.Simulators.ExMujoco.Scene do
   # inside it with one camera per sensor. A body that moves has to declare an
   # inertial or MuJoCo refuses to compile the model, and Monty gives both bodies
   # unit mass and unit inertia.
+  #
+  # The inertial's `pos` is the body's own `pos`, and that is Monty's number, not
+  # a tidy one. `add_body(mass=…, inertia=…)` leaves the inertial's position
+  # unset, and MuJoCo compiles an unset position as "the body's own `pos`"
+  # (`mjCBody::CompileInertial`, "ipos undefined: copy body frame into
+  # inertial"), so the centre of mass of an agent at `(0, 1.5, 0.2)` sits at
+  # `(0, 3.0, 0.4)` in the world. A file cannot say "unset" — the attribute is
+  # required — so the position is written out, and the two worlds then compile
+  # the same `body_ipos`, which is what the scene's statistics and the depth
+  # far plane (`vis.map.zfar × stat.extent`) are computed from. Stating the
+  # origin instead halves the compiled world's `stat.extent` (0.287 against
+  # 1.587) and its depth far plane with it (`docs/monty-differences.md` §2.48).
   defp agent(agent) do
     id = agent["agent_id"] || "agent_id_0"
+    pos = numbers(vector(agent["position"]))
+    quat = numbers(Tuple.to_list(quaternion(agent["rotation"])))
 
     """
-        <body name="#{id}" pos="#{numbers(vector(agent["position"]))}" quat="#{numbers(Tuple.to_list(quaternion(agent["rotation"])))}">
+        <body name="#{id}" pos="#{pos}" quat="#{quat}">
           <freejoint name="#{free_joint(id)}"/>
-          <inertial pos="0 0 0" mass="1" diaginertia="1 1 1"/>
+          <inertial pos="#{pos}" quat="#{quat}" mass="1" diaginertia="1 1 1"/>
           <body name="#{id}.sensor" pos="0 0 0" quat="#{numbers(@identity_quaternion)}">
             <joint name="#{pitch_joint(id)}" type="hinge" axis="1 0 0"/>
             <inertial pos="0 0 0" mass="1" diaginertia="1 1 1"/>

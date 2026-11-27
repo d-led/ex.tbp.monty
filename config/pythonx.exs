@@ -24,7 +24,20 @@ config :pythonx, :uv_init,
     # platform this project runs on, so it costs a dependency line and nothing
     # else. Habitat-Sim has no wheel at all — it comes from conda, which is what
     # `environment.yml` in a Monty checkout is for.
-    "mujoco",
+    #
+    # Pinned, and deliberately *not* to the release Monty's `uv.lock` names.
+    # Monty runs 3.13.0 and `ex_mujoco` compiles 3.13.0, so 3.13.0 would be the
+    # tidier pin — but its macOS wheel loads a bundled `libsdf_plugin.dylib`
+    # that asks for `@rpath/mujoco.framework/Versions/A/libmujoco.3.13.0.dylib`,
+    # and the interpreter this application embeds has no such rpath, so
+    # `import mujoco` fails inside it (`no LC_RPATH's found`). What the pin is
+    # for is agreement, not the number: measured on this Mac, 3.13.0 and 4.0.1
+    # render the same scene to the same picture (mean
+    # `[168.41, 151.68, 134.09]` each, identical pixel for pixel), which is why
+    # `docs/monty-differences.md` §2.48 is closed with the two worlds at this
+    # pair of versions. A release that changes the shading is a version to
+    # re-measure, not to float onto.
+    "mujoco==4.0.1",
     # What the world (`priv/monty_py/world.py`) is written against: the scene
     # and its images from `mujoco`, the arithmetic from `numpy`, and the `wxyz`
     # rotations an agent's state carries from `numpy-quaternion`. Nothing else,

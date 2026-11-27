@@ -2850,118 +2850,85 @@ read a miss the same way, and no config of ours names the deleted class.
 world convention, and both worlds now share it. The class stays in the module map
 as Monty's own, marked as removed by the pull.
 
-## 2.48 The two MuJoCo worlds do not render the same picture
+## 2.48 The two MuJoCo worlds render the same picture
 
-**In one line:** the compiled world and the Python world agree about where
-everything is and disagree about what it looks like, by about a tenth of the
-range — and that is enough to make one of them recognise an object where the
-other times out.
+**In one line:** Monty's scene, compiled from MJCF text by `ex_mujoco`, now
+renders what Monty's own `MjSpec` world renders — value for value — and the three
+things that stood between them were the scene's statistics, the agent bodies'
+centre of mass, and the flags a colour pass draws with.
 
-**How it was found.** `scripts/probe_world_parity.exs` steps both worlds with the
-same four moves and compares every image. On
-`base_infer_cows_small_compositional` (`--world` of each, MuJoCo 4.0.1 on both
-sides):
+**What Monty does, since it is the reference.** Its world is an `MjSpec`
+(`simulators/mujoco/simulator.py` and `agents.py`), compiled and drawn by its own
+MuJoCo, and its sensors are cameras on the agent's head. Nothing about the
+picture is decided outside MuJoCo: the scene's numbers, the lighting and the
+flags all come from the spec.
 
-    patch_0/1/2 rgba     12 288 of 16 384 values differ, widest 25
-    view_finder rgba     27 648 of 262 144 differ, widest 25
-    view_finder depth    the near value is identical (0.146) and the far value is
-                         143.108 against 792.233
-    semantic ids         identical
-    every pose, the agent's position and rotation   identical
+**What this port does.** `Monty.Simulators.ExMujoco.Scene` writes the same scene
+as MJCF text and `ex_mujoco` compiles it, which is how a world without an
+interpreter is built. Three numbers are stated rather than inferred, because
+MuJoCo's file format cannot say what the spec API leaves unsaid:
 
-The colour difference is not noise: the pairs run (169→148), (181→157),
-(153→135), (133→117) — a constant ratio of about 0.874 in all three channels,
-alpha identical. A constant ratio on every lit pixel is a lighting difference,
-not a rounding one.
+- **The agent bodies' inertial position is their own `pos`.** Monty's
+  `add_body(mass: …, inertia: …)` leaves `ipos` unset, and MuJoCo compiles an
+  unset one as the body's own `pos` (`mjCBody`, "ipos undefined: copy body frame
+  into inertial"), so an agent at `(0, 1.5, 0.2)` has its centre of mass at
+  `(0, 3.0, 0.4)` in the world. The scene's bounding box — and therefore
+  `stat.extent`, `stat.meansize`, and the depth far plane (`vis.map.zfar ×
+stat.extent`) — is computed from that. Stating the origin instead halved the
+  extent (0.287 against 1.587) and the far plane (`143.1 m` against `793.3 m`),
+  which every depth image is scaled against. An MJCF file has no way to say
+  "unset" (`pos` is a required attribute) and no inertial at all is refused
+  ("mass and inertia of moving bodies must be larger than mjMINVAL"), so the
+  body's own pose is written out.
+- **A colour pass draws with the scene's own flags.** `mjv_defaultScene` sets
+  them — shadows, reflections, the skybox, haze, face culling — and nothing in
+  MuJoCo 3.13 derives them afterwards: `mjv_updateScene` _reads_
+  `mjRND_REFLECTION` to decide whether to build planar reflections, and the
+  renderer draws a shadow-casting light's contribution in a second pass only
+  when `mjRND_SHADOW` is set. `ex_mujoco`'s renderer used to clear them before
+  `mjv_updateScene` (a fix for the segmentation pass leaking `SEGMENT`/`IDCOLOR`
+  into colour passes), which left the colour pass with no flags at all: a patch
+  came back a constant 0.869 of MuJoCo's own render, and a cube's shadow
+  disappeared from the floor. The fix is the one MuJoCo's Python renderer uses:
+  keep the scene's flags, add the two a segmentation pass needs, and put them
+  back before the next pass.
+- **The rest is MuJoCo's.** Lights, materials, textures, camera fields of view,
+  gravity and the offscreen buffer are the same text as the spec's numbers, and
+  a field-by-field comparison of the two compiled models agrees on every one of
+  them — their name tables aside, which differ because this scene names its
+  joints and Monty's leaves them anonymous.
 
-**What the two far values say.** Both worlds set `vis.map.zfar` the way Monty's
-simulator does (`world.py`'s `_configure_spec_settings/1` and `Scene.settings/1`
-both write `znear="0.005" zfar="500"`), and MuJoCo multiplies that by
-`stat.extent`. Read back through that formula the two models hold different
-extents — 143.108 / 500 ≈ 0.286 on the compiled side, 792.233 / 500 ≈ 1.585 on
-the Python side — so the two builders do not compile the same scene, not merely
-the same scene lit differently. The compiled model of this config is
-`nlight=1, nbody=3, ngeom=1`: one light, one geom, which is the object and
-nothing else.
+**How it was measured.** `scripts/probe_world_parity.exs` steps both worlds with
+the same four moves and compares every image. Before the three fixes it reported
+`12 288 of 16 384` patch values differing with a widest gap of 25, and the view
+finder's far depth `143.108` against `792.233`. After them, on this Mac, MuJoCo
+3.13.0 compiled against MuJoCo 4.0.1 in Python, world
+`base_infer_cows_small_compositional` and `base_10simobj_surf_agent`: **every
+depth value, every colour value, every semantic id, every pose and the agent's
+own state identical, at every step of the probe's walk.**
 
-**Why it matters.** On episode 1 of that config (seed 1170100843, `001_cube`) the
-port's `learning_module_2` reaches `match` at step 21 and names the cube, where
-Monty's runs to its 100-step cap with `confused_mlh`. Monty's
-`update_terminal_condition` (`graph_matching.py`) and this port's
-`check_terminal_condition` (`evidence_graph_lm.ex`) are identical branch for
-branch, so the two are not disagreeing about how to conclude — they are looking
-at different pixels.
+**What a wrong picture looks like, in two lines.** A patch whose pixels are the
+geom id in the red byte (`01 00 00` for the first object) is the segmentation
+pass bleeding into the colour pass, which is a renderer that did not restore a
+pass's flags. A patch whose depth is one grey drawn at the light end of the scale
+is a picture whose range collapsed — MuJoCo's far plane is `vis.map.zfar ×
+stat.extent`, 143 m here, so 15 cm of relief is below the last bit of a float32
+depth buffer (`ARB_clip_control unavailable while mjDEPTH_ZEROFAR requested`) —
+and the studio draws it at the _middle_, because the light end is what a picture
+that saw nothing looks like.
 
-**What a _wrong_ picture looks like, as opposed to a lit differently one.** The
-renderer clears `scene_.flags` before `mjv_updateScene` derives this frame's,
-because that call writes the flags its option describes and leaves the ones
-already there: without the clear, the previous pass's `mjRND_SEGMENT` and
-`mjRND_IDCOLOR` survive, every colour pass after the first segmentation pass
-renders ids, and a patch's pixels come back as the geom id in the red byte —
-`01 00 00` for the first object, measured on `base_infer_cows_small_compositional`
-on this Mac — instead of a surface colour (`90 82 73`). The difference in that
-state is not a ratio but an identity: the picture is the segmentation map. If the
-studio's "camera" half is a flat red, this clear is missing from the renderer the
-build is using, which is what happens when the app pins a branch that does not
-carry it: the fixes live on each branch the package is built from, not only on
-`main`.
-
-**A patch's depth is one value, in both worlds.** MuJoCo stores depth against the
-far plane, and Monty's far plane is `vis.map.zfar × stat.extent` — 143 m on this
-Mac for `base_infer_cows_small_compositional` — so the relief of a surface 15 cm
-away is below the last bit of a float32 depth buffer: `patch_0` of that config
-comes back as 4096 copies of 0.1459997 from the compiled world and 0.1459999 from
-the Python one, from either renderer, with MuJoCo's own warning to say so
-(`ARB_clip_control unavailable while mjDEPTH_ZEROFAR requested, depth accuracy
-will be limited`). The studio draws a picture whose range collapsed at the middle
-of its scale, not at the light end, because the light end is what a picture that
-saw nothing looks like and a patch full of surface must not read as an absent
-one; the card keeps the numbers (`depth 0.146–0.146 m`). A picture read back from
-a run's directory has been through the archive's h264 stream at `qp: 18`, so a
-decoded grey can sit a level either side of the one written.
-
-**What is not yet compared.** Which builder is wrong, and whether the difference
-is a light, a material, an extent, or all three: the two are built by different
-code (`Monty.Simulators.ExMujoco.Scene` writes MJCF text;
-`priv/monty_py/world.py` assembles an `MjSpec` and applies Monty's own settings,
-including one added directional light). Until they compile the same numbers, a
-recognition comparison between them is a comparison of two experiments.
-
-**A second, separate gap.** Monty pins `mujoco>=3.13` — 3.13.0 in its `uv.lock` —
-while both of this port's worlds are 4.0.1: the Python one because
-`config/pythonx.exs` declares bare `"mujoco"` and uv resolves the latest, the
-compiled one because `ex.mujoco/mujoco.version` is 4.0.1. Matching Monty's
-version is a prerequisite for comparing percepts at all, and it is two pins.
-
-**The version was not the cause, which narrowed it to two.** Moving the compiled
-world to 3.13.0 (`ex.mujoco`'s `mujoco-3-13` branch) left the difference at
-_exactly_ the same numbers: 12 288 of 16 384 patch values, widest 25, far depth
-143.108 against 792.233. Two independent defects, and each was measured rather
-than argued:
-
-- **Depth is `stat.extent`.** For identical geometry — `geom_pos (0, 1.5, 0)`, the
-  light at `(0, 0, 0.2)`, `geom_rbound 0.086603` — MuJoCo's **XML path** computes
-  `stat.extent` 0.286603 and its **`MjSpec` path** 1.586603. The far plane is
-  `vis.map.zfar × stat.extent` (500 ×), which is exactly 143.1 and 792.2. Monty
-  builds an `MjSpec` (`world.py`), so the compiled world has to state that number
-  instead of letting MJCF infer it.
-- **Colour is this port's renderer, not the scene.** The `ex_mujoco` NIF renders a
-  patch 12.6 % darker than MuJoCo's own Python renderer — mean 132 against 151.39
-  for the same model — and these are excluded, each by measurement: the MuJoCo
-  version (identical numbers at 4.0.1 and 3.13.0), the scene's `stat.extent`
-  (setting one model's to the other's changes nothing), the model itself (Python
-  renders the Elixir-built XML and the `MjSpec` to the _same_ mean, 151.39 each),
-  the `mjRND_` flags (`mjv_defaultScene`'s zeros and the flags `mjv_updateScene`
-  derives give the same picture — and, before they were cleared, the segmentation
-  pass leaked `SEGMENT`/`IDCOLOR` into the colour pass and rendered `[1, 0, 0]`),
-  the `mjvOption` (`mjv_defaultOption` and a zeroed one are identical, 151.39
-  each), and the model's directional light (switching its diffuse off drops the
-  mean to 72.199, a factor of 0.477 — not the observed 0.874).
-
-What is left is inside `ex.mujoco`'s own render path — the same
-`mjr_makeContext` / `mjr_setBuffer(mjFB_OFFSCREEN)` / `mjv_updateScene` /
-`mjr_render` / `mjr_readPixels` sequence MuJoCo's Python renderer runs — and it is
-reproducible in one command (`scripts/probe_world_parity.exs`).
+**What is not compared.** The two worlds run different MuJoCo releases: the
+compiled world is 3.13.0, the release Monty pins (`uv.lock`), and the Python
+world is 4.0.1 — the newest release whose macOS wheel can be imported inside the
+embedded interpreter at all, since 3.13.0's wheel loads a bundled
+`libsdf_plugin.dylib` that asks for `@rpath/mujoco.framework/…` and the embedded
+interpreter has no such rpath (`no LC_RPATH's found`). That pair was measured
+rather than assumed: the same scene rendered by 3.13.0 and by 4.0.1 in Python
+gives the same picture to the byte (mean `[168.41, 151.68, 134.09]` each), and
+the pin is a pin because a release that changes the shading is a release to
+re-measure. A scene whose material is neither a texture nor MuJoCo's default
+would exercise what 4.x changed (`mat_ambient` became a metallic/roughness
+pair), and that is unmeasured.
 
 **Two hazards of comparing them in one process, both hit.** They share one MuJoCo
 symbol namespace, so:
@@ -2976,12 +2943,3 @@ generated from are 3.13.0 (3013000)`. A probe that starts Python first — which
   the other order came back black (a patch's mean of 0.333 against 151.5), and the
   world-parity probe that reports real numbers is the one that touches
   `ExMujoco` first.
-
-**What a minimal scene says.** Every small scene tried — a box, a mesh, a
-textured mesh, a directional light, a 256-pixel offscreen buffer with a 64-pixel
-rect in it, and the real object's own `textured.obj` at the real patch camera's
-11.42° field of view — renders **identically** in the two renderers (38.644,
-38.644, 42.466, 42.466, 66.007 each). The 12.6 % therefore belongs to the full
-scene and not to meshes, textures, lights or offscreen sizes, and the next step is
-to take the full scene apart — the agent's bodies, the light, the object — rather
-than to build another small one.

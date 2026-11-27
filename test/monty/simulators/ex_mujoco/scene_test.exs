@@ -85,6 +85,20 @@ defmodule Monty.Simulators.ExMujoco.SceneTest do
 
       assert xml =~ ~s(<camera name="agent_id_0.view_finder" pos="0.0 0.0 0.03")
     end
+
+    test "its inertial is stated where MuJoCo puts an unset one: at the body's own place" do
+      # Monty's `add_body(mass: …, inertia: …)` leaves the inertial's position
+      # unset, and MuJoCo compiles an unset one as the body's own `pos` — so the
+      # agent above has its centre of mass at (0, 3.0, 0.2) in the world, and
+      # the scene's `stat.extent`, and the far plane of its depth images, are
+      # computed from that. An MJCF file has no way to say "unset" (the
+      # attribute is required), so the same number is written out: stating the
+      # origin instead halves the far plane and changes every depth image.
+      %{xml: xml} = Scene.build(%{"agents" => agents()})
+
+      assert xml =~
+               ~s(<inertial pos="0.0 1.5 0.1" quat="1.0 0.0 0.0 0.0" mass="1" diaginertia="1 1 1"/>)
+    end
   end
 
   describe "the field of view" do
