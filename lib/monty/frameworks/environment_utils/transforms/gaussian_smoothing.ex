@@ -121,6 +121,18 @@ defmodule Monty.Frameworks.EnvironmentUtils.Transforms.GaussianSmoothing do
     end)
   end
 
+  @doc """
+  The picture as the filter sees it: the outermost row and column repeated.
+
+  Monty's `get_padded_img(img, pad_type: "edge")`, which is the padding its own
+  `call` uses and the reason a smoothed picture keeps its size. Its other
+  `pad_type`, `"empty"`, pads with NaN for the renormalising mode of `conv2d` —
+  a method the transform it belongs to never calls, so this port has no NaN mode
+  and no `conv2d`: a caller that does not exist is a mode that cannot be checked.
+  """
+  @spec padded([[number()]], pos_integer()) :: [[number()]]
+  def padded(rows, kernel_width), do: pad_edges(rows, div(kernel_width, 2))
+
   # `mode="edge"`: the outermost row or column repeated, so the image keeps its
   # size when the convolution only keeps complete windows.
   defp pad_edges(rows, 0), do: rows
