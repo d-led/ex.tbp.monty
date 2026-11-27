@@ -41,6 +41,10 @@ defmodule Monty.Studio.Cad.Generate do
   # What a generated set is called, in the sets root.
   @set "brought"
 
+  @doc "The folder a set's CAD experiments sit in, which is part of their name."
+  @spec folder() :: String.t()
+  def folder, do: @folder
+
   @typedoc """
   The experiment a part became, and the files it was written as.
 

@@ -27,6 +27,7 @@ defmodule Monty.Prerequisites.Build do
   alias ExTbpMonty.Objaverse.Import
   alias Monty.Config.Source
   alias Monty.Studio
+  alias Monty.Studio.Cad.Generate
   alias Monty.Studio.Cad.Preparation
 
   # The corpus manifests this application ships, one per object set, under the
@@ -147,26 +148,55 @@ defmodule Monty.Prerequisites.Build do
     end
   end
 
-  # The experiment says which part it steps and which memory it loads, and every
-  # part it names is a memory this build writes. That is what lets several
-  # recognition experiments run against memories of several parts.
+  # Every CAD experiment this machine can teach, from every CAD set it has: the
+  # sets the application ships and the ones a person generated
+  # (`Monty.Studio.Cad.Generate`), which live in their own root beside them.
+  # Each set's `conf` is a config root, so an experiment is opened through its
+  # own set first and the shipped tree behind it — the overlay every config is
+  # read with.
   #
   # A CAD experiment with nothing to teach — no `model_name_or_path`, a part this
   # application does not carry — is skipped rather than failed: the click makes
   # what it can, and the page's Checks are where a broken config is reported.
   defp cad_plans do
-    Path.wildcard(Path.join([extra_root(), "sets", "cad", "conf", "experiment", "cad", "*.yaml"]))
-    |> Enum.map(&"cad/#{Path.basename(&1, ".yaml")}")
-    |> Enum.flat_map(fn experiment ->
-      with {:ok, opened} <- Studio.open(experiment, conf_dir: Source.conf_dirs()),
-           {:ok, plan} <- Preparation.plan(opened.setup),
-           false <- Preparation.trained?(plan) do
-        [plan]
-      else
-        _nothing_to_teach -> []
-      end
-    end)
+    roots = cad_set_roots() ++ Source.conf_dirs()
+
+    roots
+    |> cad_experiment_names()
+    |> Enum.flat_map(&plan_for(roots, &1))
     |> Enum.uniq_by(& &1.memory)
+  end
+
+  # The `conf` of every set under the roots the sets live in. The shipped tree
+  # answers the same directories through `Source.extra_conf_dirs/0`; a generated
+  # set is the one that does not, and this is where it is picked up.
+  defp cad_set_roots do
+    [Generate.sets_dir(), Path.join(extra_root(), "sets")]
+    |> Enum.uniq()
+    |> Enum.flat_map(&Path.wildcard(Path.join(&1, "*/conf")))
+    |> Enum.filter(&File.dir?/1)
+  end
+
+  defp cad_experiment_names(roots) do
+    folder = Generate.folder()
+
+    for root <- roots,
+        file <- Path.wildcard(Path.join([root, "experiment", folder, "*.yaml"])),
+        uniq: true,
+        do: "#{folder}/#{Path.basename(file, ".yaml")}"
+  end
+
+  # The experiment says which part it steps and which memory it loads, and every
+  # part it names is a memory this build writes. That is what lets several
+  # recognition experiments run against memories of several parts.
+  defp plan_for(roots, experiment) do
+    with {:ok, opened} <- Studio.open(experiment, conf_dir: roots),
+         {:ok, plan} <- Preparation.plan(opened.setup),
+         false <- Preparation.trained?(plan) do
+      [plan]
+    else
+      _nothing_to_teach -> []
+    end
   end
 
   # -- the corpus ----------------------------------------------------------

@@ -22,8 +22,10 @@ defmodule Monty.Prerequisites.BuildTest do
 
   alias Monty.Prerequisites
   alias Monty.Prerequisites.Build
+  alias Monty.Studio.Cad.Generate
   alias Monty.Studio.Cad.Preparation
   alias Monty.Test.PrerequisiteRoots
+  alias Monty.Test.Tmp
 
   setup do
     root = Path.join(System.tmp_dir!(), "build-#{System.unique_integer([:positive])}")
@@ -125,7 +127,7 @@ defmodule Monty.Prerequisites.BuildTest do
       assert message =~ "blend"
     end
 
-    test "every memory the CAD configs load is one this build promises" do
+    test "every memory the build promises is one it plans" do
       promised =
         "cad_part_memories"
         |> Prerequisites.get()
@@ -134,7 +136,11 @@ defmodule Monty.Prerequisites.BuildTest do
 
       planned = Enum.map(Build.plans(), &memory_name/1)
 
-      assert Enum.sort(planned) == Enum.sort(promised)
+      # A manifest names what it promises; a machine may hold more than one set,
+      # and a part a person brought is planned without being promised — that is
+      # the next describe. What must never happen is a promise the click does not
+      # keep.
+      assert promised -- planned == []
     end
 
     # `cad/plate_learned_eval` loads the library `cad/plate_pretrain` wrote. That
@@ -147,6 +153,26 @@ defmodule Monty.Prerequisites.BuildTest do
 
       assert "cad_plate_pretrain" not in planned
       assert "plate_part" in planned
+    end
+  end
+
+  describe "a part a person brought" do
+    setup do
+      data = Tmp.dir("build-brought")
+      Tmp.system_env("MONTY_DATA", data)
+      Tmp.app_env(:monty_libraries_dir, Path.join(data, "libraries"))
+
+      {:ok, sets: Tmp.env_dir("build-brought-sets", :cad_sets_dir)}
+    end
+
+    test "is a plan the click teaches beside the shipped ones", %{sets: sets} do
+      assert {:ok, _generated} = Generate.generate("solidcraft-plate", sets: sets)
+
+      memories = Build.plans() |> Enum.map(&memory_name/1)
+
+      assert "solidcraft-plate_part" in memories
+      assert "plate_part" in memories
+      assert "blend_part" in memories
     end
   end
 
