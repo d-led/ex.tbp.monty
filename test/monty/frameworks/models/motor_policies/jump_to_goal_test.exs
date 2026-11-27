@@ -219,12 +219,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
 
         # Forward is the body's own −z, which the jump lines up with the goal's
         # gaze (Monty's `-rotation.as_matrix()[:, 2]`).
-        forward =
-          set_pose.rotation_quat
-          |> Rotation.from_quaternion()
-          |> Rotation.apply([0.0, 0.0, -1.0])
-
-        assert_vector(forward, direction)
+        assert_vector(forward_axis(set_pose.rotation_quat), direction)
 
         # The head is not turned by a jump.
         assert %SetSensorRotation{rotation_quat: {1.0, 0.0, 0.0, 0.0}} = sensor_rotation
@@ -262,12 +257,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
 
         assert set_pose.location == location
 
-        forward =
-          set_pose.rotation_quat
-          |> Rotation.from_quaternion()
-          |> Rotation.apply([0.0, 0.0, -1.0])
-
-        assert_vector(forward, direction)
+        assert_vector(forward_axis(set_pose.rotation_quat), direction)
         assert %SetSensorRotation{rotation_quat: {1.0, 0.0, 0.0, 0.0}} = set_sensor
       end
     end
@@ -303,10 +293,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
   end
 
   defp state_with(position, rotation, sensor_rotation) do
+    # Both sensors turned the same way: a jump records one head rotation to put
+    # back, and this port refuses a state where two sensors disagree.
     %{
       @agent => %AgentState{
         sensors: %{
-          "patch" => %SensorState{position: [0.0, 0.0, 0.0], rotation: @identity},
+          "patch" => %SensorState{position: [0.0, 0.0, 0.0], rotation: sensor_rotation},
           "view_finder" => %SensorState{position: [0.0, 0.0, 0.0], rotation: sensor_rotation}
         },
         position: position,
@@ -318,6 +310,12 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
   defp turned(degrees) do
     {:ok, rotation} = Rotation.from_euler_degrees([0.0, degrees, 0.0])
     rotation
+  end
+
+  # Where the body's own −z points once turned by `quaternion`.
+  defp forward_axis(quaternion) do
+    {:ok, rotation} = Rotation.from_quaternion(quaternion)
+    Rotation.apply(rotation, [0.0, 0.0, -1.0])
   end
 
   # Monty's `np.testing.assert_allclose(..., atol=DEFAULT_TOLERANCE)`.
