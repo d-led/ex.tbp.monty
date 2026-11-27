@@ -161,6 +161,9 @@ defmodule Monty.Studio.Cad.Generate do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is `path/3`'s, built from the sets root and a part name
+  # `Monty.Studio.Cad.Parts` already checked; nothing here is a request's.
   defp write(path, text) do
     File.mkdir_p!(Path.dirname(path))
 

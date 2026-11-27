@@ -87,6 +87,9 @@ defmodule Monty.Studio.Cad.Parts do
   nobody has to guess which one a memory was taught from.
   """
   @spec install(String.t(), binary()) :: {:ok, t()} | {:error, String.t()}
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path compared here is the one `list/0` found under `Setup.parts_dirs/0`,
+  # not a request's: the name was checked before it was joined onto anything.
   def install(name, bytes) when is_binary(bytes) do
     with :ok <- check_name(name) do
       case Enum.find(list(), &(&1.name == name)) do
@@ -139,6 +142,10 @@ defmodule Monty.Studio.Cad.Parts do
   # The file is written under a name no other install uses and renamed into
   # place, so a part is either complete or absent — never half a file a run
   # could open.
+  #
+  # sobelow_skip ["Traversal.FileModule"]
+  # Both paths are built from `dir/0` and a name this module already checked
+  # against its own pattern, plus a counter of this VM's; neither is a request's.
   defp write(name, bytes) do
     File.mkdir_p!(dir())
     incoming = Path.join(dir(), ".#{name}-#{System.unique_integer([:positive])}.incoming")
