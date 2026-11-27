@@ -69,6 +69,19 @@ defmodule Monty.Studio.Cad.GenerateTest do
       assert opened.groups["monty/motor_system_config"] == "surface_curvature_informed_goal1"
     end
 
+    # The page, the run worker and `mix monty.run` all open by name. A generated
+    # experiment the worker could not open would be a run that fails at its first
+    # step with "its experiment would not open" — after the page showed it ready.
+    test "and opens by name, the way a run does, with no roots named" do
+      sets = Tmp.env_dir("cad-generate-default-sets", :cad_sets_dir)
+      assert {:ok, generated} = Generate.generate("solidcraft-plate")
+
+      assert {:ok, opened} = Studio.open(generated.experiment)
+      assert opened.name == generated.experiment
+
+      assert File.dir?(Path.join([sets, "brought", "conf"]))
+    end
+
     test "writing it again is the same experiment, not a second one", %{sets: sets} do
       assert {:ok, first} = Generate.generate("solidcraft-plate", sets: sets)
       text = File.read!(hd(first.files))

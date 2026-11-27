@@ -49,7 +49,13 @@ defmodule Monty.Studio do
   # A config this node has is composed the way it always was, and its failure is
   # its own: an experiment that exists and does not compose must say that, not
   # fall through to the cluster and come back with "no plugin offers it".
+  # The roots are the studio's (`Monty.Studio.Catalog.conf_dirs/0`) unless the
+  # caller names its own: every page and the run worker open through this one
+  # function, and a generated experiment has to be openable by all of them — the
+  # page that lists it, the worker that steps it, and the task that prints it.
   defp open_ours_or_a_plugins(name, opts) do
+    opts = Keyword.put_new_lazy(opts, :conf_dir, &Monty.Studio.Catalog.conf_dirs/0)
+
     case Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
       {:ok, tree} ->
         {:ok, describe(name, :monty, tree, nil, groups_of_name(name, opts), opts)}

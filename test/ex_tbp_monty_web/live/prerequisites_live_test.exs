@@ -419,6 +419,62 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert view |> element("#download-arrived") |> render() =~ "Unpack"
   end
 
+  # The finding on an experiment page says the memory is missing and links here.
+  # The row used to answer "present" — the release holds a memory, so the
+  # directory is not empty — and started nothing, which left a first-time part
+  # with no click anywhere. Whether a build has work to do is what its plans say.
+  test "a build whose release holds a memory still offers the click its missing one needs",
+       %{conn: conn} do
+    real = Path.join(to_string(:code.priv_dir(:ex_tbp_monty)), "prerequisites.yaml")
+    Tmp.app_env(:prerequisites_manifest, real)
+
+    libraries = Application.fetch_env!(:ex_tbp_monty, :monty_libraries_dir)
+    File.mkdir_p!(Path.join(libraries, "cad_parts_v1"))
+    File.write!(Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]), "a memory that is here")
+
+    assert {:ok, _generated} = Monty.Studio.Cad.Generate.generate("solidcraft-plate")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+    # The shipped manifest is the real one, so the page's measuring task walks
+    # every archive's size — a slower answer than the fixture manifest's.
+    html = render_async(view, 10_000)
+
+    assert html =~ "present"
+    assert has_element?(view, "#build-cad_part_memories")
+  end
+
+  # And the click does what it says. `Saga.start/1` takes the presence path when
+  # the target holds anything, so the row's Make wrote nothing at all — the same
+  # defect the experiment page's own click was fixed for.
+  test "and its click starts the build rather than seeing a present folder",
+       %{conn: conn} do
+    real = Path.join(to_string(:code.priv_dir(:ex_tbp_monty)), "prerequisites.yaml")
+    Tmp.app_env(:prerequisites_manifest, real)
+    Tmp.app_env(:prerequisite_builder, Monty.Test.FakeBuilder)
+    Tmp.app_env(:fake_build_steps, ["the plate"])
+    on_exit(fn -> Application.delete_env(:ex_tbp_monty, :prerequisite_builder) end)
+
+    libraries = Application.fetch_env!(:ex_tbp_monty, :monty_libraries_dir)
+    File.mkdir_p!(Path.join(libraries, "cad_parts_v1"))
+    File.write!(Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]), "a memory that is here")
+
+    Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Prerequisites.Saga.topic())
+
+    assert {:ok, view, _html} = live(conn, ~p"/prerequisites")
+    render_async(view, 10_000)
+
+    view |> element("#build-cad_part_memories") |> render_click()
+
+    assert_receive {:download, %{id: "cad_part_memories", status: :building}}, 2_000
+
+    on_exit(fn ->
+      case Monty.Prerequisites.Saga.lookup("cad_part_memories") do
+        nil -> :ok
+        server -> Monty.Prerequisites.Saga.cancel(server)
+      end
+    end)
+  end
+
   # A part a person brings is planned by the same click and cannot be promised by
   # the manifest, which is written before the part exists. The row names it, or
   # the CAD page's sentence — "the row teaches <part>_part" — is about a page that

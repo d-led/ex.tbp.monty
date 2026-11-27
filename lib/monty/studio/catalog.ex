@@ -13,6 +13,7 @@ defmodule Monty.Studio.Catalog do
 
   alias ExTbpMonty.Cluster.Nodes
   alias Monty.Config.Source
+  alias Monty.Studio.Cad.Generate
 
   # The groups that shape *what runs*: the model's modules and the corpus it is
   # trained on. Monty's `env_interface`, `positioning_procedures` and
@@ -78,11 +79,12 @@ defmodule Monty.Studio.Catalog do
   @spec conf_dirs() :: [Path.t()]
   def conf_dirs, do: Source.conf_dirs() ++ generated()
 
-  # A generated set is written to the data folder (`Monty.Studio.Cad.Generate`),
-  # so this asks the data root rather than listing the source tree.
+  # Where a generated set is written is `Monty.Studio.Cad.Generate`'s answer — the
+  # data root, or whichever directory a deployment pointed `:cad_sets_dir` at —
+  # so this asks that module rather than growing a second opinion about it.
   defp generated do
-    Monty.Paths.data()
-    |> Path.join("sets/*/conf")
+    Generate.sets_dir()
+    |> Path.join("*/conf")
     |> Path.wildcard()
     |> Enum.filter(&File.dir?/1)
     |> Enum.sort()

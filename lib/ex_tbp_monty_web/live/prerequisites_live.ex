@@ -281,7 +281,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                       @statuses,
                       prerequisite.id,
                       @present[prerequisite.id],
-                      @pending[prerequisite.id]
+                      @pending[prerequisite.id],
+                      also_planned(prerequisite, @planned) != []
                     )
                   }
                   id={"#{if prerequisite[:build], do: "build", else: "download"}-#{prerequisite.id}"}
@@ -492,7 +493,8 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
              socket.assigns.statuses,
              id,
              socket.assigns.present[id],
-             socket.assigns.pending[id]
+             socket.assigns.pending[id],
+             also_planned(prerequisite, planned([prerequisite])) != []
            ),
            do: start(socket, prerequisite),
            else: {:noreply, socket}
@@ -562,8 +564,16 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     end
   end
 
+  # A build is started by force, always: its target holds a memory as soon as the
+  # first part is taught, and a person arrives here because a *later* one is
+  # missing — the presence path would answer "done" and write nothing, which is
+  # the same defect the experiment page's own click was fixed for. The build
+  # skips every memory whose note matches, so forcing it costs a walk of the
+  # notes, not a second teaching.
   defp start(socket, prerequisite) do
-    case Saga.start(prerequisite) do
+    started = if prerequisite[:build], do: Saga.start(prerequisite, force: true), else: Saga.start(prerequisite)
+
+    case started do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, start_error(reason))}
 
@@ -621,9 +631,14 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # it is not here, or its memories were never read. The second is the state a
   # restored volume is in, and the one a reader with a run to start cannot see
   # from the badge alone.
-  defp downloadable?(statuses, id, present?, pending?) do
+  # `writes?` is a build's own answer to "is there anything to do": its release
+  # directory holding a memory is not the question the reader arrived with — the
+  # memory *they* need may be the one that is not there — and the row said
+  # "present" and started nothing, which left a first-time part with no click
+  # anywhere. A download has no plans, so it answers false.
+  defp downloadable?(statuses, id, present?, pending?, writes?) do
     status(statuses, id) not in [:downloading, :building, :extracting, :exporting, :done] and
-      (not present? or pending?)
+      (not present? or pending? or writes?)
   end
 
   # An archive's memories are read out of it after it lands, and `provides` is
