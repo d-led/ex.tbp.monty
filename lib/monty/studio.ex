@@ -52,7 +52,7 @@ defmodule Monty.Studio do
   defp open_ours_or_a_plugins(name, opts) do
     case Monty.Config.Composer.compose(name, Keyword.take(opts, [:conf_dir])) do
       {:ok, tree} ->
-        {:ok, describe(name, :monty, tree, nil, groups_of_name(name), opts)}
+        {:ok, describe(name, :monty, tree, nil, groups_of_name(name, opts), opts)}
 
       {:error, why} ->
         if Monty.Studio.Catalog.experiment(name),
@@ -124,8 +124,8 @@ defmodule Monty.Studio do
     end
   end
 
-  defp groups_of_name(name) do
-    case Monty.Studio.Catalog.experiment(name) do
+  defp groups_of_name(name, opts) do
+    case Monty.Studio.Catalog.experiment(name, Keyword.take(opts, [:conf_dir])) do
       nil -> %{}
       experiment -> experiment.groups
     end

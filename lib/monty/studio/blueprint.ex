@@ -363,12 +363,15 @@ defmodule Monty.Studio.Blueprint do
 
   # A base this application wrote is an experiment file of its own: it is read
   # from its path, so adjusting a draft shows the choices that draft made. One
-  # of Monty's own is read by group and name from the conf tree. Both arrive as
-  # the same shape once loaded.
+  # of Monty's own is read by group and name from the tree the studio composes
+  # from — our sets first, Monty's mirror behind — because the builder offers an
+  # experiment of ours as a starting point, and reading only the mirror turned
+  # that choice into the default template without saying so. Both arrive as the
+  # same shape once loaded.
   defp load_experiment(_base, path) when is_binary(path), do: Source.load_file(path)
 
   defp load_experiment(base, _no_file),
-    do: Source.load(Source.conf_dir(), "experiment", base)
+    do: Source.load(Source.conf_dirs(), "experiment", base)
 
   # Hydra's `${constants.name}` is how a config reuses a value it gave once, and
   # the constants live in their own group rather than in the experiment file.

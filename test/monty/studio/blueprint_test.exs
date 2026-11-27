@@ -62,7 +62,11 @@ defmodule Monty.Studio.BlueprintTest do
           "tutorial/first_experiment",
           "base_config_10distinctobj_dist_agent",
           "test/run",
-          "randrot_noise_10distinctobj_5lms_dist_agent"
+          "randrot_noise_10distinctobj_5lms_dist_agent",
+          # An experiment of ours, in one of our own sets: the builder offers
+          # these as starting points, so a base has to be read from the tree
+          # the studio composes from and not from Monty's mirror alone.
+          "cad/plate_part_eval"
         ] do
       test "#{name} composes to the same tree" do
         blueprint = Blueprint.from_experiment(unquote(name))
@@ -80,6 +84,17 @@ defmodule Monty.Studio.BlueprintTest do
   end
 
   describe "changing one component" do
+    # The failure this pins was silent: an unreadable base keeps the builder
+    # usable by falling back to a template, so the result composed — as a
+    # different experiment, in a different world, with nothing saying so.
+    test "a base this application defines is read from its own set" do
+      blueprint = Blueprint.from_experiment("cad/plate_part_eval")
+
+      assert blueprint.base == "cad/plate_part_eval"
+      assert {"environment", "cad_plate_objects"} in Blueprint.groups(blueprint)
+      refute Enum.any?(Blueprint.findings(blueprint), &(&1.code == :unknown_base))
+    end
+
     test "a different learning module changes the learning module, not the sensors" do
       blueprint =
         Blueprint.new(%{"name" => "evidence_run"})
