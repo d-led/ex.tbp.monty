@@ -337,3 +337,10 @@ fprof.trace
 # is the backstop for an example that forgets.
 /examples/*/app/target/
 /examples/*/app/gen/
+
+# What the CAD page generates from a part a person brought: configs the studio
+# wrote, not sources. They live beside the shipped sets because that is the
+# root `Monty.Config.Source.extra_conf_dirs/0` already reads — a deployment that
+# cannot write `priv/` points `:cad_sets_dir` at a writable directory instead.
+# Copying one into a set of its own is how it becomes a source.
+/priv/monty_experiments/sets/brought/
