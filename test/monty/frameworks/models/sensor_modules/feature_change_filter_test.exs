@@ -187,4 +187,53 @@ defmodule Monty.Frameworks.Models.SensorModules.FeatureChangeFilterTest do
       refute passed.pass_message
     end
   end
+
+  # Monty's `tests/unit/frameworks/models/sensor_modules_test.py`. Its
+  # `create_percept` takes the two flags a sensor sets; here they are the
+  # percept's own `on_object` and `process_features_in_lm`.
+  describe "Monty's own cases" do
+    # test_first_step_process_features_in_lm_iff_valid
+    test "a first point is offered to a learning module only when the sensor says so" do
+      for valid <- [true, false] do
+        {filter, memory} = FeatureChangeFilter.new(%{"distance" => 0.5})
+
+        {result, _memory} =
+          FeatureChangeFilter.call(
+            filter,
+            percept(
+              on_object: if(valid, do: 1.0, else: 0.0),
+              process_features_in_lm: valid
+            ),
+            memory
+          )
+
+        assert result.process_features_in_lm == valid
+      end
+    end
+
+    # test_later_step_process_features_in_lm_iff_valid_and_changed
+    test "and a later one only when it is offered and it moved" do
+      for valid <- [true, false], changed <- [true, false] do
+        {filter, memory} = FeatureChangeFilter.new(%{"distance" => 0.5})
+
+        {_first, memory} =
+          FeatureChangeFilter.call(
+            filter,
+            percept(on_object: 1.0, process_features_in_lm: true),
+            memory
+          )
+
+        moved = if changed, do: [10.0, 0.0, 0.1], else: [0.0, 0.0, 0.1]
+
+        {result, _memory} =
+          FeatureChangeFilter.call(
+            filter,
+            percept(location: moved, on_object: 1.0, process_features_in_lm: valid),
+            memory
+          )
+
+        assert result.process_features_in_lm == (valid and changed)
+      end
+    end
+  end
 end
