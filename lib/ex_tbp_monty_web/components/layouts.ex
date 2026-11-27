@@ -335,6 +335,12 @@ defmodule ExTbpMontyWeb.Layouts do
           />
           <.sidebar_link id="nav-runs" navigate={~p"/runs"} label="Runs" icon="hero-play-mini" />
           <.sidebar_link
+            id="nav-fly"
+            navigate={~p"/fly"}
+            label="Fly body"
+            icon="hero-bolt-mini"
+          />
+          <.sidebar_link
             id="nav-modules"
             navigate={~p"/modules"}
             label="Modules"

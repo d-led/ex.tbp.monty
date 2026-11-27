@@ -4,6 +4,8 @@ defmodule Monty.Simulators.Flygym.WorldTest do
   use ExUnit.Case, async: false
 
   alias Monty.Frameworks.Actions.OrientHorizontal
+  alias Monty.SensorModules.SensorModule.{Payload, TransformContext}
+  alias Monty.SensorModules.Transforms.Ommatidia
   alias Monty.Simulators.Flygym.World
 
   # The body is FlyGym in a MuJoCo this application's interpreter cannot hold, so
@@ -35,6 +37,19 @@ defmodule Monty.Simulators.Flygym.WorldTest do
       left_distance: 0.0,
       forward_distance: forward_metres
     }
+  end
+
+  # What a sensor module does with the body's observation: one transform, and the
+  # percept it makes. A sensor is handed its own agent's observations — a world
+  # reports per agent and per sensor — and the body's own pose is the context.
+  defp percept(observations, proprioceptive_state) do
+    context = %TransformContext{agent_state: agent_state(proprioceptive_state)}
+
+    {payload, _transform} =
+      Ommatidia.new()
+      |> Ommatidia.call(context, %Payload{observation: Map.fetch!(observations, @agent)})
+
+    payload.percept
   end
 
   describe "a stride" do
@@ -76,6 +91,20 @@ defmodule Monty.Simulators.Flygym.WorldTest do
         assert eye["what"] == "ommatidia"
         assert length(eye["ommatidia"]) == 721
       end
+
+      World.stop(body)
+    end
+
+    test "become a percept a learning module can store, seen from where the fly stands" do
+      body = start_body()
+
+      {observations, state, body} = World.step(body, [orient(0.0, 0.002)])
+      percept = percept(observations, state)
+
+      assert length(percept.non_morphological_features["ommatidia"]) == 2 * 721 * 2
+      assert percept.location == position(state)
+      assert percept.morphological_features["pose_fully_defined"] == true
+      assert percept.semantic_id == 0
 
       World.stop(body)
     end

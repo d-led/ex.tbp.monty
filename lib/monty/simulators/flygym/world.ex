@@ -132,6 +132,7 @@ defmodule Monty.Simulators.Flygym.World do
 
   @impl true
   @spec stop(t()) :: :ok
+  def stop(nil), do: :ok
   def stop(%__MODULE__{port: nil}), do: :ok
 
   def stop(%__MODULE__{port: port}) do

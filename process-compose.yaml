@@ -156,6 +156,12 @@ processes:
       # own (`ExTbpMonty.Cluster.Capabilities`): uncomment on one side only, and
       # Settings → Nodes says what each one can do, and who can do what.
       # - "MONTY_CAPABILITIES=gpu,world:mujoco"
+      # A fly's body, if this machine has an interpreter with FlyGym in it
+      # (`/fly` says how to make one; it cannot be the studio's own, because
+      # FlyGym installs MuJoCo 3.16 and this application is pinned to 4.0.1).
+      # Uncommented with a path that does not exist, the fly page refuses the
+      # body with a sentence rather than starting one that cannot step.
+      # - "FLYGYM_PYTHON=/Users/you/.monty-fly/bin/python"
       # A build tree of this node's own. Both nodes used `_build/dev` and took
       # turns over its lock, which is where the 26-second `GET /` came from and
       # why the probe read a serving node as a sick one: a request that triggers a

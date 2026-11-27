@@ -3007,3 +3007,42 @@ surface (`curvature = 0`) the port's `custom_distance` is the euclidean distance
 so a distant agent's numbers agree while its percept is flat. They stop agreeing
 as soon as a channel carries an orientation matrix against curved stored poses,
 and the object-pose-evidence path is not exercised at all.
+
+## 2.51 A fly's eye is a percept of this port's own making
+
+Monty has one sensor module, `CameraSM`, and it reads a patch of RGBA plus a
+depth image from a scene Monty rendered
+(`frameworks/models/sensor_modules.py::CameraSM`). A fly has neither: its eye is
+721 ommatidia per side, each reading one of two photoreceptor types (yellow and
+pale, with a zero in the other column), which is what
+`Monty.Simulators.Flygym.World` hands over as the body's observation.
+
+`Monty.SensorModules.Transforms.Ommatidia` turns that into a percept a learning
+module can store. **Nothing in it is Monty's**, and Monty's tests are no evidence
+for it. What it decided, and why:
+
+- **The features are the eye, flattened.** One `"ommatidia"` feature holding every
+  reading of every eye in the body's order. It is a high-dimensional view, not a
+  patch of pixels, and a graph stores it as a node's feature — which is what a
+  view-based distant agent does with what it sees.
+- **The location is the body's own position.** A compound eye has no depth, so
+  the only place a view is *from* is where the fly stands. Putting a surface point
+  somewhere would invent the one thing such an eye cannot measure.
+- **The pose vectors are the body's orientation**, as an `OrientationMatrix` with
+  `pose_fully_defined: true`: a fly knows which way it faces and not how far away
+  anything is, which is exactly what that type says and `SurfacePoseVectors` does
+  not.
+- **`on_object` is 1 and the semantic id is 0.** A fly sees the world and no
+  labels; 0 is Monty's own id for background, and claiming otherwise would put a
+  name on a patch of sky.
+
+The consequence to watch: every fly percept has the same `semantic_id` and the
+same kind of pose, so a learning module working in Monty's surface-agent mode
+will find nothing to distinguish one view from another beyond the feature vector
+itself — which is the point of a view-based body, and a reason not to run a
+surface-agent config against it.
+
+`test/monty/simulators/flygym/world_test.exs` checks the two halves meet: an
+observation from a stepped body becomes a percept whose features are
+`2 × 721 × 2` numbers, whose location is the body's own, and whose pose is fully
+defined.

@@ -287,14 +287,34 @@ for a machine without OpenGL.
 and that each eye reports 721 ommatidia. Without `FLYGYM_PYTHON` the five cases
 skip with the reason, so CI stays green and a machine with the body proves it.
 
-What that leaves is one honest gap and one product decision:
+### The percept, and the page
 
-- **A sensor module that reads ommatidia.** Monty's sensor modules expect an
-  RGBA patch and a depth image; a fly has 1442 numbers per eye and no depth.
-  Reading this body properly means a percept of its own, not a camera's.
-- **The studio offering the body.** A run reaches a world through the
-  experiment's config, and Monty's configs name MuJoCo; offering a fly is a
-  product decision about a config key this port does not invent.
+`Monty.SensorModules.Transforms.Ommatidia` turns the eyes into a percept a
+learning module can store, and `docs/monty-differences.md` §2.51 writes down that
+**none of it is Monty's** — Monty has one sensor module, `CameraSM`, which reads
+an RGBA patch and a depth image a fly has neither of:
+
+- the **features** are the eye, flattened, in the body's own order;
+- the **location** is the body's own position, because a compound eye has no
+  depth to put a surface point at;
+- the **pose** is the body's own orientation, as an `OrientationMatrix` with
+  `pose_fully_defined`, which is what a fly does know;
+- `on_object` is 1 and the semantic id is 0: a fly sees the world and no labels.
+
+`/fly` in the studio is the walk-through: press **Forward 5 mm**, **Turn left 25°**
+or **Turn right 25°** and the body walks; the page draws the path, says where it
+is and what it faces, and draws the first of the eye's numbers. It starts no body
+until a press, and stops the one it started when you leave.
+
+The page's other state is the one every machine starts in: **no interpreter with
+FlyGym named**, with the reason and the three commands that fix it. The running
+studio needs `FLYGYM_PYTHON` in its own environment — `process-compose.yaml`
+carries the line, commented, beside the node's other settings — so the body is one
+uncomment and one restart away rather than a promise.
+
+What is left: a config that names this world, so a _run_ uses the body rather than
+the page. That is a product decision about a config key Monty's own YAML does not
+carry, and it is written down as one rather than invented here.
 
 ## Starting it yourself
 
