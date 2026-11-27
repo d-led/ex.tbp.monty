@@ -15,12 +15,13 @@ defmodule Monty.Simulators.ExMujoco.SimulatorTest do
     remove objects from a scene and add them back. A scene here is built once
     from a config, so nothing removes an object from it; "the scene without that
     object" is the same case as "a scene built without it".
-  - `test_agent_that_does_not_understand_an_action`, its `_raises` sibling and
-    `test_agent_action_with_attribute_error` drive `actuate` on a live world with
-    a mock agent; `test_renderer_for_res_returns_different_renderers` and
-    `test_renderer_for_res_returns_same_renderer` need a GL context. Both groups
-    are the compiled world's `Monty.Simulators.ExMujoco.World` and `Simulator`,
-    and are not driven from this file yet.
+
+  Monty's action cases drive `sim.step([action])` on a world built from mock
+  agent classes; this port's actions are `Agent.act/3` — the same dispatch, with
+  Monty's `raise_actuate_missing` as its third argument — so the cases drive that
+  and say so. Monty's renderer cases ask a simulator for a renderer per
+  resolution; here the renderers are made once, for the sizes its sensors ask
+  for, and a case reads that map.
 
   Monty's refusals are classes (`UnknownObjectType`, `MissingObjectTexture`, …).
   This port raises `ArgumentError` with a message that names the object or the
@@ -29,7 +30,7 @@ defmodule Monty.Simulators.ExMujoco.SimulatorTest do
   """
   use ExUnit.Case, async: true
 
-  alias Monty.Simulators.ExMujoco.Scene
+  alias Monty.Simulators.ExMujoco.{Agent, Scene, Simulator}
 
   # Monty's own `tests/unit/resources/test_custom_objects`: a reference pose of
   # `[1, 1, 1]` turned a quarter turn about x, and the same pose with a scale of
@@ -256,6 +257,76 @@ defmodule Monty.Simulators.ExMujoco.SimulatorTest do
     end
   end
 
+  describe "an agent and an action it does not understand" do
+    # test_agent_that_does_not_understand_an_action
+    test "is left exactly where it was when the world is not asked to raise" do
+      agent = agent("SurfaceAgent")
+
+      assert Agent.act(agent, %{"action" => "look_up", "rotation_degrees" => 5.0}, false) ==
+               agent
+    end
+
+    # test_agent_that_does_not_understand_an_action_raises
+    test "is refused by name when the world is" do
+      error =
+        assert_raise RuntimeError, fn ->
+          Agent.act(
+            agent("SurfaceAgent"),
+            %{"action" => "look_up", "rotation_degrees" => 5.0},
+            true
+          )
+        end
+
+      # Monty's `ActuateMethodMissing` says which class and which method.
+      assert error.message == "SurfaceAgent does not understand 'actuate_look_up'"
+    end
+
+    # test_agent_action_with_attribute_error
+    test "an error raised inside an action reaches the caller" do
+      # Monty's mock's `actuate_look_up` raises `AttributeError` and the case
+      # wants it to arrive rather than be reported as an action the agent does
+      # not understand. Here it is the payload that fails: a distance that is
+      # not a number is arithmetic on a string.
+      assert_raise ArithmeticError, fn ->
+        Agent.act(
+          agent("SurfaceAgent"),
+          %{"action" => "move_forward", "distance" => "not a number"},
+          false
+        )
+      end
+    end
+  end
+
+  describe "a renderer for a resolution" do
+    # test_renderer_for_res_returns_different_renderers: Monty draws the two
+    # sizes with Hypothesis, so these are fixed sizes — the port's generators are
+    # seeded fixtures — and one sensor per size, because that is what builds them.
+    test "is one per size, and each has the size it was made for" do
+      simulator =
+        Simulator.start(%{
+          "agents" => [agent_with(%{"a" => sensor(64, 64), "b" => sensor(32, 48)})]
+        })
+
+      sizes =
+        simulator.renderers
+        |> Map.values()
+        |> Enum.map(&ExMujoco.Renderer.size/1)
+        |> Enum.sort()
+
+      assert sizes == [{32, 48}, {64, 64}]
+    end
+
+    # test_renderer_for_res_returns_same_renderer
+    test "is shared by two sensors of the same size, because it uploads the model's meshes" do
+      simulator =
+        Simulator.start(%{
+          "agents" => [agent_with(%{"a" => sensor(64, 64), "b" => sensor(64, 64)})]
+        })
+
+      assert map_size(simulator.renderers) == 1
+    end
+  end
+
   # Objects as the scene's `"objects"` list takes them: a name and nothing else.
   defp named(names), do: Enum.map(names, &%{"name" => &1})
 
@@ -273,4 +344,40 @@ defmodule Monty.Simulators.ExMujoco.SimulatorTest do
 
   # A float as the scene writes it: the shortest form that reads back the same.
   defp number(value) when is_float(value), do: :erlang.float_to_binary(value, [:short])
+
+  # An agent as `Simulator` builds one, without a model underneath: `Agent.act/3`
+  # reads its class, its place and its head, and nothing else.
+  defp agent(class) do
+    %Agent{
+      id: "agent_id_0",
+      class: class,
+      sensors: %{},
+      free: 0,
+      pitch: 7,
+      position: [0.0, 0.0, 0.0],
+      rotation: {1.0, 0.0, 0.0, 0.0}
+    }
+  end
+
+  # An agent as a spec states one, with the sensors whose sizes the renderers are
+  # made for.
+  defp agent_with(sensors) do
+    %{
+      "agent_id" => "agent_id_0",
+      "class" => "SurfaceAgent",
+      "position" => [0.0, 1.5, 0.1],
+      "rotation" => [1.0, 0.0, 0.0, 0.0],
+      "sensor_configs" => sensors
+    }
+  end
+
+  defp sensor(width, height) do
+    %{
+      "width" => width,
+      "height" => height,
+      "zoom" => 1.0,
+      "position" => [0.0, 0.0, 0.0],
+      "rotation" => [1.0, 0.0, 0.0, 0.0]
+    }
+  end
 end
