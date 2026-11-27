@@ -796,6 +796,24 @@ defmodule Monty.Studio.SetupTest do
       # nothing to say.
       refute :goal_generator_not_ported in Enum.map(setup_from(@base).findings, & &1.code)
     end
+
+    test "names the policy nobody offers, and the page where the hosts are" do
+      # A node told to drive with another node's policy (`MONTY_REMOTE_POLICY`)
+      # refuses to start when no host serves it — the answer `RemotePolicy`
+      # composes. The page has to say it before a run is pressed, because the
+      # refusal is a raise and a reader who met it there got a stack trace.
+      why =
+        "no node in this cluster says it hosts plugins, so \"flyverse_plugin\" cannot " <>
+          "be reached: the node that offers it is not up, or not joined (`MONTY_SEEDS`)"
+
+      setup = Setup.new(@base, remote_policy: {:error, why})
+      finding = Enum.find(setup.findings, &(&1.code == :remote_policy_unreachable))
+
+      assert finding.level == :error
+      assert finding.message == why
+      assert finding.where == "motor_system"
+      assert finding.link == %{label: "See this cluster's nodes", href: "/settings"}
+    end
   end
 
   describe "the world a run steps" do

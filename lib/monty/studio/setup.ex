@@ -2897,9 +2897,28 @@ defmodule Monty.Studio.Setup do
       attention_findings(setup) ++
       connectivity_findings(setup, monty_config) ++
       wiring_findings(setup) ++
+      remote_policy_findings(setup) ++
       memory_findings(setup) ++
       settings_findings(config)
   end
+
+  # A node told to use a policy nobody offers (`MONTY_REMOTE_POLICY`) refuses to
+  # start, which is right — but `motor_spec/1` says so by raising, and a page
+  # that only found out by dying left a person with a stack trace where the
+  # sentence already existed. `RemotePolicy` composes that sentence, including
+  # the case where a host offers the name and cannot be built, so the finding
+  # repeats it word for word and adds the one click that answers "and then?":
+  # the nodes, where the host that should have offered it is or is not.
+  defp remote_policy_findings(%__MODULE__{remote_policy: {:error, why}}) do
+    [
+      %Finding{
+        Finding.new(:error, :remote_policy_unreachable, why, "motor_system")
+        | link: %{label: "See this cluster's nodes", href: "/settings"}
+      }
+    ]
+  end
+
+  defp remote_policy_findings(%__MODULE__{}), do: []
 
   # A supervised experiment states the object and pose it was given, and it
   # reads them off the world's `primary_target`. The stand-in scene renders one
