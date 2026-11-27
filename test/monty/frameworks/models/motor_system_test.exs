@@ -8,6 +8,25 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
   alias Monty.Frameworks.Models.MotorPolicySelectors.SinglePolicySelector
   alias Monty.Frameworks.Models.MotorSystem
 
+  defmodule RecordingSelector do
+    @moduledoc false
+    @behaviour Monty.Frameworks.Models.MotorPolicySelectors.MotorPolicySelector
+
+    defstruct state: %{}
+
+    @impl true
+    def call(_selector, _ctx, _observations, _state, _percept, _goal), do: raise("not used here")
+
+    @impl true
+    def reset(%__MODULE__{} = selector) do
+      send(self(), {:selector, :reset})
+      selector
+    end
+
+    @impl true
+    def state_dict(%__MODULE__{state: state}), do: state
+  end
+
   # Actions are whatever a policy says they are; the vocabulary that an
   # environment understands is `Monty.Frameworks.Actions`, which is the next
   # file of the port. A map is what the runtime already passes around.
@@ -148,6 +167,27 @@ defmodule Monty.Frameworks.Models.MotorSystemTest do
 
       assert motor_system.telemetry.pc_heading == []
       assert motor_system.telemetry.avoidance_heading == []
+    end
+  end
+
+  # Monty's `MotorSystemTest`, whose `policy_selector` is a `Mock`. A selector
+  # here is a module, so one that records what it was asked stands in for it:
+  # the question in both cases is what the motor system asks *of* the selector.
+  describe "Monty's own cases" do
+    # test_reset_calls_reset_on_policy_selector
+    test "a reset asks the selector to reset" do
+      selector = %RecordingSelector{}
+
+      MotorSystem.reset(MotorSystem.new(selector))
+
+      assert_received {:selector, :reset}
+    end
+
+    # test_state_dict_returns_state_dict_of_policy
+    test "and the motor system's state is whatever the selector wrote down" do
+      selector = %RecordingSelector{state: %{episode_step: 7}}
+
+      assert MotorSystem.state_dict(MotorSystem.new(selector)) == %{episode_step: 7}
     end
   end
 end

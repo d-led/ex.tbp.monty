@@ -340,6 +340,46 @@ defmodule Monty.Frameworks.Utils.SensorProcessingTest do
     end
   end
 
+  # Monty's `point_pair_features` cases, whose four numbers are the distance and
+  # then the three angles in this order.
+  describe "Monty's point_pair_features cases" do
+    # test_returns_expected_distance_followed_by_three_angles_in_order
+    test "a three-four-five line is five long, and its angles follow in order" do
+      [length, from_first, from_second, between_normals] =
+        SensorProcessing.point_pair_features(
+          [0.0, 0.0, 0.0],
+          [3.0, 4.0, 0.0],
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0]
+        )
+
+      assert_in_delta length, 5.0, 1.0e-6
+      assert_in_delta from_first, :math.acos(3 / 5), 1.0e-6
+      assert_in_delta from_second, :math.acos(4 / 5), 1.0e-6
+      assert_in_delta between_normals, :math.pi() / 2, 1.0e-6
+    end
+
+    # test_coincident_points_return_zero_distance_and_zero_displacement_angles
+    test "two points in the same place are no distance and no displacement" do
+      position = [1.0, 2.0, 3.0]
+
+      [length, from_first, from_second, between_normals] =
+        SensorProcessing.point_pair_features(
+          position,
+          position,
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0]
+        )
+
+      # A line of no length makes no angle with anything; the two normals still
+      # have theirs.
+      assert_in_delta length, 0.0, 1.0e-6
+      assert_in_delta from_first, 0.0, 1.0e-6
+      assert_in_delta from_second, 0.0, 1.0e-6
+      assert_in_delta between_normals, :math.pi() / 2, 1.0e-6
+    end
+  end
+
   # -- how far along a curved surface a step really went ---------------------
   #
   # The cases below translate Monty's `ComputeArcFromTangentProjectionTest` and

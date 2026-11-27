@@ -143,4 +143,38 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.FeatureEvidence.Scorer.Defaul
              ) == [nil]
     end
   end
+
+  # Monty's `DefaultFeatureEvidenceScorerTest`, whose cases are a selector that
+  # says yes or no and a calculator that answers ones. Here the selector is the
+  # memory's own `features_to_use` and the calculator a real one, so each case
+  # asks the same question: what a channel scores when the match never reads it,
+  # and what the increment does to it when the match does.
+  describe "Monty's own cases" do
+    # test_returns_all_zeros_when_input_channel_is_not_used_for_matching
+    test "a channel the match never reads scores zero at every node" do
+      for values_at_nodes <- [[0.2], [0.2, 0.6, 0.9]] do
+        built = scorer(memory(values_at_nodes), feature_weights: %{})
+
+        assert values(DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{})) ==
+                 List.duplicate(0.0, length(values_at_nodes))
+      end
+    end
+
+    # test_returns_feature_evidence_multiplied_by_feature_evidence_increment_when_input_channel_is_used_for_matching
+    test "and the increment multiplies what a matched channel scores" do
+      # Monty's calculator answers ones, so what is left is the increment.
+      for increment <- [0.5, 1, 3] do
+        built = scorer(memory([0.2]), increment: increment)
+
+        assert [score] =
+                 values(
+                   DefaultFeatureEvidenceScorer.evidence(built, "mug", "patch", %{
+                     "principal_curvatures" => [0.2]
+                   })
+                 )
+
+        assert_in_delta score, 1.0 * increment, 1.0e-9
+      end
+    end
+  end
 end
