@@ -73,6 +73,24 @@ defmodule Monty.SensorModules.SensorModuleTest do
     end
   end
 
+  # A transform that records the context and the payload it was given, and
+  # answers the same payload: Monty's `MagicMock` with a `return_value` of its
+  # argument.
+  defmodule Passes do
+    @moduledoc false
+    @behaviour Monty.SensorModules.SensorModule.Transform
+
+    defstruct [:name]
+
+    def new(name), do: %__MODULE__{name: name}
+
+    @impl true
+    def call(%__MODULE__{name: name}, ctx, %Payload{} = payload) do
+      send(self(), {:passed, name, ctx, payload})
+      {payload, %__MODULE__{name: name}}
+    end
+  end
+
   describe "a sensor whose pipeline is empty" do
     test "answers no percept at all" do
       # Monty's view finder: a camera that measures the scene for the motor
@@ -201,4 +219,167 @@ defmodule Monty.SensorModules.SensorModuleTest do
   defp ctx, do: Context.new(0)
 
   defp observation, do: %{"depth" => [[0.1]]}
+
+  # -- Monty's own cases ---------------------------------------------------
+
+  # Monty's `tests/unit/sensor_modules/sensor_module_test.py`. Its cases assert
+  # on `MagicMock` call arguments and on `sentinel`s; here two recording
+  # transforms stand in — one that passes a payload on untouched, one that
+  # answers a percept — and a case asserts the same three things: the context a
+  # transform is given, that the next transform receives exactly what the last
+  # answered, and what the module reports afterwards.
+  describe "Monty's own cases" do
+    # test_step_no_transforms_returns_none
+    test "an empty pipeline answers no percept" do
+      sensor = SensorModule.new("test", "test", [])
+
+      assert {nil, _sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+    end
+
+    # test_step_no_transforms_prepares_empty_goals_list_for_propose_goals
+    test "and proposes no goals" do
+      sensor = SensorModule.new("test", "test", [])
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert {[], _sensor} = SensorModule.propose_goals(sensor)
+    end
+
+    # test_step_no_transforms_prepares_empty_region_for_propose_region
+    test "and attends to nothing" do
+      sensor = SensorModule.new("test", "test", [])
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert {region, _sensor} = SensorModule.propose_region(sensor)
+      assert region == AttentionRegion.empty()
+    end
+
+    # test_step_no_transforms_prepares_empty_telemetry_for_payload
+    test "and has nothing written down" do
+      sensor = SensorModule.new("test", "test", [])
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert SensorModule.state_dict(sensor) == %{}
+    end
+
+    # test_step_invokes_transforms_in_order
+    test "each transform is given the context, and the payload the one before it answered" do
+      sensor =
+        SensorModule.new("test", "test", [
+          {Passes, Passes.new(:first)},
+          {Passes, Passes.new(:second)}
+        ])
+
+      agent = agent_at([0.0, 0.0, 0.0], Rotation.identity(), [0.0, 0.0, 0.0])
+      sensor = SensorModule.update_state(agent, sensor)
+
+      {_percept, _sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert_receive {:passed, :first, first_ctx, first_payload}
+      assert_receive {:passed, :second, second_ctx, second_payload}
+
+      assert first_payload.observation == observation()
+      assert first_payload.percept == nil
+      assert first_payload.goals == []
+      assert first_payload.region == nil
+      assert first_payload.telemetry == %{}
+
+      # What the first answered is what the second was given, unchanged.
+      assert second_payload == first_payload
+
+      for given <- [first_ctx, second_ctx] do
+        assert given.agent_state == agent
+        assert given.sensor_state == sensor.sensor_state
+        assert given.motor_only_step == false
+        assert given.suppress_runtime_errors == ctx().suppress_runtime_errors
+        assert given.rng == Context.rng_for(ctx(), "test")
+      end
+    end
+
+    # test_step_returns_last_transforms_payload_percept
+    test "the percept a step answers is the last transform's" do
+      sensor =
+        SensorModule.new("test", "test", [
+          {Passes, Passes.new(:first)},
+          {SendsPercept, SendsPercept.new([1.0, 2.0, 3.0])}
+        ])
+
+      {percept, _sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert percept.location == [1.0, 2.0, 3.0]
+
+      assert_receive {:passed, :first, _ctx, %Payload{observation: observation}}
+      assert observation == observation()
+    end
+
+    # test_step_prepares_last_transforms_payload_goals_for_propose_goals
+    test "the goals it proposes are the last payload's" do
+      sensor = SensorModule.new("test", "test", [{RecordsGoals, RecordsGoals.new()}])
+
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert {[%Goal{} = goal], _sensor} = SensorModule.propose_goals(sensor)
+      assert goal.location == [1.0, 2.0, 3.0]
+    end
+
+    # test_step_prepares_last_transforms_payload_region_for_propose_region
+    test "the region it proposes is the last payload's" do
+      sensor = SensorModule.new("test", "test", [{RecordsGoals, RecordsGoals.new()}])
+
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert {region, _sensor} = SensorModule.propose_region(sensor)
+      assert region == AttentionRegion.empty()
+    end
+
+    # test_step_prepares_last_transforms_payload_telemetry_for_state_dict
+    test "the telemetry it reports is the last payload's" do
+      sensor = SensorModule.new("test", "test", [{RecordsGoals, RecordsGoals.new()}])
+
+      {_percept, sensor} = SensorModule.step(observation(), false, ctx(), sensor)
+
+      assert SensorModule.state_dict(sensor) == %{seen: :a_point}
+    end
+
+    # test_update_state_stores_agent_state_as_is
+    test "the agent's state is kept as the step gave it" do
+      agent = agent_at([1.0, 2.0, 3.0], Rotation.identity(), [0.0, 0.0, 0.0])
+      sensor = SensorModule.update_state(agent, SensorModule.new("test", "test", []))
+
+      assert sensor.agent_state == agent
+    end
+
+    # test_update_state_stores_sensor_state_in_global_reference_frame
+    test "and this sensor's pose is kept in the global frame" do
+      {:ok, turned} = Rotation.from_euler_degrees([10.0, 20.0, 30.0])
+
+      agent =
+        agent_at([1.0, -2.0, 0.5], turned, [0.25, 0.0, -0.1])
+
+      sensor = SensorModule.update_state(agent, SensorModule.new("test", "test", []))
+
+      # The agent's own pose applied to the sensor's, which is Monty's
+      # `agent.position + rotate_vectors(agent.rotation, sensor.position)` and
+      # `agent.rotation * sensor.rotation`.
+      expected_position = add(agent.position, Rotation.apply(turned, [0.25, 0.0, -0.1]))
+      expected_rotation = Rotation.multiply(turned, Rotation.identity())
+
+      for {mine, theirs} <- Enum.zip(sensor.sensor_state.position, expected_position) do
+        assert_in_delta mine, theirs, 1.0e-9
+      end
+
+      assert sensor.sensor_state.rotation == expected_rotation
+    end
+  end
+
+  defp agent_at(position, rotation, sensor_position) do
+    %AgentState{
+      position: position,
+      rotation: rotation,
+      sensors: %{
+        "test" => %SensorState{position: sensor_position, rotation: Rotation.identity()}
+      }
+    }
+  end
+
+  defp add(left, right), do: Enum.zip_with(left, right, &(&1 + &2))
 end
