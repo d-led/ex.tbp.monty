@@ -144,6 +144,30 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
     |> GraphObjectModel.build_model(locations, features, nil, nil)
   end
 
+  # Five nodes a decimetre apart, of which the second and the fourth carry the
+  # colour the observation senses: the graph's two best nodes, known before the
+  # burst runs.
+  defp two_matching_nodes_memory do
+    locations = for index <- 0..4//1, do: [index / 10, 0.0, 0.0]
+
+    model =
+      GraphObjectModel.new("mug")
+      |> GraphObjectModel.build_model(
+        locations,
+        %{
+          "rgba" => [[0.9], [0.2], [0.7], [0.2], [0.5]],
+          "pose_fully_defined" => List.duplicate(true, 5),
+          "pose_vectors" => List.duplicate(@pose, 5)
+        },
+        nil,
+        nil
+      )
+
+    GraphMemory.new(features_to_use: %{"patch" => ["rgba", "pose_fully_defined", "pose_vectors"]})
+    |> GraphMemory.add_graph_to_memory(%{"patch" => model}, "mug")
+    |> GraphMemory.initialize_feature_arrays()
+  end
+
   # One burst step of one object: the hypotheses it proposes, as the updater
   # answers them.
   defp burst(updater, graph_id) do
@@ -927,6 +951,58 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.BurstSampling.BurstSamplingHy
         started_with(starting_updater(), features)
       end
     end
+  end
+
+  # test_sample_new_hypotheses_with_feature_matching
+  # Five nodes, two of which carry the sensed colour. A burst that wants four
+  test "new hypotheses are placed on the nodes whose features match" do
+    # hypotheses takes two a node from the two best — the ones that match.
+    updater =
+      updater_for(two_matching_nodes_memory(), sampling_multiplier: 0.8)
+      |> Map.put(:sampling_burst_steps, 5)
+
+    {_updater, updated, telemetry} =
+      BurstSamplingHypothesesUpdater.update_evidence(
+        updater,
+        Hypotheses.empty(),
+        features(),
+        "mug",
+        0.0
+      )
+
+    added = Enum.take(Hypotheses.locations(updated), -length(telemetry.added_ids))
+
+    assert length(added) == 4
+    assert added |> Enum.uniq() |> Enum.sort() == [[0.1, 0.0, 0.0], [0.3, 0.0, 0.0]]
+  end
+
+  # test_calls_possible_sensed_direction_for_surface_pose_vectors
+  test "a surface pose is sampled around its normal, so a node starts on both sides" do
+    # Monty asserts that `possible_sensed_directions` was called; the directions
+    # it answers with are the observable half of that: the stored frame and the
+    # one turned half a turn about its normal — the same normal, the opposite
+    # curvature direction.
+    {_updater, updated, telemetry} =
+      starting_updater()
+      |> BurstSamplingHypothesesUpdater.update_evidence(
+        Hypotheses.empty(),
+        features(),
+        "mug",
+        0.0
+      )
+
+    poses = Enum.take(Hypotheses.poses(updated), -length(telemetry.added_ids))
+
+    # Four nodes, two poses each: the stored frame and the one turned half a turn
+    # about its normal — the same normal, the opposite curvature direction.
+    assert length(poses) == 8
+    assert [first, second] = Enum.uniq(poses)
+    refute first == second
+
+    # The two poses share exactly one row — the normal — and differ in the
+    # curvature directions, which are the side of the surface they were seen
+    # from.
+    assert Enum.count(first, &(&1 in second)) == 1
   end
 
   # A burst wide enough that the per-node count is never capped by the

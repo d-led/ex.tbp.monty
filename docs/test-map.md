@@ -7,7 +7,7 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-627 of 717 of Monty's unit cases are named here, and
+629 of 717 of Monty's unit cases are named here, and
 65 more the port cannot have are excluded, each with its reason
 below.
 
@@ -31,7 +31,7 @@ below.
 | 12/12 | 0 | `frameworks/environment_utils/transforms_test.py` |
 | 0/4 | 0 | `frameworks/experiments/profile_experiment_mixin_test.py` |
 | 23/28 | 5 | `frameworks/models/buffer_test.py` |
-| 30/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
+| 32/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
 | 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
 | 11/11 | 0 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
 | 5/5 | 0 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
