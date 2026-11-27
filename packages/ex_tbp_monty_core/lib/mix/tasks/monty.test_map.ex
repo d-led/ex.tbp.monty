@@ -40,13 +40,20 @@ defmodule Mix.Tasks.Monty.TestMap do
     {options, _rest} = OptionParser.parse!(arguments, strict: @switches)
 
     port_root = Keyword.get(options, :port_root, File.cwd!())
-    source = Keyword.get(options, :source, Path.join(port_root, "../monty-orig"))
+    checkout = Keyword.get(options, :source, Path.join(port_root, "../monty-orig"))
+
+    # `nil` is "no checkout beside this repository": the committed case table is
+    # the record then, which is what `--check` reads on a runner that has no Monty
+    # to look at. Writing that table (`--refresh`) is the one thing that needs a
+    # real checkout, and it says so.
+    source = if File.dir?(Path.join(checkout, "tests/unit")), do: checkout
 
     monty = TestMap.monty_cases(source)
 
     if monty == %{} do
       Mix.raise(
-        "#{Path.join(source, "tests/unit")} is not there: point --source at a Monty checkout"
+        "#{Path.join(checkout, "tests/unit")} is not there and no case table is committed: " <>
+          "point --source at a Monty checkout, or write the table with --refresh where one is"
       )
     end
 
@@ -62,8 +69,8 @@ defmodule Mix.Tasks.Monty.TestMap do
     coverage = TestMap.coverage(monty, attributions, excluded)
 
     cond do
-      Keyword.get(options, :refresh, false) -> refresh(port_root, source)
-      Keyword.get(options, :check, false) -> check(port_root, coverage)
+      Keyword.get(options, :refresh, false) -> refresh(port_root, checkout)
+      Keyword.get(options, :check, false) -> check(port_root, coverage, source)
       path = Keyword.get(options, :write) -> write(port_root, path, monty, coverage, by_module)
       Keyword.get(options, :missing, false) -> missing(coverage)
       true -> table(monty, coverage)
@@ -89,11 +96,12 @@ defmodule Mix.Tasks.Monty.TestMap do
     end
   end
 
-  defp check(port_root, coverage) do
+  defp check(port_root, coverage, source) do
     # The gate reads every test Monty has (an integration case is a case this
     # port may translate) and only the names a port test *leads* with, so a
     # comment that mentions `test_helper.exs` is not a claim about a case.
-    all = TestMap.all_cases(source(port_root))
+    # `source` is `nil` where the committed table is the record.
+    all = TestMap.all_cases(source)
     led = TestMap.led_cases(port_root)
     unknown = TestMap.unknown_cases(all, led)
 
@@ -222,14 +230,20 @@ defmodule Mix.Tasks.Monty.TestMap do
     end
   end
 
-  defp source(port_root), do: Path.join(port_root, "../monty-orig")
-
   # Writes the snapshot the gate reads when there is no checkout beside this
-  # repository. Deliberate, and diffed like any other file.
-  defp refresh(port_root, source) do
+  # repository. Deliberate, and diffed like any other file. It needs a real
+  # checkout — there is nothing to write down otherwise.
+  defp refresh(port_root, checkout) do
+    if not File.dir?(Path.join(checkout, "tests/unit")) do
+      Mix.raise(
+        "--refresh reads the cases from a Monty checkout, and " <>
+          "#{Path.join(checkout, "tests/unit")} is not there: point --source at one"
+      )
+    end
+
     path = Path.join(port_root, TestMap.snapshot())
     File.mkdir_p!(Path.dirname(path))
-    File.write!(path, TestMap.data_source(source))
+    File.write!(path, TestMap.data_source(checkout))
     Mix.shell().info("#{TestMap.snapshot()}: written")
   end
 
