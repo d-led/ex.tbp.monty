@@ -277,6 +277,19 @@ processes:
       - "MONTY_CLUSTER_SECRET={{.MONTY_CLUSTER_SECRET}}"
       - "MONTY_SEEDS=node1@127.0.0.1,node2@127.0.0.1"
       - "FLYVERSE_PACK=../../tmp/flyverse-pack"
+      # Which channel drives the connectome. Unset is `:depth` — the nearest thing
+      # in each band of the depth image, which is what the studio's own run page
+      # and every measurement before 2026-11-27 used. `rgba` reads the colours the
+      # same sensor recorded and drives each band by how much its light changed,
+      # which is the only thing a photoreceptor can report: a fly has no depth
+      # image. Measured on this Mac, one episode of the ten-object config, seed 42,
+      # `ex_mujoco`: depth 130 steps and `mug` at evidence 119.20, colours 55 steps
+      # and `mug` at 48.58, both `correct`. Uncomment to drive from colours — a
+      # definition cannot carry this (a plugin's experiment names a motor system,
+      # not that system's options), so the host says it once, and
+      # `process-compose project update -f process-compose.yaml` is how a running
+      # supervisor is told.
+      # - "FLYVERSE_SENSOR=rgba"
     # The same question as the other host's, asked of this name: a plugin whose
     # node is gone, or whose application is not running, cannot answer a run's
     # call for a policy.

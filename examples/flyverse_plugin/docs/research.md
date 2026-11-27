@@ -180,6 +180,8 @@ flyverse_plugin.pack` wrote.
   has: the view is cut into as many bands as the plan names drive groups, one rate
   each, so a plan naming a group per sensory column is driven by a column rather
   than by two halves (`Percept.bands/2`, and the four-group case in
-  `policy_test.exs`). The input is still one rate per group and not a spike train,
-  so the dataset's `vnc_sensory` replay — the input a faithful fly would get —
-  cannot be presented yet.
+  `policy_test.exs`). A group can now also be driven by a _recording_:
+  `{:ticks, [[tick, ...], ...]}` is one list of spike times per neuron of the
+  group, so the dataset's `vnc_sensory` replay is copyable in. What is still not
+  here is the derivation — a rendered retina, or the replay mapped from its own
+  neuron order onto a plan's groups.

@@ -86,14 +86,38 @@ shape a retina has and the shape the dataset's sensory inventory is in. The
 decision stays two-sided either way — the wish is the difference of the two
 readouts, because a walk with turns in it has two.
 
-What the network is fed is a **rate**, not a spike train, and the rate is a
-summary of a depth image rather than a photoreceptor's: `1 / depth` of the nearest
-thing in each band, capped at a 10 m horizon. That is the honest boundary of this
-example, and it is why the page above is a check that the seam works rather than a
-claim about a fly — [the study](../../../examples/flyverse_plugin/docs/research.md)
-says what a faithful input would need (the VNC sensory replay the dataset carries,
-which is a spike train and would need the plan's groups to be fed one spike
-train per group rather than one rate).
+**Two ways to drive a group.** `{:rate, hz}` is the Poisson sampler above.
+`{:ticks, [[tick, ...], ...]}` is a **recording**: one list of tick numbers per
+neuron of the group, in absolute ticks of the simulation's clock, which
+`reset/1` sets to zero. That is what the dataset's `vnc_sensory` is — which
+sensory neuron fired when, recorded rather than generated — and it is presented
+by copying it in: a tick the window has not reached yet fires when the window
+reaches it, a tick already behind it does not fire again, and a group of three
+neurons given two lists is refused rather than guessed at.
+
+**Two channels for it.** The default is depth: `1 / depth` of the nearest thing
+in each band, capped at a 10 m horizon. `FLYVERSE_SENSOR=rgba` on the host
+switches it to what a photoreceptor could answer — the luminance of the colours
+the same sensor recorded, and per band the _change_ since the previous step,
+taken as a magnitude because a growing dark shape looms as much as a growing
+light one. Depth is still what "is the patch on the object" is asked of: that is
+geometry, and a band's brightness cannot answer it. Measured on this Mac, one
+episode of this config, seed 42, `ex_mujoco`:
+
+| channel          | steps | verdict   | strongest evidence |
+| ---------------- | ----- | --------- | ------------------ |
+| depth (default)  | 130   | `correct` | 119.20             |
+| colours (`rgba`) | 55    | `correct` | 48.58              |
+
+Both recognised the same mug; the colour run got there in half the steps and
+stopped on less evidence. Neither is "the fly's" answer, and the host setting is
+which one a run uses.
+
+What is still **not** what a fly gets is a spike train _per band from its own
+eyes_: a recording can be presented, and a luminance change per band can be
+computed, but nothing here derives one from the other yet — the dataset's
+`sensory` replay and a rendered fly retina are the two ends, and this example has
+the socket between them.
 
 ## 5. What was wrong when this page was first written
 
@@ -105,6 +129,45 @@ in `init/1` and then sleeps for `config[:timeout]`, whose default is `:infinity`
 has no HTTP to wait for) and never looked again, and a studio restart lost it for
 good. Both hosts now re-dial every five seconds, and the page above is the check
 that they do.
+
+## A fly's body in MuJoCo: what is stopping us
+
+Nothing about **NeuroMechFly** is macOS-only, and nothing about MuJoCo is
+missing on this side. Checked against its own installation page
+([2.1.1](https://neuromechfly.org/2.1.1/installation/)): it is `pip install
+flygym`, MuJoCo arrives through the Python bindings, `flygym[warp]` is a
+GPU backend, and a headless machine switches the renderer to EGL
+(`MUJOCO_GL=egl`). The macOS-only note in
+[the study](../../../examples/flyverse_plugin/docs/research.md) is about
+**flyBrain**, whose engine and world are `#[cfg(target_os = "macos")]` Metal
+kernels over MuJoCo 3.9 — not about FlyGym.
+
+What is stopping us is three things, in the order they bite:
+
+1. **The body speaks Python and the policy speaks Elixir.** FlyGym is a Python
+   package, so a fly body would live in the Python world this application already
+   carries (`world: MuJoCo (in this application)`), not in `ex_mujoco`, which is
+   Rust and cannot load it. The connectome stays where it is — a NIF in the BEAM —
+   and the action crosses once per window, which is the shape the plugin contract
+   already has (a motor policy called once per step). That is a port, not a wall.
+2. **Monty's actions are not joint torques.** `OrientHorizontal` and
+   `OrientVertical` carry a yaw, a pitch and a forward distance, because the body
+   they were written for is a patch agent on a camera. A fly needs its six legs
+   driven — FlyGym's own controllers are CPG, rule-based, hybrid and turning
+   (its tutorials 4a–4d) or muscles (tutorial 6). Bridging the two means writing a
+   controller that takes Monty's action and produces leg targets, which is a small
+   fly controller and not a policy option.
+3. **The connectome we can simulate has no motor side to drive it.** MaleCNS gives
+   neurons and synapses; it does not give the descending-neuron → motor-neuron →
+   muscle mapping that a body needs, and flyverse's own README says the embodied
+   fly "skitters rather than flies", reaches no meals, and takes its main sensory
+   input from a canned `vnc_sensory` replay because the dataset has no ventral
+   nerve cord, no muscles and no donor body state. Driving NeuroMechFly's muscles
+   from that connectome would need a mapping neither dataset ships.
+
+So the next step that _is_ ours is the second one: a Python-world fly body, and a
+controller between Monty's actions and its legs. The input side is already the
+socket a real retina or a real replay plugs into (above).
 
 ## Starting it yourself
 
