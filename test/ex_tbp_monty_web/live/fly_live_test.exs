@@ -14,19 +14,22 @@ defmodule ExTbpMontyWeb.FlyLiveTest do
   import Phoenix.LiveViewTest
 
   alias Monty.Simulators.Flygym.World
+  alias Monty.Test.Tmp
 
   @skip_reason if World.available?(), do: nil, else: World.unavailable_reason()
 
   describe "a node with no fly body" do
     test "says what to set instead of offering presses that cannot work", %{conn: conn} do
-      named = System.get_env("FLYGYM_PYTHON")
-      System.delete_env("FLYGYM_PYTHON")
-      on_exit(fn -> if named, do: System.put_env("FLYGYM_PYTHON", named) end)
+      # A machine that has the body is put in the same place as one that has not:
+      # no interpreter in either place a body is looked for.
+      Tmp.without_env("FLYGYM_PYTHON")
+      Tmp.system_env("MONTY_DATA", Tmp.dir("fly-live-no-body"))
 
       {:ok, _view, html} = live(conn, ~p"/fly")
 
       assert html =~ "no interpreter with the fly body"
       assert html =~ "FLYGYM_PYTHON"
+      assert html =~ "pip install flygym"
       refute html =~ "fly-forward"
     end
   end

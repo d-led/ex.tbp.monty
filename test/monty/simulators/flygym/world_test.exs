@@ -7,6 +7,7 @@ defmodule Monty.Simulators.Flygym.WorldTest do
   alias Monty.SensorModules.SensorModule.{Payload, TransformContext}
   alias Monty.SensorModules.Transforms.Ommatidia
   alias Monty.Simulators.Flygym.World
+  alias Monty.Test.Tmp
 
   # The body is FlyGym in a MuJoCo this application's interpreter cannot hold, so
   # it runs in an interpreter a machine names; one without it runs everything else
@@ -122,12 +123,12 @@ defmodule Monty.Simulators.Flygym.WorldTest do
     end
 
     test "refuses to build a body when no interpreter is named" do
-      named = System.get_env("FLYGYM_PYTHON")
-      System.delete_env("FLYGYM_PYTHON")
+      # Both places a body is looked for, emptied: a machine with one installed
+      # must still be able to ask what happens without it.
+      Tmp.without_env("FLYGYM_PYTHON")
+      Tmp.system_env("MONTY_DATA", Tmp.dir("fly-no-interpreter"))
 
       assert_raise ArgumentError, ~r/FLYGYM_PYTHON/, fn -> World.new() end
-
-      if named, do: System.put_env("FLYGYM_PYTHON", named)
     end
   end
 

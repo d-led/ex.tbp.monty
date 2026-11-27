@@ -306,11 +306,15 @@ or **Turn right 25°** and the body walks; the page draws the path, says where i
 is and what it faces, and draws the first of the eye's numbers. It starts no body
 until a press, and stops the one it started when you leave.
 
-The page's other state is the one every machine starts in: **no interpreter with
-FlyGym named**, with the reason and the three commands that fix it. The running
-studio needs `FLYGYM_PYTHON` in its own environment — `process-compose.yaml`
-carries the line, commented, beside the node's other settings — so the body is one
-uncomment and one restart away rather than a promise.
+The page's other state is the one a machine starts in: **no interpreter with
+FlyGym**, with the reason and the two commands that fix it, printed with this
+machine's own path. The body is looked for in two places, in this order:
+`FLYGYM_PYTHON`, and then `<data dir>/fly/bin/python` — the application's own data
+directory, which is where those commands put one. So a machine is one paste away
+from a body, with nothing in the repository carrying an absolute path and no
+restart needed: the page asks at mount, and the interpreter is found on the next
+reload. `process-compose.yaml` still carries a commented `FLYGYM_PYTHON` beside
+node1's settings, for a machine that wants its interpreter somewhere else.
 
 What is left: a config that names this world, so a _run_ uses the body rather than
 the page. That is a product decision about a config key Monty's own YAML does not

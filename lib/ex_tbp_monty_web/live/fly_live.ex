@@ -43,12 +43,17 @@ defmodule ExTbpMontyWeb.FlyLive do
   # bars is a shape, not a datum.
   @drawn 24
 
+  # The smallest walk the drawing will show: one press of a stride is half a
+  # centimetre, and a dot in the middle would say nothing about where it went.
+  @minimum_span_mm 10.0
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      assign(socket,
        available?: World.available?(),
        reason: World.unavailable_reason(),
+       installed_path: World.installed_path(),
        stride: @stride,
        turn: @turn,
        drawn: @drawn,
@@ -176,13 +181,13 @@ defmodule ExTbpMontyWeb.FlyLive do
                 Nothing yet — press Forward and the path starts here.
               </p>
               <svg :if={@steps != []} viewBox="0 0 300 200" class="mt-2 h-64 w-full">
-                <polyline points={path(@steps)} fill="none" stroke="currentColor" stroke-width="2" />
-                <circle
-                  cx={scale_x(last(@steps).x)}
-                  cy={scale_y(last(@steps).y)}
-                  r="4"
-                  fill="currentColor"
+                <polyline
+                  points={sketch(@steps).points}
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
                 />
+                <circle cx={sketch(@steps).x} cy={sketch(@steps).y} r="4" fill="currentColor" />
               </svg>
               <p :if={@steps != []} class="mt-2 text-sm">
                 {length(@steps)} presses, {metres(last(@steps).x)}, {metres(last(@steps).y)} m from
@@ -221,9 +226,8 @@ defmodule ExTbpMontyWeb.FlyLive do
               <p class="font-semibold">This node has no interpreter with the fly body in it.</p>
               <p class="mt-2 text-sm">{@reason}</p>
               <p class="mt-2 text-sm">Make one and name it, then open this page again:</p>
-              <pre class="mt-2 overflow-x-auto rounded bg-base-300 p-3 text-xs"><code phx-no-curly-interpolation>python3 -m venv ~/.monty-fly
-    ~/.monty-fly/bin/pip install flygym
-    FLYGYM_PYTHON=~/.monty-fly/bin/python   # then start the studio again</code></pre>
+              <pre class="mt-2 overflow-x-auto rounded bg-base-300 p-3 text-xs"><code phx-no-curly-interpolation>python3 -m venv "{Path.dirname(Path.dirname(@installed_path))}"
+    "{@installed_path}" -m pip install flygym</code></pre>
               <p class="mt-2 text-sm opacity-70">
                 The body's interpreter is a separate one on purpose: FlyGym installs MuJoCo 3.16 and
                 this application's own interpreter is pinned to 4.0.1, so the two cannot share one.
@@ -241,13 +245,31 @@ defmodule ExTbpMontyWeb.FlyLive do
   defp readings_list(%{non_morphological_features: %{"ommatidia" => readings}}), do: readings
 
   # The path in the drawing: a body's walk is centimetres, so the box is the
-  # walk's own extent scaled up, and a fly that has not moved sits in the middle.
-  defp path(steps), do: Enum.map_join(steps, " ", &"#{scale_x(&1.x)},#{scale_y(&1.y)}")
+  # walk's own extent scaled to fill it — one scale for both axes, so the shape is
+  # true — and a fly that has barely moved still draws something.
+  defp sketch(steps) do
+    xs = Enum.map(steps, &(&1.x * 1000))
+    ys = Enum.map(steps, &(&1.y * 1000))
+
+    span = max(max(Enum.max(xs) - Enum.min(xs), Enum.max(ys) - Enum.min(ys)), @minimum_span_mm)
+    scale = 140 / span
+    centre_x = (Enum.min(xs) + Enum.max(xs)) / 2
+    centre_y = (Enum.min(ys) + Enum.max(ys)) / 2
+
+    %{
+      points:
+        Enum.map_join(steps, " ", fn step ->
+          "#{draw_x(step, centre_x, scale)},#{draw_y(step, centre_y, scale)}"
+        end),
+      x: draw_x(last(steps), centre_x, scale),
+      y: draw_y(last(steps), centre_y, scale)
+    }
+  end
+
+  defp draw_x(step, centre, scale), do: round(150 + (step.x * 1000 - centre) * scale)
+  defp draw_y(step, centre, scale), do: round(100 - (step.y * 1000 - centre) * scale)
 
   defp last(steps), do: List.last(steps)
-
-  defp scale_x(x), do: 150 + min(max(x * 1000 * 3, -140), 140)
-  defp scale_y(y), do: 100 - min(max(y * 1000 * 3, -90), 90)
 
   defp clamp(value) when is_number(value), do: min(max(value, 0.0), 1.0)
   defp clamp(_value), do: 0.0

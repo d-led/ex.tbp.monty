@@ -69,10 +69,38 @@ defmodule Monty.Simulators.Flygym.World do
         }
 
   @doc """
-  Whether this machine named an interpreter with the fly body in it.
+  Whether this machine has an interpreter with the fly body in it.
   """
   @spec available?() :: boolean()
   def available?, do: interpreter() != nil
+
+  @doc """
+  The interpreter with the body in it, or `nil` when this machine has none.
+
+  Two places, in this order:
+
+    1. `FLYGYM_PYTHON`, which a machine may point at a virtualenv of its own;
+    2. the application's data directory, `fly/bin/python` — where the page's own
+       recipe puts one. That path is the machine's rather than the repository's,
+       which is why it is the second: a checkout carries no absolute path, and a
+       person who has the body gets it without setting anything.
+  """
+  @spec interpreter() :: String.t() | nil
+  def interpreter do
+    System.get_env(@python) || installed_interpreter()
+  end
+
+  @doc """
+  Where this application would find a body, installed by the recipe it prints.
+  """
+  @spec installed_path() :: String.t()
+  def installed_path do
+    venv = Path.join(Monty.Paths.data(), "fly")
+
+    if match?({:win32, _}, :os.type()),
+      do: Path.join([venv, "Scripts", "python.exe"]),
+      else: Path.join([venv, "bin", "python"])
+  end
 
   @doc """
   What to do about it, in words — empty when there is nothing to do.
@@ -82,10 +110,10 @@ defmodule Monty.Simulators.Flygym.World do
     if available?() do
       ""
     else
-      "no interpreter with the fly body has been named: set #{@python} to one that has " <>
-        "`flygym` installed — `examples/flyverse_plugin/scripts/fly_body.py` says how to " <>
-        "make one — and a fly body steps; the studio's own interpreter cannot, because " <>
-        "FlyGym installs MuJoCo 3.16 and this application is pinned to 4.0.1"
+      "no interpreter with the fly body: neither #{@python} nor #{installed_path()} exists. " <>
+        "Make one with the commands on this page, or point #{@python} at a virtualenv that has " <>
+        "`flygym`. The studio's own interpreter cannot hold it, because FlyGym installs MuJoCo " <>
+        "3.16 and this application is pinned to 4.0.1"
     end
   end
 
@@ -170,7 +198,10 @@ defmodule Monty.Simulators.Flygym.World do
     end
   end
 
-  defp interpreter, do: System.get_env(@python)
+  defp installed_interpreter do
+    path = installed_path()
+    if File.exists?(path), do: path, else: nil
+  end
 
   defp interpreter! do
     interpreter() ||
