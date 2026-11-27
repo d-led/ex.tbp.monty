@@ -468,6 +468,25 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSM do
   end
 
   @doc """
+  The 3D locations of the segmented region that are on the object.
+
+  Monty's `region_locations_on_object`: a pixel counts when the segmentation
+  gives it a region **and** the on-object mask says it is on the object — a
+  segmented patch of background is not somewhere a goal can be, and neither is an
+  on-object pixel that nothing segmented.
+  """
+  @spec region_locations_on_object([[number()]], [[boolean()]], [[[number()]]]) :: [
+          [number()]
+        ]
+  def region_locations_on_object(segmentation_map, on_object_map, location_map) do
+    [segmentation_map, on_object_map, location_map]
+    |> Enum.zip_with(&Enum.zip/1)
+    |> Enum.flat_map(& &1)
+    |> Enum.filter(fn {segmented, on_object, _location} -> segmented != 0 and on_object end)
+    |> Enum.map(fn {_segmented, _on_object, location} -> location end)
+  end
+
+  @doc """
   Salience rescaled into `[0, 1]`, which is the range a goal's confidence carries.
 
   Monty's `_normalize_salience`: salience that does not vary — all of it, or one

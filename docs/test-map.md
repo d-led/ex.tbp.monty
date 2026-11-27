@@ -7,7 +7,7 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-632 of 717 of Monty's unit cases are named here, and
+633 of 717 of Monty's unit cases are named here, and
 78 more the port cannot have are excluded, each with its reason
 below.
 
@@ -50,7 +50,7 @@ below.
 | 6/6 | 0 | `frameworks/models/salience/on_object_observation_test.py` |
 | 17/17 | 0 | `frameworks/models/salience/return_inhibitor_test.py` |
 | 12/12 | 0 | `frameworks/models/salience/segmentation/slic_merge_test.py` |
-| 11/12 | 0 | `frameworks/models/salience/sensor_module_test.py` |
+| 12/12 | 0 | `frameworks/models/salience/sensor_module_test.py` |
 | 23/23 | 0 | `frameworks/models/salience/strategies/vocus2/pyramids_test.py` |
 | 20/20 | 0 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
 | 2/2 | 0 | `frameworks/models/sensor_modules_test.py` |

@@ -390,8 +390,8 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
     end
 
     # test_weight_salience_decays_randomizes_and_normalizes_salience_in_that_order
+    # A cell the sensor has just visited is inhibited by one, which takes three
     test "a visit decays a cell before anything else happens to it" do
-      # A cell the sensor has just visited is inhibited by one, which takes three
       # quarters of its salience: it scores 1.0 and comes out at 0.25, below a
       # cell that scored 0.4 and was not visited. Rescaling first and decaying
       # after would put them the other way round, so the order is what this says.
@@ -400,5 +400,25 @@ defmodule Monty.Frameworks.Models.Salience.SensorModule.SalienceSMTest do
       assert [visited, unvisited] = weighted
       assert visited < unvisited
     end
+  end
+
+  # test_region_locations_on_object_returns_correct_locations
+  test "a goal can only be put on a pixel that is both segmented and on the object" do
+    # Four pixels, each one a different combination of the two answers.
+    segmentation_map = [[1, 1], [0, 0]]
+    on_object_map = [[true, false], [true, false]]
+
+    location_map = [
+      [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+      [[0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]
+    ]
+
+    # Segmented and on the object: the one place a goal can be. Segmented
+    # background and an unsegmented on-object pixel are both excluded.
+    assert SalienceSM.region_locations_on_object(
+             segmentation_map,
+             on_object_map,
+             location_map
+           ) == [[0.0, 0.0, 0.0]]
   end
 end
