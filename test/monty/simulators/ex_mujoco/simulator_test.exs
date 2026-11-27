@@ -257,6 +257,53 @@ defmodule Monty.Simulators.ExMujoco.SimulatorTest do
     end
   end
 
+  # Monty's `ObjectMetadataDecoderTest`, whose three cases are the decoder's two
+  # refusals and the one file it reads. Monty decodes a string into a dataclass;
+  # the decoder here is `Scene`'s own, reached the way every other case reaches
+  # it — by building the scene the metadata is part of.
+  describe "Monty's metadata decoder cases" do
+    # test_valid_metadata_returns_dataclass_instance
+    test "a well-formed file is read as it stands, unturned and unscaled", %{root: root} do
+      object!(root, "described", ~s({"refpos": [1.0, 1.0, 1.0], "refquat": [1.0, 1.0, 0.0, 0.0]}))
+
+      %{xml: xml} =
+        Scene.build(%{"data_path" => root, "objects" => [%{"name" => "described"}]})
+
+      # The numbers are read, not normalised away: Monty's dataclass holds the
+      # file's own values, and these are the mesh attributes they become.
+      assert xml =~ ~s(refpos="1.0 1.0 1.0")
+      assert xml =~ ~s(refquat="1.0 1.0 0.0 0.0")
+    end
+
+    # test_invalid_json_raises_error
+    test "a file that is not JSON is refused by the object's name", %{root: root} do
+      object!(root, "broken", "{")
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Scene.build(%{"data_path" => root, "objects" => [%{"name" => "broken"}]})
+        end
+
+      assert error.message =~ "broken metadata could not be decoded"
+    end
+
+    # test_metadata_extra_fields
+    test "and a field nobody knows is refused by name", %{root: root} do
+      object!(
+        root,
+        "padded",
+        ~s({"refpos": [1.0, 1.0, 1.0], "refquat": [1.0, 1.0, 0.0, 0.0], "extra": "foo"})
+      )
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Scene.build(%{"data_path" => root, "objects" => [%{"name" => "padded"}]})
+        end
+
+      assert error.message =~ "nobody knows: extra"
+    end
+  end
+
   describe "an agent and an action it does not understand" do
     # test_agent_that_does_not_understand_an_action
     test "is left exactly where it was when the world is not asked to raise" do
