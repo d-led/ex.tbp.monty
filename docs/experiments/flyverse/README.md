@@ -184,9 +184,11 @@ flat MuJoCo world, with its legs drivable, and steps it.
   `set_leg_adhesion_states(fly, six flags)`; the percept a fly policy would get
   back is `get_ommatidia_readouts(fly)` — **2 eyes × 721 ommatidia** — and
   `get_raw_vision(fly)`, two 512×450 RGB views.
-- Driven by a crude antiphase stride, the thorax moved 5.4 cm along x in 800
-  steps. That is the bridge working, not a gait: it sinks as it goes, and a real
-  gait is the next piece.
+- Driven by a crude antiphase stride it moved 5.4 cm along x in 800 steps — and
+  sank 4 cm doing it. That says the actuators reach the legs; it is not a gait,
+  and it is not what the numbers below are: that fly is hand-composed in the
+  metre-scaled model, while the walking one is FlyGym's locomotion fly in
+  millimetres.
 
 **It needs its own interpreter.** FlyGym installs MuJoCo **3.16**; the
 interpreter `priv/monty_py/world.py` runs in is pinned to **4.0.1** for reasons
@@ -199,10 +201,41 @@ python3 -m venv /tmp/fly && /tmp/fly/bin/pip install flygym
 /tmp/fly/bin/python examples/flyverse_plugin/scripts/fly_body.py
 ```
 
-What that leaves, in order: a gait (FlyGym's `flygym[examples]` extra carries
-CPG, rule-based and turning controllers), the mapping from Monty's
-yaw/pitch/stride onto that controller's commands, and a world interface so the
-studio's Run button can start it.
+### A body that walks, and the one function between it and Monty
+
+The gait exists, and it takes exactly the shape a Monty action has.
+`examples/flyverse_plugin/scripts/fly_walk.py` puts FlyGym's locomotion fly on
+flat ground and drives it with a **two-channel descending signal**:
+
+$$
+\text{descending} = [\text{left}, \text{right}], \qquad
+\text{forward} = \text{left} + \text{right}, \qquad
+\text{turn} = \text{left} - \text{right}
+$$
+
+`HybridTurningController.step(descending, observation)` answers with joint
+targets and six adhesion states, `apply_locomotion_action` hands them to the
+body, and the body moves. Measured on this Mac, flat-ground world,
+`make_locomotion_fly`, one second per command:
+
+| command              | displacement        | heading     |
+| -------------------- | ------------------- | ----------- |
+| `[1.2, 1.2]` forward | 14.6 mm x, 4.6 mm y | +16.4°      |
+| `[0.4, 1.2]` left    | 7.7 mm y            | **+148.7°** |
+| `[1.2, 0.4]` right   | 8.1 mm y            | **−143.2°** |
+
+So the sign of `left − right` is the sign of the turn, and a symmetric command is
+a stride: the body answers a command in Monty's own terms. Monty says
+`OrientHorizontal(angle, distance)`; the descending signal is
+`[forward + turn, forward − turn]` with the two scaled to the body's gains, and
+the percept comes back as 2 eyes × 721 ommatidia (`get_ommatidia_readouts`) or
+two 512×450 views (`get_raw_vision`, and that path is what
+`get_ommatidia_readouts` renders from — a fly needs `add_vision()` first, or it
+raises rather than guessing).
+
+What is left is not the body any more: it is a world interface in Elixir that
+owns this interpreter and steps it once per action, the mapping's two gains, and
+a walk-through page over the result.
 
 ## Starting it yourself
 
