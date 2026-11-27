@@ -64,4 +64,35 @@ defmodule Monty.Geometry do
   @doc "Subtracts two 3-vectors."
   @spec subtract([number()], [number()]) :: [number()]
   def subtract([a1, a2, a3], [b1, b2, b3]), do: [a1 - b1, a2 - b2, a3 - b3]
+
+  @doc """
+  A quaternion in scalar-last (xyzw) order, from scalar-first (wxyz).
+
+  Monty's `to_scalar_last`, which is `np.asarray(wxyz)[..., [1, 2, 3, 0]]`: an
+  index permutation, and the order scipy's `Rotation` takes. It works on one
+  quaternion and on a list of them, as Monty's does, because Monty's callers hand
+  a batch over.
+
+  Monty keeps these two because its `Rotation` is a wrapper around scipy's and
+  the order changes at that boundary; the port's `Rotation` holds `wxyz` itself,
+  so what is left of them here is the boundary — a quaternion written for
+  something outside this port.
+  """
+  @spec to_scalar_last([number()] | [[number()]]) :: [number()] | [[number()]]
+  def to_scalar_last([first | _rest] = wxyz) when is_list(first),
+    do: Enum.map(wxyz, &to_scalar_last/1)
+
+  def to_scalar_last([w, x, y, z]), do: [x, y, z, w]
+
+  @doc """
+  A quaternion in scalar-first (wxyz) order, from scalar-last (xyzw).
+
+  Monty's `to_scalar_first`, the inverse permutation of `to_scalar_last/1`, and
+  read on one quaternion or on a list of them.
+  """
+  @spec to_scalar_first([number()] | [[number()]]) :: [number()] | [[number()]]
+  def to_scalar_first([first | _rest] = xyzw) when is_list(first),
+    do: Enum.map(xyzw, &to_scalar_first/1)
+
+  def to_scalar_first([x, y, z, w]), do: [w, x, y, z]
 end
