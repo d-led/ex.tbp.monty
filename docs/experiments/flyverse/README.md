@@ -169,6 +169,41 @@ So the next step that _is_ ours is the second one: a Python-world fly body, and 
 controller between Monty's actions and its legs. The input side is already the
 socket a real retina or a real replay plugs into (above).
 
+### A body: it is composed, and it steps
+
+The first step towards a fly body is done and is measured, not argued:
+`examples/flyverse_plugin/scripts/fly_body.py` composes a **NeuroMechFly** in a
+flat MuJoCo world, with its legs drivable, and steps it.
+
+- A bare `NeuroMechFly` is a body with **no joints and no actuators**; the legs
+  become drivable when a skeleton's active leg dofs are added and a position
+  actuator is named for each — 6 legs, **42 leg dofs, 42 actuators**, `nq 49`,
+  `nu 48`, timestep 0.1 ms.
+- The action surface a Monty action has to be mapped onto is
+  `set_actuator_inputs(fly, ActuatorType.POSITION, targets)` plus
+  `set_leg_adhesion_states(fly, six flags)`; the percept a fly policy would get
+  back is `get_ommatidia_readouts(fly)` — **2 eyes × 721 ommatidia** — and
+  `get_raw_vision(fly)`, two 512×450 RGB views.
+- Driven by a crude antiphase stride, the thorax moved 5.4 cm along x in 800
+  steps. That is the bridge working, not a gait: it sinks as it goes, and a real
+  gait is the next piece.
+
+**It needs its own interpreter.** FlyGym installs MuJoCo **3.16**; the
+interpreter `priv/monty_py/world.py` runs in is pinned to **4.0.1** for reasons
+`config/pythonx.exs` records, and one interpreter cannot hold both. So a fly body
+is a second interpreter beside the one the BEAM carries — the shape the plugin
+hosts already have — and the script says how to make one:
+
+```sh
+python3 -m venv /tmp/fly && /tmp/fly/bin/pip install flygym
+/tmp/fly/bin/python examples/flyverse_plugin/scripts/fly_body.py
+```
+
+What that leaves, in order: a gait (FlyGym's `flygym[examples]` extra carries
+CPG, rule-based and turning controllers), the mapping from Monty's
+yaw/pitch/stride onto that controller's commands, and a world interface so the
+studio's Run button can start it.
+
 ## Starting it yourself
 
 ```sh
