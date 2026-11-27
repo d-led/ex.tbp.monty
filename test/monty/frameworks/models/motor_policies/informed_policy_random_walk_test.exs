@@ -3,7 +3,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalkTest do
 
   alias Monty.Cmp.Message
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
-  alias Monty.Frameworks.Actions.{MoveForward, TurnLeft}
+  alias Monty.Frameworks.Actions.{LookUp, MoveForward, TurnLeft}
+  alias Monty.Frameworks.Models.MotorPolicies
   alias Monty.Frameworks.Models.MotorPolicies.{InformedPolicyRandomWalk, MotorPolicyResult}
   alias Monty.Geometry.SurfacePoseVectors
 
@@ -140,6 +141,58 @@ defmodule Monty.Frameworks.Models.MotorPolicies.InformedPolicyRandomWalkTest do
       {_action, policy} = action_of(policy())
 
       assert InformedPolicyRandomWalk.reset(policy).undo_action == nil
+    end
+  end
+
+  # Monty's `InformedPolicyRandomWalkTest`. Its cases stub the undo out with a
+  # `Mock`; here the undo is the port's own `MotorPolicies.undo_last_action/1`
+  # over real actions, so the expectation is the action it makes rather than a
+  # value handed back.
+  describe "Monty's own cases" do
+    # test_returns_no_actions_status_ready_if_never_on_object
+    test "a sensor that has never been on the object is given nothing, step after step" do
+      # Monty steps eleven times in all: once, then ten more in a loop.
+      results =
+        Enum.map_reduce(1..11, policy(), fn _step, policy ->
+          step(policy, percept: percept(false))
+        end)
+        |> elem(0)
+
+      assert length(results) == 11
+
+      for result <- results do
+        assert result.actions == []
+        assert result.status == :ready
+      end
+    end
+
+    # test_returns_sampled_action_status_ready_when_on_object
+    test "a sensor on the object is given the sampled step, in one action" do
+      {result, _policy} = step(policy(actions: [LookUp]), percept: percept(true))
+
+      assert [%LookUp{agent_id: @agent}] = result.actions
+      assert result.status == :ready
+    end
+
+    # test_returns_undo_status_ready_when_off_object_after_on_object
+    test "the first step off the object is the undo of the step it took on it" do
+      {stepped, policy} = action_of(policy())
+
+      {result, _policy} = step(policy, percept: percept(false))
+
+      assert result.actions == [MotorPolicies.undo_last_action(stepped)]
+      assert result.status == :ready
+    end
+
+    # test_returns_undo_of_undo_status_ready_when_off_object_after_off_object_after_on_object
+    test "and a second step off it turns round once more" do
+      {stepped, policy} = action_of(policy())
+      {back, policy} = action_of(policy, percept: percept(false))
+      {result, _policy} = step(policy, percept: percept(false))
+
+      assert back == MotorPolicies.undo_last_action(stepped)
+      assert result.actions == [MotorPolicies.undo_last_action(back)]
+      assert result.status == :ready
     end
   end
 end
