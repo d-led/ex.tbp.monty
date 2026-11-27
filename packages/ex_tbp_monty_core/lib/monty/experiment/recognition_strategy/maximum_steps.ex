@@ -37,7 +37,11 @@ defmodule Monty.Experiment.RecognitionStrategy.MaximumSteps do
   @spec call(map(), Monty.Experiment.RecognitionStrategy.RecognitionContext.t(), map()) ::
           RecognitionResult.t()
   def call(model, counter, state) do
-    is_done = not model.is_exploring and model.matching_steps >= limit(state, counter.mode)
+    # The count is the context's, as it is Monty's: `ctx.matching_steps`. The
+    # model carries a copy of it for the policies that read the model instead
+    # (`describe_status/1`), and a strategy that read the copy would be reading a
+    # second source of the same number.
+    is_done = not model.is_exploring and counter.matching_steps >= limit(state, counter.mode)
     %RecognitionResult{is_done: is_done, time_out_lms: is_done}
   end
 
