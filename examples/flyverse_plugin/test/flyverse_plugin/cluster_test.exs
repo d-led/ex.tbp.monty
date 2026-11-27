@@ -54,6 +54,21 @@ defmodule FlyversePlugin.ClusterTest do
     assert Cluster.set_cookie() == :ok
   end
 
+  # Found on a running cluster: the studio said "no node in this cluster says it
+  # hosts plugins" while this host was up, connected to the other plugin host and
+  # answering rpc. `Cluster.Strategy.Epmd` dials its hosts in `init/1` and then
+  # sleeps for `config[:timeout]`, which defaults to `:infinity` — one dial for
+  # the life of the node — so a host that booted before the studio, or one whose
+  # studio restarted, offered its plugins to nobody for ever. A bounded timeout
+  # is the whole of the fix, and the assertion is the bound rather than the
+  # number: a re-dial within seconds is what the deployment needs.
+  test "a seed that is not answering is dialled again, within seconds" do
+    System.put_env("MONTY_SEEDS", "node1@127.0.0.1")
+
+    assert timeout = Cluster.topologies()[:seeds][:config][:timeout]
+    assert timeout <= 10_000
+  end
+
   defp restore(nil), do: System.delete_env("MONTY_SEEDS")
   defp restore(value), do: System.put_env("MONTY_SEEDS", value)
 end

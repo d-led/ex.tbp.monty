@@ -39,6 +39,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
     Panel,
     Partition,
     Parts,
+    RemotePolicy,
     Replay,
     RunHistory,
     RunLog,
@@ -446,6 +447,20 @@ defmodule ExTbpMontyWeb.ExperimentLive do
             title={plugin_note(@opened)}
           >
             from {@opened.plugin.node}
+          </span>
+          <%!-- And what will step it, because that is the whole of what a plugin's
+          experiment changes: the definition replaces the config's motor system
+          with the policy the offering node registered, so the Motor system box
+          below names a policy this run will not build. Said with the same words
+          the run's record uses (`motor_policy`), so a page and a record of one
+          run cannot disagree about who decided. --%>
+          <span
+            :if={policy_of(@opened.setup)}
+            id="plugin-policy"
+            class="badge badge-secondary badge-sm"
+            title={policy_note(@opened.setup)}
+          >
+            steps with {policy_of(@opened.setup)}
           </span>
           <%!-- Which world a run here would step. A stand-in scene is not Monty
           and its numbers are this port's own, so the page says which one it is
@@ -3000,6 +3015,18 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   defp plugin_note(%{plugin: plugin}) do
     "Offered by #{plugin.name}@#{plugin.version} on #{plugin.node}: " <>
       "the run it defines, not a config this node has."
+  end
+
+  # The policy the definition asked for, in the words the run's own record uses:
+  # `<name>@<version> on <node>`. Nothing when the config's policy is the run's.
+  defp policy_of(%Setup{remote_policy: {:ok, policy}}), do: RemotePolicy.origin(policy)
+  defp policy_of(_setup), do: nil
+
+  defp policy_note(setup) do
+    "The config's own motor system is not built for this run: every step asks " <>
+      "#{policy_of(setup)} where to look, on the node that keeps it, and the " <>
+      "answer travels back with the policy's own value — a plugin is called once " <>
+      "per step, which is what the plugin contract routes."
   end
 
   defp world_note(%{world: :mujoco} = setup) do

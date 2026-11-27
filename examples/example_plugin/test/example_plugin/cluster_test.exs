@@ -54,6 +54,18 @@ defmodule ExamplePlugin.ClusterTest do
     assert Cluster.set_cookie() == :ok
   end
 
+  # `Cluster.Strategy.Epmd` dials its hosts in `init/1` and then sleeps for
+  # `config[:timeout]`, which defaults to `:infinity` — one dial for the life of
+  # the node. A host started before the studio, or one whose studio restarted,
+  # would then offer its modules to nobody for ever, and the studio would read
+  # that as a host that is down.
+  test "a seed that is not answering is dialled again, within seconds" do
+    System.put_env("MONTY_SEEDS", "node1@127.0.0.1")
+
+    assert timeout = Cluster.topologies()[:seeds][:config][:timeout]
+    assert timeout <= 10_000
+  end
+
   defp restore(nil), do: System.delete_env("MONTY_SEEDS")
   defp restore(value), do: System.put_env("MONTY_SEEDS", value)
 end

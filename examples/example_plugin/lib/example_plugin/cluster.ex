@@ -33,6 +33,8 @@ defmodule ExamplePlugin.Cluster do
 
   @seeds "MONTY_SEEDS"
   @secret "MONTY_CLUSTER_SECRET"
+  # How often a seed that is not answering is dialled again, in milliseconds.
+  @redial 5_000
 
   @doc false
   def start_link(options \\ []),
@@ -56,12 +58,20 @@ defmodule ExamplePlugin.Cluster do
   starts no supervisor and opens no socket, which is what keeps this node a
   cluster of one, and keeps a test run from joining whichever window happens to
   be open on the machine.
+
+  The seeds are **re-dialled**, which is not the strategy's default:
+  `Cluster.Strategy.Epmd` connects its hosts once in `init/1` and then sleeps for
+  `config[:timeout]`, whose default is `:infinity`. A host started before the
+  studio — the common case, since a plugin host has no HTTP to wait for — is then
+  invisible for the rest of its life, and so is one whose studio restarted; the
+  studio's answer is "no node in this cluster says it hosts plugins", which reads
+  like a host that is down while the host is up and answering.
   """
   @spec topologies() :: keyword()
   def topologies do
     case seeds() do
       [] -> []
-      hosts -> [seeds: [strategy: Epmd, config: [hosts: hosts]]]
+      hosts -> [seeds: [strategy: Epmd, config: [hosts: hosts, timeout: @redial]]]
     end
   end
 
