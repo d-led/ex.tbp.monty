@@ -46,9 +46,9 @@ defmodule Monty.Frameworks.Models.BufferMontyTest do
 
   alias Monty.Cmp
   alias Monty.Cmp.Message
+  alias Monty.Frameworks.Actions.{ActionJSONEncoder, LookDown, LookUp, TurnLeft, TurnRight}
   alias Monty.Frameworks.Models.Buffer.{BufferEncoder, FeatureAtLocationBuffer}
   alias Monty.Frameworks.Models.MotorSystemState.SensorState
-  alias Monty.Frameworks.Actions.{ActionJSONEncoder, LookDown, LookUp, TurnLeft, TurnRight}
   alias Monty.Geometry.{Rotation, SurfacePoseVectors}
 
   @agent "test"
