@@ -1,5 +1,6 @@
 defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias Monty.Frameworks.Utils.ObjectModelUtils
   alias Monty.Frameworks.Utils.SpatialArithmetics
@@ -145,6 +146,24 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
       assert_in_delta SpatialArithmetics.magnitude(Enum.slice(pose, 3, 3)), 1.0, @tolerance
       assert_in_delta SpatialArithmetics.magnitude(Enum.slice(pose, 6, 3)), 1.0, @tolerance
     end
+
+    # test_orthonormal_pose_vectors_orthgonalizes_curvature_direction
+    test "a curvature direction off the surface is squared up to it, and the frame is a rotation" do
+      pose = orthonormal_pose_vectors(normal(), [1.0, 0.0, 0.7])
+
+      assert_is_rotation(pose, "pose vectors are not a rotation")
+      assert_vectors_match(Enum.take(pose, 3), normal())
+    end
+  end
+
+  # Monty's name for this case is 116 characters, so it is recorded one level out:
+  # the map wants it verbatim, and inside a `describe` the indentation pushes it
+  # past the line limit.
+  # test_orthonormal_pose_vectors_falls_back_to_arbitrary_direction_if_curvature_direction_is_parallel_to_surface_normal
+  test "a curvature direction parallel to the normal still leaves a rotation" do
+    pose = orthonormal_pose_vectors(normal(), Enum.map(normal(), &(&1 * 2.0)))
+
+    assert_is_rotation(pose, "a parallel curvature direction did not fall back")
   end
 
   describe "pose_vector_merge/4" do
@@ -167,6 +186,47 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
       assert_in_delta SpatialArithmetics.dot(curvature_1, curvature_2), 0.0, @tolerance
       # Halfway round a half-radian turn.
       assert_in_delta SpatialArithmetics.get_angle_between(normal, [1.0, 0.0, 0.0]), 0.5, 1.0e-6
+    end
+
+    # test_pose_vector_merge_of_opposite_curvature_directions_is_a_rotation
+    test "merging a frame with its mirror twin is still a rotation" do
+      merged = pose_vector_merge(opposite_frame(), frame(), 4, 4)
+
+      assert_is_rotation(merged, "merged pose vectors are not a rotation")
+    end
+
+    # test_pose_vector_merge_keeps_the_surface_side_with_more_observations
+    test "the side of the surface with more observations wins" do
+      # Eight observations from the other side against four from this one.
+      assert_vectors_match(Enum.take(pose_vector_merge(opposite_frame(), frame(), 8, 4), 3), [
+        0.0,
+        0.0,
+        -1.0
+      ])
+
+      assert_vectors_match(
+        Enum.take(pose_vector_merge(opposite_frame(), frame(), 4, 8), 3),
+        normal()
+      )
+    end
+
+    # test_pose_vector_merge_averages_normals_on_the_same_surface_side
+    test "two normals on the same side of the surface are averaged, and the frame stays a rotation" do
+      tilted = orthonormal_pose_vectors([0.0, 0.5, 1.0], [1.0, 0.0, 0.0])
+      merged = pose_vector_merge(tilted, frame(), 4, 4)
+
+      assert_is_rotation(merged, "merged pose vectors are not a rotation")
+      assert SpatialArithmetics.dot(Enum.take(merged, 3), normal()) > 0.0
+    end
+
+    # test_pose_vector_merge_repeated_merges_from_the_opposite_side_stay_a_rotation
+    test "merging from the opposite side again and again stays a rotation" do
+      final =
+        Enum.reduce(1..8, frame(), fn update, stored ->
+          pose_vector_merge(opposite_frame(), stored, 4, 4 * update)
+        end)
+
+      assert_is_rotation(final, "a repeated merge from the opposite side is not a rotation")
     end
   end
 
@@ -218,6 +278,59 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
       pose = orthonormal_pose_vectors([0.0, 0.0, 1.0], [1.0, 0.0, 0.0])
 
       assert {_mean_pose, false} = pose_vector_mean([pose, pose], [false, false])
+    end
+
+    # test_pose_vector_mean_of_spread_observations_is_a_rotation
+    property "the mean of observations spread around a normal is a rotation" do
+      # Monty draws fifty sets of six observations from a seeded numpy stream;
+      # the property is what the seed is for, so any stream proves it or refutes
+      # it, and the port's stream is the episode's own.
+      check all(
+              seed <- integer(),
+              max_runs: 50
+            ) do
+        :rand.seed(:exsss, {seed, seed, seed})
+
+        observations =
+          for _ <- 1..6 do
+            orthonormal_pose_vectors(
+              normal() |> Enum.map(&(&1 + :rand.normal() * 0.3)),
+              [:rand.normal(), :rand.normal(), :rand.normal()]
+            )
+          end
+
+        {mean_pose, true} = pose_vector_mean(observations, List.duplicate(true, 6))
+
+        assert_is_rotation(mean_pose, "the mean of spread observations is not a rotation")
+      end
+    end
+
+    # test_repeated_merges_of_noisy_observations_stay_a_rotation
+    property "merging four noisy observations at a time, fifty times, stays a rotation" do
+      check all(
+              seed <- integer(),
+              max_runs: 50
+            ) do
+        :rand.seed(:exsss, {seed, seed, seed})
+
+        {stored, _count} =
+          Enum.reduce(1..50, {frame(), 4}, fn _round, {stored, count} ->
+            observations =
+              for _ <- 1..4 do
+                sign = if :rand.uniform() < 0.5, do: 1.0, else: -1.0
+
+                orthonormal_pose_vectors(
+                  normal() |> Enum.map(&(&1 + :rand.normal() * 0.3)),
+                  Enum.map([1.0, 0.0, 0.0], &(&1 * sign))
+                )
+              end
+
+            {mean_pose, true} = pose_vector_mean(observations, List.duplicate(true, 4))
+            {pose_vector_merge(mean_pose, stored, 4, count), count + 4}
+          end)
+
+        assert_is_rotation(stored, "a merged frame is not a rotation")
+      end
     end
   end
 
@@ -278,5 +391,33 @@ defmodule Monty.Frameworks.Utils.ObjectModelUtilsTest do
   defp assert_vectors_match(left, right) do
     Enum.zip(left, right)
     |> Enum.each(fn {l, r} -> assert_in_delta l, r, @tolerance end)
+  end
+
+  defp normal, do: [0.0, 0.0, 1.0]
+
+  # Monty's `setUp` frame: the normal, the first curvature direction, and the
+  # second one the cross product makes — a right-handed frame.
+  defp frame, do: [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+  # The same frame seen from the other side of the surface.
+  defp opposite_frame, do: [0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0]
+
+  # Monty's `assert_is_rotation`: the nine numbers are a rotation matrix — a
+  # right-handed orthonormal basis — and not merely nine numbers that look like
+  # one.
+  defp assert_is_rotation(pose_vecs, message) do
+    matrix = Enum.chunk_every(pose_vecs, 3)
+    product = Monty.Geometry.mul(matrix, Monty.Geometry.transpose(matrix))
+
+    for {row, expected} <- Enum.zip(product, Monty.Geometry.identity()) do
+      assert_vectors_match(row, expected)
+    end
+
+    assert_in_delta determinant(matrix), 1.0, @tolerance, message
+    assert {:ok, _rotation} = Rotation.from_matrix(matrix)
+  end
+
+  defp determinant([[a1, a2, a3], [b1, b2, b3], [c1, c2, c3]]) do
+    a1 * (b2 * c3 - b3 * c2) - a2 * (b1 * c3 - b3 * c1) + a3 * (b1 * c2 - b2 * c1)
   end
 end

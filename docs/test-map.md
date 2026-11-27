@@ -7,7 +7,7 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-610 of 717 of Monty's unit cases are named here, and
+618 of 717 of Monty's unit cases are named here, and
 39 more the port cannot have are excluded, each with its reason
 below.
 
@@ -60,7 +60,7 @@ below.
 | 18/18 | 0 | `frameworks/utils/edge_detection_test.py` |
 | 3/3 | 0 | `frameworks/utils/graph_matching_utils_test.py` |
 | 7/7 | 0 | `frameworks/utils/logging_utils_test.py` |
-| 0/8 | 0 | `frameworks/utils/object_model_utils_test.py` |
+| 8/8 | 0 | `frameworks/utils/object_model_utils_test.py` |
 | 0/5 | 0 | `frameworks/utils/plot_utils_dev_test.py` |
 | 0/2 | 0 | `frameworks/utils/plot_utils_test.py` |
 | 14/14 | 0 | `frameworks/utils/sensor_processing_test.py` |
@@ -88,4 +88,4 @@ below.
 - **no `from_pandas`; `new/3` is the door** — `test_from_pandas_validates_input_using_validate_dataframe`
 - **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
 - **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`
-- **pandas only; the studio's run page reads per-LM figures from the run record** — `test_reconstructs_named_metrics`
+- **pandas only; the run page reads the run record** — `test_reconstructs_named_metrics`
