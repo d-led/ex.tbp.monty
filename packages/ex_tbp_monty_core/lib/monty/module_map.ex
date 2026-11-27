@@ -123,6 +123,7 @@ defmodule Monty.ModuleMap do
     problems =
       Enum.flat_map(packages, &coverage_problems(&1, mapped)) ++
         missing_modules(entries) ++
+        written_already(entries) ++
         missing_reasons(entries) ++
         missing_stand_ins(entries)
 
@@ -353,6 +354,40 @@ defmodule Monty.ModuleMap do
         written?(entry.status),
         not exists?(entry.elixir) do
       "#{entry.status} entry points at a module that does not exist: #{entry.elixir} (#{entry.package}:#{entry.python})"
+    end
+  end
+
+  # The other direction, which nothing asserted before: a class the map says
+  # nobody wrote must not have been written. The map is the claim a reader
+  # trusts — `/modules` prints it, and a config is refused or accepted by it — so
+  # a module that exists under a `planned` name means the map is stale rather
+  # than that the module is wrong. Both levels are checked because the drift
+  # happens one class at a time inside a file this port does write.
+  #
+  # `excluded` is deliberately not checked: an excluded class is one this port
+  # does not write, and the module carrying its name may be the replacement
+  # `Monty.ModuleMap.StandIns` names — a coincidence of name, not drift.
+  defp written_already(entries) do
+    written_files(entries) ++ written_classes(entries)
+  end
+
+  defp written_files(entries) do
+    for entry <- entries,
+        entry.status == :planned,
+        exists?(entry.elixir) do
+      "planned entry points at a module that exists: #{entry.elixir} " <>
+        "(#{entry.package}:#{entry.python}) — the map is stale; run `mix monty.module_map.gen`"
+    end
+  end
+
+  defp written_classes(entries) do
+    for entry <- entries,
+        class <- entry.classes,
+        class.status == :planned,
+        exists?(class.elixir) do
+      "planned class points at a module that exists: #{class.elixir} " <>
+        "(#{entry.package}:#{entry.python}::#{class.python}) — the map is stale; " <>
+        "run `mix monty.module_map.gen`"
     end
   end
 

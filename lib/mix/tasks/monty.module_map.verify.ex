@@ -2,7 +2,7 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
   @shortdoc "Fails when the module map has drifted from the Python checkouts"
 
   @moduledoc """
-  Checks three things, for both packages this application mirrors:
+  Checks four things, for both packages this application mirrors:
 
       mix monty.module_map.verify
       mix monty.module_map.verify --source ../monty-orig --teleop-source ../tbp.teleop
@@ -10,6 +10,8 @@ defmodule Mix.Tasks.Monty.ModuleMap.Verify do
     * every Python file in a checkout has an entry;
     * every entry marked `implemented` or `partial` points at a module that
       exists;
+    * every entry marked `planned` points at a module that does **not** exist —
+      a class the map says nobody wrote, and that somebody has;
     * every entry marked `excluded` or `partial` says why.
 
   It also reports a checkout that has moved since the map was generated: the map

@@ -101,6 +101,56 @@ defmodule Monty.ModuleMapTest do
         refute entry[:reason] in [nil, ""], "#{entry.python} is excluded without a reason"
       end
     end
+
+    test "claims nothing is unwritten that this port has already written" do
+      assert {:ok, _summary} = ModuleMap.verify()
+    end
+  end
+
+  describe "a map that has drifted from the code" do
+    test "is a problem when a planned file already has its module" do
+      drifted = %{
+        package: "monty",
+        python: "frameworks/paths.py",
+        elixir: "Monty.Paths",
+        status: :planned,
+        classes: []
+      }
+
+      assert {:error, [problem]} = ModuleMap.verify(entries: [drifted], packages: [])
+      assert problem =~ "planned entry points at a module that exists: Monty.Paths"
+      assert problem =~ "mix monty.module_map.gen"
+    end
+
+    test "is a problem when one planned class of a written file exists" do
+      drifted = %{
+        package: "monty",
+        python: "frameworks/models/sensor_modules.py",
+        # A file module that exists, so the only problem this entry has is its
+        # class being written while the map calls it planned.
+        elixir: "Monty.ModuleMap",
+        status: :implemented,
+        classes: [
+          %{python: "EnvLogger", elixir: "Monty.Paths", status: :planned}
+        ]
+      }
+
+      assert {:error, [problem]} = ModuleMap.verify(entries: [drifted], packages: [])
+      assert problem =~ "planned class points at a module that exists: Monty.Paths"
+      assert problem =~ "::EnvLogger"
+    end
+
+    test "says nothing about an entry whose module is genuinely absent" do
+      unwritten = %{
+        package: "monty",
+        python: "frameworks/never_written.py",
+        elixir: "Monty.Frameworks.NeverWritten",
+        status: :planned,
+        classes: []
+      }
+
+      assert {:ok, _summary} = ModuleMap.verify(entries: [unwritten], packages: [])
+    end
   end
 
   describe "reading a class path out of a config" do
