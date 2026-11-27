@@ -45,4 +45,14 @@ defmodule Monty.Simulators.Flygym.InterpreterTest do
       assert reason =~ "4.0.1"
     end
   end
+
+  describe "a body whose interpreter is not there" do
+    test "names the path when it is asked for a body, rather than failing at the first step" do
+      body = World.new(python: "/nonexistent/interpreter-with-no-body")
+
+      assert_raise ArgumentError, ~r/interpreter is not there: \/nonexistent/, fn ->
+        World.reset(body)
+      end
+    end
+  end
 end

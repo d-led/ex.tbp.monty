@@ -186,16 +186,34 @@ defmodule Monty.Simulators.Flygym.World do
   defp start(%__MODULE__{started?: true} = body), do: body
 
   defp start(%__MODULE__{} = body) do
-    # `Port.Environment` takes the executable first and its arguments after it,
-    # so the interpreter and the peer script are one command.
-    options = [command: [body.python, script_path()], sensor_ids: body.sensors]
+    ensure_interpreter!(body.python)
 
-    options = if body.name, do: Keyword.put(options, :name, body.name), else: options
-
-    case Environment.start_link(options) do
+    case Environment.start_link(environment_options(body)) do
       {:ok, port} -> %{body | port: port, started?: true}
       {:error, reason} -> raise ArgumentError, "the fly's body did not start: #{inspect(reason)}"
     end
+  end
+
+  # Checked before a process exists: the port's own refusal arrives as an exit,
+  # which would take the caller down with a stack trace instead of a sentence. A
+  # machine that has moved or not yet made the interpreter is told which path is
+  # missing.
+  defp ensure_interpreter!(python) do
+    if File.exists?(python) do
+      :ok
+    else
+      raise ArgumentError,
+            "the fly's body's interpreter is not there: #{python}. " <>
+              "Make one with the commands on the fly page, or point #{@python} at one"
+    end
+  end
+
+  # What `Port.Environment` is started with: the interpreter and the peer script
+  # are one command, and a run that names the process has it registered.
+  defp environment_options(%__MODULE__{} = body) do
+    options = [command: [body.python, script_path()], sensor_ids: body.sensors]
+
+    if body.name, do: Keyword.put(options, :name, body.name), else: options
   end
 
   defp installed_interpreter do
