@@ -39,8 +39,17 @@ defmodule Monty.Cmp.Goal do
 
   @allowed_sender_types [:sm, :lm, :gsg]
 
+  alias Monty.Cmp.Message
+
   @doc """
   Builds a goal. Fields a goal generator did not decide are simply absent.
+
+  The pose features it carries, if it carries any, are checked as `Message`'s
+  are — Monty asserts the same two keys on a goal — with the one allowance a goal
+  gets: its `pose_fully_defined` may be `nil`, because a goal handed to a motor
+  system does not know how completely the pose it came from was seen. A goal with
+  no morphological features at all claims nothing and is accepted, which is how a
+  salience module's "look there" goal is built.
   """
   @spec new(map() | keyword()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
@@ -48,10 +57,16 @@ defmodule Monty.Cmp.Goal do
 
     with :ok <- validate_sender_type(goal),
          :ok <- validate_confidence(goal),
-         :ok <- validate_location(goal) do
+         :ok <- validate_location(goal),
+         :ok <- validate_features(goal) do
       {:ok, goal}
     end
   end
+
+  defp validate_features(%__MODULE__{morphological_features: nil}), do: :ok
+
+  defp validate_features(%__MODULE__{morphological_features: features}),
+    do: Message.validate_pose_features(features, allow_nil_flag?: true)
 
   defp validate_sender_type(%__MODULE__{sender_type: type}) when type in @allowed_sender_types,
     do: :ok

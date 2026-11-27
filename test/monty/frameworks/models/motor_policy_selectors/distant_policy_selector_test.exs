@@ -57,7 +57,8 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectors.DistantPolicySelectorTest
         morphological_features: %{
           "pose_vectors" => %GazeDirection{
             value: [[-1.0, 0.0, 0.0], [nil, nil, nil], [nil, nil, nil]]
-          }
+          },
+          "pose_fully_defined" => true
         },
         sender_id: sender_id(sender_type),
         sender_type: sender_type,

@@ -57,7 +57,11 @@ defmodule Monty.Frameworks.Models.Salience.MotorPolicy.LookAtGoalMontyTest do
         morphological_features: %{
           "pose_vectors" => %Monty.Geometry.GazeDirection{
             value: [[0.0, 0.0, -1.0], [nil, nil, nil], [nil, nil, nil]]
-          }
+          },
+          # Monty's own goal fixture carries the flag; a goal with pose vectors
+          # must say whether they are fully defined, and `Goal.new/1` refuses one
+          # that does not.
+          "pose_fully_defined" => true
         },
         sender_id: "test",
         sender_type: :sm

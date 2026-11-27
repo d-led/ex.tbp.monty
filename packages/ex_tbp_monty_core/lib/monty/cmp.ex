@@ -19,7 +19,7 @@ defmodule Monty.Cmp do
   """
 
   alias Monty.Cmp.{AttentionRegion, Goal, Message}
-  alias Monty.Geometry.{GazeDirection, OrientationMatrix, SurfacePoseVectors}
+  alias Monty.Geometry.{GazeDirection, OrientationMatrix, Rotation, SurfacePoseVectors}
 
   @typedoc "Anything that can travel on the CMP."
   @type message :: Message.t() | Goal.t() | AttentionRegion.t()
@@ -69,7 +69,7 @@ defmodule Monty.Cmp do
   def decode(%{"kind" => "goal"} = payload), do: payload |> decode_goal() |> wrap()
 
   def decode(%{"kind" => "attention_region", "locations" => locations, "weights" => weights}) do
-    {:ok, %AttentionRegion{locations: locations, weights: weights}}
+    AttentionRegion.new(locations, weights)
   end
 
   def decode(other), do: {:error, {:unknown_payload, other}}
@@ -145,6 +145,15 @@ defmodule Monty.Cmp do
 
   defp encode_value(%GazeDirection{value: value}),
     do: %{"pose_vectors_type" => "gaze_direction", "value" => value}
+
+  # A goal's `info` carries the hypothesis it was proposed to test, and a
+  # hypothesis carries a rotation. Angles in degrees, unrounded, exactly as the
+  # buffer encoder writes a rotation into a log — the same numbers, because a log
+  # is compared.
+  defp encode_value(%Rotation{} = rotation),
+    do: Rotation.to_euler_degrees(rotation, nil)
+
+  defp encode_value(tuple) when is_tuple(tuple), do: tuple |> Tuple.to_list() |> encode_value()
 
   defp encode_value(%{} = map), do: encode_features(map)
 

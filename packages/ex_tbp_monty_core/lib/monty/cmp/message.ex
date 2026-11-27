@@ -223,11 +223,26 @@ defmodule Monty.Cmp.Message do
 
   defp validate_features(%__MODULE__{process_features_in_lm: false}), do: :ok
 
-  defp validate_features(%__MODULE__{morphological_features: features}) do
+  defp validate_features(%__MODULE__{morphological_features: features}),
+    do: validate_pose_features(features)
+
+  @doc """
+  Whether a feature map carries a usable pose: vectors of a known type, and the
+  flag that says whether they are fully defined.
+
+  Monty asserts this in `Message`, and in `Goal` with one allowance — a goal's
+  flag may be `nil`, because a goal handed to a motor system does not know how
+  completely the pose it came from was seen. `:allow_nil_flag?` is that
+  allowance; everything else is refused the same way in both.
+  """
+  @spec validate_pose_features(map(), keyword()) :: :ok | {:error, term()}
+  def validate_pose_features(features, opts \\ []) do
+    allow_nil? = Keyword.get(opts, :allow_nil_flag?, false)
+
     with {:ok, pose_vectors} <- required(features, "pose_vectors"),
          :ok <- valid_pose_vectors(pose_vectors),
          {:ok, fully_defined} <- required(features, "pose_fully_defined") do
-      boolean_field("pose_fully_defined", fully_defined)
+      boolean_field("pose_fully_defined", fully_defined, allow_nil?)
     end
   end
 
@@ -244,6 +259,11 @@ defmodule Monty.Cmp.Message do
 
   defp valid_pose_vectors(other), do: {:error, {:invalid_pose_vectors, other}}
 
-  defp boolean_field(_name, value) when is_boolean(value), do: :ok
-  defp boolean_field(name, value), do: {:error, {:not_a_boolean, name, value}}
+  defp boolean_field(name, value, allow_nil?) do
+    cond do
+      is_boolean(value) -> :ok
+      allow_nil? and is_nil(value) -> :ok
+      true -> {:error, {:not_a_boolean, name, value}}
+    end
+  end
 end

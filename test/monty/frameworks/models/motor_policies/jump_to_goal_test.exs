@@ -34,7 +34,8 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
         morphological_features: %{
           "pose_vectors" => %GazeDirection{
             value: [[-1.0, 0.0, 0.0], [nil, nil, nil], [nil, nil, nil]]
-          }
+          },
+          "pose_fully_defined" => true
         },
         sender_id: "LM_0",
         sender_type: :gsg
