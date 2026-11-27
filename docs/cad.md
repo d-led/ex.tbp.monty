@@ -119,6 +119,14 @@ a part the application already ships can start at the second.
    source tree; a deployment that wants it elsewhere points `:cad_sets_dir` at a
    directory.
 
+   The page offers the two arms the pipeline has, and each is its own click:
+   **Make it a run** is the part as one object (`cad/<part>_part_eval`, the arm
+   whose answer is known), and **Make its feature run** is the same part as the
+   features the recognition found (`cad/<part>_features_eval`, one object per
+   feature plus the stock between them) — the arm the compositional question
+   needs, and the one whose wall is recorded below. A part whose run exists shows
+   the link instead of the button.
+
 2. **`/prerequisites` → "CAD part memories and meshes" → Make.** One memory and
    one object set per CAD experiment this machine has — the sets the application
    ships and the one a part you brought generated — taught from each part's STEP

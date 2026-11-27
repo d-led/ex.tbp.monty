@@ -87,12 +87,53 @@ defmodule Monty.Studio.Cad.GenerateTest do
     end
   end
 
+  describe "a part as the features it is made of" do
+    test "is an experiment that asks about each of them", %{sets: sets} do
+      assert {:ok, generated} =
+               Generate.generate("solidcraft-plate", sets: sets, labels: :features)
+
+      assert generated.experiment == "cad/solidcraft-plate_features_eval"
+
+      assert {:ok, opened} = open(generated.experiment, sets)
+      assert {:ok, plan} = Preparation.plan(opened.setup)
+      assert plan.name == "solidcraft-plate_features"
+      assert plan.labels == :features
+
+      objects = Setup.objects(opened.setup)
+      assert "solidcraft-plate_bosses_0" in objects
+      assert "solidcraft-plate_body" in objects
+      assert Enum.all?(objects, &String.starts_with?(&1, "solidcraft-plate_"))
+    end
+
+    # A feature is a fraction of a part and the features arm stands closer for it.
+    # The plan is what Make teaches and it derives the optics from the config, so
+    # this number is the promise that the memory and the run are taught and stepped
+    # through the same lens.
+    test "is taught and stepped from the features arm's own stand-off", %{sets: sets} do
+      assert {:ok, generated} =
+               Generate.generate("solidcraft-plate", sets: sets, labels: :features)
+
+      assert {:ok, opened} = open(generated.experiment, sets)
+      assert {:ok, plan} = Preparation.plan(opened.setup)
+
+      assert plan.optics.distance == 8.0
+    end
+
+    test "and its run is offered as a link once it exists", %{sets: sets} do
+      assert {:ok, _generated} =
+               Generate.generate("solidcraft-plate", sets: sets, labels: :features)
+
+      assert Generate.experiment_for("solidcraft-plate", :features, sets) ==
+               "cad/solidcraft-plate_features_eval"
+    end
+  end
+
   # A generated set is read before the shipped ones, so a second experiment of
   # the same name would shadow a measured one with a copy of itself.
   describe "a part that already has an experiment" do
     test "is refused, and nothing is written", %{sets: sets} do
       assert {:error, sentence} = Generate.generate("plate", sets: sets)
-      assert sentence =~ "already has a run"
+      assert sentence =~ "already has this run"
       assert Path.wildcard(Path.join(sets, "**/*.yaml")) == []
     end
 

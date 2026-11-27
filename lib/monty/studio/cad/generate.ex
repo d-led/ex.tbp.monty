@@ -29,11 +29,18 @@ defmodule Monty.Studio.Cad.Generate do
   alias Monty.Studio.Blueprint
   alias Monty.Studio.Cad.Parts
   alias Monty.Studio.Catalog
+  alias Monty.Studio.Memory
 
-  # The shipped experiment a generated one is modelled on. Part-level because
-  # that is the arm whose answer is known on this pipeline; an arm with a wall
-  # in front of it is not a thing to generate for a person who has not asked.
-  @base "cad/plate_part_eval"
+  # What a memory can hold, and the shipped experiment each arm is modelled on.
+  # Two answers because the pipeline has two: the whole part as one object (the
+  # arm whose answer is known), and one object per feature the recognition found
+  # (the arm the compositional question needs). A run that differs from its arm in
+  # anything else would not be comparable with the one it was generated from.
+  @labels [:part, :features]
+  @bases %{
+    part: "cad/plate_part_eval",
+    features: "cad/plate_features_eval"
+  }
 
   # The folder a generated section's experiments sit in, which is the same one
   # the shipped CAD experiments use: the address and the file are one name.
@@ -51,7 +58,13 @@ defmodule Monty.Studio.Cad.Generate do
 
   `files` has the experiment first, which is the one a person would open.
   """
-  @type generated :: %{experiment: String.t(), files: [Path.t()]}
+  @type generated :: %{
+          experiment: String.t(),
+          part: String.t(),
+          labels: :part | :features,
+          objects: pos_integer(),
+          files: [Path.t()]
+        }
 
   @doc "The root the CAD sets live in: the shipped ones and the generated ones."
   @spec sets_dir() :: Path.t()
@@ -72,29 +85,48 @@ defmodule Monty.Studio.Cad.Generate do
   def conf_dirs(sets \\ sets_dir()), do: [Path.join([sets, @set, "conf"]) | Source.conf_dirs()]
 
   @doc """
-  Writes the part's experiment and the interface that names its object.
+  Writes the part's experiment and the interface that names its objects.
 
-  Refuses — before writing anything — a part no file answers, a part that
-  already has an experiment (a generated set is read *before* the shipped ones,
-  so a second one would shadow a measured experiment with a copy of itself), and
-  a config the studio would not compose: a config this module cannot read back is
+  `labels` is what the memory holds, and there are two answers because the
+  pipeline has two: `:part` is the whole part as one object (the arm whose answer
+  is known), `:features` is one object per feature the recognition found (the arm
+  the compositional question needs). A label this module does not have is refused
+  here, where the option arrives, so nothing further has to re-check it.
+
+  Refuses — before writing anything — a part no file answers, an arm that already
+  has an experiment (a generated set is read *before* the shipped ones, so a
+  second one would shadow a measured experiment with a copy of itself), and a
+  config the studio would not compose: a config this module cannot read back is
   not one a person should be given.
   """
   @spec generate(String.t(), keyword()) :: {:ok, generated()} | {:error, String.t()}
   def generate(part, opts \\ []) do
-    sets = Keyword.get_lazy(opts, :sets, &sets_dir/0)
-    blueprint = blueprint(part)
+    labels = Keyword.get(opts, :labels, :part)
+
+    if labels in @labels do
+      write_experiment(part, labels, Keyword.get_lazy(opts, :sets, &sets_dir/0))
+    else
+      {:error, "a run of a part is :part or :features, not #{inspect(labels)}"}
+    end
+  end
+
+  defp write_experiment(part, labels, sets) do
+    blueprint = blueprint(part, labels)
 
     with {:ok, _named} <- Parts.find(part),
-         :ok <- unclaimed(part, sets),
-         :ok <- write(environment_path(part, sets), env_interface(part)),
+         :ok <- unclaimed(part, labels, sets),
+         {:ok, interface, objects} <- interface(part, labels),
+         :ok <- write(environment_path(part, labels, sets), interface),
          :ok <- nothing_wrong(blueprint, conf_dirs(sets)),
          {:ok, _composed} <- Blueprint.compose(blueprint, conf_dir: conf_dirs(sets)),
-         :ok <- write(experiment_path(part, sets), Blueprint.to_yaml(blueprint)) do
+         :ok <- write(experiment_path(part, labels, sets), Blueprint.to_yaml(blueprint)) do
       {:ok,
        %{
          experiment: blueprint.name,
-         files: [experiment_path(part, sets), environment_path(part, sets)]
+         part: part,
+         labels: labels,
+         objects: length(objects),
+         files: [experiment_path(part, labels, sets), environment_path(part, labels, sets)]
        }}
     end
   end
@@ -105,9 +137,9 @@ defmodule Monty.Studio.Cad.Generate do
   A page asks this before it offers to generate one: a part with a run is a link
   to that run, not a second experiment of the same name.
   """
-  @spec experiment_for(String.t(), Path.t()) :: String.t() | nil
-  def experiment_for(part, sets \\ sets_dir()) do
-    name = "#{@folder}/#{part}_part_eval"
+  @spec experiment_for(String.t(), :part | :features, Path.t()) :: String.t() | nil
+  def experiment_for(part, labels \\ :part, sets \\ sets_dir()) do
+    name = experiment_name(part, labels)
 
     case Catalog.experiment(name, conf_dir: conf_dirs(sets)) do
       nil -> nil
@@ -115,11 +147,41 @@ defmodule Monty.Studio.Cad.Generate do
     end
   end
 
+  @doc """
+  The memories the parts a person brought need, by path.
+
+  One file per brought part, each naming its own memory; a page that says "the
+  same Make writes these" needs the names and not a composed plan, so this is one
+  small read per part rather than a compose of every experiment on the machine.
+  """
+  @spec memories(Path.t()) :: [Path.t()]
+  def memories(sets \\ sets_dir()) do
+    Path.join([sets, "*", "conf", "experiment", @folder, "*.yaml"])
+    |> Path.wildcard()
+    |> Enum.flat_map(&memory_in/1)
+  end
+
+  # The memory is the one thing a generated experiment always names (the part had
+  # to exist for it to be written), so a file without one is not one of ours. The
+  # path is `Monty.Studio.Memory`'s, which is the one the build writes to; the
+  # config names the last two segments (release and memory) and the deployment
+  # supplies the root.
+  defp memory_in(file) do
+    with {:ok, config} <- Source.load_file(file),
+         value when is_binary(value) <-
+           get_in(config.body, ["experiment", "config", "model_name_or_path"]),
+         [release, name] <- value |> String.split("/", trim: true) |> Enum.take(-2) do
+      [Memory.path_for(name, release)]
+    else
+      _no_memory -> []
+    end
+  end
+
   # The generated file is this module's own: a second click rewrites it, which is
   # the same state. Anything else of that name is a shipped experiment and a
   # generated copy would be read before it.
-  defp unclaimed(part, sets) do
-    case {File.exists?(experiment_path(part, sets)), experiment_for(part, sets)} do
+  defp unclaimed(part, labels, sets) do
+    case {File.exists?(experiment_path(part, labels, sets)), experiment_for(part, labels, sets)} do
       {true, _ours} ->
         :ok
 
@@ -128,62 +190,77 @@ defmodule Monty.Studio.Cad.Generate do
 
       {false, name} ->
         {:error,
-         "#{name} is already an experiment here — #{part} already has a run. " <>
+         "#{name} is already an experiment here — #{part} already has this run. " <>
            "Open that one instead of making a second."}
     end
   end
 
-  # The base experiment with the three choices a part decides: its own name, the
-  # memory a build teaches for it, and the interface that steps its object. The
-  # memory keeps the base's resolver — where libraries live is the deployment's
-  # answer, not a generated file's.
-  defp blueprint(part) do
-    base = Blueprint.from_experiment(@base)
+  # The arm's shipped experiment with the three choices a part decides: its own
+  # name, the memory a build teaches for it, and the interface that steps its
+  # objects. The memory keeps the base's resolver — where libraries live is the
+  # deployment's answer, not a generated file's.
+  defp blueprint(part, labels) do
+    base = Blueprint.from_experiment(@bases[labels])
 
     base
-    |> Blueprint.put_name("#{@folder}/#{part}_part_eval")
+    |> Blueprint.put_name(experiment_name(part, labels))
     # The address has a folder in it; a run's name is one file name, as the
     # shipped experiments' are (`run_name: cad_plate_part_eval`).
     |> Blueprint.put_config(
       "logging",
-      Map.put(base.config["logging"], "run_name", "#{part}_part_eval")
+      Map.put(base.config["logging"], "run_name", "#{part}_#{labels}_eval")
     )
-    |> Blueprint.put_group("env_interface", "cad_#{part}_eval")
-    |> Blueprint.put_config("model_name_or_path", memory_of(base, part))
+    |> Blueprint.put_group("env_interface", interface_name(part, labels))
+    |> Blueprint.put_config("model_name_or_path", memory_of(base, part, labels))
   end
 
-  defp memory_of(blueprint, part) do
+  defp experiment_name(part, labels), do: "#{@folder}/#{part}_#{labels}_eval"
+  defp interface_name(part, labels), do: "cad_#{part}_#{labels}_eval"
+
+  # `Monty.Studio.Cad.Preparation` reads what a memory holds off its name
+  # (`<part>_part`, `<part>_features`), so the suffix is the statement.
+  defp memory_of(blueprint, part, labels) do
     blueprint.config["model_name_or_path"]
     |> Path.dirname()
-    |> Path.join("#{part}_part")
+    |> Path.join("#{part}_#{labels}")
   end
 
-  defp experiment_path(part, sets) do
-    path(sets, ["experiment", @folder], "#{part}_part_eval")
+  defp experiment_path(part, labels, sets) do
+    path(sets, ["experiment", @folder], "#{part}_#{labels}_eval")
   end
 
-  defp environment_path(part, sets) do
-    path(sets, "env_interface", "cad_#{part}_eval")
+  defp environment_path(part, labels, sets) do
+    path(sets, "env_interface", interface_name(part, labels))
   end
 
-  # The object the run steps: the part's name, because that is the directory the
-  # build writes the part's mesh into and the name the memory answers with.
-  defp env_interface(part) do
+  # The objects the run steps, from the same place the build gets them: the
+  # part's own name, or one object per feature (`Monty.Studio.Cad.Parts`).
+  defp interface(part, labels) do
+    case Parts.objects(part, labels) do
+      {:ok, objects} -> {:ok, env_interface(part, labels, objects), objects}
+      {:error, _sentence} = refused -> refused
+    end
+  end
+
+  defp env_interface(part, labels, objects) do
     """
     # @package experiment.config
-    # #{part}, as the mesh the build writes from its STEP file, in the world the
-    # memory taught from that file is compared against. Written by the CAD page
-    # from the part's own name; `object_names` is what the memory answers with.
+    # #{part}, as #{what(labels)}, in the world the memory taught from its STEP
+    # file is compared against. Written by the CAD page from the recognition's own
+    # objects; `object_names` is what the memory answers with.
     do_eval: true
     eval_env_interface_args:
       object_names:
-        - #{part}
+    #{Enum.map_join(objects, "\n", &"    - #{&1}")}
       object_init_sampler:
         _target_: tbp.monty.frameworks.environments.object_init_samplers.Predefined
         rotations: ${constants.rotations_3}
     eval_env_interface_class: ${monty.class:tbp.monty.experiment.environment.OneObjectPerEpisodeInterface}
     """
   end
+
+  defp what(:part), do: "the mesh the build writes from it"
+  defp what(:features), do: "one mesh per feature the recognition found"
 
   defp nothing_wrong(blueprint, conf) do
     blueprint

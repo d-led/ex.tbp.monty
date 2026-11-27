@@ -20,6 +20,10 @@ defmodule ExTbpMontyWeb.CadLive do
 
   alias Monty.Studio.Cad.{Generate, Parts}
 
+  # What a part's memory can hold: the two arms the pipeline has, and what a row
+  # offers a button or a link for.
+  @arms [:part, :features]
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -67,13 +71,17 @@ defmodule ExTbpMontyWeb.CadLive do
     end
   end
 
-  def handle_event("generate", %{"part" => name}, socket) do
-    case Generate.generate(name) do
+  def handle_event("generate", %{"part" => name, "labels" => labels}, socket) do
+    labels = if labels == "features", do: :features, else: :part
+
+    case Generate.generate(name, labels: labels) do
       {:ok, generated} ->
         {:noreply,
          socket
-         |> assign(:generated, Map.put(generated, :part, name))
-         |> update_part(name, &%{&1 | experiment: generated.experiment})
+         |> assign(:generated, generated)
+         |> update_part(name, fn entry ->
+           %{entry | experiments: Map.put(entry.experiments, labels, generated.experiment)}
+         end)
          |> put_flash(:info, "#{generated.experiment} is written.")}
 
       {:error, sentence} ->
@@ -162,21 +170,40 @@ defmodule ExTbpMontyWeb.CadLive do
                 Look at it
               </button>
               <.link
-                :if={entry.experiment}
+                :if={entry.experiments.part}
                 id={"run-#{entry.part.name}"}
-                navigate={~p"/experiments/#{String.split(entry.experiment, "/")}"}
+                navigate={~p"/experiments/#{String.split(entry.experiments.part, "/")}"}
                 class="btn btn-sm"
               >
                 Open its run
               </.link>
               <button
-                :if={entry.experiment == nil}
+                :if={entry.experiments.part == nil}
                 id={"generate-#{entry.part.name}"}
                 phx-click="generate"
                 phx-value-part={entry.part.name}
+                phx-value-labels="part"
                 class="btn btn-sm btn-primary"
               >
                 Make it a run
+              </button>
+              <.link
+                :if={entry.experiments.features}
+                id={"run-features-#{entry.part.name}"}
+                navigate={~p"/experiments/#{String.split(entry.experiments.features, "/")}"}
+                class="btn btn-sm btn-ghost"
+              >
+                Open its feature run
+              </.link>
+              <button
+                :if={entry.experiments.features == nil}
+                id={"generate-features-#{entry.part.name}"}
+                phx-click="generate"
+                phx-value-part={entry.part.name}
+                phx-value-labels="features"
+                class="btn btn-sm btn-ghost"
+              >
+                Make its feature run
               </button>
             </div>
           </div>
@@ -189,15 +216,20 @@ defmodule ExTbpMontyWeb.CadLive do
         >
           <h2 class="font-semibold">{@generated.experiment} is written</h2>
           <p class="text-sm text-base-content/70">
-            It steps {@generated.part} and loads the memory <code>{(@generated).part}_part</code>,
-            which does not exist yet. Two clicks, in this order:
+            It steps {@generated.objects} object(s) of {@generated.part} and loads the memory <code>{@generated.part}_{@generated.labels}</code>, which does not exist yet. Two clicks,
+            in this order:
+          </p>
+          <p :if={@generated.labels == :features} class="text-sm text-base-content/70">
+            A feature run is the harder question: two features that report the same numbers — a body
+            and the risers lying in its own plane, say — end their episodes without a verdict. That
+            is the wall <code>docs/cad.md</code> records, not a broken run.
           </p>
           <ol class="list-decimal space-y-1 pl-5 text-sm">
             <li>
               <.link navigate={~p"/prerequisites"} class="link">Make its memory and meshes</.link>
               — the row “CAD part memories and meshes”, then Make. It teaches
-              <code>{@generated.part}_part</code>
-              from the STEP file and writes the part's mesh.
+              <code>{@generated.part}_{@generated.labels}</code>
+              from the STEP file and writes its meshes.
             </li>
             <li>
               <.link
@@ -223,7 +255,7 @@ defmodule ExTbpMontyWeb.CadLive do
         part: part,
         description: nil,
         error: nil,
-        experiment: Generate.experiment_for(part.name)
+        experiments: Map.new(@arms, &{&1, Generate.experiment_for(part.name, &1)})
       }
     end)
   end

@@ -65,8 +65,16 @@ defmodule ExTbpMontyWeb.CadLiveTest do
       {:ok, view, _html} = live(conn, ~p"/cad")
 
       assert has_element?(view, "#run-plate[href='/experiments/cad/plate_part_eval']")
+
+      assert has_element?(
+               view,
+               "#run-features-plate[href='/experiments/cad/plate_features_eval']"
+             )
+
       refute has_element?(view, "#generate-plate")
+      refute has_element?(view, "#generate-features-plate")
       assert has_element?(view, "#generate-solidcraft-plate")
+      assert has_element?(view, "#generate-features-solidcraft-plate")
     end
   end
 
@@ -109,6 +117,29 @@ defmodule ExTbpMontyWeb.CadLiveTest do
 
       assert File.exists?(
                Path.join([sets, "brought/conf/experiment/cad/solidcraft-plate_part_eval.yaml"])
+             )
+    end
+
+    # The other arm: one object per feature the recognition found, and a sentence
+    # about what that run can and cannot answer (`docs/cad.md`).
+    test "its feature run is a click of its own", %{conn: conn, sets: sets} do
+      {:ok, view, _html} = live(conn, ~p"/cad")
+
+      html = view |> element("#generate-features-solidcraft-plate") |> render_click()
+
+      assert html =~ "cad/solidcraft-plate_features_eval"
+      assert html =~ "without a verdict"
+
+      assert has_element?(
+               view,
+               "#run-features-solidcraft-plate[href='/experiments/cad/solidcraft-plate_features_eval']"
+             )
+
+      assert File.exists?(
+               Path.join([
+                 sets,
+                 "brought/conf/experiment/cad/solidcraft-plate_features_eval.yaml"
+               ])
              )
     end
 

@@ -21,6 +21,7 @@ defmodule Monty.Studio.Cad.Parts do
   and what a generated run's object names come from.
   """
 
+  alias ExTbpMonty.Cad.Objects
   alias Monty.Studio.Setup
 
   # A name becomes a directory in the object set and the head of a memory's
@@ -125,6 +126,53 @@ defmodule Monty.Studio.Cad.Parts do
          features: features_of(recognition)
        }}
     end
+  end
+
+  @doc """
+  The objects a run of this part steps, as the object set names them.
+
+  `:part` is the whole part under its own name. `:features` is one object per
+  feature the recognition claims, plus the stock between them, named the way the
+  build writes the directories and the way the memory renames its objects
+  (`ExTbpMonty.Cad.Objects.object_name/1`): a directory cannot carry the
+  separator a recognition id has. Asking here keeps that rule in one place, so a
+  generated config and the build that fills it cannot disagree.
+  """
+  @spec objects(String.t(), :part | :features) :: {:ok, [String.t()]} | {:error, String.t()}
+  def objects(name, :part) do
+    with {:ok, part} <- find(name), do: {:ok, [part.name]}
+  end
+
+  def objects(name, :features) do
+    with {:ok, part} <- find(name),
+         {:ok, opened} <- open(part.path),
+         {:ok, recognition} <- features(opened) do
+      {:ok, feature_objects(name, opened, recognition)}
+    end
+  end
+
+  # One object per record that owns a face — a record that owns none has no
+  # triangles to write — plus the body when a face is nobody's: the exporter puts
+  # every face no record claims into one `body` object (`MontyCad.Export.named/1`).
+  defp feature_objects(part, opened, recognition) do
+    claimed =
+      recognition
+      |> Quiddity.Recognition.records()
+      |> Enum.filter(&(&1["faces"] != []))
+      |> Enum.map(&Objects.object_name("#{part}/#{&1["id"]}"))
+
+    Enum.sort(claimed ++ body(part, opened, recognition))
+  end
+
+  defp body(part, opened, recognition) do
+    faces = Quiddity.Part.face_count(opened)
+
+    if Enum.any?(
+         0..(faces - 1)//1,
+         &(not is_binary(Quiddity.Recognition.owner(recognition, &1)))
+       ),
+       do: [Objects.object_name("#{part}/body")],
+       else: []
   end
 
   # -- the file ------------------------------------------------------------

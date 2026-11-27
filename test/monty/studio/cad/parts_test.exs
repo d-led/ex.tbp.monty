@@ -115,4 +115,37 @@ defmodule Monty.Studio.Cad.PartsTest do
       assert sentence =~ "no part"
     end
   end
+
+  # What a run steps is the object set's names, not the recognition's ids: a
+  # directory cannot carry the separator, and the memory renames its objects to
+  # match (`Monty.Studio.Cad.Preparation`). Asking here keeps that rule in one
+  # place, so a generated config and the build that fills it cannot disagree.
+  describe "the objects a run of a part steps" do
+    test "as a whole part, is the part's own name" do
+      assert {:ok, ["solidcraft-plate"]} = Parts.objects("solidcraft-plate", :part)
+    end
+
+    test "as its features, is one object per feature and the stock between them" do
+      assert {:ok, objects} = Parts.objects("solidcraft-plate", :features)
+
+      assert objects == [
+               "solidcraft-plate_body",
+               "solidcraft-plate_bosses_0",
+               "solidcraft-plate_fillets_0",
+               "solidcraft-plate_fillets_1",
+               "solidcraft-plate_fillets_2",
+               "solidcraft-plate_fillets_3",
+               "solidcraft-plate_holes_0",
+               "solidcraft-plate_holes_1",
+               "solidcraft-plate_holes_2",
+               "solidcraft-plate_plates_0",
+               "solidcraft-plate_risers_0"
+             ]
+    end
+
+    test "is refused for a name no part answers" do
+      assert {:error, sentence} = Parts.objects("nothing_by_that_name", :part)
+      assert sentence =~ "no part"
+    end
+  end
 end
