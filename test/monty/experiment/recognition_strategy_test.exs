@@ -25,9 +25,9 @@ defmodule Monty.Experiment.RecognitionStrategyTest do
   alias Monty.Experiment.RecognitionStrategy.MinimumLMs
   alias Monty.Experiment.RecognitionStrategy.NaiveScan
   alias Monty.Experiment.RecognitionStrategy.ObjectRecognition
-  alias Monty.Experiment.RecognitionStrategy.StepLimit
   alias Monty.Experiment.RecognitionStrategy.RecognitionContext
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
+  alias Monty.Experiment.RecognitionStrategy.StepLimit
 
   describe "MinEvalMaxTotalSteps" do
     # test_raises_value_error_if_min_eval_steps_is_negative
