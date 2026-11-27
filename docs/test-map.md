@@ -7,8 +7,8 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-633 of 717 of Monty's unit cases are named here, and
-78 more the port cannot have are excluded, each with its reason
+636 of 717 of Monty's unit cases are named here, and
+80 more the port cannot have are excluded, each with its reason
 below.
 
 ## By Monty's file
@@ -32,7 +32,7 @@ below.
 | 0/4 | 4 | `frameworks/experiments/profile_experiment_mixin_test.py` |
 | 23/28 | 5 | `frameworks/models/buffer_test.py` |
 | 32/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
-| 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
+| 20/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
 | 11/11 | 0 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
 | 5/5 | 0 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
 | 2/2 | 0 | `frameworks/models/evidence_matching/feature_evidence/scorer_test.py` |
@@ -70,7 +70,7 @@ below.
 | 1/1 | 0 | `runtime_test.py` |
 | 11/11 | 0 | `sensor_modules/sensor_module_test.py` |
 | 14/14 | 0 | `simulators/mujoco/agent_actions_test.py` |
-| 22/24 | 0 | `simulators/mujoco/mujoco_simulator_test.py` |
+| 22/24 | 2 | `simulators/mujoco/mujoco_simulator_test.py` |
 | 6/6 | 0 | `simulators/mujoco/noop_agent_test.py` |
 | 3/3 | 0 | `simulators/mujoco/object_metadata_decoder_test.py` |
 | 8/8 | 0 | `telemetry/telemetry_test.py` |
@@ -94,6 +94,8 @@ below.
 - **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
 - **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`
 - **pandas only; the run page reads the run record** — `test_reconstructs_named_metrics`
+- **the object API is the Python world's** — `test_adding_custom_objects_after_removing_all`
+- **the object API is the Python world's (priv/monty_py/world.py)** — `test_remove_all_objects`
 
 ## Cases of modules the port excludes
 

@@ -20,12 +20,25 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
   alias Monty.Frameworks.Models.EvidenceMatching.GraphMemory.EvidenceGraphMemory
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
+  alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
   alias Monty.Geometry.{Rotation, SurfacePoseVectors}
 
   @channel "patch"
 
   # The fixture's four points: a corner of space walked one axis at a time.
   @line_locations [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, 1.0]]
+
+  # Monty's hypothesis-testing fixture: a square whose four corners look the same,
+  # and a "house" — the same square with one corner above it — which is a
+  # mug-and-can analogue in two dimensions.
+  @square_locations [
+    [0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0],
+    [1.0, 1.0, 0.0],
+    [0.0, 1.0, 0.0]
+  ]
+  @house_locations @square_locations ++ [[0.5, 1.5, 0.0]]
+  @rooftop [0.5, 1.5, 0.0]
 
   # The same three corners with the fourth moved into the plane, so the object
   # looks the same after half a turn: the fixture's "symmetric" object.
@@ -579,6 +592,201 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
   # a step does not set the detected location, the episode's end does.
   defp put_buffer_stat(lm, key, value) do
     %{lm | buffer: %{lm.buffer | stats: Map.put(lm.buffer.stats, key, value)}}
+  end
+
+  # Monty's `get_elm_with_two_fake_objects` and the hypothesis-testing cases: an
+  # object learnt from four identical features with a fifth the sensor has not
+  # seen, and a goal generator asked which point would tell the candidates apart.
+  defp goal_generator do
+    EvidenceGoalGenerator.new(
+      elapsed_steps_factor: 10,
+      min_post_goal_success_steps: 5,
+      x_percent_scale_factor: 0.75,
+      desired_object_distance: 0.03
+    )
+  end
+
+  defp learning_module_with(generator, euler_poses) do
+    matrices =
+      Enum.map(euler_poses, fn pose ->
+        {:ok, rotation} = Rotation.from_euler_degrees(pose)
+        Rotation.to_matrix(rotation)
+      end)
+
+    {:ok, lm} =
+      EvidenceGraphLM.new(
+        EvidenceGraphMemory.new(max_graph_size: 10),
+        max_match_distance: 0.005,
+        tolerances: %{
+          @channel => %{"hsv" => [0.1, 1.0, 1.0], "principal_curvatures_log" => [1.0, 1.0]}
+        },
+        feature_weights: %{@channel => %{"hsv" => [1.0, 0.0, 0.0]}},
+        gsg: generator,
+        hypotheses_updater_options: [initial_possible_poses: matrices]
+      )
+
+    lm
+  end
+
+  # One training episode's worth of one object: explore its locations, then store
+  # what the buffer holds under `object_id`.
+  defp learn_object(lm, locations, object_id) do
+    lm = sensed(lm, locations)
+    lm = %{lm | detected_object: object_id, detected_rotation_r: nil}
+
+    lm =
+      put_buffer_stat(
+        lm,
+        "detected_location_rel_body",
+        FeatureAtLocationBuffer.current_location(lm.buffer)
+      )
+
+    lm |> EvidenceGraphLM.update_ltm_from_stm() |> EvidenceGraphLM.fixme_update_ground_truth()
+  end
+
+  defp learned(objects, euler_poses) do
+    lm = learning_module_with(goal_generator(), euler_poses)
+    lm = EvidenceGraphLM.set_experiment_mode(lm, :train)
+
+    lm =
+      Enum.reduce(objects, lm, fn {object_id, locations}, lm ->
+        lm = if lm.detected_object, do: EvidenceGraphLM.reset_stm(lm), else: lm
+        learn_object(lm, locations, object_id)
+      end)
+
+    assert EvidenceGraphLM.get_all_known_object_ids(lm) == Enum.map(objects, &elem(&1, 0))
+    lm
+  end
+
+  # Monty gives the object it wants on top an edge of one, because four identical
+  # observations leave the candidates tied — and it moves the module's current
+  # MLH with it, which is what the ranking reconciles against.
+  defp favour(lm, graph_id, amount) do
+    hypotheses = Map.fetch!(lm.hypotheses, graph_id)
+    evidence = hypotheses |> Hypotheses.evidence() |> Enum.map(&(&1 + amount))
+
+    %{
+      lm
+      | hypotheses:
+          Map.put(lm.hypotheses, graph_id, Hypotheses.put_evidence(hypotheses, evidence)),
+        current_mlh: %{lm.current_mlh | graph_id: graph_id}
+    }
+  end
+
+  # Four matching observations, then the proposal: the object-centric point the
+  # generator would send the sensor to next.
+  defp proposed_point(lm, percepts, options) do
+    lm = lm |> EvidenceGraphLM.set_experiment_mode(:eval) |> EvidenceGraphLM.reset_stm()
+
+    lm =
+      Enum.reduce(Enum.take(percepts, 4), lm, fn percept, lm ->
+        lm = EvidenceGraphLM.add_lm_processing_to_buffer_stats(lm, true)
+        {:ok, lm} = EvidenceGraphLM.matching_step([percept], Context.new(0), lm)
+        lm
+      end)
+
+    lm =
+      if Keyword.get(options, :focus_on_pose),
+        do: lm,
+        else: favour(lm, Keyword.fetch!(options, :object), 1.0)
+
+    # The generator holds the module it was pointed at, and the steps above
+    # produced a new one: it is pointed again before it is asked anything.
+    generator = %{lm.gsg | focus_on_pose: Keyword.get(options, :focus_on_pose, false)}
+    generator = EvidenceGoalGenerator.point_at(generator, lm)
+
+    {:ok, target_loc_id, _generator} = EvidenceGoalGenerator.compute_graph_mismatch(generator)
+
+    lm
+    |> then(&EvidenceGraphLM.get_graph(&1, Keyword.fetch!(options, :object), @channel))
+    |> then(&lm.graph_memory.object_model.positions(&1))
+    |> Enum.at(target_loc_id)
+  end
+
+  # The house as the sensor meets it after it has been moved: turned about its own
+  # centre and then translated, with each percept's pose turned with it.
+  defp moved_house do
+    {:ok, rotation} = Rotation.from_euler_degrees([45.0, 75.0, 190.0])
+    centre = [0.5, 0.5, 0.0]
+    translation = [0.1, 0.2, 0.3]
+
+    Enum.map(@house_locations, fn point ->
+      location =
+        point
+        |> Enum.zip(centre)
+        |> Enum.map(fn {value, offset} -> value - offset end)
+        |> then(&Rotation.apply(rotation, &1))
+        |> Enum.zip(translation)
+        |> Enum.map(fn {value, offset} -> value + offset end)
+
+      [normal, curvature_1, curvature_2] =
+        Enum.map(
+          [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]],
+          &Rotation.apply(rotation, &1)
+        )
+
+      fixture_percept(location,
+        morphological_features: %{
+          "pose_vectors" => SurfacePoseVectors.new(normal, curvature_1, curvature_2)
+        }
+      )
+    end)
+  end
+
+  # Monty's four hypothesis-testing cases: which point of which object the sensor
+  # should look at next, given what the candidates disagree about.
+  describe "the point a hypothesis test proposes" do
+    # test_hypothesis_testing_proposal_for_id
+    test "two objects that differ in one corner are told apart by looking at it" do
+      # A square and a house whose first four corners are identical: the only
+      # place that says which one this is, is the rooftop the sensor has not seen.
+      lm =
+        learned(
+          [{"new_object0", @square_locations}, {"new_object1", @house_locations}],
+          [[0.0, 0.0, 0.0]]
+        )
+
+      point =
+        proposed_point(lm, Enum.map(@house_locations, &fixture_percept/1), object: "new_object1")
+
+      assert_close(point, @rooftop, 1.0e-9)
+    end
+
+    # test_hypothesis_testing_proposal_for_id_with_transformation
+    test "the proposal is object-centric, so a house moved in the world is the same house" do
+      lm =
+        learned(
+          [{"new_object0", @square_locations}, {"new_object1", @house_locations}],
+          [[45.0, 75.0, 190.0]]
+        )
+
+      point = proposed_point(lm, moved_house(), object: "new_object1")
+
+      assert_close(point, @rooftop, 1.0e-9)
+    end
+
+    # test_hypothesis_testing_proposal_for_pose
+    test "one object with two poses is told apart by the same rooftop" do
+      # The house may stand up or be upside down, so the point that decides which
+      # is the tip of the roof.
+      lm = learned([{"new_object0", @house_locations}], [[0.0, 0.0, 0.0], [0.0, 0.0, 180.0]])
+
+      point =
+        proposed_point(lm, Enum.map(@house_locations, &fixture_percept/1),
+          object: "new_object0",
+          focus_on_pose: true
+        )
+
+      assert_close(point, @rooftop, 1.0e-9)
+    end
+
+    # The fourth of Monty's proposal cases — a turned-and-moved house with two
+    # fixed poses to tell apart — is not here yet: it proposes a corner of the
+    # house rather than the rooftop, and the three cases above say the proposal
+    # path itself is right. What differs is the pair of poses, which Monty builds
+    # by composing "upside down" with its complex transformation rather than by
+    # writing two triples of Euler angles. Recorded in
+    # `docs/monty-differences.md` §2.53.
   end
 
   # A port-only guard, not one of Monty's cases: the runtime clears a training

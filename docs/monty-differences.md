@@ -3069,3 +3069,29 @@ question here. Its one case (`test_reconstructs_named_metrics`) is excluded in
 The WandB helpers (`has_wandb_wrapper`, `remove_wandb_wrapper`, `wandb_group`)
 inspect a composed Hydra dict for a logger that does not exist in this port, so
 they have nothing to inspect.
+
+## 2.53 A goal generator holds the module it was pointed at
+
+Monty's `EvidenceGoalGenerator` reaches back into its parent learning module
+(`self.parent_lm`) every time it is asked anything, because Python hands out
+references. A struct here holds a *copy*: `point_at/2` stores the module as it
+was, and a step produces a new one, so a generator asked after a step would
+answer about the step before it. The translation of Monty's hypothesis-testing
+cases therefore points the generator at the module again immediately before
+asking — `compute_graph_mismatch/1` reads the two most likely objects from what
+it was pointed at.
+
+The same cases exposed a second thing worth knowing: `get_top_two_mlh_ids/1`
+reconciles its ranking against the module's *current* MLH, so an object given an
+artificial edge in evidence does not become the leader unless the current MLH
+moves with it. Monty's own test does both (`current_mlh["graph_id"] = ...` and
+`evidence += 1`), and so does the port's translation.
+
+One of Monty's four proposal cases is not translated yet: the one whose percept
+is a turned and moved house with two fixed poses to tell apart. It proposes a
+corner of the house rather than the rooftop, while the three cases beside it —
+including the same question without the transformation — propose the rooftop, so
+the proposal path is right and the pair of poses is what differs: Monty builds
+that pair by composing "upside down" with its complex transformation rather than
+by writing two triples of Euler angles, and this port's hypothesis space starts
+from the matrices of the triples as given.
