@@ -3235,11 +3235,13 @@ defmodule Monty.Studio.Setup do
   end
 
   # The click that writes it: a build is made on the page an archive is fetched
-  # from, and the page starts either from the same query parameter.
+  # from, and the page starts either from the same query parameter. A memory only
+  # a run here writes has neither, and its trainer's page is the click — the same
+  # one the memory of another release's trainer gets.
   defp with_memory_link(finding, name, release) do
     case Prerequisites.for_model(name, release) do
       nil ->
-        finding
+        with_trainer_link(finding, name)
 
       %{build: build} = prerequisite when is_binary(build) ->
         Finding.with_link(finding, "Make it", "/prerequisites?fetch=#{prerequisite.id}")
@@ -3259,7 +3261,10 @@ defmodule Monty.Studio.Setup do
   defp with_trainer_link(finding, name) do
     trainer = Catalog.trainer_for(name)
 
-    if Memory.releases_for(name) == [Learned.release()] and is_binary(trainer) do
+    # No release other than `trained` carries it, which includes the one that is
+    # not written yet: `[]` is the memory the finding is about, and the run that
+    # would write it is the answer rather than a reason to withhold the link.
+    if Memory.releases_for(name) -- [Learned.release()] == [] and is_binary(trainer) do
       Finding.with_link(finding, trainer, "/experiments/#{trainer}")
     else
       finding

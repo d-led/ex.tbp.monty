@@ -337,6 +337,25 @@ defmodule Monty.Studio.MemoryTest do
       assert message =~ "train that first"
     end
 
+    # And the name is a click, the way the memory of another release's trainer
+    # already is. A memory that is not written yet is exactly the case where the
+    # experiment page is the next thing a reader needs — its runs are listed
+    # there and another is started there — and the guard above kept the link off
+    # it, because it asked whether the memory existed in the `trained` release.
+    test "and offers that experiment as the click, before the memory exists" do
+      Tmp.env_dir("libraries-nothing-yet-at-all", :monty_libraries_dir)
+
+      setup = %Setup{
+        world: :mujoco,
+        model_name_or_path: monty_path("pretrained_ycb_v14", "surf_agent_2obj_train")
+      }
+
+      assert [%{code: :no_pretrained_memory, link: link}] = Setup.memory_findings(setup)
+
+      assert %{label: trainer, href: "/experiments/" <> trainer} = link
+      assert trainer == "tutorial/surf_agent_2obj_train"
+    end
+
     test "names the build that writes a memory this application makes, and offers the click" do
       # A CAD memory is neither an archive nor a training run: pressing Make on
       # `/prerequisites` writes it. A finding that said "no archive carries it"

@@ -197,4 +197,133 @@ defmodule Monty.Frameworks.Models.MotorPolicies.JumpToGoalTest do
       refute JumpToGoal.reset(jumped).is_jumping
     end
   end
+
+  # -- Monty's own cases ---------------------------------------------------
+
+  # Monty's `JumpToGoalTest`, driven through the same `call/6` every other case
+  # here uses. Its goals are `Mock`s whose `pose_vectors` is a `GazeDirection`;
+  # a goal here is a real `Goal` carrying the same direction, and its
+  # `get_on_object` is the percept's own `on_object` feature.
+  describe "Monty's own cases" do
+    # test_generates_actions_that_align_forward_axis_with_goal_direction
+    test "the jump stands the agent at the goal, facing the way the goal looks" do
+      for {location, direction} <- [
+            {[0.5, 0.0, 0.0], [-1.0, 0.0, 0.0]},
+            {[-0.25, 0.75, 0.1], [0.0, 0.0, -1.0]},
+            {[0.0, 0.0, 0.4], [0.7071067811865475, 0.7071067811865475, 0.0]}
+          ] do
+        {%MotorPolicyResult{actions: [set_pose, sensor_rotation]}, _policy} =
+          step(policy(), goal: goal_at(location, direction))
+
+        assert %SetAgentPose{location: ^location} = set_pose
+
+        # Forward is the body's own −z, which the jump lines up with the goal's
+        # gaze (Monty's `-rotation.as_matrix()[:, 2]`).
+        forward =
+          set_pose.rotation_quat
+          |> Rotation.from_quaternion()
+          |> Rotation.apply([0.0, 0.0, -1.0])
+
+        assert_vector(forward, direction)
+
+        # The head is not turned by a jump.
+        assert %SetSensorRotation{rotation_quat: {1.0, 0.0, 0.0, 0.0}} = sensor_rotation
+      end
+    end
+
+    # test_returns_undo_actions_status_ready_if_undo_is_needed_regardless_of_new_goal
+    test "a landing off the object is undone, whether a goal arrived or not" do
+      for position <- [[0.0, 0.0, 0.0], [0.3, -0.2, 0.05]],
+          rotation <- [@identity, turned(90.0)],
+          sensor_rotation <- [@identity, turned(45.0)],
+          goal <- [goal_at([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]), nil] do
+        before = state_with(position, rotation, sensor_rotation)
+        {_result, jumped} = step(policy(), state: before)
+
+        {%MotorPolicyResult{status: :ready, actions: [set_pose, set_sensor]}, _policy} =
+          step(jumped, percept: percept(false), goal: goal)
+
+        assert set_pose.location == position
+        assert set_pose.rotation_quat == Rotation.to_quaternion(rotation)
+        assert set_sensor.rotation_quat == Rotation.to_quaternion(sensor_rotation)
+      end
+    end
+
+    # test_returns_new_jump_actions_status_in_progress_if_undo_is_not_needed_after_jump_and_goal_is_provided
+    test "a landing on the object jumps again, to the goal that has arrived" do
+      for {location, direction} <- [
+            {[0.5, 0.0, 0.0], [-1.0, 0.0, 0.0]},
+            {[-0.25, 0.75, 0.1], [0.0, 0.0, -1.0]}
+          ] do
+        {_result, jumped} = step(policy())
+
+        {%MotorPolicyResult{status: :in_progress, actions: [set_pose, set_sensor]}, _policy} =
+          step(jumped, percept: percept(true), goal: goal_at(location, direction))
+
+        assert set_pose.location == location
+
+        forward =
+          set_pose.rotation_quat
+          |> Rotation.from_quaternion()
+          |> Rotation.apply([0.0, 0.0, -1.0])
+
+        assert_vector(forward, direction)
+        assert %SetSensorRotation{rotation_quat: {1.0, 0.0, 0.0, 0.0}} = set_sensor
+      end
+    end
+
+    # test_returns_no_actions_status_ready_if_undo_is_not_needed_after_jump_and_goal_is_none
+    test "a landing on the object with no goal asks for nothing at all" do
+      {_result, jumped} = step(policy())
+
+      assert {%MotorPolicyResult{status: :ready, actions: []}, _policy} =
+               step(jumped, percept: percept(true), goal: nil)
+    end
+  end
+
+  # -- Monty's fixtures ----------------------------------------------------
+
+  # The goal Monty's `Mock` stands in for: a place, and the gaze it states in
+  # its first pose vector — the other two rows undefined, as Monty's are.
+  defp goal_at(location, direction) do
+    {:ok, goal} =
+      Goal.new(
+        location: location,
+        morphological_features: %{
+          "pose_vectors" => %GazeDirection{
+            value: [direction, [nil, nil, nil], [nil, nil, nil]]
+          },
+          "pose_fully_defined" => true
+        },
+        sender_id: "LM_0",
+        sender_type: :gsg
+      )
+
+    goal
+  end
+
+  defp state_with(position, rotation, sensor_rotation) do
+    %{
+      @agent => %AgentState{
+        sensors: %{
+          "patch" => %SensorState{position: [0.0, 0.0, 0.0], rotation: @identity},
+          "view_finder" => %SensorState{position: [0.0, 0.0, 0.0], rotation: sensor_rotation}
+        },
+        position: position,
+        rotation: rotation
+      }
+    }
+  end
+
+  defp turned(degrees) do
+    {:ok, rotation} = Rotation.from_euler_degrees([0.0, degrees, 0.0])
+    rotation
+  end
+
+  # Monty's `np.testing.assert_allclose(..., atol=DEFAULT_TOLERANCE)`.
+  defp assert_vector(actual, expected) do
+    for {mine, theirs} <- Enum.zip(actual, expected) do
+      assert_in_delta mine, theirs, 1.0e-6
+    end
+  end
 end
