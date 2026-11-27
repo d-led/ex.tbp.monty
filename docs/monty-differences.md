@@ -3089,9 +3089,20 @@ moves with it. Monty's own test does both (`current_mlh["graph_id"] = ...` and
 
 One of Monty's four proposal cases is not translated yet: the one whose percept
 is a turned and moved house with two fixed poses to tell apart. It proposes a
-corner of the house rather than the rooftop, while the three cases beside it —
-including the same question without the transformation — propose the rooftop, so
-the proposal path is right and the pair of poses is what differs: Monty builds
-that pair by composing "upside down" with its complex transformation rather than
-by writing two triples of Euler angles, and this port's hypothesis space starts
-from the matrices of the triples as given.
+corner rather than the rooftop, while the three cases beside it — including the
+same question without the transformation — propose the rooftop, so the proposal
+path itself is right.
+
+The pair of poses is *not* the difference, which is worth recording because it
+looks like the obvious suspect: this port's `Rotation.from_euler_degrees/1` of
+Monty's two triples gives matrices that agree with `R` and `R · Rz(180°)` to the
+last digit, which is what "upside down before the transformation was applied"
+means. What differs is the *evidence*: after the four matching observations every
+hypothesis of the one object sits at the floor of `-2.0` (two channels' worth of
+`MIN_EVIDENCE`), so the two the generator compares are the first two in an
+arbitrary tie order — two nodes with different rotations — rather than the upright
+and upside-down readings of one node. Whether that floor is the transformed
+percepts failing to match at `max_match_distance: 0.005` or the initial poses
+being taken the other way round (Monty's updater inverts them; the port's
+`initial_possible_poses` are used as given) is the open question, and it is the
+place to look before writing this case.
