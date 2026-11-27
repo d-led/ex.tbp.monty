@@ -67,6 +67,83 @@ defmodule FlyversePlugin.PerceptTest do
     end
   end
 
+  # A fly's eye reports light, not metres. The `rgba` a sensor records is the same
+  # view a depth image is a rendering of, so the second channel is a colour per
+  # pixel and a luminance per band — which is what a photoreceptor could answer and
+  # a depth image cannot be asked for.
+  describe "the colours to drive from" do
+    test "a pixel is its luminance, with green weighing most" do
+      assert {:ok, {"view_finder", [[white]]}} =
+               Percept.luminance(
+                 %{"agent_id_0" => %{"view_finder" => %{"rgba" => [[[255, 255, 255, 255]]]}}},
+                 "agent_id_0",
+                 nil
+               )
+
+      assert_in_delta white, 1.0, 1.0e-9
+
+      assert {:ok, {"view_finder", [[black, red, green]]}} =
+               Percept.luminance(
+                 %{
+                   "agent_id_0" => %{
+                     "view_finder" => %{
+                       "rgba" => [[[0, 0, 0, 255], [255, 0, 0, 255], [0, 255, 0, 255]]]
+                     }
+                   }
+                 },
+                 "agent_id_0",
+                 nil
+               )
+
+      assert black == 0.0
+      assert green > red
+      assert red == Float.round(0.2126, 6) or abs(red - 0.2126) < 0.001
+    end
+
+    test "a channel that arrived as a float is taken at its word" do
+      assert {:ok, {_sensor, [[white]]}} =
+               Percept.luminance(
+                 %{"agent_id_0" => %{"view_finder" => %{"rgba" => [[[1.0, 1.0, 1.0, 1.0]]]}}},
+                 "agent_id_0",
+                 nil
+               )
+
+      assert_in_delta white, 1.0, 1.0e-9
+    end
+
+    test "a world that renders no colours is refused, and the sentence says so" do
+      assert {:error, sentence} =
+               Percept.luminance(
+                 %{"agent_id_0" => %{"view_finder" => %{"depth" => [[1.0]]}}},
+                 "agent_id_0",
+                 nil
+               )
+
+      assert sentence =~ "colours"
+    end
+
+    # A photoreceptor band can only report *change*, and the polarity is not the
+    # detector's to choose: a surface growing in the view brightens or darkens its
+    # band, and both loom.
+    test "a band's change is its drive, whichever way it changed" do
+      assert Percept.loom([1.0, 0.0], [0.0, 0.0], 20.0) == [20.0, 0.0]
+      assert Percept.loom([0.0, 1.0], [1.0, 1.0], 20.0) == [20.0, 0.0]
+      assert Percept.loom([0.5, 0.5], [0.5, 0.5], 20.0) == [0.0, 0.0]
+    end
+
+    test "a first step has nothing to be a change of" do
+      assert Percept.loom([1.0, 0.0], nil, 20.0) == [0.0, 0.0]
+    end
+
+    test "a band's light is the mean of its columns" do
+      rows = [[0.0, 0.0, 1.0, 1.0]]
+
+      assert Percept.luminance_bands(rows, 2) == [0.0, 1.0]
+      # The odd middle column goes to the right, as it does for the depth bands.
+      assert Percept.luminance_bands([[0.2, 0.4, 0.8]], 2) == [0.2, 0.6000000000000001]
+    end
+  end
+
   describe "the image to drive from" do
     setup do
       observations = %{

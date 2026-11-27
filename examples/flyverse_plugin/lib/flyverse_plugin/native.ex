@@ -56,13 +56,20 @@ defmodule FlyversePlugin.Native do
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc """
-  Steps `ticks` of 0.1 ms and answers `{counts, window_spikes, total_spikes}`.
+  Steps `ticks` of 0.1 ms with one stimulus per drive group, and answers what the
+  readouts did.
+
+  A stimulus is `{:rate, hz}` — Poisson, one probability for the whole group — or
+  `{:ticks, [[tick, ...], ...]}`, a recording: one list of ticks per neuron of the
+  group, in absolute ticks of this simulation's clock (`reset/1` sets it to zero).
+  The second is what the dataset's `vnc_sensory` replay is, and the first is what a
+  policy with only a rate to offer can say; both drive the same engine.
 
   One count per readout, in the order `new/5` took them. Counts rather than
   rates because a 2 ms window cannot honestly carry a rate: one spike in a
   window is 500 Hz, and a policy that wants a rate averages it itself.
   """
-  def window(_simulation, _connectome, _ticks, _rates_hz),
+  def window(_simulation, _connectome, _ticks, _stimuli),
     do: :erlang.nif_error(:nif_not_loaded)
 
   @doc "Starts the next episode from the connectome's resting state."

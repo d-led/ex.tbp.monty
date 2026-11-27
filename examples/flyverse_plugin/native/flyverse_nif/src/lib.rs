@@ -27,6 +27,17 @@
 //! simulation — and `sampler_matches_stim_gen` holds the copy to the original,
 //! so a change upstream is a test failure here rather than a quiet divergence.
 //!
+//! ## …and a drive can also be a recording
+//!
+//! The dataset this engine is written for carries `vnc_sensory`, a *canned
+//! spike train*: which sensory neuron fired on which tick, recorded rather than
+//! generated. So a group's stimulus on a window is either `{:rate, hz}` — the
+//! sampler above, for a policy that has only a rate to offer — or
+//! `{:ticks, [[tick, ...], ...]}`, one list per target of the group, in
+//! absolute ticks of the simulation's own clock (`reset/1` sets it to zero).
+//! Replaying a recording is then copying it in, and a tick that a window never
+//! reaches is simply not reached.
+//!
 //! ## One pack leak, on purpose
 //!
 //! `Connectome::load` keeps its arrays for the life of the process
@@ -93,6 +104,23 @@ struct Simulation {
 
 #[rustler::resource_impl]
 impl rustler::Resource for Simulation {}
+
+/// What drives one group on one window: a rate the sampler draws from, or the
+/// ticks a recording says its neurons fired on.
+enum Stimulus {
+    /// Poisson, one probability for the whole group, as `StimGen` would.
+    Rate(f64),
+    /// One list per target of the group, in the group's own order, in absolute
+    /// ticks of the simulation's clock.
+    Ticks(Vec<Vec<u64>>),
+}
+
+/// A stimulus, ready to be applied on the tick loop: the rate's own sampler, or
+/// the recording turned inside out into `tick -> the targets that fired on it`.
+enum Prepared {
+    Rate { seed: u64, probability: f64 },
+    Ticks(HashMap<u64, Vec<u32>>),
+}
 
 /// The refusal shape every fallible NIF here answers: a code a caller can branch
 /// on and a sentence a person can read.
@@ -200,18 +228,9 @@ fn window(
     simulation: ResourceArc<Simulation>,
     connectome: ResourceArc<ConnectomeResource>,
     ticks: u32,
-    rates_hz: Vec<f64>,
+    stimuli: Vec<Term>,
 ) -> Result<(Vec<u32>, u64, u64), Refusal> {
-    if rates_hz.len() != simulation.drives.len() {
-        return Err(refusal(
-            "drives",
-            format!(
-                "{} drive group(s) but {} rate(s)",
-                simulation.drives.len(),
-                rates_hz.len()
-            ),
-        ));
-    }
+    let prepared = prepared(&simulation, stimuli)?;
 
     let mut inner = lock(&simulation)?;
     let mut counts = vec![0u32; simulation.readouts.len()];
@@ -221,12 +240,24 @@ fn window(
     for _ in 0..ticks {
         events.clear();
 
-        for (drive, &rate_hz) in simulation.drives.iter().zip(rates_hz.iter()) {
-            let probability = (rate_hz.max(0.0)) * DT_MS as f64 / 1000.0;
+        for (drive, stimulus) in simulation.drives.iter().zip(prepared.iter()) {
+            match stimulus {
+                Prepared::Rate { seed, probability } => {
+                    for (position, &target) in drive.targets.iter().enumerate() {
+                        if draw(*seed, inner.tick, position as u64) < *probability {
+                            events.push((target, 1));
+                        }
+                    }
+                }
 
-            for (position, &target) in drive.targets.iter().enumerate() {
-                if draw(drive.seed, inner.tick, position as u64) < probability {
-                    events.push((target, 1));
+                // A recording is not a probability: the ticks it names fire, and
+                // the ticks it does not name do not, however long the window is.
+                Prepared::Ticks(by_tick) => {
+                    if let Some(targets) = by_tick.get(&inner.tick) {
+                        for &target in targets {
+                            events.push((target, 1));
+                        }
+                    }
                 }
             }
         }
@@ -250,6 +281,104 @@ fn window(
     let total = inner.spikes;
 
     Ok((counts, spikes, total))
+}
+
+/// Validates every stimulus against the group it drives, and prepares it for the
+/// tick loop.
+///
+/// The refusals are here rather than inside the loop: a shape that is wrong is
+/// wrong before a tick is stepped, and a window that half-stepped is a
+/// simulation no caller can reason about.
+fn prepared(simulation: &Simulation, stimuli: Vec<Term>) -> Result<Vec<Prepared>, Refusal> {
+    if stimuli.len() != simulation.drives.len() {
+        return Err(refusal(
+            "drives",
+            format!(
+                "{} drive group(s) but {} stimulus(es): a group without a stimulus \
+                 is a group that cannot be driven",
+                simulation.drives.len(),
+                stimuli.len()
+            ),
+        ));
+    }
+
+    stimuli
+        .into_iter()
+        .enumerate()
+        .map(|(index, term)| {
+            let drive = &simulation.drives[index];
+
+            match stimulus(term)? {
+                Stimulus::Rate(hz) => Ok(Prepared::Rate {
+                    seed: drive.seed,
+                    probability: hz.max(0.0) * DT_MS as f64 / 1000.0,
+                }),
+
+                Stimulus::Ticks(lists) => {
+                    if lists.len() != drive.targets.len() {
+                        return Err(refusal(
+                            "drives",
+                            format!(
+                                "drive group {index} names {} target(s) and {} spike list(s): \
+                                 a recording is one list of ticks per neuron",
+                                drive.targets.len(),
+                                lists.len()
+                            ),
+                        ));
+                    }
+
+                    let mut by_tick: HashMap<u64, Vec<u32>> = HashMap::new();
+
+                    for (&target, ticks) in drive.targets.iter().zip(lists.iter()) {
+                        for &tick in ticks {
+                            by_tick.entry(tick).or_default().push(target);
+                        }
+                    }
+
+                    Ok(Prepared::Ticks(by_tick))
+                }
+            }
+        })
+        .collect()
+}
+
+/// `{:rate, hz}` or `{:ticks, [[tick, ...], ...]}`: the two ways to drive a group.
+fn stimulus(term: Term) -> Result<Stimulus, Refusal> {
+    let (kind, payload) = term.decode::<(Term, Term)>().map_err(|_| {
+        refusal(
+            "stimulus",
+            "a drive is `{:rate, hz}` or `{:ticks, [[tick, ...], ...]}`",
+        )
+    })?;
+
+    let kind = kind.atom_to_string().map_err(|_| {
+        refusal(
+            "stimulus",
+            "the first element of a drive names its kind, as an atom: :rate or :ticks",
+        )
+    })?;
+
+    match kind.as_str() {
+        "rate" => payload
+            .decode::<f64>()
+            .map(Stimulus::Rate)
+            .map_err(|_| refusal("stimulus", "a rate is a number of hertz")),
+
+        "ticks" => payload
+            .decode::<Vec<Vec<u64>>>()
+            .map(Stimulus::Ticks)
+            .map_err(|_| {
+                refusal(
+                    "stimulus",
+                    "a recording is a list of tick lists, one per neuron of the group",
+                )
+            }),
+
+        other => Err(refusal(
+            "stimulus",
+            format!("`{other}` is not a stimulus: a drive is :rate or :ticks"),
+        )),
+    }
 }
 
 /// Starts the next episode from the connectome's resting state.

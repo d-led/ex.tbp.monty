@@ -958,6 +958,12 @@ defmodule FlyversePlugin.PolicyTest do
     defp radians(degrees), do: degrees * :math.pi() / 180.0
   end
 
+  # The same step, keeping whatever the policy answered: a refusal is an answer a
+  # caller has to be able to read, not a crash in a test helper.
+  defp outcome(policy, state, observations) do
+    Policy.call(policy, {nil, observations, nil, nil, nil}, state)
+  end
+
   defp step(policy, state, depth) do
     step(policy, state, observations(depth), nil)
   end
@@ -1113,6 +1119,82 @@ defmodule FlyversePlugin.PolicyTest do
 
   # Two sensors, because a config usually gives an agent both: the policy reads
   # the wide one, and the test says so by giving both the same image.
+  # A fly's eye reports light, not metres. The photoreceptor channel drives the
+  # same network from the `rgba` the sensor recorded: what a band is driven with is
+  # how much the light it returns *changed* since the last step, so a band that is
+  # brightening or darkening is a surface growing or shrinking in it, and the side
+  # that changed is the side the step turns toward. The depth channel is what the
+  # reach is still asked of, because "is the patch on the object" is geometry.
+  describe "driven by colours instead of depth" do
+    # What the channel is, and what it is not: the network is stepped from the
+    # colours the sensor recorded — the drive is a band's change, which `loom/3`
+    # holds on its own — while the reach is still asked of depth, because "is the
+    # patch on the object" is geometry and not brightness.
+    test "the network is stepped from the colours when the policy asks for them", %{state: state} do
+      {:ok, policy, state} = Policy.new([sensor: :rgba], state)
+      {policy, state} = until_steer(policy, state, coloured(dark(), dark(), 0.04))
+
+      {result, _policy, _state} = steer_once(policy, state, coloured(bright(), dark(), 0.03))
+
+      assert %{drives: [left_drive, right_drive], left_hz: left_hz, right_hz: right_hz} =
+               result.telemetry
+
+      assert is_float(left_drive) and is_float(right_drive)
+      assert is_number(left_hz) and is_number(right_hz)
+    end
+
+    # A policy asked for colours by a world that renders none is refused with the
+    # sentence, rather than driven by numbers it does not have.
+    test "a world with no colours refuses the channel and says why", %{state: state} do
+      {:ok, policy, state} = Policy.new([sensor: :rgba], state)
+
+      assert {:error, sentence} =
+               outcome(policy, state, observations([[0.04, 0.04, 100.0, 100.0]]))
+
+      assert sentence =~ "colours"
+    end
+  end
+
+  # The first step of a bout is Monty's `_touch_object` and not the network's, and
+  # only a step whose telemetry carries the drive is the network's. The policy and
+  # its state are the accumulator because they move together.
+  defp until_steer(policy, state, observations, tries \\ 8) do
+    Enum.reduce_while(1..tries, {policy, state}, fn _try, {policy, state} ->
+      {result, policy, state} = step(policy, state, observations, nil)
+
+      if Map.has_key?(result.telemetry, :drives),
+        do: {:halt, {policy, state}},
+        else: {:cont, {policy, state}}
+    end)
+  end
+
+  defp steer_once(policy, state, observations) do
+    {result, policy, state} = step(policy, state, observations, nil)
+
+    # A step that was not the network's carries the walk's telemetry instead, and
+    # this match is what says so rather than a list of zero drives looking true.
+    assert %{drives: _, left_hz: _, right_hz: _} = result.telemetry
+
+    {result, policy, state}
+  end
+
+  defp dark, do: [0, 0, 0, 0]
+
+  defp bright, do: Enum.map(1..4, fn _ -> 255 end)
+
+  defp coloured(left, right, patch) do
+    rgba = [left ++ right]
+
+    %{
+      "agent_id_0" => %{
+        # Something near in the *depth* view is what makes the step a walk towards it
+        # rather than a search; the colours are what drives the network.
+        "view_finder" => %{"depth" => [[0.04, 0.04, 100.0, 100.0]], "rgba" => rgba},
+        "patch" => %{"depth" => [[patch, patch], [patch, patch]]}
+      }
+    }
+  end
+
   defp observations(depth) do
     %{
       "agent_id_0" => %{

@@ -58,7 +58,7 @@ defmodule FlyversePlugin.Policy do
   alias Monty.Frameworks.Models.MotorSystemState.AgentState
 
   @enforce_keys [:sim]
-  defstruct [:sim, :agent_id, :sensor_id, :turn_degrees, :distance]
+  defstruct [:sim, :agent_id, :sensor_id, :turn_degrees, :distance, :sensor]
 
   @type t :: %__MODULE__{
           sim: pos_integer(),
@@ -342,6 +342,13 @@ defmodule FlyversePlugin.Policy do
   # view shows.
   @clip_nearness 20.0
 
+  # How much a band's *change* in light counts as drive, in the units the rate
+  # function takes: a band whose luminance moves by a twentieth of the range in one
+  # step is driven as hard as a surface at the near limit. It is the same ceiling
+  # the depth channel is clipped at, so the two channels ask the same question of
+  # the same rate function and a run of one is comparable with a run of the other.
+  @loom_gain 20.0
+
   @doc "The name a cluster registers it under."
   @spec name() :: String.t()
   def name, do: "flyverse_plugin.lif_steering"
@@ -385,9 +392,11 @@ defmodule FlyversePlugin.Policy do
   """
   @impl FlyversePlugin.Plugin
   def new(options, state) do
+    sensor = Keyword.get(options, :sensor, sensor_from_env())
+
     with {:ok, network} <- Networks.open(),
          :ok <- plannable(network.directory, network.plan),
-         {:ok, simulation} <- start(network) do
+         {:ok, simulation} <- start(network, sensor) do
       key = state.next
       policy = policy_of(options, key)
 
@@ -422,7 +431,7 @@ defmodule FlyversePlugin.Policy do
     watched = watch(advanced, patch_nearness(observations, policy))
     state = put(state, policy.sim, watched)
 
-    {:ok, result, policy, state} =
+    outcome =
       if idle?(watched) do
         {:ok, struggling(policy, watched), policy, state}
       else
@@ -435,7 +444,17 @@ defmodule FlyversePlugin.Policy do
         end
       end
 
-    {:ok, %{result | motor_only_step: motor_only?(saw)}, policy, state}
+    # A step that could not be driven — no depth, or no colours for a policy that
+    # asked for them — answers its sentence rather than crashing on a failed match:
+    # the caller turns it into the error the run reports, and the sentence says
+    # which channel was missing.
+    case outcome do
+      {:ok, result, policy, state} ->
+        {:ok, %{result | motor_only_step: motor_only?(saw)}, policy, state}
+
+      {:error, sentence} ->
+        {:error, sentence}
+    end
   end
 
   # Which steps the learning module is shown, and it is the patch's answer rather
@@ -678,7 +697,8 @@ defmodule FlyversePlugin.Policy do
 
     with {:ok, {_sensor_id, rows}} <-
            Percept.image(observations, policy.agent_id, policy.sensor_id),
-         {:ok, window} <- step(simulation, rows) do
+         {:ok, luminance} <- luminance(policy, observations),
+         {:ok, window} <- step(simulation, rows, luminance) do
       wish = smoothed(simulation, window.left - window.right)
       result = result(policy, wish, window, observations)
 
@@ -688,12 +708,26 @@ defmodule FlyversePlugin.Policy do
           spikes: window.spikes,
           last: window,
           nearness: window.nearness,
+          luminance: window.luminance,
           steps: simulation.steps + 1
       }
 
       {:ok, result, policy, put(state, policy.sim, simulation)}
     end
   end
+
+  # The colours the drive is read from, when the policy asked for the photoreceptor
+  # channel. `nil` in the depth channel: a world that renders no colours still runs
+  # the channel a config was measured with, and a policy asked for colours it did
+  # not get is refused rather than driven by nothing.
+  defp luminance(%{sensor: :rgba} = policy, observations) do
+    case Percept.luminance(observations, policy.agent_id, policy.sensor_id) do
+      {:ok, {_sensor, rows}} -> {:ok, rows}
+      {:error, sentence} -> {:error, sentence}
+    end
+  end
+
+  defp luminance(_policy, _observations), do: {:ok, nil}
 
   # The two questions this policy asks of a view are not the same question, and
   # they are not asked of the same sensor. "How near is the world on the left, and
@@ -1073,8 +1107,21 @@ defmodule FlyversePlugin.Policy do
       agent_id: Keyword.get(options, :agent_id, @agent_id),
       sensor_id: Keyword.get(options, :sensor_id),
       turn_degrees: Keyword.get(options, :turn_degrees, @turn_degrees),
-      distance: Keyword.get(options, :distance, @distance)
+      distance: Keyword.get(options, :distance, @distance),
+      sensor: Keyword.get(options, :sensor, sensor_from_env())
     }
+  end
+
+  # Which channel drives the network. A definition cannot carry it — a plugin's
+  # experiment names a motor system, not that system's options — so a host says it
+  # once, at boot, the way it says which pack it steps. `:depth` is the default and
+  # the channel every run before this option was measured with.
+  defp sensor_from_env do
+    case System.get_env("FLYVERSE_SENSOR") do
+      "rgba" -> :rgba
+      "photoreceptor" -> :rgba
+      _depth_or_nothing -> :depth
+    end
   end
 
   defp plannable(directory, %{drives: drives, readouts: readouts}) do
@@ -1098,7 +1145,7 @@ defmodule FlyversePlugin.Policy do
   # it — the wish, the spikes so far, and the window it last read. All of them
   # are per policy, which is why they live here and not in the policy value: a
   # policy value is copied by every call, and a wish is not worth a copy.
-  defp start(network) do
+  defp start(network, sensor) do
     bands = length(network.plan.drives)
     rates = Enum.map(network.plan.drives, fn _group -> 0.0 end)
 
@@ -1117,6 +1164,8 @@ defmodule FlyversePlugin.Policy do
            ticks: network.plan.ticks,
            seconds: network.plan.ticks * @tick_seconds,
            bands: bands,
+           sensor: sensor,
+           luminance: nil,
            wish: 0.0,
            spikes: 0,
            steps: 0,
@@ -1145,25 +1194,31 @@ defmodule FlyversePlugin.Policy do
     end
   end
 
-  defp step(simulation, rows) do
+  defp step(simulation, rows, luminance) do
     count = simulation.bands
     bands = Percept.bands(rows, count)
     # The decision stays two-sided — the readouts are two — while the drive is as
     # wide as the pack says: the left bands and the right bands are what the wish
-    # is asked about, and a band is what a drive group is stimulated with.
+    # is asked about, and a band is what a drive group is stimulated with. Which
+    # channel the rates come from is the policy's `sensor`; the *reach* below is
+    # always depth's, because "is the patch on the object" is a question about
+    # geometry that a band's brightness cannot answer.
     split = div(count, 2)
     nearness = {Enum.max(Enum.take(bands, split)), Enum.max(Enum.drop(bands, split))}
+    {driven, previous} = driven(simulation.sensor, rows, luminance, simulation.luminance, count)
     wander = wander(simulation.steps)
 
     rates =
-      bands
+      driven
       |> Enum.with_index()
       |> Enum.map(fn {band, index} ->
         leaning = if index < split, do: wander, else: -wander
         clamp(rate(band) + leaning)
       end)
 
-    case Native.window(simulation.sim, simulation.connectome, simulation.ticks, rates) do
+    rate_stimuli = Enum.map(rates, &{:rate, &1})
+
+    case Native.window(simulation.sim, simulation.connectome, simulation.ticks, rate_stimuli) do
       {:ok, {counts, spikes, _total}} ->
         {:ok,
          %{
@@ -1171,13 +1226,36 @@ defmodule FlyversePlugin.Policy do
            right: Enum.at(counts, 1, 0),
            spikes: spikes,
            rates: rates,
+           drives: driven,
            nearness: nearness,
-           loom: loom(simulation.nearness, nearness)
+           loom: loom(simulation.nearness, nearness),
+           luminance: previous
          }}
 
       {:error, {code, sentence}} ->
         {:error, "#{code}: #{sentence}"}
     end
+  end
+
+  # What each band is driven with, in the units `rate/1` takes, and what to
+  # remember for the next step.
+  #
+  # The depth channel is a distance, so its answer is `1 / depth` and nothing has
+  # to be remembered. The photoreceptor channel is what a fly's eye can answer —
+  # *how much did this part of the view change* — because a photoreceptor reports
+  # light and has no distance to report. A surface that approaches grows in the
+  # field of view, and the band it grows in brightens or darkens; a loom detector
+  # does not get to choose the polarity, so the change is taken as a magnitude. The
+  # first step of an episode has nothing to compare itself with and is therefore
+  # dark rather than inventing a difference.
+  defp driven(:depth, rows, _luminance, _before, count), do: {Percept.bands(rows, count), nil}
+
+  defp driven(:rgba, _rows, luminance, before, count) do
+    bands = Percept.luminance_bands(luminance, count)
+
+    loom = bands |> Percept.loom(before, @loom_gain) |> Enum.map(&min(&1, @clip_nearness))
+
+    {loom, bands}
   end
 
   # The wish is the difference of the two readout counts, low-passed the way
@@ -1204,6 +1282,7 @@ defmodule FlyversePlugin.Policy do
         left_hz: left_hz,
         right_hz: right_hz,
         bands: length(window.rates),
+        drives: window.drives,
         left_spikes: window.left,
         right_spikes: window.right,
         spikes: window.spikes,
