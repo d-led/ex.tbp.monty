@@ -155,6 +155,33 @@ defmodule Monty.Geometry.RotationTest do
       assert Rotation.to_quaternion(rotation) == {1.0, 0.0, 0.0, 0.0}
       assert Rotation.to_xyzw(rotation) == [0.0, 0.0, 0.0, 1.0]
     end
+
+    # test_from_quat_assumes_scalar_first_order
+    test "a quaternion is read scalar first, which is what turns it" do
+      # Monty's case compares against scipy's `from_quat(to_scalar_last(quat))`
+      # over generated quaternions. There is no scipy here, so the number the
+      # order decides is asserted instead: `{cos 45°, 0, 0, sin 45°}` is a
+      # quarter turn about z if — and only if — the scalar is read first.
+      half = :math.pi() / 4.0
+      {:ok, rotation} = Rotation.from_quaternion({:math.cos(half), 0.0, 0.0, :math.sin(half)})
+
+      assert_vectors_match(Rotation.apply(rotation, [1.0, 0.0, 0.0]), [0.0, 1.0, 0.0])
+    end
+
+    # test_as_quat_returns_scalar_first_order
+    test "and is written back scalar first" do
+      length = :math.sqrt(0.25 + 0.09 + 0.04 + 0.01)
+      quaternion = {0.5 / length, 0.3 / length, 0.2 / length, 0.1 / length}
+      {:ok, rotation} = Rotation.from_quaternion(quaternion)
+
+      # All four numbers differ, so the order is not ambiguous.
+      {w, x, y, z} = Rotation.to_quaternion(rotation)
+
+      assert_in_delta w, 0.5 / length, @tolerance
+      assert_in_delta x, 0.3 / length, @tolerance
+      assert_in_delta y, 0.2 / length, @tolerance
+      assert_in_delta z, 0.1 / length, @tolerance
+    end
   end
 
   # The reference is scipy's `Rotation.align_vectors`, which the numbers below
