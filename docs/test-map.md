@@ -7,7 +7,7 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-569 of 717 of Monty's unit cases are named here.
+580 of 717 of Monty's unit cases are named here.
 
 ## By Monty's file
 
@@ -35,7 +35,7 @@ one: the test itself says whether it asserts the same behaviour.
 | 5/5 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
 | 2/2 | `frameworks/models/evidence_matching/feature_evidence/scorer_test.py` |
 | 2/2 | `frameworks/models/evidence_matching/graph_memory_test.py` |
-| 0/7 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
+| 5/7 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
 | 4/4 | `frameworks/models/evidence_matching/hypotheses_updater_test.py` |
 | 7/7 | `frameworks/models/graph_matching_test.py` |
 | 3/3 | `frameworks/models/mixins/no_reset_evidence_test.py` |
@@ -63,7 +63,7 @@ one: the test itself says whether it asserts the same behaviour.
 | 0/2 | `frameworks/utils/plot_utils_test.py` |
 | 14/14 | `frameworks/utils/sensor_processing_test.py` |
 | 15/15 | `frameworks/utils/spatial_arithmetics_test.py` |
-| 6/12 | `geometry_test.py` |
+| 12/12 | `geometry_test.py` |
 | 0/1 | `path_test.py` |
 | 1/1 | `runtime_test.py` |
 | 11/11 | `sensor_modules/sensor_module_test.py` |

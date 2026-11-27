@@ -42,7 +42,8 @@ mix monty.inputs                       # fast-forward main, then copy conf + sna
 mix monty.inputs --check               # read-only: is priv/monty what that checkout holds?
 mix monty.config.snapshots             # composes every config, compares tree to snapshot
 mix monty.module_map.gen               # new, renamed and deleted Python files
-mix monty.module_map.verify            # every file mapped, every implemented entry real
+mix monty.module_map.verify            # every file mapped, every implemented entry real,
+                                       # and nothing planned that is already written
 mix monty.port_census                  # what the newly planned classes actually are
 ```
 

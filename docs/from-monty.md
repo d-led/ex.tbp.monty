@@ -59,7 +59,8 @@ names. Run in this order, each a task of its own:
 4. `mix monty.config.snapshots` — compose every experiment and compare it with
    Monty's own snapshot;
 5. `mix monty.module_map.verify` — coverage, `implemented` pointing at real
-   modules, `excluded` saying why, no checkout past the map;
+   modules, `planned` pointing at modules nobody has written yet, `excluded`
+   saying why, no checkout past the map;
 6. `mix monty.readiness` — the numbers, because they moved.
 
 The chain stops at the first step that refuses, whose own message says what to
