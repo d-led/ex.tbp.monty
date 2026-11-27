@@ -2619,13 +2619,15 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/utils/communication_utils.py"
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "Python dataclass plumbing — an importlib round trip, a dataclass built from a signature — with no caller in Monty",
+      status: :excluded,
       elixir: "Monty.Frameworks.Utils.DataclassUtils",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          reason: "A typing Protocol for dataclasses; a struct is the type here",
+          status: :excluded,
           elixir: "Monty.Frameworks.Utils.DataclassUtils.Dataclass",
           python: "Dataclass"
         }
