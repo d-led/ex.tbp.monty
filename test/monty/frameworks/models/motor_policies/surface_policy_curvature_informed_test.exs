@@ -3,7 +3,7 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
 
   alias Monty.Cmp.Message
   alias Monty.Frameworks.Actions.ActionSamplers.ConstantSampler
-  alias Monty.Frameworks.Actions.{MoveTangentially, OrientHorizontal, OrientVertical}
+  alias Monty.Frameworks.Actions.{LookUp, MoveTangentially, OrientHorizontal, OrientVertical}
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformed
   alias Monty.Frameworks.Models.MotorSystemState.{AgentState, SensorState}
@@ -371,6 +371,57 @@ defmodule Monty.Frameworks.Models.MotorPolicies.SurfacePolicyCurvatureInformedTe
       assert reset.following_pc_counter == 0
       assert reset.ignoring_pc_counter == reset.min_general_steps
       assert reset.last_surface_policy_action == nil
+    end
+  end
+
+  # -- the places it remembers walking to -----------------------------------
+
+  # Monty's `SurfacePolicyCurvatureInformedTest`, whose three cases stub the
+  # parent `SurfacePolicy.__call__` out with a `Mock` so that only the recording
+  # its subclass does first is under test. A function here cannot be stubbed, so
+  # the whole `call/6` runs and the case asserts on the pair of lists it answers
+  # with — the recording is the same work, in front of the same step.
+  describe "the places it remembers walking to" do
+    # test_appends_to_tangent_locs_and_tangent_norms_if_last_action_is_orient_vertical
+    test "a step after an orienting vertical remembers the place and the surface's normal" do
+      {_result, policy} = step(after_orienting_vertically(policy()), percept: percept())
+
+      assert policy.tangent_locs == [[0.0, 0.0, 0.0]]
+      assert policy.tangent_norms == [[0.0, 0.0, 1.0]]
+    end
+
+    # test_appends_none_to_tangent_norms_if_last_action_is_orient_vertical_but_no_pose_vectors_in_state
+    test "and remembers the place without a normal when the percept carries no pose" do
+      # Monty deletes `pose_vectors` and stubs the parent step out. The parent
+      # runs here, so the flag that sends it down the plain path goes with them:
+      # what this case is about is the recording in front of the step, and the
+      # normal it records comes off the vectors that were deleted.
+      without_pose = %{
+        percept()
+        | morphological_features:
+            percept().morphological_features
+            |> Map.delete("pose_vectors")
+            |> Map.put("pose_fully_defined", false)
+      }
+
+      {_result, policy} =
+        step(after_orienting_vertically(policy()), percept: without_pose)
+
+      assert policy.tangent_locs == [[0.0, 0.0, 0.0]]
+      assert policy.tangent_norms == [nil]
+    end
+
+    # test_does_not_append_to_tangent_locs_and_tangent_norms_if_last_action_is_not_orient_vertical
+    test "and remembers nothing when the last action was not the orienting vertical" do
+      looking_up = %{
+        policy()
+        | last_surface_policy_action: %LookUp{agent_id: @agent, rotation_degrees: 0.0}
+      }
+
+      {_result, policy} = step(looking_up, percept: percept())
+
+      assert policy.tangent_locs == []
+      assert policy.tangent_norms == []
     end
   end
 end
