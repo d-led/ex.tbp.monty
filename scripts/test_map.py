@@ -9,12 +9,14 @@ Monty's rule for this repository is one case for one case: a `def test_...` in
 `tests/unit/**` becomes one ExUnit test that names the case it translates, and a
 case that cannot be translated is listed rather than dropped. The name is the
 whole record of the translation, so it is greppable: this walks Monty's unit
-suite, takes every `def test_*` name, and asks whether that name appears anywhere
-in `test/**/*.exs`.
+suite, takes every `def test_*` name, and asks whether that name is *attributed*
+in `test/**/*.exs` — on a `# test_...` comment, or in a test's title. A name that
+appears only in prose is not counted: a list of the cases that could not be
+translated must not read as translations.
 
-What it does NOT claim: a name that appears is a translation that is faithful. It
-says the case was read and named; the test itself says whether it asserts the same
-behaviour.
+What it does NOT claim: a name that is attributed is a translation that is
+faithful. It says the case was read and named; the test itself says whether it
+asserts the same behaviour.
 """
 
 import argparse
@@ -48,15 +50,25 @@ def monty_cases(source):
 
 
 def port_tests(directory):
-    """Everything the port's tests say, as one string to search."""
-    text = []
+    """The lines of this port's tests that attribute a case, as one string.
+
+    An attribution is a comment (`# test_foo` above the test that translates it)
+    or a test whose title carries the name. Only those lines are read, because a
+    name mentioned in prose is not a translation: a moduledoc that lists the
+    cases which could *not* be translated would otherwise count them, and the
+    count would flatter the port by exactly the cases it is honest about.
+    """
+    lines = []
     for root, subdirectories, files in os.walk(directory):
         subdirectories[:] = [d for d in subdirectories if d != "_build"]
-        for name in files:
+        for name in sorted(files):
             if name.endswith(".exs"):
                 with open(os.path.join(root, name), errors="ignore") as handle:
-                    text.append(handle.read())
-    return "\n".join(text)
+                    for line in handle:
+                        stripped = line.strip()
+                        if stripped.startswith("#") or 'test "' in line or "test '" in line:
+                            lines.append(line)
+    return "\n".join(lines)
 
 
 def main():
