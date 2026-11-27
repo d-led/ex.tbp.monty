@@ -282,7 +282,7 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
   defp location_mapping(%__MODULE__{} = model, start_location) do
     voxel_size = model.max_size / model.num_voxels_per_dim
     scale_factor = 1 / voxel_size
-    start_index = Enum.map(start_location, &round(&1 * scale_factor))
+    start_index = Enum.map(start_location, &round_half_even(&1 * scale_factor))
     centre = div(model.num_voxels_per_dim, 2)
 
     {scale_factor, Enum.map(start_index, &(centre - &1))}
@@ -329,10 +329,27 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModel do
 
   defp voxel_of(%__MODULE__{} = model, location) do
     location
-    |> Enum.map(&round(&1 * model.location_scale_factor))
+    |> Enum.map(&round_half_even(&1 * model.location_scale_factor))
     |> Enum.zip(model.location_offset)
     |> Enum.map(fn {index, offset} -> index + offset end)
     |> List.to_tuple()
+  end
+
+  # Monty bins a location with `np.round`, and numpy takes a half to its **even**
+  # neighbour: `np.round(0.5)` is 0 and `np.round(1.5)` is 2. `round/1` takes it
+  # away from zero, which puts an observation exactly half a voxel out into the
+  # next voxel instead of the one it shares with the observation before it — the
+  # binning Monty's own `test_grid_locations_binned_correctly` pins.
+  defp round_half_even(value) do
+    floor = :math.floor(value)
+    fraction = value - floor
+
+    cond do
+      fraction > 0.5 -> trunc(floor) + 1
+      fraction < 0.5 -> trunc(floor)
+      rem(trunc(floor), 2) == 0 -> trunc(floor)
+      true -> trunc(floor) + 1
+    end
   end
 
   defp in_bounds?(%__MODULE__{num_voxels_per_dim: dimensions}, voxel) do

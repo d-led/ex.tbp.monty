@@ -260,15 +260,106 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModelTest do
       end
     end
 
-    # test_grid_locations_binned_correctly and
-    # test_grid_features_are_averaged_correctly are **parked**, not dropped:
-    # both put four observations a centimetre apart into two-centimetre voxels,
-    # and one of them lands exactly on a voxel boundary (0.01 x 50 = 0.5).
-    # Monty rounds that with `np.round`, which takes a half to its even
-    # neighbour; `round/1` here takes it away from zero — so the port bins the
-    # observation into the next voxel, and the two cases answer four nodes where
-    # Monty answers one. The fix is `GridObjectModel`'s rounding (in
-    # `location_mapping/2` and `voxel_of/2`); the cases follow it.
+    # test_grid_locations_binned_correctly
+    test "two-centimetre voxels bin them together, and average where they were" do
+      {:ok, built} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), dummy_features())
+
+      # The observation a centimetre out sits exactly on this grid's boundary,
+      # and numpy's rounding — a half to its even neighbour — keeps it in the
+      # first observation's voxel.
+      assert GridObjectModel.num_nodes(built) == 1
+      assert [[x, y, z]] = GridObjectModel.positions(built)
+      # The average of [0, 0], [0, 1], [1, 0] and [1, 1] centimetres.
+      assert_in_delta x, 0.005, 1.0e-9
+      assert_in_delta y, 0.005, 1.0e-9
+      assert z == 0.0
+    end
+
+    # test_grid_features_are_averaged_correctly
+    test "a voxel's features are the average of what was seen inside it" do
+      {:ok, built} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), dummy_features())
+
+      [pose] = GridObjectModel.get_values_for_feature(built, "pose_vectors")
+      # Every observation's pose is the identity, so the average is too.
+      assert_close(pose, identity_pose())
+
+      assert GridObjectModel.get_values_for_feature(built, "pose_fully_defined") == [[1.0]]
+
+      [hsv] = GridObjectModel.get_values_for_feature(built, "hsv")
+      # A circular average, where 0 and 1 are one hue.
+      assert_close(hsv, [0.95, 1.0, 1.0])
+
+      assert [[curvature]] = GridObjectModel.get_values_for_feature(built, "curvature")
+      assert_in_delta curvature, 1.0, 1.0e-9
+
+      # A majority vote decides the pose's own flag: one of four is not enough…
+      features =
+        Map.put(dummy_features(), "pose_fully_defined", [[0.0], [0.0], [0.0], [1.0]])
+
+      {:ok, majority_no} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), features)
+
+      assert GridObjectModel.get_values_for_feature(majority_no, "pose_fully_defined") == [[0.0]]
+
+      # …and a tie is a yes.
+      features = Map.put(dummy_features(), "pose_fully_defined", [[1.0], [0.0], [0.0], [1.0]])
+
+      {:ok, tied} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), features)
+
+      assert GridObjectModel.get_values_for_feature(tied, "pose_fully_defined") == [[1.0]]
+
+      # A pose turned to the other side of the surface is left out of the
+      # average while it is the odd one out…
+      opposite = opposite_pose()
+
+      one_away =
+        Map.put(
+          dummy_features(),
+          "pose_vectors",
+          List.replace_at(dummy_pose_vectors(), 0, opposite)
+        )
+
+      {:ok, odd_one} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), one_away)
+
+      [averaged] = GridObjectModel.get_values_for_feature(odd_one, "pose_vectors")
+      assert_close(averaged, identity_pose())
+
+      # …and becomes the average once most of them are on that side.
+      three_away =
+        Map.put(
+          dummy_features(),
+          "pose_vectors",
+          dummy_pose_vectors()
+          |> List.replace_at(0, opposite)
+          |> List.replace_at(1, opposite)
+          |> List.replace_at(2, opposite)
+        )
+
+      {:ok, majority_away} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), three_away)
+
+      [turned] = GridObjectModel.get_values_for_feature(majority_away, "pose_vectors")
+      assert_close(turned, opposite)
+
+      # An average of poses is still a rotation: unit rows, at right angles.
+      rotated =
+        Map.put(
+          dummy_features(),
+          "pose_vectors",
+          List.replace_at(dummy_pose_vectors(), 0, rotated_pose(20.0))
+        )
+
+      {:ok, skewed} =
+        GridObjectModel.build_model(two_centimetre_grid(), dummy_locations(), rotated)
+
+      [average_of_rotated] = GridObjectModel.get_values_for_feature(skewed, "pose_vectors")
+
+      assert_orthonormal(average_of_rotated)
+    end
 
     # test_update_model_keeps_pose_vectors_as_rotation_matrix
     test "pose vectors averaged into the model stay a rotation" do
@@ -352,6 +443,24 @@ defmodule Monty.Frameworks.Models.ObjectModel.GridObjectModelTest do
   # The identity turned half way round the vertical: the same surface normal,
   # the other two directions negated.
   defp opposite_pose, do: [-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0]
+
+  # The identity turned by `degrees` about the vertical, flattened.
+  defp rotated_pose(degrees) do
+    {:ok, rotation} = Rotation.from_euler_degrees([0.0, 0.0, degrees])
+
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    |> Enum.map(&Rotation.apply(rotation, &1))
+    |> List.flatten()
+  end
+
+  defp assert_close(actual, expected) do
+    for {mine, theirs} <- Enum.zip(actual, expected) do
+      assert_in_delta mine,
+                      theirs,
+                      1.0e-9,
+                      "expected #{inspect(expected)}, got #{inspect(actual)}"
+    end
+  end
 
   # Monty's `check_orthonormal`: three unit rows at right angles.
   defp assert_orthonormal(pose) do
