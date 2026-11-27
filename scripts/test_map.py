@@ -16,7 +16,11 @@ translated must not read as translations.
 
 What it does NOT claim: a name that is attributed is a translation that is
 faithful. It says the case was read and named; the test itself says whether it
-asserts the same behaviour.
+asserts the same behaviour. Nor can it separate two files' cases that share a
+name — Monty's `test_dict` and `test_json_serialization` recur in a dozen files,
+and one attribution answers for all of them — so a file's row is an upper bound
+on its translations, and the ones a moduledoc list as untranslatable are still
+counted if another file happens to have the same name.
 """
 
 import argparse
@@ -83,20 +87,26 @@ def main():
     options = parser.parse_args()
 
     cases = monty_cases(options.source)
-    translated_by = port_tests(options.tests)
+    attributed = port_tests(options.tests)
+
+    def named(name):
+        # A whole name, not a prefix: `test_encode` has a translation only where
+        # a test says so, not because `test_encodes_dataclass_instances_...`
+        # happens to contain it.
+        return re.search(r"\b" + re.escape(name) + r"\b", attributed) is not None
 
     total = 0
-    named = 0
+    named_count = 0
     rows = []
 
     for path, names in sorted(cases.items()):
-        here = sum(1 for name in names if name in translated_by)
+        here = sum(1 for name in names if named(name))
         total += len(names)
-        named += here
-        rows.append((path, here, len(names), [n for n in names if n not in translated_by]))
+        named_count += here
+        rows.append((path, here, len(names), [n for n in names if not named(n)]))
 
     print(f"monty: {options.source} · tests: {options.tests}")
-    print(f"{named} of {total} unit cases named in this port's tests\n")
+    print(f"{named_count} of {total} unit cases named in this port's tests\n")
 
     for path, here, count, missing in rows:
         print(f"{here:>3}/{count:<3} {path}")
@@ -104,7 +114,7 @@ def main():
             for name in missing:
                 print(f"        {name}")
 
-    untranslated = total - named
+    untranslated = total - named_count
     files = sum(1 for _, here, _, _ in rows if here == 0)
     print(f"\n{untranslated} cases not named · {files} of {len(rows)} files with none named")
 
