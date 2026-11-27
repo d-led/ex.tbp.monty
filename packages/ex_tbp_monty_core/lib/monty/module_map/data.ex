@@ -2584,8 +2584,9 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/run_env.py"
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "`parse_episode_spec/2` and `filter_episode_configs/2` are ported with all twenty-two of Monty's cases. `per_lm_stats/1` sums a pandas DataFrame and the WandB helpers read a Hydra dict; the studio's run page computes its own per-LM figures from a run record (§2.52)",
+      status: :partial,
       elixir: "Monty.Frameworks.RunParallel",
       package: "monty",
       classes: [],

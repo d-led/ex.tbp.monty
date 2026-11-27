@@ -7,8 +7,8 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-580 of 717 of Monty's unit cases are named here, and
-38 more the port cannot have are excluded, each with its reason
+610 of 717 of Monty's unit cases are named here, and
+39 more the port cannot have are excluded, each with its reason
 below.
 
 ## By Monty's file
@@ -31,13 +31,13 @@ below.
 | 12/12 | 0 | `frameworks/environment_utils/transforms_test.py` |
 | 0/4 | 0 | `frameworks/experiments/profile_experiment_mixin_test.py` |
 | 28/28 | 5 | `frameworks/models/buffer_test.py` |
-| 25/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
+| 30/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
 | 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
 | 11/11 | 0 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
 | 5/5 | 0 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
 | 2/2 | 0 | `frameworks/models/evidence_matching/feature_evidence/scorer_test.py` |
 | 2/2 | 0 | `frameworks/models/evidence_matching/graph_memory_test.py` |
-| 5/7 | 0 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
+| 7/7 | 0 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
 | 4/4 | 0 | `frameworks/models/evidence_matching/hypotheses_updater_test.py` |
 | 7/7 | 0 | `frameworks/models/graph_matching_test.py` |
 | 3/3 | 0 | `frameworks/models/mixins/no_reset_evidence_test.py` |
@@ -55,7 +55,7 @@ below.
 | 20/20 | 0 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
 | 2/2 | 0 | `frameworks/models/sensor_modules_test.py` |
 | 10/10 | 0 | `frameworks/models/two_d_sensor_module_test.py` |
-| 0/23 | 0 | `frameworks/run_parallel_test.py` |
+| 23/23 | 1 | `frameworks/run_parallel_test.py` |
 | 2/37 | 0 | `frameworks/utils/dataclass_utils_test.py` |
 | 18/18 | 0 | `frameworks/utils/edge_detection_test.py` |
 | 3/3 | 0 | `frameworks/utils/graph_matching_utils_test.py` |
@@ -66,7 +66,7 @@ below.
 | 14/14 | 0 | `frameworks/utils/sensor_processing_test.py` |
 | 15/15 | 0 | `frameworks/utils/spatial_arithmetics_test.py` |
 | 12/12 | 0 | `geometry_test.py` |
-| 0/1 | 0 | `path_test.py` |
+| 1/1 | 0 | `path_test.py` |
 | 1/1 | 0 | `runtime_test.py` |
 | 11/11 | 0 | `sensor_modules/sensor_module_test.py` |
 | 14/14 | 0 | `simulators/mujoco/agent_actions_test.py` |
@@ -88,3 +88,4 @@ below.
 - **no `from_pandas`; `new/3` is the door** — `test_from_pandas_validates_input_using_validate_dataframe`
 - **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
 - **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`
+- **pandas only; the studio's run page reads per-LM figures from the run record** — `test_reconstructs_named_metrics`

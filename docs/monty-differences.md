@@ -3047,3 +3047,25 @@ surface-agent config against it.
 observation from a stepped body becomes a percept whose features are
 `2 × 721 × 2` numbers, whose location is the body's own, and whose pose is fully
 defined.
+
+## 2.52 The parallel runner's episode grammar is here, its statistics are not
+
+`tbp/monty/frameworks/run_parallel.py` holds three unrelated jobs: parsing the
+`--episodes 0,3,5:8` selection, filtering a list of configs by it, and turning a
+finished evaluation's per-LM results into named metrics. The first two are ported
+as `Monty.Frameworks.RunParallel`, and all twenty-two of Monty's
+`ParseEpisodeSpecTest` cases are translated with them — including the refusals,
+which are the part that matters: a range outside the list is an error here, never
+a silently shorter run.
+
+What is not ported is `per_lm_stats/1` and the WandB handlers' inspection
+helpers. `per_lm_stats/1` takes a pandas `DataFrame` of an evaluation's rows and
+sums it into `LM_0/overall/percent_correct` and friends. The port has no pandas
+and no such frame: a run's per-learning-module figures are read from the run
+record the studio writes, on the run page, which is where a person asks that
+question here. Its one case (`test_reconstructs_named_metrics`) is excluded in
+`test/monty/frameworks/run_parallel_test.exs` with that reason.
+
+The WandB helpers (`has_wandb_wrapper`, `remove_wandb_wrapper`, `wandb_group`)
+inspect a composed Hydra dict for a logger that does not exist in this port, so
+they have nothing to inspect.
