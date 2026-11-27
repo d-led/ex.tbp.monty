@@ -3087,22 +3087,16 @@ artificial edge in evidence does not become the leader unless the current MLH
 moves with it. Monty's own test does both (`current_mlh["graph_id"] = ...` and
 `evidence += 1`), and so does the port's translation.
 
-One of Monty's four proposal cases is not translated yet: the one whose percept
-is a turned and moved house with two fixed poses to tell apart. It proposes a
-corner rather than the rooftop, while the three cases beside it — including the
-same question without the transformation — propose the rooftop, so the proposal
-path itself is right.
-
-The pair of poses is *not* the difference, which is worth recording because it
-looks like the obvious suspect: this port's `Rotation.from_euler_degrees/1` of
-Monty's two triples gives matrices that agree with `R` and `R · Rz(180°)` to the
-last digit, which is what "upside down before the transformation was applied"
-means. What differs is the *evidence*: after the four matching observations every
-hypothesis of the one object sits at the floor of `-2.0` (two channels' worth of
-`MIN_EVIDENCE`), so the two the generator compares are the first two in an
-arbitrary tie order — two nodes with different rotations — rather than the upright
-and upside-down readings of one node. Whether that floor is the transformed
-percepts failing to match at `max_match_distance: 0.005` or the initial poses
-being taken the other way round (Monty's updater inverts them; the port's
-`initial_possible_poses` are used as given) is the open question, and it is the
-place to look before writing this case.
+The fourth proposal case — a turned and moved house with two fixed poses — cost
+another hour, and the answer is worth recording because it is a trap for any test
+that starts a hypothesis space by hand: **Monty inverts the poses a config
+names**. `get_initial_possible_poses` builds `Rotation.from_euler(...).inv()`, and
+this port's `GraphMatchingUtils.initial_possible_poses/1` does the same, so a
+config's Euler angles arrive at the updater inverted. A harness that skips that
+conversion — building `Rotation.to_matrix(Rotation.from_euler_degrees(pose))` and
+handing it to `hypotheses_updater_options` — gives the hypothesis space the wrong
+frame, and with it every hypothesis sits at the floor of `MIN_EVIDENCE`: nothing
+matches, `get_top_two_pose_hypotheses_for_graph_id/2` returns the first two of an
+arbitrary tie, and the mismatch compares two nodes instead of the upright and
+upside-down readings of one. With the poses put through the same conversion a run
+uses, all four of Monty's cases propose the rooftop.

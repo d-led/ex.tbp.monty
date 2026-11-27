@@ -21,6 +21,7 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
   alias Monty.Frameworks.Models.EvidenceMatching.Hypotheses
   alias Monty.Frameworks.Models.EvidenceMatching.LearningModule.EvidenceGraphLM
   alias Monty.Frameworks.Models.GoalGeneration.EvidenceGoalGenerator
+  alias Monty.Frameworks.Utils.GraphMatchingUtils
   alias Monty.Geometry.{Rotation, SurfacePoseVectors}
 
   @channel "patch"
@@ -607,11 +608,10 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
   end
 
   defp learning_module_with(generator, euler_poses) do
-    matrices =
-      Enum.map(euler_poses, fn pose ->
-        {:ok, rotation} = Rotation.from_euler_degrees(pose)
-        Rotation.to_matrix(rotation)
-      end)
+    # The poses a config names go through the same conversion a run's config does:
+    # Euler degrees in, and the updater's matrices out — which are the *inverse*
+    # of the named rotation, as Monty's `get_initial_possible_poses` builds them.
+    {:ok, rotations} = GraphMatchingUtils.initial_possible_poses(euler_poses)
 
     {:ok, lm} =
       EvidenceGraphLM.new(
@@ -622,7 +622,9 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
         },
         feature_weights: %{@channel => %{"hsv" => [1.0, 0.0, 0.0]}},
         gsg: generator,
-        hypotheses_updater_options: [initial_possible_poses: matrices]
+        hypotheses_updater_options: [
+          initial_possible_poses: Enum.map(rotations, &Rotation.to_matrix/1)
+        ]
       )
 
     lm
@@ -780,13 +782,18 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.EvidenceLMTest do
       assert_close(point, @rooftop, 1.0e-9)
     end
 
-    # The fourth of Monty's proposal cases — a turned-and-moved house with two
-    # fixed poses to tell apart — is not here yet: it proposes a corner of the
-    # house rather than the rooftop, and the three cases above say the proposal
-    # path itself is right. What differs is the pair of poses, which Monty builds
-    # by composing "upside down" with its complex transformation rather than by
-    # writing two triples of Euler angles. Recorded in
-    # `docs/monty-differences.md` §2.53.
+    # test_hypothesis_testing_proposal_for_pose_with_transformation
+    test "and the same rooftop when the house has been turned and moved" do
+      lm =
+        learned(
+          [{"new_object0", @house_locations}],
+          [[45.0, 75.0, 190.0], [315.0, 285.0, 10.0]]
+        )
+
+      point = proposed_point(lm, moved_house(), object: "new_object0", focus_on_pose: true)
+
+      assert_close(point, @rooftop, 1.0e-9)
+    end
   end
 
   # A port-only guard, not one of Monty's cases: the runtime clears a training
