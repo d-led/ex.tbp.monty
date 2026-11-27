@@ -269,10 +269,32 @@ Two things that measurement taught, both now written into the script:
   eye render is 512×450×3, 1.2 MB per eye per step, which is a camera's percept
   and not a fly's. The peer sends the ommatidia.
 
-What that leaves: a sensor module that reads ommatidia (Monty's own expect an
-RGBA patch and a depth), and a Run-button path that names the interpreter as a
-world's command — `Port.Environment` takes `command:`, so that is configuration
-rather than code.
+### The world, in Elixir
+
+`Monty.Simulators.Flygym.World` is the world a run threads: it implements
+`Monty.Simulators.Environment` and starts the peer through
+`Monty.Simulators.Port.Environment` with
+`command: [interpreter, priv/monty_py/fly_peer.py]`. The script ships with the
+application; the **interpreter** is what a machine supplies, named by
+`FLYGYM_PYTHON`. `available?/0` answers before a run is opened and
+`unavailable_reason/0` says what to set, so a node without one refuses the
+experiment instead of failing inside it — the same shape `ExMujoco.World` has
+for a machine without OpenGL.
+
+`test/monty/simulators/flygym/world_test.exs` drives it the way a run does —
+`OrientHorizontal` in, the motor system's own `AgentState` out — and asserts a
+5 mm stride arrives within a millimetre, that +25° and −25° turn opposite ways,
+and that each eye reports 721 ommatidia. Without `FLYGYM_PYTHON` the five cases
+skip with the reason, so CI stays green and a machine with the body proves it.
+
+What that leaves is one honest gap and one product decision:
+
+- **A sensor module that reads ommatidia.** Monty's sensor modules expect an
+  RGBA patch and a depth image; a fly has 1442 numbers per eye and no depth.
+  Reading this body properly means a percept of its own, not a camera's.
+- **The studio offering the body.** A run reaches a world through the
+  experiment's config, and Monty's configs name MuJoCo; offering a fly is a
+  product decision about a config key this port does not invent.
 
 ## Starting it yourself
 

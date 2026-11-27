@@ -1,6 +1,9 @@
 """Speak to `fly_peer.py` the way `Port.Environment` does, and check it answers.
 
-    python examples/flyverse_plugin/scripts/fly_peer_check.py
+    python examples/flyverse_plugin/scripts/fly_peer_check.py [interpreter]
+
+The peer is `priv/monty_py/fly_peer.py`, because the application ships it: the
+*interpreter* is what a machine supplies, not the script.
 
 A foothold test, not an Elixir test: it proves the framing and that a Monty
 action moves the body in the direction the action asked for, without starting
@@ -12,7 +15,11 @@ import struct
 import subprocess
 import sys
 
-PEER = ["/tmp/flygym-probe/bin/python", "examples/flyverse_plugin/scripts/fly_peer.py"]
+import os
+
+# The interpreter that has flygym, then the script this application ships.
+INTERPRETER = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("FLYGYM_PYTHON")
+PEER = [INTERPRETER, "priv/monty_py/fly_peer.py"]
 IDENTITY = [1.0, 0.0, 0.0, 0.0]
 
 
@@ -53,6 +60,9 @@ def yaw_degrees(rotation):
 
 
 def main():
+    if not INTERPRETER:
+        print("name an interpreter: an argument or FLYGYM_PYTHON")
+        return 1
     process = subprocess.Popen(
         PEER, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd="."
     )
