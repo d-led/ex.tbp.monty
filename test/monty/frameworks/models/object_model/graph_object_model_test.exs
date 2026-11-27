@@ -300,4 +300,103 @@ defmodule Monty.Frameworks.Models.ObjectModel.GraphObjectModelTest do
       assert_in_delta length(GraphObjectModel.positions(loaded)), 1, @tolerance
     end
   end
+
+  # -- Monty's own cases ---------------------------------------------------
+
+  # Monty's `ObjectModelTest` cases that are about a graph model, with its
+  # `dummy_locs` and `dummy_features` as fixtures. Monty's numbers are
+  # centimetres; this port's are metres, so a centimetre is `0.01`.
+  describe "Monty's own cases" do
+    # test_create_graph_object_model
+    test "a model is a model before anything is built into it" do
+      model = GraphObjectModel.new("test_model")
+
+      assert model.object_id == "test_model"
+      assert GraphObjectModel.graph(model) == nil
+      # Monty's `repr(model)` is `inspect/1` here, which every struct answers.
+      assert is_binary(inspect(model))
+    end
+
+    # test_can_build_graph_object_model
+    test "four observations become four nodes, and every feature is stored" do
+      built = model(dummy_locations(), dummy_features())
+
+      assert GraphObjectModel.num_nodes(built) == 4
+
+      for feature <- Map.keys(dummy_features()) do
+        assert GraphObjectModel.has_feature?(built, feature), "#{feature} is not stored"
+      end
+    end
+
+    # test_apply_delta_thresholds_correctly
+    test "the distance threshold merges, and any feature's threshold parts" do
+      # No two of the four observations are more than two centimetres apart.
+      merged = model(dummy_locations(), dummy_features(), nil, %{"distance" => 0.02})
+      assert GraphObjectModel.num_nodes(merged) == 1
+
+      # The same distance, but the second observation's pose faces another way.
+      faced_away =
+        dummy_features()
+        |> Map.put(
+          "pose_vectors",
+          List.replace_at(dummy_pose_vectors(), 1, [
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ])
+        )
+
+      parted =
+        model(dummy_locations(), faced_away, nil, %{
+          "distance" => 0.02,
+          "pose_vectors" => [1.0, 1.0, 1.0]
+        })
+
+      assert GraphObjectModel.num_nodes(parted) == 2
+
+      # And the same for a colour that differs enough…
+      coloured =
+        model(dummy_locations(), dummy_features(), nil, %{
+          "distance" => 0.02,
+          "hsv" => [0.1, 1.0, 1.0]
+        })
+
+      assert GraphObjectModel.num_nodes(coloured) == 2
+
+      # …and for a curvature that does.
+      curved =
+        model(dummy_locations(), dummy_features(), nil, %{
+          "distance" => 0.02,
+          "curvature" => 1.0
+        })
+
+      assert GraphObjectModel.num_nodes(curved) == 2
+    end
+  end
+
+  # Monty's `dummy_locs`: four observations a centimetre apart, in metres.
+  defp dummy_locations do
+    [[0.0, 0.0, 0.0], [0.0, 0.01, 0.0], [0.01, 0.0, 0.0], [0.01, 0.01, 0.0]]
+  end
+
+  # Monty's `dummy_pv`, the identity, flattened as a pose vector's nine numbers.
+  defp dummy_pose_vectors do
+    List.duplicate([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], 4)
+  end
+
+  # Monty's `dummy_features`: one row per observation, as a buffer gathers them.
+  defp dummy_features do
+    %{
+      "pose_vectors" => dummy_pose_vectors(),
+      "pose_fully_defined" => List.duplicate([1.0], 4),
+      "hsv" => [[0.1, 1.0, 1.0], [0.0, 1.0, 1.0], [0.9, 1.0, 1.0], [0.8, 1.0, 1.0]],
+      "curvature" => [[0.0], [1.0], [2.0], [1.0]]
+    }
+  end
 end
