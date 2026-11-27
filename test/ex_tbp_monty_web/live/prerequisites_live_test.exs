@@ -430,7 +430,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
     libraries = Application.fetch_env!(:ex_tbp_monty, :monty_libraries_dir)
     File.mkdir_p!(Path.join(libraries, "cad_parts_v1"))
-    File.write!(Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]), "a memory that is here")
+
+    File.write!(
+      Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]),
+      "a memory that is here"
+    )
 
     assert {:ok, _generated} = Monty.Studio.Cad.Generate.generate("solidcraft-plate")
 
@@ -456,7 +460,11 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
 
     libraries = Application.fetch_env!(:ex_tbp_monty, :monty_libraries_dir)
     File.mkdir_p!(Path.join(libraries, "cad_parts_v1"))
-    File.write!(Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]), "a memory that is here")
+
+    File.write!(
+      Path.join([libraries, "cad_parts_v1", "plate_part.jsonl.gz"]),
+      "a memory that is here"
+    )
 
     Phoenix.PubSub.subscribe(ExTbpMonty.PubSub, Monty.Prerequisites.Saga.topic())
 
@@ -486,5 +494,24 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     {:ok, view, _html} = live(conn, ~p"/prerequisites")
 
     assert render_async(view) =~ "solidcraft-plate_part"
+  end
+
+  # And it names it after the Make as well. The row read "present" and said
+  # nothing else once the memory was written, so the only sentence that ever
+  # mentioned a brought part disappeared exactly when the part was there — the
+  # badge answering "is there anything to do?" and never "is mine in there?".
+  test "and names it after its memory is written, when no click is left",
+       %{conn: conn} do
+    assert {:ok, _generated} = Monty.Studio.Cad.Generate.generate("solidcraft-plate")
+
+    libraries = Application.fetch_env!(:ex_tbp_monty, :monty_libraries_dir)
+    written = Path.join([libraries, "cad_parts_v1", "solidcraft-plate_part.jsonl.gz"])
+    File.mkdir_p!(Path.dirname(written))
+    File.write!(written, "a memory that is here")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+    render_async(view, 10_000)
+
+    assert view |> element("#also-made_here") |> render() =~ "written by the same Make"
   end
 end

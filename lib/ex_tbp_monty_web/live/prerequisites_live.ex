@@ -234,16 +234,15 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 </p>
                 <%!-- A part a person brought is planned by the same click and is not
                 one of the promises: a manifest is written before the part exists. Saying
-                so is what makes the CAD page's "the row teaches <part>_part" true. --%>
+                so is what makes the CAD page's "the row teaches <part>_part" true, and
+                it is said after the Make as well — the badge alone would leave a reader
+                with no way to see their own part behind it. --%>
                 <p
-                  :if={also_planned(prerequisite, @planned) != []}
+                  :if={brought_note(prerequisite, @planned)}
                   id={"also-#{prerequisite.id}"}
                   class="font-mono text-xs text-base-content/60"
                 >
-                  and the parts you brought: {Enum.join(
-                    also_planned(prerequisite, @planned),
-                    ", "
-                  )} — the same Make writes them.
+                  {brought_note(prerequisite, @planned)}
                 </p>
                 <%!-- Where it comes from, on what terms, and which bytes. A
                 person about to wait for two gigabytes is entitled to the three,
@@ -571,7 +570,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # skips every memory whose note matches, so forcing it costs a walk of the
   # notes, not a second teaching.
   defp start(socket, prerequisite) do
-    started = if prerequisite[:build], do: Saga.start(prerequisite, force: true), else: Saga.start(prerequisite)
+    started =
+      if prerequisite[:build],
+        do: Saga.start(prerequisite, force: true),
+        else: Saga.start(prerequisite)
 
     case started do
       {:error, reason} ->
@@ -747,18 +749,41 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   defp missing_provided(_prerequisite), do: []
 
-  # What the click would write that the manifest does not promise, and that is not
-  # there yet — the parts a person brought. Before the task answers, the page says
-  # nothing rather than guessing.
-  defp also_planned(_prerequisite, planned) when not is_map(planned), do: []
+  # What a build plans that its manifest cannot promise — the parts a person
+  # brought — as memory paths. One filter, two questions: what the click has
+  # left to write, and what the row covers at all. Before the task answers, the
+  # page says nothing rather than guessing.
+  defp planned_paths(_prerequisite, planned) when not is_map(planned), do: []
 
-  defp also_planned(prerequisite, planned) do
+  defp planned_paths(prerequisite, planned) do
     promised = Prerequisites.promised_memories(prerequisite)
+    Enum.reject(Map.get(planned, prerequisite[:build], []), &(&1 in promised))
+  end
 
-    planned
-    |> Map.get(prerequisite[:build], [])
-    |> Enum.reject(&(&1 in promised or File.exists?(&1)))
+  # What the click would still write, by the name a person brought it under.
+  defp also_planned(prerequisite, planned) do
+    prerequisite
+    |> planned_paths(planned)
+    |> Enum.reject(&File.exists?/1)
     |> Enum.map(&Path.basename(&1, ".jsonl.gz"))
+  end
+
+  # The sentence under the row. It names the brought parts whether or not they
+  # are written: a row that said "present" and nothing else about the part a
+  # person just brought answered neither "is mine there?" nor "and then?".
+  defp brought_note(prerequisite, planned) do
+    names = prerequisite |> planned_paths(planned) |> Enum.map(&Path.basename(&1, ".jsonl.gz"))
+
+    cond do
+      names == [] ->
+        nil
+
+      also_planned(prerequisite, planned) == [] ->
+        "and the parts you brought: #{Enum.join(names, ", ")} — written by the same Make."
+
+      true ->
+        "and the parts you brought: #{Enum.join(names, ", ")} — the same Make writes them."
+    end
   end
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
