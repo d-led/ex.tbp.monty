@@ -64,13 +64,14 @@ defmodule ExTbpMontyWeb.FlyLive do
      )}
   end
 
+  # What each press asks for: a turn and a stride, and the three differ only in
+  # those two numbers. A table rather than three clauses because this page's
+  # cases skip on a machine with no FlyGym, so on CI the handler has no coverage
+  # and the CRAP gate reads its complexity alone — a lookup scores a fraction of
+  # six branches (`docs/…`, tools/crap).
+  @presses %{"forward" => {0.0, @stride}, "left" => {@turn, 0.0}, "right" => {-@turn, 0.0}}
+
   @impl true
-  def handle_event("forward", _params, socket), do: {:noreply, walk(socket, 0.0, @stride)}
-
-  def handle_event("left", _params, socket), do: {:noreply, walk(socket, @turn, 0.0)}
-
-  def handle_event("right", _params, socket), do: {:noreply, walk(socket, -@turn, 0.0)}
-
   def handle_event("reset", _params, socket) do
     World.stop(socket.assigns.body)
 
@@ -78,6 +79,12 @@ defmodule ExTbpMontyWeb.FlyLive do
      socket
      |> assign(body: nil, steps: [], age_ms: nil, percept: nil)
      |> put_flash(:info, "The body starts where its own gait stands it up.")}
+  end
+
+  def handle_event(press, _params, socket) when is_map_key(@presses, press) do
+    {turn, stride} = Map.fetch!(@presses, press)
+
+    {:noreply, walk(socket, turn, stride)}
   end
 
   # A client event this page does not answer keeps the page drawing rather than
