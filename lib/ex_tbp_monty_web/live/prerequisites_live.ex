@@ -742,8 +742,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
     planned
     |> Map.get(prerequisite[:build], [])
-    |> Enum.reject(&(&1 in promised))
-    |> Enum.reject(&File.exists?/1)
+    |> Enum.reject(&(&1 in promised or File.exists?(&1)))
     |> Enum.map(&Path.basename(&1, ".jsonl.gz"))
   end
 
