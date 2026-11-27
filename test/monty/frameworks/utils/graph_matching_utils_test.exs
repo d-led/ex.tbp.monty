@@ -206,6 +206,45 @@ defmodule Monty.Frameworks.Utils.GraphMatchingUtilsTest do
     end
   end
 
+  # Monty's `CustomDistancesTest` and `EuclideanDistancesTest` calibration
+  # cases: the numbers a hand calculation gives, so a change to either rule
+  # shows up as a number rather than as a test that no longer agrees with
+  # itself.
+  describe "Monty's distance calibration cases" do
+    # test_one_hyp_with_two_nn_neighbors_calibration
+    test "one height of one pays a flat surface's half, and the tangent plane's nothing" do
+      # Normals along +x: the first neighbour lies in the tangent plane, the
+      # second one metre up it.
+      distances =
+        custom_distances(
+          [[[0.0, 3.0, 4.0], [1.0, 0.0, 0.0]]],
+          [[0.0, 0.0, 0.0]],
+          [[1.0, 0.0, 0.0]],
+          1.5
+        )
+
+      assert [[in_plane, above]] = distances
+      assert_in_delta in_plane, 5.0, @tolerance
+      # 1 + 1 * 1 / (1.5 + 0.5) — the flat case's half a metre per metre.
+      assert_in_delta above, 1.5, @tolerance
+    end
+
+    # test_two_hyps_with_two_nn_neighbors_calibration
+    test "two candidates against two neighbours each are their four plain distances" do
+      distances =
+        euclidean_distances(
+          [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+          [[[3.0, 4.0, 0.0], [0.0, 0.0, 2.0]], [[1.0, 1.0, 1.0], [1.0, 1.0, 0.0]]]
+        )
+
+      assert [[first_a, first_b], [second_a, second_b]] = distances
+      assert_in_delta first_a, 5.0, @tolerance
+      assert_in_delta first_b, 2.0, @tolerance
+      assert_in_delta second_a, 0.0, @tolerance
+      assert_in_delta second_b, 1.0, @tolerance
+    end
+  end
+
   describe "exponential_kernel/2" do
     test "weighs the most recent step fully and older steps less" do
       kernel = exponential_kernel(3, 3)
