@@ -2851,7 +2851,7 @@ defmodule Monty.ModuleMap.Data do
     },
     %{
       reason: nil,
-      status: :planned,
+      status: :implemented,
       elixir: "Monty.Path",
       package: "monty",
       classes: [],
