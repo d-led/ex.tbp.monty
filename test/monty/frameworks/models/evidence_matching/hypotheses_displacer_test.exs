@@ -274,10 +274,95 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
     end
   end
 
+  # Monty's `test_multi_channel_evidence_sums`: what a step earns is the sum of
+  # what each channel earned. Monty stubs the per-channel evidence out; here two
+  # channels over the same graph earn it for real, one channel at a time and
+  # then both, and the total has to be the sum.
+  describe "Monty's multi-channel case" do
+    # test_multi_channel_evidence_sums
+    test "two channels' evidence is summed, and added to what the hypotheses had" do
+      settled = two_channel_displacer()
+      start = hypotheses([1.0, 2.0, 3.0], [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+
+      {one, _} =
+        HypothesesDisplacer.compute_evidence(
+          settled,
+          %{"a" => channel_features()},
+          0.0,
+          "mug",
+          start
+        )
+
+      {other, _} =
+        HypothesesDisplacer.compute_evidence(
+          settled,
+          %{"b" => channel_features()},
+          0.0,
+          "mug",
+          start
+        )
+
+      {both, _} =
+        HypothesesDisplacer.compute_evidence(
+          settled,
+          %{"a" => channel_features(), "b" => channel_features()},
+          0.0,
+          "mug",
+          start
+        )
+
+      sums =
+        Enum.zip_with(Hypotheses.evidence(one), Hypotheses.evidence(other), fn left, right ->
+          left + right
+        end)
+
+      assert Hypotheses.evidence(both) == sums
+    end
+  end
+
+  # Two channels over one node apiece, and the weights that leave the new
+  # evidence bare: `past_weight: 0` forgets what a hypothesis had, so what is
+  # left is what this step's channels earned.
+  defp two_channel_displacer do
+    features_to_use = %{
+      "a" => ["pose_vectors", "pose_fully_defined", "rgba"],
+      "b" => ["pose_vectors", "pose_fully_defined", "rgba"]
+    }
+
+    model =
+      GraphObjectModel.new("mug")
+      |> GraphObjectModel.build_model(
+        [[0.0, 0.0, 0.0]],
+        %{"pose_vectors" => [@pose], "pose_fully_defined" => [[1.0]], "rgba" => [[0.2]]},
+        nil,
+        nil
+      )
+
+    memory =
+      GraphMemory.new(features_to_use: features_to_use)
+      |> GraphMemory.add_graph_to_memory(%{"a" => model, "b" => model}, "mug")
+      |> GraphMemory.initialize_feature_arrays()
+
+    HypothesesDisplacer.new(memory,
+      feature_weights: %{
+        "a" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0},
+        "b" => %{"pose_vectors" => [1.0, 1.0, 1.0], "rgba" => 1.0}
+      },
+      max_match_distance: 0.5,
+      tolerances: %{"a" => %{"rgba" => 0.1}, "b" => %{"rgba" => 0.1}},
+      past_weight: 0,
+      present_weight: 1
+    )
+  end
+
+  defp channel_features,
+    do: %{"pose_vectors" => @pose, "pose_fully_defined" => true, "rgba" => [0.2]}
+
   # Monty's `ObjectPoseEvidenceTest` — the `` clause of PR #1266: a channel whose
   # pose is an object orientation is scored by how far two rotations are apart,
   # scaled so 0° is 1 and 180° is -1.
   describe "object_pose_evidence/2" do
+    # test_object_orientations_map_0_to_pi_onto_1_to_neg1_interval_respectively
     property "maps 0 to π onto 1 to -1, whatever the poses are" do
       check all(
               query_poses <- list_of(rotation_matrix(), max_length: 3),
