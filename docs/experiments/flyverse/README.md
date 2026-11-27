@@ -237,6 +237,43 @@ What is left is not the body any more: it is a world interface in Elixir that
 owns this interpreter and steps it once per action, the mapping's two gains, and
 a walk-through page over the result.
 
+### The body on the port that already exists
+
+The Elixir side needed no new contract. `Monty.Simulators.Port.Environment`
+already starts a simulator as a _command_ and speaks
+`Monty.Simulators.Port.Protocol` — length-prefixed JSON, `reset` and `step`,
+Monty's own action maps in and `observations` + `proprioceptive_state` out. So a
+fly body is a **peer script**:
+`examples/flyverse_plugin/scripts/fly_peer.py`, checked end to end against the
+framing by `fly_peer_check.py` in the same directory (a foothold check that runs
+without the application).
+
+What it is measured to do, on this Mac, flat-ground world:
+
+| request                     | asked | arrived    |
+| --------------------------- | ----- | ---------- |
+| `orient_horizontal` forward | 5 mm  | 5.2 mm     |
+| `orient_horizontal` left    | +25°  | **+26.3°** |
+| `orient_horizontal` right   | −25°  | **−22.2°** |
+
+Two things that measurement taught, both now written into the script:
+
+- **A turning _gain_ would be a fiction.** The same differential turns the body
+  119°/s one way and 352°/s the other (`[1, −1]` → −23.8° in 0.2 s, `[−1, 1]` →
+  +70.5°), because the gait is not symmetric in open loop. So the turn is
+  **closed on the heading**: each body step measures how far the body still is
+  from the heading the action named and leans the differential that way.
+- **A fly's percept is 1442 numbers, not a camera frame.** `get_ommatidia_readouts`
+  answers 721 ommatidia per eye, each reading one of two photoreceptor types
+  (yellow and pale) with a zero in the other column — 1.4 kB per eye. The raw
+  eye render is 512×450×3, 1.2 MB per eye per step, which is a camera's percept
+  and not a fly's. The peer sends the ommatidia.
+
+What that leaves: a sensor module that reads ommatidia (Monty's own expect an
+RGBA patch and a depth), and a Run-button path that names the interpreter as a
+world's command — `Port.Environment` takes `command:`, so that is configuration
+rather than code.
+
 ## Starting it yourself
 
 ```sh
