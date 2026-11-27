@@ -2892,6 +2892,34 @@ Monty's runs to its 100-step cap with `confused_mlh`. Monty's
 branch, so the two are not disagreeing about how to conclude — they are looking
 at different pixels.
 
+**What a _wrong_ picture looks like, as opposed to a lit differently one.** The
+renderer clears `scene_.flags` before `mjv_updateScene` derives this frame's,
+because that call writes the flags its option describes and leaves the ones
+already there: without the clear, the previous pass's `mjRND_SEGMENT` and
+`mjRND_IDCOLOR` survive, every colour pass after the first segmentation pass
+renders ids, and a patch's pixels come back as the geom id in the red byte —
+`01 00 00` for the first object, measured on `base_infer_cows_small_compositional`
+on this Mac — instead of a surface colour (`90 82 73`). The difference in that
+state is not a ratio but an identity: the picture is the segmentation map. If the
+studio's "camera" half is a flat red, this clear is missing from the renderer the
+build is using, which is what happens when the app pins a branch that does not
+carry it: the fixes live on each branch the package is built from, not only on
+`main`.
+
+**A patch's depth is one value, in both worlds.** MuJoCo stores depth against the
+far plane, and Monty's far plane is `vis.map.zfar × stat.extent` — 143 m on this
+Mac for `base_infer_cows_small_compositional` — so the relief of a surface 15 cm
+away is below the last bit of a float32 depth buffer: `patch_0` of that config
+comes back as 4096 copies of 0.1459997 from the compiled world and 0.1459999 from
+the Python one, from either renderer, with MuJoCo's own warning to say so
+(`ARB_clip_control unavailable while mjDEPTH_ZEROFAR requested, depth accuracy
+will be limited`). The studio draws a picture whose range collapsed at the middle
+of its scale, not at the light end, because the light end is what a picture that
+saw nothing looks like and a patch full of surface must not read as an absent
+one; the card keeps the numbers (`depth 0.146–0.146 m`). A picture read back from
+a run's directory has been through the archive's h264 stream at `qp: 18`, so a
+decoded grey can sit a level either side of the one written.
+
 **What is not yet compared.** Which builder is wrong, and whether the difference
 is a light, a material, an extent, or all three: the two are built by different
 code (`Monty.Simulators.ExMujoco.Scene` writes MJCF text;

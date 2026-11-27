@@ -221,14 +221,26 @@ defmodule Monty.Simulators.Synthetic.Camera do
   defp widen(depth, {low, high}) when depth > high, do: {low, depth}
   defp widen(_depth, range), do: range
 
+  # The scale a depth picture is drawn over: nearest is dark, furthest is light,
+  # and zero is kept for a pixel that saw nothing. Named because a picture with no
+  # range in it is drawn at the middle of the same scale.
+  @depth_near 32
+  @depth_far 255
+
   # Nearest is dark, furthest is light: depth reads as a picture of the surface,
   # and a pixel that saw nothing stays black along with it.
   defp depth_byte(depth, _low, _high) when depth == 0.0, do: 0
 
   defp depth_byte(depth, low, high) when high > low,
-    do: round(32 + 223 * (depth - low) / (high - low))
+    do: round(@depth_near + (@depth_far - @depth_near) * (depth - low) / (high - low))
 
-  defp depth_byte(_depth, _low, _high), do: 255
+  # Everything in the picture at one depth has no range to be drawn over, which
+  # is the ordinary case for a patch: a few centimetres of surface at arm's
+  # length is one value in MuJoCo's depth buffer, in either world — the far plane
+  # it is stored against leaves no bit for the relief. The middle of the scale
+  # says "a surface, and no relief to see"; the light end said what a picture
+  # that saw nothing says, and a patch full of cow read as an absent one.
+  defp depth_byte(_depth, _low, _high), do: div(@depth_near + @depth_far, 2)
 
   defp markup(sensor_id, images) do
     case images do

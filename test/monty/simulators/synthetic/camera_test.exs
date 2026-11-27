@@ -56,11 +56,14 @@ defmodule Monty.Simulators.Synthetic.CameraTest do
     assert nothing == 0
   end
 
-  test "a depth image with one depth in it is drawn flat, and says so" do
+  test "a depth image with one depth in it is drawn as a surface without relief, not as an empty one" do
     {rows, range} = Camera.depth_view([[0.05, 0.05]])
 
     assert range == {0.05, 0.05}
-    assert rows == [[255, 255]]
+    # The middle of the scale. The light end is what a picture that saw nothing
+    # looks like, and a patch this port draws from either MuJoCo world is one
+    # value: the depth buffer has no bit for the relief of a surface 15 cm away.
+    assert rows == [[143, 143]]
   end
 
   test "a sensor whose world rendered nothing says so rather than showing an empty box" do
