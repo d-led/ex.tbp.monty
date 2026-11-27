@@ -386,7 +386,7 @@ defmodule FlyversePlugin.Policy do
   @impl FlyversePlugin.Plugin
   def new(options, state) do
     with {:ok, network} <- Networks.open(),
-         :ok <- two_sided(network.directory, network.plan),
+         :ok <- plannable(network.directory, network.plan),
          {:ok, simulation} <- start(network) do
       key = state.next
       policy = policy_of(options, key)
@@ -1077,12 +1077,12 @@ defmodule FlyversePlugin.Policy do
     }
   end
 
-  defp two_sided(directory, %{drives: drives, readouts: readouts}) do
+  defp plannable(directory, %{drives: drives, readouts: readouts}) do
     cond do
-      length(drives) != 2 ->
+      length(drives) < 2 ->
         {:error,
          "the plan in #{directory} names #{length(drives)} drive group(s), and this policy " <>
-           "drives two: the left half of the view and the right half of it"}
+           "drives the view in bands: at least two, one for each side of it"}
 
       length(readouts) != 2 ->
         {:error,
@@ -1099,6 +1099,7 @@ defmodule FlyversePlugin.Policy do
   # are per policy, which is why they live here and not in the policy value: a
   # policy value is copied by every call, and a wish is not worth a copy.
   defp start(network) do
+    bands = length(network.plan.drives)
     rates = Enum.map(network.plan.drives, fn _group -> 0.0 end)
 
     case Native.new(
@@ -1115,6 +1116,7 @@ defmodule FlyversePlugin.Policy do
            connectome: network.connectome,
            ticks: network.plan.ticks,
            seconds: network.plan.ticks * @tick_seconds,
+           bands: bands,
            wish: 0.0,
            spikes: 0,
            steps: 0,
@@ -1130,7 +1132,12 @@ defmodule FlyversePlugin.Policy do
            position: nil,
            idle: 0,
            dive: 0,
-           last: %{left: 0, right: 0, spikes: 0, rates: [0.0, 0.0]}
+           last: %{
+             left: 0,
+             right: 0,
+             spikes: 0,
+             rates: List.duplicate(0.0, bands)
+           }
          }}
 
       {:error, {code, sentence}} ->
@@ -1139,14 +1146,22 @@ defmodule FlyversePlugin.Policy do
   end
 
   defp step(simulation, rows) do
-    nearness = Percept.nearness(rows)
-    {left_nearness, right_nearness} = nearness
+    count = simulation.bands
+    bands = Percept.bands(rows, count)
+    # The decision stays two-sided — the readouts are two — while the drive is as
+    # wide as the pack says: the left bands and the right bands are what the wish
+    # is asked about, and a band is what a drive group is stimulated with.
+    split = div(count, 2)
+    nearness = {Enum.max(Enum.take(bands, split)), Enum.max(Enum.drop(bands, split))}
     wander = wander(simulation.steps)
 
-    rates = [
-      band(rate(left_nearness) + wander),
-      band(rate(right_nearness) - wander)
-    ]
+    rates =
+      bands
+      |> Enum.with_index()
+      |> Enum.map(fn {band, index} ->
+        leaning = if index < split, do: wander, else: -wander
+        clamp(rate(band) + leaning)
+      end)
 
     case Native.window(simulation.sim, simulation.connectome, simulation.ticks, rates) do
       {:ok, {counts, spikes, _total}} ->
@@ -1177,7 +1192,10 @@ defmodule FlyversePlugin.Policy do
   end
 
   defp result(policy, wish, window, observations) do
-    [left_hz, right_hz] = window.rates
+    {left_hz, right_hz} =
+      {Enum.max(Enum.take(window.rates, div(length(window.rates), 2))),
+       Enum.max(Enum.drop(window.rates, div(length(window.rates), 2)))}
+
     reach = patch_reach(observations, policy)
 
     %MotorPolicyResult{
@@ -1185,6 +1203,7 @@ defmodule FlyversePlugin.Policy do
       telemetry: %{
         left_hz: left_hz,
         right_hz: right_hz,
+        bands: length(window.rates),
         left_spikes: window.left,
         right_spikes: window.right,
         spikes: window.spikes,
@@ -1383,7 +1402,7 @@ defmodule FlyversePlugin.Policy do
   # A drive is a rate in the band the network answers in: never negative, and
   # never past the ceiling that silences it. One function clamps, so a change to
   # the ceiling is a change in one place.
-  defp band(hz), do: hz |> max(0.0) |> min(@max_hz)
+  defp clamp(hz), do: hz |> max(0.0) |> min(@max_hz)
 
   # Which way the fly leans when nothing in the view does: one period of a sine
   # over `@wander_period` steps of the episode.

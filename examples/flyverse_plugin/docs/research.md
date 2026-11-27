@@ -176,4 +176,10 @@ flyverse_plugin.pack` wrote.
 - **Nothing here ran against the dataset.** It is in no checkout, so the
   `plan.json` a person would write for the real pack is untested, and the first
   thing to check is that the group indices a plan names are the ones
-  `male_cns_v1_neural_io.json` gives.
+  `male_cns_v1_neural_io.json` gives. What _is_ tested is the shape such a plan
+  has: the view is cut into as many bands as the plan names drive groups, one rate
+  each, so a plan naming a group per sensory column is driven by a column rather
+  than by two halves (`Percept.bands/2`, and the four-group case in
+  `policy_test.exs`). The input is still one rate per group and not a spike train,
+  so the dataset's `vnc_sensory` replay — the input a faithful fly would get —
+  cannot be presented yet.

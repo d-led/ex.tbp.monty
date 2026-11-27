@@ -76,6 +76,25 @@ everywhere. [The plugin's README](../../../examples/flyverse_plugin/README.md)
 has the rest: the 80 Hz tonic, the four hertz per inverse metre, the 20 ms window
 stepped in 0.1 ms ticks, and why each of those is not free.
 
+### What the network is fed, and how wide
+
+The two halves above are the _demonstrator's_ plan, not a limit of the
+interface: the pack carries `plan.json`, and the number of drive groups in it is
+the number of bands the view is cut into. Two groups is a left and a right; a
+pack that names one index per group is driven by a column per group, which is the
+shape a retina has and the shape the dataset's sensory inventory is in. The
+decision stays two-sided either way — the wish is the difference of the two
+readouts, because a walk with turns in it has two.
+
+What the network is fed is a **rate**, not a spike train, and the rate is a
+summary of a depth image rather than a photoreceptor's: `1 / depth` of the nearest
+thing in each band, capped at a 10 m horizon. That is the honest boundary of this
+example, and it is why the page above is a check that the seam works rather than a
+claim about a fly — [the study](../../../examples/flyverse_plugin/docs/research.md)
+says what a faithful input would need (the VNC sensory replay the dataset carries,
+which is a spike train and would need the plan's groups to be fed one spike
+train per group rather than one rate).
+
 ## 5. What was wrong when this page was first written
 
 The host was up, answering rpc, and invisible: the studio answered _"no experiment

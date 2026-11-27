@@ -29,10 +29,20 @@ defmodule FlyversePlugin.Percept do
 
   ## Which half is which
 
-  The image is split at its middle column, and an odd column goes to the right
-  half. That is a statement about how the image is stored, not about a fly's
-  eyes: a real binocular channel would be built from the retinotopy, and this
-  plugin's packs are not a fly.
+  A band is a run of columns, and two of them are the left half of the image and
+  the right half of it, with an odd middle column going to the right. That is a
+  statement about how the image is stored, not about a fly's eyes: a real
+  binocular channel would be built from the retinotopy.
+
+  ## How many bands
+
+  `bands/2` asks the same question of any number of columns-runs, because that is
+  where a connectome's input comes from: a pack names as many drive groups as its
+  sensory groups have, and a pack that names one index per group gets one rate
+  per index. Two is what the four-neuron demonstrator's plan asks for and what
+  `nearness/1` answers; a pack built from the dataset's sensory inventory would
+  ask for hundreds, which is the shape the retina is in and the shape this
+  function can already drive.
   """
 
   # The sensors Monty's own configs name, in the order an agent's view is worth
@@ -107,13 +117,34 @@ defmodule FlyversePlugin.Percept do
   How close the nearest thing is on the left half and on the right half.
 
   Two rates in inverse metres: `0.0` for a side that saw nothing within the
-  horizon at all.
+  horizon at all. The two-band case of `bands/2`.
   """
   @spec nearness([[number()]]) :: {float(), float()}
   def nearness(rows) do
-    {left, right} = Enum.unzip(Enum.map(rows, &Enum.split(&1, div(length(&1), 2))))
+    [left, right] = bands(rows, 2)
+    {left, right}
+  end
 
-    {nearest_nearness(left), nearest_nearness(right)}
+  @doc """
+  How close the nearest thing is in each of `count` bands of the image.
+
+  A band is a run of columns — the image's width divided into `count` parts, the
+  last one taking the remainder — and its nearness is the nearest thing in it,
+  the same question `nearness/1` asks of a half. `count` is the number of drive
+  groups the pack's plan names, so a network with two groups is driven by the
+  two halves of the view and a network with a group per sensory column is driven
+  by a column per group.
+  """
+  @spec bands([[number()]], pos_integer()) :: [float()]
+  def bands(rows, count) when is_integer(count) and count > 0 do
+    width = rows |> hd() |> length()
+
+    for index <- 0..(count - 1) do
+      first = div(width * index, count)
+      last = div(width * (index + 1), count) - 1
+
+      if last < first, do: 0.0, else: nearest_in(rows, first, last)
+    end
   end
 
   defp no_image(agent_id) do
@@ -132,9 +163,9 @@ defmodule FlyversePlugin.Percept do
     {:error, "a depth image is a list of rows, and this is not one"}
   end
 
-  defp nearest_nearness(rows) do
+  defp nearest_in(rows, first, last) do
     rows
-    |> Enum.flat_map(fn row -> Enum.map(row, &nearness_of/1) end)
+    |> Enum.flat_map(fn row -> row |> Enum.slice(first..last//1) |> Enum.map(&nearness_of/1) end)
     |> Enum.reject(&(&1 == 0.0))
     |> case do
       [] -> 0.0

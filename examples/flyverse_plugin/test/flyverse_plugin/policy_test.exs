@@ -754,6 +754,45 @@ defmodule FlyversePlugin.PolicyTest do
     assert sentence =~ "names 1 drive group(s)"
   end
 
+  # What a pack built from a real sensory inventory is shaped like: many drive
+  # groups and two readouts. Each group is stimulated with one rate — the nearest
+  # thing in its own band of the view — so a plan that names a column per group is
+  # driven by a column, which is the input a retina has and the thing a two-number
+  # summary of the picture could not express. The decision is still two-sided: the
+  # wish is the difference of the two readouts, because that is what a walk with
+  # turns in it is.
+  test "a pack with a group per column is driven with a rate per group", %{state: state} do
+    directory =
+      Path.join(System.tmp_dir!(), "flyverse_four_band_#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm_rf!(directory) end)
+
+    {:ok, _written} =
+      Pack.write(directory, %{
+        neuron_ids: [1, 2, 3, 4, 5, 6],
+        edges: [{0, 4, 200}, {1, 4, 200}, {2, 5, 200}, {3, 5, 200}],
+        plan: %{
+          "drives" => [[0], [1], [2], [3]],
+          "readouts" => [[4], [5]],
+          "ticks" => 200,
+          "seed" => 7
+        }
+      })
+
+    Application.put_env(:flyverse_plugin, :pack, directory)
+
+    {:ok, policy, state} = Policy.new([], state)
+    {result, _policy, _state} = step(policy, state, [[0.04, 0.04, 100.0, 100.0]])
+
+    # Four bands, and the NIF refuses a window that is not one rate per group, so
+    # stepping at all is the assertion that every group was stimulated.
+    assert result.telemetry.bands == 4
+    assert result.telemetry.left_hz > result.telemetry.right_hz
+
+    assert [%OrientHorizontal{} = walked] = result.actions
+    assert walked.rotation_degrees < 0.0, "left, because the near columns are on the left"
+  end
+
   test "a node with no pack named says what to do", %{state: state} do
     Application.delete_env(:flyverse_plugin, :pack)
     System.delete_env("FLYVERSE_PACK")

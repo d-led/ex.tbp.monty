@@ -38,6 +38,35 @@ defmodule FlyversePlugin.PerceptTest do
     end
   end
 
+  # A band is a run of columns and its own nearest thing, and two of them are the
+  # two halves — which is why `nearness/1` is this function with `2`. The reason
+  # the count is a parameter is the connectome's input: a pack names as many drive
+  # groups as its sensory groups have, and a plan that names one index per group
+  # is a retina, not a left and a right.
+  describe "bands, one per drive group" do
+    test "two bands are the two halves of the view" do
+      rows = [[0.02, 0.02, 1.0, 1.0]]
+
+      assert Percept.bands(rows, 2) == [50.0, 1.0]
+      assert Percept.bands(rows, 2) == Tuple.to_list(Percept.nearness(rows))
+    end
+
+    test "a band per column, each its own nearest thing" do
+      assert Percept.bands([[0.5, 0.25, 1.0, 2.0]], 4) == [2.0, 4.0, 1.0, 0.5]
+    end
+
+    # Columns do not divide evenly, and the remainder goes to a band that widens
+    # rather than to a band that sees nothing.
+    test "the bands cover the image when the columns do not divide evenly" do
+      assert Percept.bands([[0.5, 0.25, 1.0, 2.0]], 3) == [2.0, 4.0, 1.0]
+    end
+
+    test "one band is the whole image, and a far one is nothing" do
+      assert Percept.bands([[1.0, 0.5, 2.0]], 1) == [2.0]
+      assert Percept.bands([[799.0, 799.0, 799.0]], 3) == [0.0, 0.0, 0.0]
+    end
+  end
+
   describe "the image to drive from" do
     setup do
       observations = %{
