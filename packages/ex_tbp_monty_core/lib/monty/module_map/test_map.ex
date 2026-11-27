@@ -143,6 +143,35 @@ defmodule Monty.ModuleMap.TestMap do
   end
 
   @doc """
+  The cases of the modules this port excludes, by case, with the module's reason.
+
+  A case tests the module it lives beside, so a module the port does not have is
+  a case nobody can translate: `dataclass_utils_test.py` asks how a Python
+  dataclass is converted, and this port has no dataclasses. Recording that in one
+  place — the module map's own exclusion — is what keeps the ledger honest
+  without thirty lines that all say the same thing.
+  """
+  @spec excluded_by_module(cases(), [map()]) :: %{optional(String.t()) => String.t()}
+  def excluded_by_module(monty_cases, module_entries) do
+    for %{status: :excluded, python: source, reason: reason} <- module_entries,
+        reason != nil,
+        name <- names_of_module_tests(monty_cases, source),
+        into: %{},
+        do: {name, reason}
+  end
+
+  # Monty names a test module after the module it tests, `<thing>_test.py`, and
+  # older releases used `test_<thing>.py`; both are read, because the exclusion is
+  # about the module and not about the file name it was given.
+  defp names_of_module_tests(monty_cases, source) do
+    directory = Path.dirname(source)
+    base = Path.basename(source, ".py")
+
+    [Path.join(directory, base <> "_test.py"), Path.join(directory, "test_" <> base <> ".py")]
+    |> Enum.flat_map(&Map.get(monty_cases, &1, []))
+  end
+
+  @doc """
   The M×N relation, in both directions.
 
   `:monty` maps a Monty file to its cases and, for each, the port files that
@@ -193,12 +222,17 @@ defmodule Monty.ModuleMap.TestMap do
           named: non_neg_integer(),
           excluded: non_neg_integer(),
           total: non_neg_integer(),
+          excluded_cases: MapSet.t(),
           missing: cases()
         }
   def coverage(monty_cases, attributions, excluded \\ MapSet.new()) do
-    attributed = attributions |> Map.values() |> List.flatten() |> MapSet.new()
     defined = monty_cases |> Map.values() |> List.flatten() |> MapSet.new()
+    excluded = MapSet.intersection(excluded, defined)
+    attributed = attributions |> Map.values() |> List.flatten() |> MapSet.new()
 
+    # A case is accounted for once: an exclusion wins over an attribution, because
+    # a name written while explaining why a case cannot be translated is not a
+    # translation of it.
     missing =
       Map.new(monty_cases, fn {file, names} ->
         {file,
@@ -212,12 +246,12 @@ defmodule Monty.ModuleMap.TestMap do
 
     total = monty_cases |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
     absent = missing |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
-    excluded_count = MapSet.intersection(excluded, defined) |> MapSet.size()
 
     %{
-      named: total - absent - excluded_count,
-      excluded: excluded_count,
+      named: total - absent - MapSet.size(excluded),
+      excluded: MapSet.size(excluded),
       total: total,
+      excluded_cases: excluded,
       missing: missing
     }
   end

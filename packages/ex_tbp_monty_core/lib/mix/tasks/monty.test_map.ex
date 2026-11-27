@@ -51,12 +51,20 @@ defmodule Mix.Tasks.Monty.TestMap do
     end
 
     attributions = TestMap.attributions(port_root)
-    coverage = TestMap.coverage(monty, attributions, TestMap.excluded_cases(port_root))
+
+    # A case of a module this port excludes is excluded with that module's
+    # reason: the case asks about a module that is not here.
+    by_module = TestMap.excluded_by_module(monty, Monty.ModuleMap.load())
+
+    excluded =
+      TestMap.excluded_cases(port_root) |> MapSet.union(MapSet.new(Map.keys(by_module)))
+
+    coverage = TestMap.coverage(monty, attributions, excluded)
 
     cond do
       Keyword.get(options, :refresh, false) -> refresh(port_root, source)
       Keyword.get(options, :check, false) -> check(port_root, coverage)
-      path = Keyword.get(options, :write) -> write(port_root, path, monty, coverage)
+      path = Keyword.get(options, :write) -> write(port_root, path, monty, coverage, by_module)
       Keyword.get(options, :missing, false) -> missing(coverage)
       true -> table(monty, coverage)
     end
@@ -121,17 +129,18 @@ defmodule Mix.Tasks.Monty.TestMap do
 
   defp outstanding(coverage), do: coverage.total - coverage.named - coverage.excluded
 
-  defp write(port_root, path, monty, coverage) do
+  defp write(port_root, path, monty, coverage, by_module) do
     full = Path.expand(path, port_root)
     File.mkdir_p!(Path.dirname(full))
-    File.write!(full, page(monty, coverage, TestMap.exclusions(port_root)))
+    File.write!(full, page(monty, coverage, TestMap.exclusions(port_root), by_module))
     Mix.shell().info("#{path}: written")
   end
 
   # The page a person reads: Monty's files down the side, and for each the
   # number of its cases a port test names, then the cases that cannot exist here
-  # with the reason each one cannot.
-  defp page(monty, coverage, exclusions) do
+  # with the reason each one cannot — the ones a port test recorded, and the ones
+  # a module the port excludes accounts for.
+  defp page(monty, coverage, exclusions, by_module) do
     rows =
       for {file, names} <- Enum.sort(monty) do
         "| #{named(file, names, coverage)}/#{length(names)} | #{excluded_count(names, exclusions)} | `#{file}` |"
@@ -157,7 +166,26 @@ defmodule Mix.Tasks.Monty.TestMap do
     |---:|---:|---|
     #{Enum.join(rows, "\n")}
     #{excluded_section(exclusions)}
+
+    #{module_excluded_section(by_module)}
     """
+  end
+
+  # The exclusions a module map entry already made, grouped by its reason: a case
+  # asks about the module beside it, so an excluded module excludes its cases.
+  defp module_excluded_section(by_module) when by_module == %{}, do: ""
+
+  defp module_excluded_section(by_module) do
+    groups =
+      by_module
+      |> Enum.group_by(fn {_name, reason} -> reason end, fn {name, _reason} -> name end)
+      |> Enum.sort_by(fn {_reason, names} -> length(names) end, :desc)
+      |> Enum.map_join("\n", fn {reason, names} ->
+        cases = names |> Enum.sort() |> Enum.map_join(", ", &"`#{&1}`")
+        "- **#{reason}** — #{cases}"
+      end)
+
+    "## Cases of modules the port excludes\n\n#{groups}"
   end
 
   defp excluded_count(names, exclusions) do
@@ -205,6 +233,10 @@ defmodule Mix.Tasks.Monty.TestMap do
     Mix.shell().info("#{TestMap.snapshot()}: written")
   end
 
-  defp named(file, names, coverage),
-    do: length(names) - length(Map.get(coverage.missing, file, []))
+  defp named(file, names, coverage) do
+    name_set = MapSet.new(names)
+    missing = length(Map.get(coverage.missing, file, []))
+    excluded = MapSet.intersection(coverage.excluded_cases, name_set) |> MapSet.size()
+    length(names) - missing - excluded
+  end
 end

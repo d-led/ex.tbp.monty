@@ -54,7 +54,25 @@ defmodule Monty.ModuleMap.TestMapTest do
       coverage =
         TestMap.coverage(monty(), TestMap.attributions(root), TestMap.excluded_cases(root))
 
-      assert coverage == %{named: 1, excluded: 1, total: 2, missing: %{}}
+      assert coverage.named == 1
+      assert coverage.excluded == 1
+      assert coverage.total == 2
+      assert coverage.missing == %{}
+      assert coverage.excluded_cases == MapSet.new([python_only()])
+    end
+
+    test "a case named while explaining why it cannot be translated is excluded, not named" do
+      # A moduledoc that lists the cases the port cannot have must not read as a
+      # list of translations: the exclusion wins over the attribution, and the
+      # case the file does not mention stays outstanding.
+      root = port_tree("  # #{python_only()}\n" <> exclusion_line())
+
+      coverage =
+        TestMap.coverage(monty(), TestMap.attributions(root), TestMap.excluded_cases(root))
+
+      assert coverage.named == 0
+      assert coverage.excluded == 1
+      assert coverage.missing == %{"thing_test.py" => [translated()]}
     end
 
     test "a reason attached to a case Monty does not define is a defect" do

@@ -7,8 +7,8 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-618 of 717 of Monty's unit cases are named here, and
-39 more the port cannot have are excluded, each with its reason
+627 of 717 of Monty's unit cases are named here, and
+65 more the port cannot have are excluded, each with its reason
 below.
 
 ## By Monty's file
@@ -19,7 +19,7 @@ below.
 | 3/3 | 0 | `attention/decay_test.py` |
 | 6/6 | 0 | `attention/goal_filter_test.py` |
 | 2/2 | 0 | `attention/merge_test.py` |
-| 12/12 | 5 | `attention/voxel_grid_test.py` |
+| 7/12 | 5 | `attention/voxel_grid_test.py` |
 | 2/2 | 0 | `attention/weight_pooler_test.py` |
 | 15/15 | 0 | `cmp_test.py` |
 | 0/1 | 0 | `dependencies_test.py` |
@@ -27,10 +27,10 @@ below.
 | 35/35 | 0 | `experiments/recognition_strategy_test.py` |
 | 4/4 | 0 | `experiments/sensor_modules/telemetry_test.py` |
 | 29/29 | 0 | `frameworks/actions/action_samplers_test.py` |
-| 84/84 | 28 | `frameworks/actions/actions_test.py` |
+| 55/84 | 28 | `frameworks/actions/actions_test.py` |
 | 12/12 | 0 | `frameworks/environment_utils/transforms_test.py` |
 | 0/4 | 0 | `frameworks/experiments/profile_experiment_mixin_test.py` |
-| 28/28 | 5 | `frameworks/models/buffer_test.py` |
+| 23/28 | 5 | `frameworks/models/buffer_test.py` |
 | 30/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
 | 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
 | 11/11 | 0 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
@@ -55,8 +55,8 @@ below.
 | 20/20 | 0 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
 | 2/2 | 0 | `frameworks/models/sensor_modules_test.py` |
 | 10/10 | 0 | `frameworks/models/two_d_sensor_module_test.py` |
-| 23/23 | 1 | `frameworks/run_parallel_test.py` |
-| 2/37 | 0 | `frameworks/utils/dataclass_utils_test.py` |
+| 22/23 | 1 | `frameworks/run_parallel_test.py` |
+| 11/37 | 0 | `frameworks/utils/dataclass_utils_test.py` |
 | 18/18 | 0 | `frameworks/utils/edge_detection_test.py` |
 | 3/3 | 0 | `frameworks/utils/graph_matching_utils_test.py` |
 | 7/7 | 0 | `frameworks/utils/logging_utils_test.py` |
@@ -89,3 +89,7 @@ below.
 - **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
 - **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`
 - **pandas only; the run page reads the run record** — `test_reconstructs_named_metrics`
+
+## Cases of modules the port excludes
+
+- **Python dataclass plumbing — an importlib round trip, a dataclass built from a signature — with no caller in Monty** — `test_class_method`, `test_dataclass_instance`, `test_dataclass_type`, `test_dataclass_with_dict`, `test_deep_nested_dataclass`, `test_deeply_nested`, `test_dict`, `test_dict_with_dataclass`, `test_list`, `test_named_tuple`, `test_nested_dataclass`, `test_nested_dataclass_with_dict`, `test_simple_dataclass`, `test_simple_functions`, `test_simple_functions_with_default`, `test_tuple`, `test_with_basic_attr`, `test_with_basic_dict`, `test_with_basic_list`, `test_with_basic_named_tuple`, `test_with_basic_tuple`, `test_with_nested_attr`, `test_with_nested_dict`, `test_with_nested_list`, `test_with_nested_named_tuple`, `test_with_nested_tuple`
