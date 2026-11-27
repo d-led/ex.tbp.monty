@@ -23,6 +23,8 @@ defmodule Monty.Experiment.RecognitionStrategyTest do
   alias Monty.Experiment.RecognitionStrategy.MaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinimumLMs
+  alias Monty.Experiment.RecognitionStrategy.NaiveScan
+  alias Monty.Experiment.RecognitionStrategy.ObjectRecognition
   alias Monty.Experiment.RecognitionStrategy.StepLimit
   alias Monty.Experiment.RecognitionStrategy.RecognitionContext
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
@@ -330,6 +332,138 @@ defmodule Monty.Experiment.RecognitionStrategyTest do
                  %RecognitionContext{}
                ).is_done ==
                  concluded >= min_lms
+      end
+    end
+  end
+
+  describe "NaiveScan" do
+    # test_raises_value_error_if_fixed_amount_is_not_positive
+    test "refuses an amount that is not positive with Monty's words" do
+      for fixed_amount <- [0, -1, -100] do
+        assert NaiveScan.new(fixed_amount: fixed_amount) ==
+                 {:error, "fixed_amount must be positive"}
+      end
+    end
+
+    # test_fixed_amount_5_yields_307_steps
+    test "an amount of five is a scan of 307 steps" do
+      {:ok, policy} = NaiveScan.new(fixed_amount: 5)
+
+      for step <- [0, 306, 307, 400] do
+        is_done = step >= 307
+
+        assert RecognitionStrategy.call(policy, matching(), %RecognitionContext{step: step}).is_done ==
+                 is_done
+      end
+    end
+
+    # test_step_limit_less_than_10000
+    test "every amount up to a hundred has scanned by ten thousand steps" do
+      for fixed_amount <- [1, 5, 100] do
+        {:ok, policy} = NaiveScan.new(fixed_amount: fixed_amount)
+
+        assert RecognitionStrategy.call(policy, matching(), %RecognitionContext{step: 10_000}).is_done
+      end
+    end
+  end
+
+  describe "ObjectRecognition" do
+    # test_raises_value_error_if_max_total_steps_is_not_positive
+    test "refuses a total ceiling that is not positive with Monty's words" do
+      for max_total_steps <- [0, -1, -100] do
+        assert ObjectRecognition.new(
+                 max_train_steps: 1,
+                 max_eval_steps: 1,
+                 max_total_steps: max_total_steps
+               ) == {:error, "max_total_steps must be positive"}
+      end
+    end
+
+    # test_raises_value_error_if_max_train_steps_is_not_positive
+    test "refuses a training ceiling that is not positive with Monty's words" do
+      for max_train_steps <- [0, -1, -100] do
+        assert ObjectRecognition.new(
+                 max_train_steps: max_train_steps,
+                 max_eval_steps: 1,
+                 max_total_steps: 1
+               ) == {:error, "max_train_steps must be positive"}
+      end
+    end
+
+    # test_raises_value_error_if_max_eval_steps_is_not_positive
+    test "refuses an evaluation ceiling that is not positive with Monty's words" do
+      for max_eval_steps <- [0, -1, -100] do
+        assert ObjectRecognition.new(
+                 max_train_steps: 1,
+                 max_eval_steps: max_eval_steps,
+                 max_total_steps: 1
+               ) == {:error, "max_eval_steps must be positive"}
+      end
+    end
+
+    # test_times_out_at_or_after_max_matching_steps
+    test "is done at or after the matching ceiling" do
+      for max_steps <- [1, 2, 5], matching_steps <- [0, 1, 2, 5, 6] do
+        {:ok, policy} =
+          ObjectRecognition.new(
+            max_train_steps: max_steps,
+            max_eval_steps: max_steps,
+            max_total_steps: 100
+          )
+
+        is_done = matching_steps >= max_steps
+
+        assert RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+                 step: 10,
+                 matching_steps: matching_steps
+               }).is_done == is_done
+      end
+    end
+
+    # test_selects_max_matching_steps_by_mode
+    test "counts matching steps against the ceiling the mode names" do
+      {:ok, policy} =
+        ObjectRecognition.new(max_train_steps: 3, max_eval_steps: 7, max_total_steps: 5000)
+
+      for {mode, max_steps} <- [{:train, 3}, {:eval, 7}] do
+        at_limit =
+          RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+            mode: mode,
+            matching_steps: max_steps
+          })
+
+        before_limit =
+          RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+            mode: mode,
+            matching_steps: max_steps - 1
+          })
+
+        assert at_limit.is_done
+        refute before_limit.is_done
+      end
+    end
+
+    # test_times_out_at_or_after_max_total_steps
+    test "is done at or after the total ceiling, exploring or not" do
+      for is_exploring <- [false, true],
+          max_total_steps <- [1, 5],
+          extra <- [0, 3],
+          matching_steps <- [0, 50] do
+        {:ok, policy} =
+          ObjectRecognition.new(
+            max_train_steps: 1000,
+            max_eval_steps: 1000,
+            max_total_steps: max_total_steps
+          )
+
+        assert RecognitionStrategy.call(
+                 policy,
+                 %{is_exploring: is_exploring},
+                 %RecognitionContext{
+                   step: max_total_steps + extra,
+                   matching_steps: matching_steps
+                 }
+               ).is_done
       end
     end
   end
