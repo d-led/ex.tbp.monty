@@ -409,9 +409,9 @@ defmodule ExTbpMontyWeb.BuildLive do
 
   # What a builder offers is what a run page can open: the experiment sets this
   # application carries, over the groups they share, over Monty's own tree
-  # (`Monty.Config.Source.conf_dirs/0` — first root holding a file wins, so ours
+  # (`Monty.Studio.Catalog.conf_dirs/0` — first root holding a file wins, so ours
   # replace Monty's where they name the same group option).
-  defp roots, do: Monty.Config.Source.conf_dirs()
+  defp roots, do: Catalog.conf_dirs()
 
   defp base_options do
     templates = Catalog.templates() |> Enum.map(&{&1, &1})

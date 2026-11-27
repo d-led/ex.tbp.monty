@@ -115,7 +115,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         socket
       end
 
-    case Studio.open(name_of(params), conf_dir: Monty.Config.Source.conf_dirs()) do
+    case Studio.open(name_of(params), conf_dir: Catalog.conf_dirs()) do
       {:ok, opened} ->
         {:ok,
          follow_running(
@@ -1338,7 +1338,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
         {:noreply,
          start_async(socket, :world, fn ->
            Studio.open(name,
-             conf_dir: Monty.Config.Source.conf_dirs(),
+             conf_dir: Catalog.conf_dirs(),
              world_simulator: world
            )
          end)}
@@ -1566,7 +1566,7 @@ defmodule ExTbpMontyWeb.ExperimentLive do
   end
 
   defp reread_setup(%{assigns: %{opened: %{name: name}}} = socket) do
-    case Studio.open(name, conf_dir: Monty.Config.Source.conf_dirs()) do
+    case Studio.open(name, conf_dir: Catalog.conf_dirs()) do
       {:ok, opened} -> assign(socket, opened: opened)
       {:error, _reason} -> socket
     end

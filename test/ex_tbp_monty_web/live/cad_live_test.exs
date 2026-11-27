@@ -58,6 +58,16 @@ defmodule ExTbpMontyWeb.CadLiveTest do
 
       assert has_element?(view, "#nav-cad")
     end
+
+    # A part with a run is a link to it: a second experiment of the same name
+    # would be read before the shipped one and shadow it.
+    test "a part that already runs offers its run, not a second one", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/cad")
+
+      assert has_element?(view, "#run-plate[href='/experiments/cad/plate_part_eval']")
+      refute has_element?(view, "#generate-plate")
+      assert has_element?(view, "#generate-solidcraft-plate")
+    end
   end
 
   describe "bringing a part" do
@@ -102,13 +112,19 @@ defmodule ExTbpMontyWeb.CadLiveTest do
              )
     end
 
-    test "twice is the same experiment, not a second one", %{conn: conn, sets: sets} do
+    test "and the list offers the run it just made", %{conn: conn, sets: sets} do
       {:ok, view, _html} = live(conn, ~p"/cad")
 
-      view |> element("#generate-solidcraft-plate") |> render_click()
       html = view |> element("#generate-solidcraft-plate") |> render_click()
 
       assert html =~ "cad/solidcraft-plate_part_eval"
+
+      assert has_element?(
+               view,
+               "#run-solidcraft-plate[href='/experiments/cad/solidcraft-plate_part_eval']"
+             )
+
+      refute has_element?(view, "#generate-solidcraft-plate")
 
       assert Path.wildcard(Path.join([sets, "brought/conf/experiment/cad/*.yaml"]))
              |> length() == 1

@@ -132,7 +132,7 @@ defmodule Monty.Studio.Blueprint do
   @doc "What is wrong with the choices, if anything."
   @spec findings(t(), keyword()) :: [Finding.t()]
   def findings(%__MODULE__{} = blueprint, opts \\ []) do
-    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
+    conf_dir = Keyword.get_lazy(opts, :conf_dir, fn -> Catalog.conf_dirs() end)
 
     name_findings(blueprint) ++
       base_findings(blueprint, conf_dir) ++
@@ -371,7 +371,7 @@ defmodule Monty.Studio.Blueprint do
   defp load_experiment(_base, path) when is_binary(path), do: Source.load_file(path)
 
   defp load_experiment(base, _no_file),
-    do: Source.load(Source.conf_dirs(), "experiment", base)
+    do: Source.load(Catalog.conf_dirs(), "experiment", base)
 
   # Hydra's `${constants.name}` is how a config reuses a value it gave once, and
   # the constants live in their own group rather than in the experiment file.

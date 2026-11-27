@@ -25,10 +25,10 @@ defmodule Monty.Prerequisites.Build do
   """
 
   alias ExTbpMonty.Objaverse.Import
-  alias Monty.Config.Source
   alias Monty.Studio
   alias Monty.Studio.Cad.Generate
   alias Monty.Studio.Cad.Preparation
+  alias Monty.Studio.Catalog
 
   # The corpus manifests this application ships, one per object set, under the
   # experiments root `extra_root/0` answers.
@@ -159,7 +159,7 @@ defmodule Monty.Prerequisites.Build do
   # application does not carry — is skipped rather than failed: the click makes
   # what it can, and the page's Checks are where a broken config is reported.
   defp cad_plans do
-    roots = cad_set_roots() ++ Source.conf_dirs()
+    roots = cad_set_roots() ++ Catalog.conf_dirs()
 
     roots
     |> cad_experiment_names()

@@ -28,6 +28,7 @@ defmodule Monty.Studio.Cad.Generate do
   alias Monty.Config.Source
   alias Monty.Studio.Blueprint
   alias Monty.Studio.Cad.Parts
+  alias Monty.Studio.Catalog
 
   # The shipped experiment a generated one is modelled on. Part-level because
   # that is the arm whose answer is known on this pipeline; an arm with a wall
@@ -56,7 +57,7 @@ defmodule Monty.Studio.Cad.Generate do
   @spec sets_dir() :: Path.t()
   def sets_dir do
     Application.get_env(:ex_tbp_monty, :cad_sets_dir) ||
-      Path.join(Source.extra_root(), "sets")
+      Path.join(Monty.Paths.data(), "sets")
   end
 
   @doc """
@@ -73,9 +74,11 @@ defmodule Monty.Studio.Cad.Generate do
   @doc """
   Writes the part's experiment and the interface that names its object.
 
-  Refuses — before writing anything — a part no file answers, and a config the
-  studio would not compose: a config this module cannot read back is not one a
-  person should be given.
+  Refuses — before writing anything — a part no file answers, a part that
+  already has an experiment (a generated set is read *before* the shipped ones,
+  so a second one would shadow a measured experiment with a copy of itself), and
+  a config the studio would not compose: a config this module cannot read back is
+  not one a person should be given.
   """
   @spec generate(String.t(), keyword()) :: {:ok, generated()} | {:error, String.t()}
   def generate(part, opts \\ []) do
@@ -83,6 +86,7 @@ defmodule Monty.Studio.Cad.Generate do
     blueprint = blueprint(part)
 
     with {:ok, _named} <- Parts.find(part),
+         :ok <- unclaimed(part, sets),
          :ok <- write(environment_path(part, sets), env_interface(part)),
          :ok <- nothing_wrong(blueprint, conf_dirs(sets)),
          {:ok, _composed} <- Blueprint.compose(blueprint, conf_dir: conf_dirs(sets)),
@@ -92,6 +96,40 @@ defmodule Monty.Studio.Cad.Generate do
          experiment: blueprint.name,
          files: [experiment_path(part, sets), environment_path(part, sets)]
        }}
+    end
+  end
+
+  @doc """
+  The experiment a part already runs, or `nil`.
+
+  A page asks this before it offers to generate one: a part with a run is a link
+  to that run, not a second experiment of the same name.
+  """
+  @spec experiment_for(String.t(), Path.t()) :: String.t() | nil
+  def experiment_for(part, sets \\ sets_dir()) do
+    name = "#{@folder}/#{part}_part_eval"
+
+    case Catalog.experiment(name, conf_dir: conf_dirs(sets)) do
+      nil -> nil
+      _experiment -> name
+    end
+  end
+
+  # The generated file is this module's own: a second click rewrites it, which is
+  # the same state. Anything else of that name is a shipped experiment and a
+  # generated copy would be read before it.
+  defp unclaimed(part, sets) do
+    case {File.exists?(experiment_path(part, sets)), experiment_for(part, sets)} do
+      {true, _ours} ->
+        :ok
+
+      {false, nil} ->
+        :ok
+
+      {false, name} ->
+        {:error,
+         "#{name} is already an experiment here — #{part} already has a run. " <>
+           "Open that one instead of making a second."}
     end
   end
 

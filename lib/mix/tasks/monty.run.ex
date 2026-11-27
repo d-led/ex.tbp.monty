@@ -652,9 +652,9 @@ defmodule Mix.Tasks.Monty.Run do
   # this application carries, the group files they share, then Monty's mirror —
   # so an experiment that appears in a set runs by name with no flag, which is
   # what the catalog offers.
-  defp conf_dir(nil), do: Monty.Config.Source.conf_dirs()
+  defp conf_dir(nil), do: Monty.Studio.Catalog.conf_dirs()
 
-  defp conf_dir(overlay), do: [Path.expand(overlay) | Monty.Config.Source.conf_dirs()]
+  defp conf_dir(overlay), do: [Path.expand(overlay) | Monty.Studio.Catalog.conf_dirs()]
 
   # Named here so a misspelling is a refusal rather than a quietly different
   # world: `--world mujoco` that fell back to the stand-in would report numbers

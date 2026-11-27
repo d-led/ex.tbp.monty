@@ -63,6 +63,32 @@ defmodule Monty.Studio.Catalog do
   def templates, do: @templates
 
   @doc """
+  Every config root this studio reads, in the order that decides who wins.
+
+  Monty's mirror and the sets the application ships, then the sets a person
+  generated — under the data root, because they are the application's output and
+  the source tree holds sources. A generated name therefore never shadows a
+  shipped experiment, which is the order `Monty.Studio.Cad.Generate` refuses to
+  create a collision for anyway.
+
+  Everything that lists or opens an experiment defaults to this list, so a
+  generated part's run appears on `/experiments` and its page opens, without
+  either one knowing that generated sets exist.
+  """
+  @spec conf_dirs() :: [Path.t()]
+  def conf_dirs, do: Source.conf_dirs() ++ generated()
+
+  # A generated set is written to the data folder (`Monty.Studio.Cad.Generate`),
+  # so this asks the data root rather than listing the source tree.
+  defp generated do
+    Monty.Paths.data()
+    |> Path.join("sets/*/conf")
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.sort()
+  end
+
+  @doc """
   Every experiment Monty ships, with the choices its defaults list made and the
   few `experiment.config` values a list needs.
 
@@ -280,5 +306,5 @@ defmodule Monty.Studio.Catalog do
   # and a catalogue that answered that was a catalogue which could not find the
   # experiment that trains a model this node offers — `trainer_for/2` said "no
   # experiment here trains it" about an experiment one page away.
-  defp conf_dir(opts), do: Keyword.get_lazy(opts, :conf_dir, fn -> Source.conf_dirs() end)
+  defp conf_dir(opts), do: Keyword.get_lazy(opts, :conf_dir, fn -> conf_dirs() end)
 end

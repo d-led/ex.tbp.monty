@@ -86,4 +86,19 @@ defmodule Monty.Studio.Cad.GenerateTest do
       assert Path.wildcard(Path.join(sets, "**/*.yaml")) == []
     end
   end
+
+  # A generated set is read before the shipped ones, so a second experiment of
+  # the same name would shadow a measured one with a copy of itself.
+  describe "a part that already has an experiment" do
+    test "is refused, and nothing is written", %{sets: sets} do
+      assert {:error, sentence} = Generate.generate("plate", sets: sets)
+      assert sentence =~ "already has a run"
+      assert Path.wildcard(Path.join(sets, "**/*.yaml")) == []
+    end
+
+    test "answers the experiment a page links to" do
+      assert Generate.experiment_for("plate") == "cad/plate_part_eval"
+      assert Generate.experiment_for("bracket") == nil
+    end
+  end
 end

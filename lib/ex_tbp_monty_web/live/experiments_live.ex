@@ -25,7 +25,6 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
   use ExTbpMontyWeb, :live_view
 
   alias ExTbpMonty.Cluster.Nodes
-  alias Monty.Config.Source
   alias Monty.Studio.{Catalog, Drafts, Index, PluginExperiment, Readiness}
 
   @page_size 30
@@ -137,11 +136,11 @@ defmodule ExTbpMontyWeb.ExperimentsLive do
 
   # The config trees a page here lists and opens: this application's experiment
   # sets, then the group files they share, then Monty's copy
-  # (`Monty.Config.Source.conf_dirs/0`). `load/3` reads a list as an overlay —
+  # (`Monty.Studio.Catalog.conf_dirs/0`). `load/3` reads a list as an overlay —
   # the first root that holds a file wins — so an experiment of ours composes
   # against the whole of Monty's config without copying any of it, and a group
   # file of ours replaces Monty's wherever an experiment names it.
-  defp roots, do: Source.conf_dirs()
+  defp roots, do: Catalog.conf_dirs()
 
   # The index a page shows. A plugin's experiment is listed by the node that
   # brings it (`Catalog.plugin_experiments/0`), and what it *is* comes from the

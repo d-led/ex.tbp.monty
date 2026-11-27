@@ -24,10 +24,7 @@ defmodule ExTbpMontyWeb.CadLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(
-       parts: Enum.map(Parts.list(), &%{part: &1, description: nil, error: nil}),
-       generated: nil
-     )
+     |> assign(parts: listed(), generated: nil)
      |> assign(form: to_form(%{"name" => ""}, as: :bring))
      |> allow_upload(:step,
        # `accept` is not asked to do the checking: Phoenix validates that list
@@ -76,6 +73,7 @@ defmodule ExTbpMontyWeb.CadLive do
         {:noreply,
          socket
          |> assign(:generated, Map.put(generated, :part, name))
+         |> update_part(name, &%{&1 | experiment: generated.experiment})
          |> put_flash(:info, "#{generated.experiment} is written.")}
 
       {:error, sentence} ->
@@ -163,7 +161,16 @@ defmodule ExTbpMontyWeb.CadLive do
               >
                 Look at it
               </button>
+              <.link
+                :if={entry.experiment}
+                id={"run-#{entry.part.name}"}
+                navigate={~p"/experiments/#{String.split(entry.experiment, "/")}"}
+                class="btn btn-sm"
+              >
+                Open its run
+              </.link>
               <button
+                :if={entry.experiment == nil}
                 id={"generate-#{entry.part.name}"}
                 phx-click="generate"
                 phx-value-part={entry.part.name}
@@ -180,7 +187,7 @@ defmodule ExTbpMontyWeb.CadLive do
           id="generated"
           class="rounded-box border border-base-300 bg-base-100 p-4 space-y-2"
         >
-          <h2 class="font-semibold">2. {@generated.experiment} is written</h2>
+          <h2 class="font-semibold">{@generated.experiment} is written</h2>
           <p class="text-sm text-base-content/70">
             It steps {@generated.part} and loads the memory <code>{(@generated).part}_part</code>,
             which does not exist yet. Two clicks, in this order:
@@ -211,7 +218,14 @@ defmodule ExTbpMontyWeb.CadLive do
   # -- the parts on the page -----------------------------------------------
 
   defp listed do
-    Enum.map(Parts.list(), &%{part: &1, description: nil, error: nil})
+    Enum.map(Parts.list(), fn part ->
+      %{
+        part: part,
+        description: nil,
+        error: nil,
+        experiment: Generate.experiment_for(part.name)
+      }
+    end)
   end
 
   defp describe(socket, name) do

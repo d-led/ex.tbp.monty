@@ -104,16 +104,20 @@ a part the application already ships can start at the second.
    under `$MONTY_DATA/parts/` and quiddity says what it is — its size, its faces,
    the features the recognition found. “Make it a run” writes the experiment
    (`cad/<part>_part_eval`) and the interface that names its object, as a set of
-   the part's own under `priv/monty_experiments/sets/brought/conf`. The part's
-   name is the name of everything downstream: the object directory, the memory
+   the part's own under `$MONTY_DATA/sets/brought/conf`. The part's name is the
+   name of everything downstream: the object directory, the memory
    (`<part>_part`) and the experiment.
 
    The same bytes under a used name are the same part; other bytes are refused,
    because every memory of that name describes the file that was there when it
-   was taught. A generated set is an ordinary set: `/experiments` lists it, the
-   builder offers it, and the Make click plans it. It is the application's output
-   rather than a source (`.gitignore` keeps it out of a commit); a deployment that
-   cannot write `priv/` points `:cad_sets_dir` at a writable directory.
+   was taught. A part that already has an experiment is a link to that run rather
+   than a second one of the same name. A generated set is an ordinary root —
+   `Monty.Studio.Catalog.conf_dirs/0` lists Monty's mirror and the shipped sets
+   first, then the generated ones — so `/experiments` lists it, the builder
+   offers it and the Make click plans it, with no further wiring. It is the
+   application's output, so it is written under the data root and never into the
+   source tree; a deployment that wants it elsewhere points `:cad_sets_dir` at a
+   directory.
 
 2. **`/prerequisites` → "CAD part memories and meshes" → Make.** One memory and
    one object set per CAD experiment this machine has — the sets the application
@@ -138,8 +142,8 @@ a part the application already ships can start at the second.
 The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
 whole setup — no checkout has to sit beside this one, and no build path has to be
 appended. The shipped experiments live in `priv/monty_experiments/sets/cad/conf`,
-a generated one in `sets/brought/conf` beside it, and that set's own README is
-the same walk-through written down.
+a generated one under `$MONTY_DATA/sets/brought/conf`, and that set's own README
+is the same walk-through written down.
 
 Measured on this Mac (2026-11-19), `Make` and `Run it` and nothing else: the plate's
 three evaluation episodes concluded in 97, 184 and 351 steps, and each answered
