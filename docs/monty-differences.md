@@ -2934,3 +2934,26 @@ What is left is inside `ex.mujoco`'s own render path — the same
 `mjr_makeContext` / `mjr_setBuffer(mjFB_OFFSCREEN)` / `mjv_updateScene` /
 `mjr_render` / `mjr_readPixels` sequence MuJoCo's Python renderer runs — and it is
 reproducible in one command (`scripts/probe_world_parity.exs`).
+
+**Two hazards of comparing them in one process, both hit.** They share one MuJoCo
+symbol namespace, so:
+
+- **the two worlds cannot be on different library versions.** The compiled
+  library has to be loaded before Python's, and the NIF refuses to work when it is
+  not: `the MuJoCo library in priv/ is 4.0.1 (4000001), and the headers the NIF was
+generated from are 3.13.0 (3013000)`. A probe that starts Python first — which
+  is the natural order, since the Python world needs its interpreter — is
+  measuring something it cannot name.
+- **whichever GL context was made last is the one that draws.** A render taken in
+  the other order came back black (a patch's mean of 0.333 against 151.5), and the
+  world-parity probe that reports real numbers is the one that touches
+  `ExMujoco` first.
+
+**What a minimal scene says.** Every small scene tried — a box, a mesh, a
+textured mesh, a directional light, a 256-pixel offscreen buffer with a 64-pixel
+rect in it, and the real object's own `textured.obj` at the real patch camera's
+11.42° field of view — renders **identically** in the two renderers (38.644,
+38.644, 42.466, 42.466, 66.007 each). The 12.6 % therefore belongs to the full
+scene and not to meshes, textures, lights or offscreen sizes, and the next step is
+to take the full scene apart — the agent's bodies, the light, the object — rather
+than to build another small one.
