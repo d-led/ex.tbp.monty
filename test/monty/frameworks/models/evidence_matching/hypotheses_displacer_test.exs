@@ -278,6 +278,21 @@ defmodule Monty.Frameworks.Models.EvidenceMatching.HypothesesDisplacerTest do
   # what each channel earned. Monty stubs the per-channel evidence out; here two
   # channels over the same graph earn it for real, one channel at a time and
   # then both, and the total has to be the sum.
+  # Three of Monty's cases are **parked**, not dropped:
+  #
+  #   test_calculate_evidence_for_new_locations_invoke_custom_distances_for_surface_pose_vectors
+  #   test_calculate_evidence_for_new_locations_invoke_euclidean_distances_for_orientation_matrix_pose_vectors
+  #   test_calculate_evidence_for_new_locations_invokes_object_pose_evidence_for_orientation_matrix_pose_vectors
+  #
+  # They record a dispatch this port does not have: Monty picks the distance
+  # rule by the channel's pose type — curvature-aware `custom_distances` for a
+  # `SurfacePoseVectors`, plain `euclidean_distances` for an `OrientationMatrix`,
+  # and `_object_pose_evidence` when a distant agent's pose is an object
+  # orientation. `neighbour_evidence/5` here always calls
+  # `GraphMatchingUtils.custom_distance/4`, and `object_pose_evidence/2` is
+  # defined but nothing calls it. The cases follow the dispatch, in
+  # `docs/monty-differences.md` §2.50.
+
   describe "Monty's multi-channel case" do
     # test_multi_channel_evidence_sums
     test "two channels' evidence is summed, and added to what the hypotheses had" do

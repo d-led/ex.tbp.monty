@@ -2976,3 +2976,34 @@ Three things have no Elixir counterpart, and the port answers them its own way:
 - **Emitting does not require a collector.** `Collector.record/1` answers
   `:no_collector` when none is running: a run nobody is watching starts no
   process and pays nothing.
+
+## 2.50 The distance rule is chosen by the pose a channel carries
+
+Monty's `DefaultHypothesesDisplacer._calculate_evidence_for_new_locations`
+branches on the channel's pose type before it measures how far a search location
+is from a stored node:
+
+- a `SurfacePoseVectors` pose is measured with `custom_distances` — the distance
+  in the tangent plane, plus a penalty for height off it, scaled by curvature;
+- an `OrientationMatrix` pose with `euclidean_distances` — a distant agent's
+  camera has no surface, so a metre is a metre;
+- and with `use_object_pose_evidence` set, an orientation is scored by
+  `_object_pose_evidence` instead: how far apart two rotations are, scaled so
+  0° is 1 and 180° is −1.
+
+This port's `neighbour_evidence/5` calls `GraphMatchingUtils.custom_distance/4`
+for every channel, whatever its pose, and `object_pose_evidence/2` — which is
+ported and tested against Monty's `ObjectPoseEvidenceTest` property — has no
+caller. Three of Monty's cases record the dispatch and are parked in
+`test/monty/frameworks/models/evidence_matching/hypotheses_displacer_test.exs`
+until it exists:
+
+    test_calculate_evidence_for_new_locations_invoke_custom_distances_for_surface_pose_vectors
+    test_calculate_evidence_for_new_locations_invoke_euclidean_distances_for_orientation_matrix_pose_vectors
+    test_calculate_evidence_for_new_locations_invokes_object_pose_evidence_for_orientation_matrix_pose_vectors
+
+What it costs today: for a surface agent the rule is Monty's, and for a flat
+surface (`curvature = 0`) the port's `custom_distance` is the euclidean distance,
+so a distant agent's numbers agree while its percept is flat. They stop agreeing
+as soon as a channel carries an orientation matrix against curved stored poses,
+and the object-pose-evidence path is not exercised at all.
