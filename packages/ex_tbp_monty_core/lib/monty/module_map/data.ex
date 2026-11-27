@@ -1199,13 +1199,14 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/experiments/pretraining_experiments.py"
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "The mixin wraps a phase in cProfile and writes the profile as a pandas CSV, and its `__init_subclass__` polices Python's base-class order. Profiling here is `:eprof`/`:fprof`, a step's timings are the run record's, and Elixir composes by `use` rather than by base-class order",
+      status: :excluded,
       elixir: "Monty.Frameworks.Experiments.Profile",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Frameworks.Experiments.Profile.ProfileExperimentMixin",
           python: "ProfileExperimentMixin"
         }
@@ -2710,8 +2711,9 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/utils/object_model_utils.py"
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "matplotlib is not on the BEAM: a view finder's outline and a graph's drawing are the run page's LiveView components over the same data, not figures written to files",
+      status: :excluded,
       elixir: "Monty.Frameworks.Utils.PlotUtils",
       package: "monty",
       classes: [],
@@ -2726,13 +2728,14 @@ defmodule Monty.ModuleMap.Data do
       python: "frameworks/utils/plot_utils_analysis.py"
     },
     %{
-      reason: nil,
-      status: :planned,
+      reason:
+        "matplotlib is not on the BEAM: a policy's path and a graph's drawing are the run page's LiveView components over the same data, not figures written to files",
+      status: :excluded,
       elixir: "Monty.Frameworks.Utils.PlotUtilsDev",
       package: "monty",
       classes: [
         %{
-          status: :planned,
+          status: :excluded,
           elixir: "Monty.Frameworks.Utils.PlotUtilsDev.PolicyPlot",
           python: "PolicyPlot"
         }

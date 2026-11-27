@@ -8,7 +8,7 @@ comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
 629 of 717 of Monty's unit cases are named here, and
-65 more the port cannot have are excluded, each with its reason
+78 more the port cannot have are excluded, each with its reason
 below.
 
 ## By Monty's file
@@ -22,14 +22,14 @@ below.
 | 7/12 | 5 | `attention/voxel_grid_test.py` |
 | 2/2 | 0 | `attention/weight_pooler_test.py` |
 | 15/15 | 0 | `cmp_test.py` |
-| 0/1 | 0 | `dependencies_test.py` |
+| 0/1 | 1 | `dependencies_test.py` |
 | 7/7 | 0 | `experiments/match_criteria_test.py` |
 | 35/35 | 0 | `experiments/recognition_strategy_test.py` |
 | 4/4 | 0 | `experiments/sensor_modules/telemetry_test.py` |
 | 29/29 | 0 | `frameworks/actions/action_samplers_test.py` |
 | 55/84 | 28 | `frameworks/actions/actions_test.py` |
 | 12/12 | 0 | `frameworks/environment_utils/transforms_test.py` |
-| 0/4 | 0 | `frameworks/experiments/profile_experiment_mixin_test.py` |
+| 0/4 | 4 | `frameworks/experiments/profile_experiment_mixin_test.py` |
 | 23/28 | 5 | `frameworks/models/buffer_test.py` |
 | 32/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
 | 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
@@ -43,7 +43,7 @@ below.
 | 3/3 | 0 | `frameworks/models/mixins/no_reset_evidence_test.py` |
 | 1/1 | 0 | `frameworks/models/monty_base_test.py` |
 | 13/13 | 0 | `frameworks/models/motor_policies_test.py` |
-| 13/14 | 0 | `frameworks/models/motor_policy_selectors_test.py` |
+| 13/14 | 1 | `frameworks/models/motor_policy_selectors_test.py` |
 | 2/2 | 0 | `frameworks/models/motor_system_test.py` |
 | 10/10 | 0 | `frameworks/models/object_model_test.py` |
 | 5/5 | 0 | `frameworks/models/salience/motor_policy_test.py` |
@@ -78,13 +78,18 @@ below.
 
 - **an action has no actuator to delegate to** — `test_delegates_to_actuate_look_down`, `test_delegates_to_actuate_look_up`, `test_delegates_to_actuate_move_forward`, `test_delegates_to_actuate_move_tangentially`, `test_delegates_to_actuate_orient_horizontal`, `test_delegates_to_actuate_orient_vertical`, `test_delegates_to_actuate_set_agent_pitch`, `test_delegates_to_actuate_set_agent_pose`, `test_delegates_to_actuate_set_sensor_pitch`, `test_delegates_to_actuate_set_sensor_pose`, `test_delegates_to_actuate_set_sensor_rotation`, `test_delegates_to_actuate_set_yaw`, `test_delegates_to_actuate_turn_left`, `test_delegates_to_actuate_turn_right`
 - **an action has no sampler to delegate to** — `test_delegates_to_sample_look_down`, `test_delegates_to_sample_look_up`, `test_delegates_to_sample_move_forward`, `test_delegates_to_sample_move_tangentially`, `test_delegates_to_sample_orient_horizontal`, `test_delegates_to_sample_orient_vertical`, `test_delegates_to_sample_set_agent_pitch`, `test_delegates_to_sample_set_agent_pose`, `test_delegates_to_sample_set_sensor_pitch`, `test_delegates_to_sample_set_sensor_pose`, `test_delegates_to_sample_set_sensor_rotation`, `test_delegates_to_sample_set_yaw`, `test_delegates_to_sample_turn_left`, `test_delegates_to_sample_turn_right`
+- **Python's base-class order** — `test_missing_experiment_base_raises_error`, `test_non_leftmost_subclassing_raises_error`
+- **Python's base-class order; Elixir composes by `use`** — `test_leftmost_subclassing_does_not_error`
 - **Python's order picks it; protocols pick here** — `test_encode_uses_method_resolution_order_encoder`
 - **`new/3` validates voxels and weights** — `test_init_validates_input_using_validate_dataframe`
+- **a FIXME-named method this port does not have (§2.2)** — `test_fixme_provide_motor_system_calls_fixme_provide_motor_system_on_policy`
 - **a grid always has weights** — `test_raises_value_error_if_dataframe_does_not_have_a_weight_column`
 - **a list cannot be two-dimensional** — `test_raises_value_error_if_weight_column_not_1d`
 - **a numpy array is a list here** — `test_buffer_encoder_encodes_numpy_ndarray_by_default`
 - **a numpy bool is a boolean here** — `test_buffer_encoder_encodes_numpy_bools_by_default`
 - **a numpy integer is a number here** — `test_buffer_encoder_encodes_numpy_ints_by_default`
+- **an import check for a Python library; a dependency here is a line in mix.exs** — `test_torch_geometric`
+- **asserts nothing; it only builds two classes** — `test_experiment_subclasses_are_properly_detected`
 - **no `from_pandas`; `new/3` is the door** — `test_from_pandas_validates_input_using_validate_dataframe`
 - **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
 - **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`
@@ -93,3 +98,5 @@ below.
 ## Cases of modules the port excludes
 
 - **Python dataclass plumbing — an importlib round trip, a dataclass built from a signature — with no caller in Monty** — `test_class_method`, `test_dataclass_instance`, `test_dataclass_type`, `test_dataclass_with_dict`, `test_deep_nested_dataclass`, `test_deeply_nested`, `test_dict`, `test_dict_with_dataclass`, `test_list`, `test_named_tuple`, `test_nested_dataclass`, `test_nested_dataclass_with_dict`, `test_simple_dataclass`, `test_simple_functions`, `test_simple_functions_with_default`, `test_tuple`, `test_with_basic_attr`, `test_with_basic_dict`, `test_with_basic_list`, `test_with_basic_named_tuple`, `test_with_basic_tuple`, `test_with_nested_attr`, `test_with_nested_dict`, `test_with_nested_list`, `test_with_nested_named_tuple`, `test_with_nested_tuple`
+- **matplotlib is not on the BEAM: a policy's path and a graph's drawing are the run page's LiveView components over the same data, not figures written to files** — `test_is_match_step_not_on_object`, `test_is_match_step_on_object`, `test_not_match_step_action_name`, `test_not_match_step_action_none`, `test_not_match_step_step_0`
+- **matplotlib is not on the BEAM: a view finder's outline and a graph's drawing are the run page's LiveView components over the same data, not figures written to files** — `test_rgb_view_finder_gets_blue_outline`, `test_rgba_view_finder_outline_unchanged`

@@ -16,6 +16,8 @@ defmodule Monty.Frameworks.Models.MotorPolicySelectorsTest do
   """
   use ExUnit.Case, async: true
 
+  # excluded test_fixme_provide_motor_system_calls_fixme_provide_motor_system_on_policy: a FIXME-named method this port does not have (§2.2)
+
   alias Monty.Cmp.Goal
   alias Monty.Frameworks.Models.MotorPolicies.MotorPolicyResult
   alias Monty.Frameworks.Models.MotorPolicySelectors
