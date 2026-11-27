@@ -95,4 +95,31 @@ defmodule Monty.Geometry do
     do: Enum.map(xyzw, &to_scalar_first/1)
 
   def to_scalar_first([x, y, z, w]), do: [w, x, y, z]
+
+  @doc """
+  Whether two rotations are the same within `tol` radians — Monty's
+  `scipy_rotations_approx_equal`.
+
+  scipy asks whether the *angle* of `a · b⁻¹` is inside the tolerance, and so
+  does this, from the same quaternion: the angle is `2·atan2(|vector|, |scalar|)`.
+  `atan2` rather than `acos` because a pair one tolerance apart has a cosine of
+  `1 − tol²/8`, and `acos` there is only accurate to about `1e-10` — a thousandth
+  of the tolerance the caller is asking about.
+
+  `|scalar|`, because a quaternion and its negative are one rotation.
+  """
+  @spec rotations_approx_equal?(Monty.Geometry.Rotation.t(), Monty.Geometry.Rotation.t(), float()) ::
+          boolean()
+  def rotations_approx_equal?(
+        %Monty.Geometry.Rotation{} = left,
+        %Monty.Geometry.Rotation{} = right,
+        tol \\ 1.0e-6
+      ) do
+    {w, x, y, z} =
+      left
+      |> Monty.Geometry.Rotation.multiply(Monty.Geometry.Rotation.invert(right))
+      |> Monty.Geometry.Rotation.to_quaternion()
+
+    2.0 * :math.atan2(:math.sqrt(x * x + y * y + z * z), abs(w)) <= tol
+  end
 end
