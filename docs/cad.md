@@ -134,6 +134,12 @@ a part the application already ships can start at the second.
    was never written is a part a run has nothing to match against, and the page
    says so on the experiment's own checks.
 
+   The row names the parts a generate made — the manifest cannot promise a part
+   that did not exist when it was written — and says whether they are written or
+   still to come. The Make is offered while anything is missing: a folder that
+   holds the shipped parts' memories is not the question a person arriving with
+   their own part is asking.
+
    The click is idempotent: each memory keeps a note of the part file's bytes,
    the optics and the sampling it was written from, so a second click teaches
    only what changed — a new part file, a new stand-off, a deleted memory — and
@@ -146,12 +152,11 @@ a part the application already ships can start at the second.
    config names, in the world that config names, with the patch's own pictures
    beside the evidence per object, step by step. A generated part's experiment
    is at `/experiments/cad/<part>_part_eval`, and its page is the same one.
-
-The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
-whole setup — no checkout has to sit beside this one, and no build path has to be
-appended. The shipped experiments live in `priv/monty_experiments/sets/cad/conf`,
-a generated one under `$MONTY_DATA/sets/brought/conf`, and that set's own README
-is the same walk-through written down.
+   The geometry is a git dependency pinned in `mix.lock`, so `mix deps.get` is the
+   whole setup — no checkout has to sit beside this one, and no build path has to be
+   appended. The shipped experiments live in `priv/monty_experiments/sets/cad/conf`,
+   a generated one under `$MONTY_DATA/sets/brought/conf`, and that set's own README
+   is the same walk-through written down.
 
 Measured on this Mac (2026-11-19), `Make` and `Run it` and nothing else: the plate's
 three evaluation episodes concluded in 97, 184 and 351 steps, and each answered
@@ -169,6 +174,9 @@ comparable: the memory is taught through **the run's own patch** — the field o
 view its camera makes, the distance its policy stands off by, and three nodes
 across the patch's width, all read from the config — so the two see one surface
 rather than two.
+
+[The same clicks in screenshots](experiments/cad/README.md) are the walk-through
+of the three, one page per click, with what each one wrote and where.
 
 The same experiment from a shell, for a machine without a page in front of it:
 

@@ -22,6 +22,7 @@ Streamable HTTP. A terminal has `mix monty.run` and `mix monty.bench`.
 
 - [Start](README.md): the quickstart compose file, then the first experiment.
 - [A CAD part in a run](docs/cad.md): STEP part, memory, recognition.
+- [A CAD part, click by click](docs/experiments/cad/README.md): the same walk-through with screenshots of every page it passes.
 
 ## How-to guides (specific tasks)
 

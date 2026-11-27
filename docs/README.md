@@ -3,15 +3,17 @@
 Every page here is one of four kinds: a lesson, a task, a fact, or an
 explanation. Pick by the question you have, not by the file name.
 
-The pages stay in one folder so existing links keep working. The four headings
-below are the grouping.
+The pages stay in one folder so existing links keep working, with the
+walk-throughs that carry screenshots in a folder of their own. The four
+headings below are the grouping.
 
 ## Learn it
 
-| Page                         | Walks through                                        |
-| ---------------------------- | ---------------------------------------------------- |
-| [../README.md](../README.md) | the studio in Docker, then the first experiment      |
-| [cad.md](cad.md)             | a STEP part becoming a memory, then being recognised |
+| Page                                                   | Walks through                                        |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| [../README.md](../README.md)                           | the studio in Docker, then the first experiment      |
+| [cad.md](cad.md)                                       | a STEP part becoming a memory, then being recognised |
+| [experiments/cad/README.md](experiments/cad/README.md) | the same part, click by click, in screenshots        |
 
 ## Do a task
 
