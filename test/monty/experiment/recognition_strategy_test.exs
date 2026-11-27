@@ -17,9 +17,13 @@ defmodule Monty.Experiment.RecognitionStrategyTest do
 
   alias Monty.Experiment.RecognitionStrategy
   alias Monty.Experiment.RecognitionStrategy.Answering
+  alias Monty.Experiment.RecognitionStrategy.CountingCriterion
+  alias Monty.Experiment.RecognitionStrategy.MatchCriteria
   alias Monty.Experiment.RecognitionStrategy.MaximumSteps
   alias Monty.Experiment.RecognitionStrategy.MaxTotalSteps
   alias Monty.Experiment.RecognitionStrategy.MinEvalMaxTotalSteps
+  alias Monty.Experiment.RecognitionStrategy.MinimumLMs
+  alias Monty.Experiment.RecognitionStrategy.StepLimit
   alias Monty.Experiment.RecognitionStrategy.RecognitionContext
   alias Monty.Experiment.RecognitionStrategy.RecognitionResult
 
@@ -191,10 +195,152 @@ defmodule Monty.Experiment.RecognitionStrategyTest do
     end
   end
 
+  describe "StepLimit" do
+    # test_raises_value_error_if_min_train_steps_is_negative
+    test "refuses a negative minimum training count with Monty's words" do
+      for min_train_steps <- [-1, -5, -100] do
+        assert StepLimit.new(min_train_steps: min_train_steps) ==
+                 {:error, "min_train_steps must be non-negative"}
+      end
+    end
+
+    # test_raises_value_error_if_num_exploring_steps_is_negative
+    test "refuses a negative exploring count with Monty's words" do
+      for num_exploring_steps <- [-1, -5, -100] do
+        assert StepLimit.new(num_exploring_steps: num_exploring_steps) ==
+                 {:error, "num_exploring_steps must be non-negative"}
+      end
+    end
+
+    # test_raises_value_error_if_max_train_steps_is_not_positive
+    test "refuses a training ceiling that is not positive with Monty's words" do
+      for max_train_steps <- [0, -1, -100] do
+        assert StepLimit.new(max_train_steps: max_train_steps) ==
+                 {:error, "max_train_steps must be positive"}
+      end
+    end
+
+    # test_raises_value_error_if_max_eval_steps_is_not_positive
+    test "refuses an evaluation ceiling that is not positive with Monty's words" do
+      for max_eval_steps <- [0, -1, -100] do
+        assert StepLimit.new(max_eval_steps: max_eval_steps) ==
+                 {:error, "max_eval_steps must be positive"}
+      end
+    end
+
+    # test_matching_times_out_at_or_after_max_steps
+    test "times matching out at or after the ceiling, in either mode" do
+      for max_steps <- [1, 2, 5], mode <- [:train, :eval], matching_steps <- [0, 1, 2, 5, 6] do
+        {:ok, policy} = StepLimit.new(max_train_steps: max_steps, max_eval_steps: max_steps)
+        is_done = matching_steps >= max_steps
+
+        assert RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+                 matching_steps: matching_steps,
+                 mode: mode
+               }) == %RecognitionResult{
+                 is_done: is_done,
+                 time_out_lms: is_done,
+                 start_exploring: mode == :train and matching_steps >= 0
+               }
+      end
+    end
+
+    # test_selects_max_steps_by_mode
+    test "counts matching steps against the ceiling the mode names" do
+      {:ok, policy} = StepLimit.new(max_train_steps: 3, max_eval_steps: 7)
+
+      for {mode, max_steps} <- [{:train, 3}, {:eval, 7}],
+          matching_steps <- [0, 2, 3, 6, 7, 8] do
+        is_done = matching_steps >= max_steps
+
+        assert RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+                 matching_steps: matching_steps,
+                 mode: mode
+               }).is_done == is_done
+      end
+    end
+
+    # test_exploring_times_out_at_or_after_num_exploring_steps
+    test "times exploring out at or after the exploring count" do
+      for num_exploring_steps <- [1, 3], exploring_steps <- [0, 1, 2, 3, 4] do
+        {:ok, policy} = StepLimit.new(num_exploring_steps: num_exploring_steps)
+        is_done = exploring_steps >= num_exploring_steps
+
+        assert RecognitionStrategy.call(policy, %{is_exploring: true}, %RecognitionContext{
+                 exploring_steps: exploring_steps,
+                 mode: :train
+               }) == %RecognitionResult{is_done: is_done, time_out_lms: is_done}
+      end
+    end
+
+    # test_switch_to_explore_after_min_train_steps
+    test "asks to explore once the minimum training count is reached" do
+      {:ok, policy} = StepLimit.new(min_train_steps: 3, max_train_steps: 10)
+
+      for matching_steps <- [3, 5, 9] do
+        result =
+          RecognitionStrategy.call(policy, matching(), %RecognitionContext{
+            matching_steps: matching_steps,
+            mode: :train
+          })
+
+        assert result.start_exploring
+        assert result.is_done == matching_steps >= 10
+      end
+    end
+  end
+
+  describe "MatchCriteria" do
+    # test_done_iff_match_criterion_has_been_met
+    test "is done when the criterion says so, and asks it exactly once" do
+      for matched? <- [true, false] do
+        criterion = CountingCriterion.new(self(), matched?)
+        {:ok, policy} = MatchCriteria.new(match_criterion: criterion)
+
+        result =
+          RecognitionStrategy.call(policy, %{terminal_states: %{}}, %RecognitionContext{})
+
+        assert result.is_done == matched?
+        assert result.time_out_lms == matched?
+        assert_received :criterion_asked
+        refute_received :criterion_asked
+      end
+    end
+  end
+
+  describe "MinimumLMs" do
+    # test_raises_value_error_if_min_lms_is_not_positive
+    test "refuses a minimum that is not positive with Monty's words" do
+      for min_lms <- [0, -1, -100] do
+        assert MinimumLMs.new(min_lms: min_lms) == {:error, "min_lms must be positive"}
+      end
+    end
+
+    # test_done_iff_conclusion_count_reaches_count: Monty draws the conclusions
+    # with Hypothesis, up to twenty of them; these are the same counts either
+    # side of the minimum.
+    test "is done when the conclusions reach the minimum" do
+      for min_lms <- [1, 2, 3], concluded <- [0, 1, 2, 3, 4] do
+        {:ok, policy} = MinimumLMs.new(min_lms: min_lms)
+        conclusions = List.duplicate(:match, concluded) ++ [nil, nil]
+
+        assert RecognitionStrategy.call(
+                 policy,
+                 %{conclusions: conclusions},
+                 %RecognitionContext{}
+               ).is_done ==
+                 concluded >= min_lms
+      end
+    end
+  end
+
   # Monty's `MagicMock(RecognitionStrategy, return_value=…)`: a strategy that
   # answers one result, whatever it is asked.
   defp answering(result \\ %RecognitionResult{is_done: true}) do
     {:ok, strategy} = Answering.new(result)
     strategy
   end
+
+  # A model in a matching step: the one field `StepLimit` reads.
+  defp matching, do: %{is_exploring: false}
 end
