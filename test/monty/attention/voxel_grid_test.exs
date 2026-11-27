@@ -11,6 +11,14 @@ defmodule Monty.Attention.VoxelGridTest do
   no counterpart either.
   """
 
+  # Monty's five DataFrame cases: they build a malformed pandas frame and check
+  # `validate_dataframe` refuses it. A map cannot hold the shapes they refuse.
+  # excluded test_from_pandas_validates_input_using_validate_dataframe: no `from_pandas`; `new/3` is the door
+  # excluded test_init_validates_input_using_validate_dataframe: `new/3` validates voxels and weights
+  # excluded test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz: pandas only
+  # excluded test_raises_value_error_if_dataframe_does_not_have_a_weight_column: a grid always has weights
+  # excluded test_raises_value_error_if_weight_column_not_1d: a list cannot be two-dimensional
+
   use ExUnit.Case, async: true
   use ExUnitProperties
 

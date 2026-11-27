@@ -319,6 +319,14 @@ defmodule Monty.Frameworks.Models.BufferMontyTest do
       assert BufferEncoder.encode(message) == Cmp.encode(message)
     end
 
+    # The five cases below are Monty's Python-typed defaults, and there is no
+    # type here for them to encode: a numpy array is a list, a numpy scalar is a
+    # number, and torch does not exist on the BEAM.
+  # excluded test_encode_uses_method_resolution_order_encoder: Python's order picks it; protocols pick here
+  # excluded test_buffer_encoder_encodes_numpy_ndarray_by_default: a numpy array is a list here
+  # excluded test_buffer_encoder_encodes_numpy_ints_by_default: a numpy integer is a number here
+  # excluded test_buffer_encoder_encodes_numpy_bools_by_default: a numpy bool is a boolean here
+  # excluded test_buffer_encoder_encodes_torch_tensors_by_default: no torch on the BEAM
     # test_buffer_encoder_encodes_scipy_rotation_by_default
     test "a rotation encodes as its Euler angles in degrees, as scipy answered them" do
       {:ok, rotation} = Rotation.from_euler_degrees([30.0, 45.0, 60.0])

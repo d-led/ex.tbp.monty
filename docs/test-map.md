@@ -7,68 +7,84 @@ A case is **named** when a port test carries its name on a `# test_...`
 comment or in its title. Naming is the record of a translation, not proof of
 one: the test itself says whether it asserts the same behaviour.
 
-580 of 717 of Monty's unit cases are named here.
+580 of 717 of Monty's unit cases are named here, and
+38 more the port cannot have are excluded, each with its reason
+below.
 
 ## By Monty's file
 
-| cases | Monty file |
-|---:|---|
-| 20/20 | `attention/attention_system_test.py` |
-| 3/3 | `attention/decay_test.py` |
-| 6/6 | `attention/goal_filter_test.py` |
-| 2/2 | `attention/merge_test.py` |
-| 7/12 | `attention/voxel_grid_test.py` |
-| 2/2 | `attention/weight_pooler_test.py` |
-| 15/15 | `cmp_test.py` |
-| 0/1 | `dependencies_test.py` |
-| 7/7 | `experiments/match_criteria_test.py` |
-| 35/35 | `experiments/recognition_strategy_test.py` |
-| 4/4 | `experiments/sensor_modules/telemetry_test.py` |
-| 29/29 | `frameworks/actions/action_samplers_test.py` |
-| 56/84 | `frameworks/actions/actions_test.py` |
-| 12/12 | `frameworks/environment_utils/transforms_test.py` |
-| 0/4 | `frameworks/experiments/profile_experiment_mixin_test.py` |
-| 23/28 | `frameworks/models/buffer_test.py` |
-| 25/32 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
-| 17/21 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
-| 11/11 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
-| 5/5 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
-| 2/2 | `frameworks/models/evidence_matching/feature_evidence/scorer_test.py` |
-| 2/2 | `frameworks/models/evidence_matching/graph_memory_test.py` |
-| 5/7 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
-| 4/4 | `frameworks/models/evidence_matching/hypotheses_updater_test.py` |
-| 7/7 | `frameworks/models/graph_matching_test.py` |
-| 3/3 | `frameworks/models/mixins/no_reset_evidence_test.py` |
-| 1/1 | `frameworks/models/monty_base_test.py` |
-| 13/13 | `frameworks/models/motor_policies_test.py` |
-| 13/14 | `frameworks/models/motor_policy_selectors_test.py` |
-| 2/2 | `frameworks/models/motor_system_test.py` |
-| 10/10 | `frameworks/models/object_model_test.py` |
-| 5/5 | `frameworks/models/salience/motor_policy_test.py` |
-| 6/6 | `frameworks/models/salience/on_object_observation_test.py` |
-| 17/17 | `frameworks/models/salience/return_inhibitor_test.py` |
-| 12/12 | `frameworks/models/salience/segmentation/slic_merge_test.py` |
-| 8/12 | `frameworks/models/salience/sensor_module_test.py` |
-| 23/23 | `frameworks/models/salience/strategies/vocus2/pyramids_test.py` |
-| 20/20 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
-| 2/2 | `frameworks/models/sensor_modules_test.py` |
-| 10/10 | `frameworks/models/two_d_sensor_module_test.py` |
-| 0/23 | `frameworks/run_parallel_test.py` |
-| 2/37 | `frameworks/utils/dataclass_utils_test.py` |
-| 18/18 | `frameworks/utils/edge_detection_test.py` |
-| 3/3 | `frameworks/utils/graph_matching_utils_test.py` |
-| 7/7 | `frameworks/utils/logging_utils_test.py` |
-| 0/8 | `frameworks/utils/object_model_utils_test.py` |
-| 0/5 | `frameworks/utils/plot_utils_dev_test.py` |
-| 0/2 | `frameworks/utils/plot_utils_test.py` |
-| 14/14 | `frameworks/utils/sensor_processing_test.py` |
-| 15/15 | `frameworks/utils/spatial_arithmetics_test.py` |
-| 12/12 | `geometry_test.py` |
-| 0/1 | `path_test.py` |
-| 1/1 | `runtime_test.py` |
-| 11/11 | `sensor_modules/sensor_module_test.py` |
-| 14/14 | `simulators/mujoco/agent_actions_test.py` |
-| 22/24 | `simulators/mujoco/mujoco_simulator_test.py` |
-| 6/6 | `simulators/mujoco/noop_agent_test.py` |
-| 3/3 | `simulators/mujoco/object_metadata_decoder_test.py` |
-| 8/8 | `telemetry/telemetry_test.py` |
+| named/total | excluded | Monty file |
+|---:|---:|---|
+| 20/20 | 0 | `attention/attention_system_test.py` |
+| 3/3 | 0 | `attention/decay_test.py` |
+| 6/6 | 0 | `attention/goal_filter_test.py` |
+| 2/2 | 0 | `attention/merge_test.py` |
+| 12/12 | 5 | `attention/voxel_grid_test.py` |
+| 2/2 | 0 | `attention/weight_pooler_test.py` |
+| 15/15 | 0 | `cmp_test.py` |
+| 0/1 | 0 | `dependencies_test.py` |
+| 7/7 | 0 | `experiments/match_criteria_test.py` |
+| 35/35 | 0 | `experiments/recognition_strategy_test.py` |
+| 4/4 | 0 | `experiments/sensor_modules/telemetry_test.py` |
+| 29/29 | 0 | `frameworks/actions/action_samplers_test.py` |
+| 84/84 | 28 | `frameworks/actions/actions_test.py` |
+| 12/12 | 0 | `frameworks/environment_utils/transforms_test.py` |
+| 0/4 | 0 | `frameworks/experiments/profile_experiment_mixin_test.py` |
+| 28/28 | 5 | `frameworks/models/buffer_test.py` |
+| 25/32 | 0 | `frameworks/models/evidence_matching/burst_sampling_test.py` |
+| 17/21 | 0 | `frameworks/models/evidence_matching/evidence_lm_test.py` |
+| 11/11 | 0 | `frameworks/models/evidence_matching/evidence_slope_tracker_test.py` |
+| 5/5 | 0 | `frameworks/models/evidence_matching/feature_evidence/calculator_test.py` |
+| 2/2 | 0 | `frameworks/models/evidence_matching/feature_evidence/scorer_test.py` |
+| 2/2 | 0 | `frameworks/models/evidence_matching/graph_memory_test.py` |
+| 5/7 | 0 | `frameworks/models/evidence_matching/hypotheses_displacer_test.py` |
+| 4/4 | 0 | `frameworks/models/evidence_matching/hypotheses_updater_test.py` |
+| 7/7 | 0 | `frameworks/models/graph_matching_test.py` |
+| 3/3 | 0 | `frameworks/models/mixins/no_reset_evidence_test.py` |
+| 1/1 | 0 | `frameworks/models/monty_base_test.py` |
+| 13/13 | 0 | `frameworks/models/motor_policies_test.py` |
+| 13/14 | 0 | `frameworks/models/motor_policy_selectors_test.py` |
+| 2/2 | 0 | `frameworks/models/motor_system_test.py` |
+| 10/10 | 0 | `frameworks/models/object_model_test.py` |
+| 5/5 | 0 | `frameworks/models/salience/motor_policy_test.py` |
+| 6/6 | 0 | `frameworks/models/salience/on_object_observation_test.py` |
+| 17/17 | 0 | `frameworks/models/salience/return_inhibitor_test.py` |
+| 12/12 | 0 | `frameworks/models/salience/segmentation/slic_merge_test.py` |
+| 8/12 | 0 | `frameworks/models/salience/sensor_module_test.py` |
+| 23/23 | 0 | `frameworks/models/salience/strategies/vocus2/pyramids_test.py` |
+| 20/20 | 0 | `frameworks/models/salience/strategies/vocus2/vocus2_test.py` |
+| 2/2 | 0 | `frameworks/models/sensor_modules_test.py` |
+| 10/10 | 0 | `frameworks/models/two_d_sensor_module_test.py` |
+| 0/23 | 0 | `frameworks/run_parallel_test.py` |
+| 2/37 | 0 | `frameworks/utils/dataclass_utils_test.py` |
+| 18/18 | 0 | `frameworks/utils/edge_detection_test.py` |
+| 3/3 | 0 | `frameworks/utils/graph_matching_utils_test.py` |
+| 7/7 | 0 | `frameworks/utils/logging_utils_test.py` |
+| 0/8 | 0 | `frameworks/utils/object_model_utils_test.py` |
+| 0/5 | 0 | `frameworks/utils/plot_utils_dev_test.py` |
+| 0/2 | 0 | `frameworks/utils/plot_utils_test.py` |
+| 14/14 | 0 | `frameworks/utils/sensor_processing_test.py` |
+| 15/15 | 0 | `frameworks/utils/spatial_arithmetics_test.py` |
+| 12/12 | 0 | `geometry_test.py` |
+| 0/1 | 0 | `path_test.py` |
+| 1/1 | 0 | `runtime_test.py` |
+| 11/11 | 0 | `sensor_modules/sensor_module_test.py` |
+| 14/14 | 0 | `simulators/mujoco/agent_actions_test.py` |
+| 22/24 | 0 | `simulators/mujoco/mujoco_simulator_test.py` |
+| 6/6 | 0 | `simulators/mujoco/noop_agent_test.py` |
+| 3/3 | 0 | `simulators/mujoco/object_metadata_decoder_test.py` |
+| 8/8 | 0 | `telemetry/telemetry_test.py` |
+## Cases the port cannot have
+
+- **an action has no actuator to delegate to** — `test_delegates_to_actuate_look_down`, `test_delegates_to_actuate_look_up`, `test_delegates_to_actuate_move_forward`, `test_delegates_to_actuate_move_tangentially`, `test_delegates_to_actuate_orient_horizontal`, `test_delegates_to_actuate_orient_vertical`, `test_delegates_to_actuate_set_agent_pitch`, `test_delegates_to_actuate_set_agent_pose`, `test_delegates_to_actuate_set_sensor_pitch`, `test_delegates_to_actuate_set_sensor_pose`, `test_delegates_to_actuate_set_sensor_rotation`, `test_delegates_to_actuate_set_yaw`, `test_delegates_to_actuate_turn_left`, `test_delegates_to_actuate_turn_right`
+- **an action has no sampler to delegate to** — `test_delegates_to_sample_look_down`, `test_delegates_to_sample_look_up`, `test_delegates_to_sample_move_forward`, `test_delegates_to_sample_move_tangentially`, `test_delegates_to_sample_orient_horizontal`, `test_delegates_to_sample_orient_vertical`, `test_delegates_to_sample_set_agent_pitch`, `test_delegates_to_sample_set_agent_pose`, `test_delegates_to_sample_set_sensor_pitch`, `test_delegates_to_sample_set_sensor_pose`, `test_delegates_to_sample_set_sensor_rotation`, `test_delegates_to_sample_set_yaw`, `test_delegates_to_sample_turn_left`, `test_delegates_to_sample_turn_right`
+- **Python's order picks it; protocols pick here** — `test_encode_uses_method_resolution_order_encoder`
+- **`new/3` validates voxels and weights** — `test_init_validates_input_using_validate_dataframe`
+- **a grid always has weights** — `test_raises_value_error_if_dataframe_does_not_have_a_weight_column`
+- **a list cannot be two-dimensional** — `test_raises_value_error_if_weight_column_not_1d`
+- **a numpy array is a list here** — `test_buffer_encoder_encodes_numpy_ndarray_by_default`
+- **a numpy bool is a boolean here** — `test_buffer_encoder_encodes_numpy_bools_by_default`
+- **a numpy integer is a number here** — `test_buffer_encoder_encodes_numpy_ints_by_default`
+- **no `from_pandas`; `new/3` is the door** — `test_from_pandas_validates_input_using_validate_dataframe`
+- **no torch on the BEAM** — `test_buffer_encoder_encodes_torch_tensors_by_default`
+- **pandas only** — `test_raises_value_error_if_dataframe_does_not_have_a_multiindex_with_level_names_xyz`

@@ -24,10 +24,27 @@ defmodule Monty.ModuleMap.TestMap do
   What this does **not** claim: an attributed name is a translation that is
   faithful. It says the case was read and named; the test itself says whether it
   asserts the same behaviour.
+
+  ## Cases the port cannot have
+
+  Some of Monty's cases test a Python mechanism this port does not own — the
+  method resolution order that picks a buffer encoder, a pandas `DataFrame`'s
+  index levels, a torch dtype, Hydra's multiprocessing orchestration. Such a case
+  has no translation, and counting it as outstanding would be a target nobody can
+  reach. A port test records it instead, on one line, with the reason:
+
+      # excluded test_encode_uses_method_resolution_order_encoder: Python picks
+      #   the encoder by method resolution order; Elixir has protocols.
+
+  The line is read against Monty's own case table, so an excluded name that
+  Monty never defined is a defect like a misspelled attribution, and a case that
+  is both named and excluded is a contradiction. An exclusion counts towards the
+  total; it just says which of the ways the case is accounted for.
   """
 
   @case_definition ~r/def (test_[A-Za-z0-9_]+)/
   @name ~r/\btest_[A-Za-z0-9_]+/
+  @exclusion ~r/^#\s*excluded\s+(test_[A-Za-z0-9_]+)\s*:\s*(\S.*)$/
 
   @typedoc "Monty's cases by the file that defines them."
   @type cases :: %{optional(String.t()) => [String.t()]}
@@ -96,6 +113,36 @@ defmodule Monty.ModuleMap.TestMap do
   end
 
   @doc """
+  The cases a port test marks as having no translation, and why, by port file.
+
+  Each entry is `%{case: name, reason: text}` from a line that reads
+  `# excluded test_foo: because …`. The exclusion is checked against Monty's
+  case table by `exclusion_problems/3`, so a reason cannot be attached to a case
+  Monty does not have.
+  """
+  @spec exclusions(Path.t()) :: %{
+          optional(String.t()) => [%{case: String.t(), reason: String.t()}]
+        }
+  def exclusions(port_root) do
+    port_root
+    |> Path.join("test/**/*.exs")
+    |> Path.wildcard()
+    |> Map.new(fn path -> {Path.relative_to(path, port_root), excluded_in(path)} end)
+    |> Enum.reject(fn {_file, entries} -> entries == [] end)
+    |> Map.new()
+  end
+
+  @doc "Every case name a port file marks as excluded, in one set."
+  @spec excluded_cases(Path.t()) :: MapSet.t()
+  def excluded_cases(port_root) do
+    port_root
+    |> exclusions()
+    |> Map.values()
+    |> List.flatten()
+    |> MapSet.new(& &1.case)
+  end
+
+  @doc """
   The M×N relation, in both directions.
 
   `:monty` maps a Monty file to its cases and, for each, the port files that
@@ -136,27 +183,43 @@ defmodule Monty.ModuleMap.TestMap do
   end
 
   @doc """
-  How many of a Monty case table's names are attributed, and which are not.
+  How many of a Monty case table's names are attributed, excluded, and neither.
+
+  Every case is accounted for exactly once: `named + excluded + missing == total`.
+  `excluded` counts only the names Monty actually defines, so a stale exclusion
+  cannot shrink the outstanding work — `exclusion_problems/3` reports it instead.
   """
-  @spec coverage(cases(), cases()) :: %{
+  @spec coverage(cases(), cases(), MapSet.t()) :: %{
           named: non_neg_integer(),
+          excluded: non_neg_integer(),
           total: non_neg_integer(),
           missing: cases()
         }
-  def coverage(monty_cases, attributions) do
+  def coverage(monty_cases, attributions, excluded \\ MapSet.new()) do
     attributed = attributions |> Map.values() |> List.flatten() |> MapSet.new()
+    defined = monty_cases |> Map.values() |> List.flatten() |> MapSet.new()
 
     missing =
       Map.new(monty_cases, fn {file, names} ->
-        {file, Enum.reject(names, &MapSet.member?(attributed, &1))}
+        {file,
+         Enum.reject(
+           names,
+           &(MapSet.member?(attributed, &1) or MapSet.member?(excluded, &1))
+         )}
       end)
       |> Enum.reject(fn {_file, names} -> names == [] end)
       |> Map.new()
 
     total = monty_cases |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
     absent = missing |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
+    excluded_count = MapSet.intersection(excluded, defined) |> MapSet.size()
 
-    %{named: total - absent, total: total, missing: missing}
+    %{
+      named: total - absent - excluded_count,
+      excluded: excluded_count,
+      total: total,
+      missing: missing
+    }
   end
 
   @doc """
@@ -175,6 +238,36 @@ defmodule Monty.ModuleMap.TestMap do
         name <- names,
         not MapSet.member?(known, name),
         do: %{port: port_file, case: name}
+  end
+
+  @doc """
+  The problems an exclusion list can have: a case Monty does not define, or a
+  case the same port also claims to translate.
+
+  Both are defects of the record rather than of the port, and both are checkable
+  without a judgement about faithfulness: the first is a typo or a case renamed
+  upstream, the second says a case is accounted for twice.
+  """
+  @spec exclusion_problems(cases(), cases(), %{
+          optional(String.t()) => [%{case: String.t(), reason: String.t()}]
+        }) :: [%{port: String.t(), case: String.t(), problem: :unknown | :also_named}]
+  def exclusion_problems(monty_cases, attributions, exclusions) do
+    defined = monty_cases |> Map.values() |> List.flatten() |> MapSet.new()
+    named = attributions |> Map.values() |> List.flatten() |> MapSet.new()
+
+    for {port_file, entries} <- exclusions,
+        %{case: name} <- entries,
+        problem = exclusion_problem(name, defined, named),
+        problem != nil,
+        do: %{port: port_file, case: name, problem: problem}
+  end
+
+  defp exclusion_problem(name, defined, named) do
+    cond do
+      not MapSet.member?(defined, name) -> :unknown
+      MapSet.member?(named, name) -> :also_named
+      true -> nil
+    end
   end
 
   @doc """
@@ -205,6 +298,9 @@ defmodule Monty.ModuleMap.TestMap do
       trimmed = String.trim(line)
 
       cond do
+        Regex.match?(@exclusion, trimmed) ->
+          []
+
         Regex.match?(~r/^#\s*test_/, trimmed) ->
           names_in_line(trimmed)
 
@@ -293,11 +389,24 @@ defmodule Monty.ModuleMap.TestMap do
     |> Enum.filter(fn line ->
       trimmed = String.trim(line)
 
-      String.starts_with?(trimmed, "#") or String.contains?(line, ~s(test ")) or
-        String.contains?(line, "test '")
+      not Regex.match?(@exclusion, trimmed) and
+        (String.starts_with?(trimmed, "#") or String.contains?(line, ~s(test ")) or
+           String.contains?(line, "test '"))
     end)
     |> Enum.flat_map(&names_in_line/1)
     |> Enum.uniq()
+  end
+
+  defp excluded_in(path) do
+    path
+    |> File.read!()
+    |> String.split("\n")
+    |> Enum.flat_map(fn line ->
+      case Regex.run(@exclusion, String.trim(line), capture: :all_but_first) do
+        [name, reason] -> [%{case: name, reason: String.trim(reason)}]
+        nil -> []
+      end
+    end)
   end
 
   defp names_in_line(line), do: Regex.scan(@name, line) |> List.flatten()

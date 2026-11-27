@@ -21,6 +21,35 @@ defmodule Monty.Frameworks.Actions.ActionsMontyTest do
   home.
   """
 
+  # excluded test_delegates_to_sample_look_down: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_look_down: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_look_up: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_look_up: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_move_forward: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_move_forward: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_move_tangentially: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_move_tangentially: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_orient_horizontal: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_orient_horizontal: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_orient_vertical: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_orient_vertical: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_agent_pitch: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_agent_pitch: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_agent_pose: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_agent_pose: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_sensor_pitch: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_sensor_pitch: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_sensor_pose: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_sensor_pose: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_sensor_rotation: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_sensor_rotation: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_set_yaw: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_set_yaw: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_turn_left: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_turn_left: an action has no actuator to delegate to
+  # excluded test_delegates_to_sample_turn_right: an action has no sampler to delegate to
+  # excluded test_delegates_to_actuate_turn_right: an action has no actuator to delegate to
+
   use ExUnit.Case, async: true
 
   alias Monty.Frameworks.Actions.{
