@@ -418,4 +418,17 @@ defmodule ExTbpMontyWeb.PrerequisitesLiveTest do
     assert view |> element("#prereq-arrived") |> render() =~ "not unpacked"
     assert view |> element("#download-arrived") |> render() =~ "Unpack"
   end
+
+  # A part a person brings is planned by the same click and cannot be promised by
+  # the manifest, which is written before the part exists. The row names it, or
+  # the CAD page's sentence — "the row teaches <part>_part" — is about a page that
+  # never says so.
+  test "a build names the part a person brought, which its promises cannot",
+       %{conn: conn} do
+    assert {:ok, _generated} = Monty.Studio.Cad.Generate.generate("solidcraft-plate")
+
+    {:ok, view, _html} = live(conn, ~p"/prerequisites")
+
+    assert render_async(view) =~ "solidcraft-plate_part"
+  end
 end

@@ -78,6 +78,22 @@ defmodule Monty.Prerequisites.Build do
   @spec plans() :: [map()]
   def plans, do: cad_plans()
 
+  @doc """
+  The memories the click for `build` would write, by path.
+
+  A build this application makes has plans; a corpus does not. A page asks this
+  to name what a click writes *beyond* what the manifest promises — a part a
+  person brought is planned from their own experiment, and the manifest, written
+  before the part existed, cannot promise it.
+
+  Read off the generated sets' own experiment files, not by composing every plan:
+  a plan composes each experiment and stats each part (~150 ms for the CAD sets),
+  which is more than a render can pay, and what a row needs to say is the name.
+  """
+  @spec planned_memories(String.t()) :: [Path.t()]
+  def planned_memories("cad_part_memories"), do: Generate.memories()
+  def planned_memories(_build), do: []
+
   # -- the CAD parts -------------------------------------------------------
 
   # One memory per CAD experiment this application defines, taught from the part

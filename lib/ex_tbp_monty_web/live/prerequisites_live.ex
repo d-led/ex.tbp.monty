@@ -14,6 +14,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
 
   alias ExTbpMonty.EmbeddedPython
   alias Monty.Prerequisites
+  alias Monty.Prerequisites.Build
   alias Monty.Prerequisites.Saga
   alias Monty.Studio.Pretrained
   alias Monty.Studio.Storage
@@ -77,6 +78,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
         # for it answered `GET /prerequisites` in a minute or not at all on a busy
         # disk (the request-log test timed out on exactly that).
         sizes: Map.new(prerequisites, &{&1.id, :measuring}),
+        planned: :measuring,
         python: EmbeddedPython.version(),
         wandb: EmbeddedPython.wandb_mode(),
         engines: Prerequisites.engines(),
@@ -95,8 +97,22 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   defp measured(prerequisites) do
     %{
       sizes: Map.new(prerequisites, &{&1.id, Prerequisites.size(&1)}),
-      held: held(prerequisites)
+      held: held(prerequisites),
+      planned: planned(prerequisites)
     }
+  end
+
+  # What each build's click would write, by build name. A part a person brought is
+  # planned from their own experiment and the manifest cannot promise it, so the
+  # row that says "not written yet": the manifest's list would say nothing about
+  # the memory its own click teaches. Composing the plans is ~150 ms, which a
+  # render cannot pay on every progress tick, so it is asked here.
+  defp planned(prerequisites) do
+    prerequisites
+    |> Enum.map(& &1[:build])
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Map.new(&{&1, Build.planned_memories(&1)})
   end
 
   # Where these downloads land: what each directory already holds, and what is
@@ -215,6 +231,19 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
                 >
                   not written yet: {Enum.join(missing_provided(prerequisite), ", ")} — the
                   Make button writes them.
+                </p>
+                <%!-- A part a person brought is planned by the same click and is not
+                one of the promises: a manifest is written before the part exists. Saying
+                so is what makes the CAD page's "the row teaches <part>_part" true. --%>
+                <p
+                  :if={also_planned(prerequisite, @planned) != []}
+                  id={"also-#{prerequisite.id}"}
+                  class="font-mono text-xs text-base-content/60"
+                >
+                  and the parts you brought: {Enum.join(
+                    also_planned(prerequisite, @planned),
+                    ", "
+                  )} — the same Make writes them.
                 </p>
                 <%!-- Where it comes from, on what terms, and which bytes. A
                 person about to wait for two gigabytes is entitled to the three,
@@ -432,7 +461,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
   # that failed says nothing about the files, so the page says nothing about the
   # space rather than showing a nought.
   @impl true
-  def handle_async(:measured, {:ok, %{sizes: sizes, held: held}}, socket) do
+  def handle_async(:measured, {:ok, %{sizes: sizes, held: held, planned: planned}}, socket) do
     roots =
       Enum.map(socket.assigns.storage.roots, fn root ->
         %{root | occupied: Map.get(held, root.root)}
@@ -441,6 +470,7 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     {:noreply,
      assign(socket,
        sizes: sizes,
+       planned: planned,
        storage: %{socket.assigns.storage | roots: roots}
      )}
   end
@@ -524,7 +554,10 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
           statuses: Map.delete(socket.assigns.statuses, id),
           present: Map.put(socket.assigns.present, id, Prerequisites.present?(prerequisite)),
           pending: Map.put(socket.assigns.pending, id, memory_pending?(prerequisite)),
-          sizes: Map.put(socket.assigns.sizes, id, Prerequisites.size(prerequisite))
+          sizes: Map.put(socket.assigns.sizes, id, Prerequisites.size(prerequisite)),
+          # A build that just finished taught what the plans said it would, so the
+          # row's own list of what is still missing is read again.
+          planned: planned(socket.assigns.prerequisites)
         )
     end
   end
@@ -698,6 +731,21 @@ defmodule ExTbpMontyWeb.PrerequisitesLive do
     do: Prerequisites.absent_memories(prerequisite)
 
   defp missing_provided(_prerequisite), do: []
+
+  # What the click would write that the manifest does not promise, and that is not
+  # there yet — the parts a person brought. Before the task answers, the page says
+  # nothing rather than guessing.
+  defp also_planned(_prerequisite, planned) when not is_map(planned), do: []
+
+  defp also_planned(prerequisite, planned) do
+    promised = Prerequisites.promised_memories(prerequisite)
+
+    planned
+    |> Map.get(prerequisite[:build], [])
+    |> Enum.reject(&(&1 in promised))
+    |> Enum.reject(&File.exists?/1)
+    |> Enum.map(&Path.basename(&1, ".jsonl.gz"))
+  end
 
   # Where an archive comes from, whose it is, on what terms, and which bytes —
   # read off the manifest rather than written here, so a page cannot say
